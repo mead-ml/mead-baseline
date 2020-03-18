@@ -64,6 +64,7 @@ def train():
     parser.add_argument("--weight_decay", type=float, default=0.0, help="Weight decay")
     parser.add_argument("--epochs", type=int, default=20, help="Num training epochs")
     parser.add_argument("--restart_from", type=str, help="Option allows you to restart from a previous checkpoint")
+    parser.add_argument("--restart_tt", type=str, help="Optional param for legacy checkpoints (step|epoch)")
     parser.add_argument("--warmup_steps", type=int, default=10000, help="Num warmup steps")
     parser.add_argument("--update_steps", type=int, default=100, help="The number of steps to take before saving a checkpoint")
     parser.add_argument("--mlm", type=str2bool, default=False, help="Use Masked Language Model (MLM) objective")
@@ -209,10 +210,24 @@ def train():
     start_epoch = 0
     if args.restart_from:
         model.load_state_dict(torch.load(args.restart_from))
-        start_epoch = int(args.restart_from.split("-")[-1].split(".")[0]) - 1
-        global_step = (start_epoch+1) * steps_per_epoch
+        vec = args.restart_from.split("-")
+
+        if args.restart_tt:
+            tick_type = args.restart_tt
+        else:
+            tick_type = vec[-2]
+        step_num = int(vec[-1].split(".")[0])
+        if tick_type == 'epoch':
+            start_epoch = step_num - 1
+            global_step = (start_epoch + 1) * steps_per_epoch
+
+        else:
+            start_epoch = step_num // steps_per_epoch
+            global_step = step_num
+
         logger.info("Restarting from a previous checkpoint %s.\n\tStarting at global_step=%d, epoch=%d",
                     args.restart_from, global_step, start_epoch+1)
+
     optimizer = OptimizerManager(model, global_step, optim='adam', lr=args.lr, lr_function=lr_sched, weight_decay=args.weight_decay)
     logger.info("Model has {:,} parameters".format(sum(p.numel() for p in model.parameters() if p.requires_grad)))
 
