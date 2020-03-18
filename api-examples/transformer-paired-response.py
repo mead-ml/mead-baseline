@@ -11,7 +11,7 @@ from baseline.vectorizers import Token1DVectorizer, BPEVectorizer1D
 logger = logging.getLogger(__file__)
 
 
-def decode_sentence(model, vectorizer, query, word2index, index2word, device, max_response_length):
+def decode_sentence(model, vectorizer, query, word2index, index2word, device, max_response_length, sample=True):
     vec, length = vectorizer.run(query, word2index)
     toks = torch.from_numpy(vec).unsqueeze(0).to(device=device)
     length = torch.from_numpy(np.array(length)).unsqueeze(0).to(device=device)
@@ -21,9 +21,17 @@ def decode_sentence(model, vectorizer, query, word2index, index2word, device, ma
         dst = [Offsets.GO]
         for i in range(max_response_length):
             dst_tensor = torch.from_numpy(np.array(dst)).unsqueeze(0).to(device=device)
-            response_tensor = model({'x': toks, 'src_len': length, 'dst': dst_tensor})
-            output = torch.argmax(response_tensor, -1).squeeze(0)
-            output = output[-1].item()
+            predictions = model({'x': toks, 'src_len': length, 'dst': dst_tensor})
+
+            if not sample:
+                output = torch.argmax(predictions, -1).squeeze(0)
+                output = output[-1].item()
+            else:
+                # using a multinomial distribution to predict the word returned by the model
+                predictions = predictions.exp().squeeze(0)
+                output = torch.multinomial(predictions, num_samples=1).squeeze(0)[-1].item()
+
+
             dst.append(output)
             response.append(index2word.get(dst[-1], '<WTF>'))
             if output == Offsets.EOS or output == EOU:
@@ -57,6 +65,7 @@ def run():
     parser = ArgumentParser()
     parser.add_argument("--basedir", type=str)
     parser.add_argument("--checkpoint", type=str, help='Checkpoint name to load')
+    parser.add_argument("--sample", type=str2bool, help='Sample from the decoder?  Defaults to `true`', default=1)
     parser.add_argument("--vocab", type=str, help='Vocab file to load')
     parser.add_argument("--query", type=str, default='hello how are you ?')
     parser.add_argument("--dataset_cache", type=str, default=os.path.expanduser('~/.bl-data'),
@@ -94,6 +103,6 @@ def run():
     vectorizer = BPEVectorizer1D(model_file=args.subword_model_file, vocab_file=args.subword_vocab_file, mxlen=args.nctx)
     index2word = revlut(vocab)
     print('[Query]', args.query)
-    print('[Response]', ' '.join(decode_sentence(model, vectorizer, args.query.split(), vocab, index2word, args.device, max_response_length=args.nctx)))
+    print('[Response]', ' '.join(decode_sentence(model, vectorizer, args.query.split(), vocab, index2word, args.device, max_response_length=args.nctx, sample=args.sample)))
 
 run()
