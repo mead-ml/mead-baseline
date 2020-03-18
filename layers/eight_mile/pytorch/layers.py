@@ -3193,8 +3193,8 @@ class BeamSearchBase:
         return paths, lengths, best_scores
 
 
-def checkpoint_for(model_base, epoch):
-    return '{}-{}'.format(model_base, epoch+1)
+def checkpoint_for(model_base, epoch, tick_type='epoch'):
+    return '{}-{}-{}'.format(model_base, tick_type, epoch+1)
 
 
 def rm_old_checkpoints(base_path, current_epoch, last_n=10):
