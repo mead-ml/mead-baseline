@@ -34,7 +34,7 @@ def decode_sentence(model, vectorizer, query, word2index, index2word, device, ma
 
 
             dst.append(output)
-            response.append(index2word.get(dst[-1], '<WTF>'))
+            response.append(index2word.get(dst[-1], '<ERROR>'))
             if output == Offsets.EOS or output == EOU:
                 break
     return response
