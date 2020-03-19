@@ -40,7 +40,7 @@ TransformerEncoderOutput = namedtuple("TransformerEncoderOutput", ("output", "sr
 class TransformerEncoderWrapper(torch.nn.Module):
 
     def __init__(self, dsz, hsz=None, num_heads=4, layers=1, dropout=0.5, **kwargs):
-        super(TransformerEncoderWrapper, self).__init__()
+        super().__init__()
         if hsz is None:
             hsz = dsz
         self.proj = pytorch_linear(dsz, hsz) if hsz != dsz else self._identity
