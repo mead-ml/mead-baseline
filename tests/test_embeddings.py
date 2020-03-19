@@ -200,7 +200,7 @@ def test_rand_no_counts():
     """Test that unattested word are not removed without counts."""
     vocab = {"A": 0, "B": 0, "C": 13, "D": 55}
     wv = RandomInitVecModel(random.randint(1, 301), vocab, counts=False)
-    assert wv.get_vsz() == len(vocab)
+    assert wv.get_vsz() == max(vocab.values()) + 1
 
 
 def test_rand_counts():
