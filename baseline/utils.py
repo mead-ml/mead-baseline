@@ -437,9 +437,11 @@ def _try_user_cmp(user_cmp):
 @export
 def show_examples(model, es, rlut1, rlut2, vocab, mxlen, sample, prob_clip, max_examples, reverse):
     """Expects model.predict to return [B, K, T]."""
-    si = np.random.randint(0, len(es))
-
-    batch_dict = es[si]
+    if hasattr(es, '__getitem__'):
+        si = np.random.randint(0, len(es))
+        batch_dict = es[si]
+    else:
+        batch_dict = next(iter(es))
 
     lengths_key = model.src_lengths_key
     src_field = lengths_key.split('_')[0]

@@ -344,7 +344,7 @@ class PretrainedEmbeddingsStack(EmbeddingsModel):
                 self.vsz += 1
         else:
             self.vocab = known_vocab
-            self.vsz = len(self.vocab)
+            self.vsz = max(self.vocab.values()) + 1
 
         index2word = revlut(self.vocab)
         # vocab = word2index
@@ -409,7 +409,7 @@ class RandomInitVecModel(EmbeddingsModel):
                 self.vsz += 1
         else:
             self.vocab = known_vocab
-            self.vsz = len(self.vocab)
+            self.vsz = max(self.vocab.values()) + 1
 
         self.weights = np.random.uniform(-uw, uw, (self.vsz, self.dsz)).astype(np.float32)
 
