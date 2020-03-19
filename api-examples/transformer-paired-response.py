@@ -116,7 +116,7 @@ def run():
 
     vocab = read_json(vocab_file)
     # If we are not using chars, then use 'x' for both input and output
-    preproc_data = baseline.embeddings.load_embeddings('x', dsz=args.d_model, known_vocab=vocab, embed_type=args.embed_type)
+    preproc_data = baseline.embeddings.load_embeddings('x', dsz=args.d_model, counts=False, known_vocab=vocab, embed_type=args.embed_type)
     embeddings = preproc_data['embeddings']
 
     model = create_model(embeddings, d_model=args.d_model, d_ff=args.d_ff, num_heads=args.num_heads, num_layers=args.num_layers,
