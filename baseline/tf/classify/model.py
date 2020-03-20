@@ -237,13 +237,13 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
                 for k in embeddings_info:
                     if k in kwargs:
                         _state[k] = kwargs[k]
-            labels = read_json("{}.labels".format(basename))
-            model = cls.create(embeddings, labels, **_state)
-            model._state = _state
-            if kwargs.get('init', True):
-                model.sess.run(tf.compat.v1.global_variables_initializer())
-            model.saver = tf.compat.v1.train.Saver()
-            model.saver.restore(model.sess, basename)
+                labels = read_json("{}.labels".format(basename))
+                model = cls.create(embeddings, labels, **_state)
+                model._state = _state
+                if kwargs.get('init', True):
+                    model.sess.run(tf.compat.v1.global_variables_initializer())
+                model.saver = tf.compat.v1.train.Saver()
+                model.saver.restore(model.sess, basename)
         else:
             embeddings_info = _state.pop('embeddings')
             embeddings = reload_embeddings(embeddings_info, basename)
