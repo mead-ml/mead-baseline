@@ -486,6 +486,11 @@ def train():
     valid_loader = DataLoader(valid_set, batch_size=args.batch_size, shuffle=False)
     logger.info("Loaded datasets")
 
+    if len(args.rpr_k) == 0 or args.rpr_k[0] < 1:
+        rpr_k = None
+    else:
+        rpr_k = args.rpr_k
+
     if args.mlm:
         from baseline.pytorch.lm import TransformerMaskedLanguageModel
         model = TransformerMaskedLanguageModel.create(embeddings,
@@ -496,7 +501,7 @@ def train():
                                                       gpu=False,
                                                       num_heads=args.num_heads,
                                                       layers=args.num_layers,
-                                                      rpr_k=args.rpr_k,
+                                                      rpr_k=rpr_k,
                                                       d_k=args.d_k,
                                                       src_keys=['x'], tgt_key=tgt_key)
     else:
@@ -508,7 +513,7 @@ def train():
                                                 gpu=False,
                                                 num_heads=args.num_heads,
                                                 layers=args.num_layers,
-                                                rpr_k=args.rpr_k,
+                                                rpr_k=rpr_k,
                                                 d_k=args.d_k,
                                                 src_keys=['x'], tgt_key=tgt_key)
     model.to(args.device)
