@@ -201,7 +201,7 @@ class MultiFileLoader(IterableDataset):
         offset = self.rank * num_workers_per_node + node_worker_id
         start_idx = offset * files_per_worker
         end_idx = start_idx + files_per_worker if offset < all_workers - 1 else len(files)
-        print(f'worker {worker_info.id} [{start_idx}:{end_idx}]')
+        print(f'worker {node_worker_id} [{start_idx}:{end_idx}]')
 
         self.vectorizer.mxlen = self.nctx
 
