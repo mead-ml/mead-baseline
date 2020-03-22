@@ -381,6 +381,7 @@ def train():
     parser.add_argument("--weight_decay", type=float, default=0.0, help="Weight decay")
     parser.add_argument("--epochs", type=int, default=20, help="Num training epochs")
     parser.add_argument("--restart_from", type=str, help="Option allows you to restart from a previous checkpoint")
+    parser.add_argument("--restart_tt", type=str, help="Optional param for legacy checkpoints (step|epoch)")
     parser.add_argument("--warmup_steps", type=int, default=1000, help="Num warmup steps")
     parser.add_argument("--mlm", type=str2bool, default=False, help="Use Masked Language Model (MLM) objective")
     parser.add_argument('--rpr_k', help='Relative attention positional sizes pass 0 if you dont want relative attention',
@@ -485,6 +486,11 @@ def train():
     valid_loader = DataLoader(valid_set, batch_size=args.batch_size, shuffle=False)
     logger.info("Loaded datasets")
 
+    if len(args.rpr_k) == 0 or args.rpr_k[0] < 1:
+        rpr_k = None
+    else:
+        rpr_k = args.rpr_k
+
     if args.mlm:
         from baseline.pytorch.lm import TransformerMaskedLanguageModel
         model = TransformerMaskedLanguageModel.create(embeddings,
@@ -495,7 +501,7 @@ def train():
                                                       gpu=False,
                                                       num_heads=args.num_heads,
                                                       layers=args.num_layers,
-                                                      rpr_k=args.rpr_k,
+                                                      rpr_k=rpr_k,
                                                       d_k=args.d_k,
                                                       src_keys=['x'], tgt_key=tgt_key)
     else:
@@ -507,7 +513,7 @@ def train():
                                                 gpu=False,
                                                 num_heads=args.num_heads,
                                                 layers=args.num_layers,
-                                                rpr_k=args.rpr_k,
+                                                rpr_k=rpr_k,
                                                 d_k=args.d_k,
                                                 src_keys=['x'], tgt_key=tgt_key)
     model.to(args.device)
@@ -526,10 +532,25 @@ def train():
     start_epoch = 0
     if args.restart_from:
         model.load_state_dict(torch.load(args.restart_from))
-        start_epoch = int(args.restart_from.split("-")[-1].split(".")[0]) - 1
-        global_step = (start_epoch+1) * steps_per_epoch
+        vec = args.restart_from.split("-")
+
+        if args.restart_tt:
+            tick_type = args.restart_tt
+        else:
+            tick_type = vec[-2]
+        step_num = int(vec[-1].split(".")[0])
+        if tick_type == 'epoch':
+            start_epoch = step_num - 1
+            global_step = (start_epoch + 1) * steps_per_epoch
+
+        else:
+            start_epoch = step_num // steps_per_epoch
+            global_step = step_num
+
         logger.info("Restarting from a previous checkpoint %s.\n\tStarting at global_step=%d, epoch=%d",
-                    args.restart_from, global_step, start_epoch+1)
+                    args.restart_from, global_step, start_epoch + 1)
+
+
     optimizer = OptimizerManager(model, global_step, optim='adam', lr=args.lr, lr_function=lr_sched, weight_decay=args.weight_decay)
     logger.info("Model has {:,} parameters".format(sum(p.numel() for p in model.parameters() if p.requires_grad)))
 

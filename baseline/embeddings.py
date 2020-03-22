@@ -90,10 +90,12 @@ def load_embeddings(name, **kwargs):
         known_vocab = kwargs.pop("known_vocab", None)
         keep_unused = kwargs.pop("keep_unused", False)
         normalize = kwargs.pop("normalized", False)
+        preserve_vocab_indices = bool(kwargs.get('preserve_vocab_indices', False))
+
         # if there is no filename, use random-init model
         if filename is None:
             dsz = kwargs.pop("dsz")
-            model = RandomInitVecModel(dsz, known_vocab=known_vocab, unif_weight=unif)
+            model = RandomInitVecModel(dsz, known_vocab=known_vocab, unif_weight=unif, counts=not preserve_vocab_indices)
         # If there, is use the PretrainedEmbeddingsModel loader
         else:
             if is_sequence(filename):
@@ -101,6 +103,7 @@ def load_embeddings(name, **kwargs):
                     listify(filename),
                     known_vocab=known_vocab,
                     normalize=normalize,
+                    counts=not preserve_vocab_indices,
                     **kwargs
                 )
             else:
