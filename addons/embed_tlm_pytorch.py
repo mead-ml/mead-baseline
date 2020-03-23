@@ -194,13 +194,14 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
     @classmethod
     def load(cls, embeddings, **kwargs):
         c = cls("tlm-words-embed", **kwargs)
-        if embeddings.endswith('.pth'):
+
+        if embeddings.endswith('.npz'):
+            load_tlm_npz(c, embeddings)
+        else:
             unmatch = c.load_state_dict(torch.load(embeddings), strict=False)
             if unmatch.missing_keys or len(unmatch.unexpected_keys) > 2:
                 print("Warning: Embedding doesn't match with the checkpoint being loaded.")
                 print(f"missing keys: {unmatch.missing_keys}\n unexpected keys: {unmatch.unexpected_keys}")
-        elif embeddings.endswith('.npz'):
-            load_tlm_npz(c, embeddings)
         return c
 
 
