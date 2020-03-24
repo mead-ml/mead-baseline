@@ -199,7 +199,7 @@ if not tf.executing_eagerly():
 
         def save(self, model_base):
             self.save_md(model_base)
-            self.saver.save(self.sess, model_base)
+            self.saver.save(self.sess, model_base, write_meta_graph=False)
 
         def predict(self, batch_dict, **kwargs):
             feed_dict = self.make_input(batch_dict)

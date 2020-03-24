@@ -1,6 +1,7 @@
 import baseline as bl
 import argparse
 import os
+from baseline.utils import str2bool
 
 parser = argparse.ArgumentParser(description='Classify text with a model')
 parser.add_argument('--model', help='The path to either the .zip file created by training or to the client bundle '
@@ -16,7 +17,13 @@ parser.add_argument('--preproc', help='(optional) where to perform preprocessing
 parser.add_argument('--batchsz', help='batch size when --text is a file', default=100, type=int)
 parser.add_argument('--model_type', type=str, default='default')
 parser.add_argument('--modules', default=[])
+parser.add_argument('--prefer_eager', help="If running in TensorFlow, should we prefer eager model", type=str2bool)
+
 args = parser.parse_args()
+
+if args.backend == 'tf':
+    from eight_mile.tf.layers import set_tf_eager_mode
+    set_tf_eager_mode(args.prefer_eager)
 
 for mod_name in args.modules:
     bl.import_user_module(mod_name)

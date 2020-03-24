@@ -212,7 +212,9 @@ class TaggerTrainerTf(EpochReportingTrainer):
         :return: None
         """
         checkpoint_dir = '{}-{}'.format("./tf-tagger", os.getpid())
-        self.model.saver.save(self.sess, os.path.join(checkpoint_dir, 'tagger'), global_step=self.global_step)
+        self.model.saver.save(self.sess, os.path.join(checkpoint_dir, 'tagger'),
+                              global_step=self.global_step,
+                              write_meta_graph=False)
 
     def recover_last_checkpoint(self):
         """Recover the last saved checkpoint

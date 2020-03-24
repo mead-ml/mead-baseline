@@ -115,7 +115,10 @@ class Seq2SeqTrainerTf(Trainer):
         :return: None
         """
         checkpoint_dir = '{}-{}'.format("./tf-seq2seq", os.getpid())
-        self.model.saver.save(self.sess, os.path.join(checkpoint_dir, 'seq2seq'), global_step=self.global_step)
+        self.model.saver.save(self.sess,
+                              os.path.join(checkpoint_dir, 'seq2seq'),
+                              global_step=self.global_step,
+                              write_meta_graph=False)
 
     def recover_last_checkpoint(self):
         """Recover the last saved checkpoint

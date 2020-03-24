@@ -21,7 +21,13 @@ parser.add_argument('--export_mapping', help='mapping between features and the f
                                                          'request, eg: token:word ner:ner. This should match with the '
                                                          '`exporter_field` definition in the mead config',
                     default=[], nargs='+')
+parser.add_argument('--prefer_eager', help="If running in TensorFlow, should we prefer eager model", type=str2bool)
+
 args = parser.parse_args()
+
+if args.backend == 'tf':
+    from eight_mile.tf.layers import set_tf_eager_mode
+    set_tf_eager_mode(args.prefer_eager)
 
 
 def create_export_mapping(feature_map_strings):

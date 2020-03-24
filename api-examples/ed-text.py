@@ -2,6 +2,8 @@ from __future__ import print_function
 import baseline as bl
 import argparse
 import os
+from baseline.utils import str2bool
+
 parser = argparse.ArgumentParser(description='Encoder-Decoder execution')
 parser.add_argument('--model', help='An encoder-decoder model', required=True, type=str)
 parser.add_argument('--text', help='raw value or a file', type=str)
@@ -14,8 +16,13 @@ parser.add_argument('--batchsz', help='Size of a batch to pass at once', default
 parser.add_argument('--device', help='device')
 parser.add_argument('--alpha', type=float, help='If set use in the gnmt length penalty.')
 parser.add_argument('--beam', type=int, default=30, help='The size of beam to use.')
+parser.add_argument('--prefer_eager', help="If running in TensorFlow, should we prefer eager model", type=str2bool)
 
 args = parser.parse_known_args()[0]
+
+if args.backend == 'tf':
+    from eight_mile.tf.layers import set_tf_eager_mode
+    set_tf_eager_mode(args.prefer_eager)
 
 batches = []
 if os.path.exists(args.text) and os.path.isfile(args.text):

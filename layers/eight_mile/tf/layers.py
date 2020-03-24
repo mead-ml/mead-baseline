@@ -10,6 +10,15 @@ BASELINE_TF_TRAIN_FLAG = None
 LOGGER = logging.getLogger('mead.layers')
 
 
+def set_tf_eager_mode(prefer_eager: bool = False):
+    tf_version = get_version(tf)
+    if prefer_eager and tf_version < 2:
+        LOGGER.info('user requesting eager on 1.x')
+        tf.compat.v1.enable_eager_execution()
+    elif not prefer_eager and tf_version >= 2:
+        LOGGER.info('User requesting eager disabled on 2.x')
+        tf.compat.v1.disable_eager_execution()
+
 def set_tf_log_level(ll):
     # 0     | DEBUG            | [Default] Print all messages
     # 1     | INFO             | Filter out INFO messages
