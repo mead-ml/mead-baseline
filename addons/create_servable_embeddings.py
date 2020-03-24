@@ -200,7 +200,7 @@ class ServableTensorFlowEmbeddingsModel(ServableEmbeddingsModel):
             e.save_md('{}-{}-md.json'.format(basename, k))
 
     def save_values(self, basename):
-        self.saver.save(self.sess, basename)
+        self.saver.save(self.sess, basename, write_meta_graph=False)
 
 
 @register_exporter(task='servable_embeddings', name='default')

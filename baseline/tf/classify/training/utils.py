@@ -240,7 +240,10 @@ class ClassifyTrainerTf(EpochReportingTrainer):
         :return: None
         """
         checkpoint_dir = '{}-{}'.format("./tf-classify", os.getpid())
-        self.model.saver.save(self.sess, os.path.join(checkpoint_dir, 'classify'), global_step=self.global_step)
+        self.model.saver.save(self.sess,
+                              os.path.join(checkpoint_dir, 'classify'),
+                              global_step=self.global_step,
+                              write_meta_graph=False)
 
     def recover_last_checkpoint(self):
         """Recover the last saved checkpoint

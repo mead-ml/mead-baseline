@@ -51,7 +51,7 @@ class TaggerModelBase(tf.keras.Model, TaggerModel):
         :return:
         """
         if not tf.executing_eagerly():
-            self.saver.save(self.sess, basename)
+            self.saver.save(self.sess, basename, write_meta_graph=False)
         else:
             self.save_weights(f"{basename}.wgt")
 
