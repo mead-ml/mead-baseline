@@ -15,7 +15,7 @@ def expected_calibration_error(
         from https://arxiv.org/abs/1706.04599
 
     This is the absolute difference between the confidence and accuracy of each
-    bin weighted but the number of samples in each bin.
+    bin weighted by the number of samples in each bin.
 
     :param bin_mean_acc: `[B]` an array with the accuracy of each bin as elements
     :param bin_meanc_conf: `[B]` an array with the mean confidence of each bin as elements

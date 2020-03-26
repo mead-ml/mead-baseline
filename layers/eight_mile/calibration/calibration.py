@@ -11,7 +11,7 @@ Bins = namedtuple("Bins", "accs confs counts edges")
 def multiclass_calibration_bins(truth: np.ndarray, probs: np.ndarray, bins: int, class_weights: Optional[np.ndarray] = None) -> Bins:
     """Calculate the binned confidence and accuracy for a multiclass problem.
 
-    :param true: A 1D array of the true labels for some examples.
+    :param truth: A 1D array of the true labels for some examples.
     :param probs: A 1D array of the probabilities from a model. Each row represents an example in the dataset.
         and each column represents the probably assigned by the model to each class for that example.
     :param bins: The number of bins to use when aggregating.
@@ -54,11 +54,11 @@ def binary_calibration_bins(credit: np.ndarray, probs: np.ndarray, bins: int) ->
     bin_acc_sum = np.bincount(bin_idx, weights=credit, minlength=len(bins))
     bin_counts = np.bincount(bin_idx, minlength=len(bins))
 
-    mask = bin_counts != 0
-    denom = np.where(mask, bin_counts, 1)
+    mask = bin_counts == 0
+    denom = bin_counts + mask
 
-    bin_mean_conf = (bin_conf_sum / denom) * mask
-    bin_mean_acc = (bin_acc_sum / denom) * mask
+    bin_mean_conf = bin_conf_sum / denom
+    bin_mean_acc = bin_acc_sum / denom
 
     return Bins(bin_mean_acc[:-1], bin_mean_conf[:-1], bin_counts[:-1], bins[:-1])
 
