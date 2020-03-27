@@ -22,7 +22,7 @@ class TensorFlowEmbeddings(tf.keras.layers.Layer):
         # to be passed into it. These are not documented and you need to look into the
         # code to find this. For now just don't pass in out kwargs
         super().__init__(trainable, name, dtype)
-        self._name = name
+        #self._name = name
         self.W = None
 
     def get_dsz(self):

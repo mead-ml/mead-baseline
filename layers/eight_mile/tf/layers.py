@@ -2695,9 +2695,10 @@ class TagSequenceModel(tf.keras.Model):
         path, self.path_scores = self.decoder_model((transduced, lengths))
         return path
 
-    def call(self, inputs, training=None):
+    def call(self, inputs, return_probs=False):
         transduced = self.transduce(inputs)
-        return self.decode(transduced, inputs.get("lengths"))
+        decoded = self.decode(transduced, inputs.get("lengths"))
+        return (transduced, decoded) if return_probs else decoded
 
     def neg_log_loss(self, unary, tags, lengths):
         return self.decoder_model.neg_log_loss(unary, tags, lengths)

@@ -18,10 +18,10 @@ class TaggerModelBase(tf.keras.Model, TaggerModel):
     This class provides the implementation of the TaggerModel for TensorFlow
     """
 
-    def __init__(self):
+    def __init__(self, name=None):
         """Create a tagger, nothing marked as unserializable
         """
-        super().__init__()
+        super().__init__(name=name)
         self._unserializable = []
         self._lengths_key = None
         self._dropin_value = None
@@ -327,7 +327,7 @@ class TaggerModelBase(tf.keras.Model, TaggerModel):
 
         :return:
         """
-        model = cls()
+        model = cls(name=kwargs.get('name'))
         model.embeddings = embeddings
 
         model.lengths_key = kwargs.get('lengths_key')
@@ -346,7 +346,6 @@ class TaggerModelBase(tf.keras.Model, TaggerModel):
 
         model._record_state(**kwargs)
         model.labels = labels
-        nc = len(labels)
 
         # This only exists to make exporting easier
         model.pdrop_value = kwargs.get('dropout', 0.5)
@@ -354,16 +353,17 @@ class TaggerModelBase(tf.keras.Model, TaggerModel):
 
         model.labels = labels
         model.span_type = kwargs.get('span_type')
-
-        embed_model = model.embed(**kwargs)
-        transduce_model = model.encode(**kwargs)
-        decode_model = model.decode(**kwargs)
-
-        model.impl = TagSequenceModel(nc, embed_model, transduce_model, decode_model)
+        model.create_layers(**kwargs)
         if not tf.executing_eagerly():
-            model.probs = model.impl.transduce(inputs)
-            model.best = model.impl.decode(model.probs, model.lengths)
+            model.probs, model.best = model(inputs, return_probs=True)
         return model
+
+    def create_layers(self, **kwargs):
+        nc = len(self.labels)
+        embed_model = self.embed(**kwargs)
+        transduce_model = self.encode(**kwargs)
+        decode_model = self.decode(**kwargs)
+        self.impl = TagSequenceModel(nc, embed_model, transduce_model, decode_model)
 
 
 @register_model(task='tagger', name='default')
@@ -377,8 +377,8 @@ class RNNTaggerModel(TaggerModelBase):
     def vdrop(self, value):
         self._vdrop = value
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, name=None):
+        super().__init__(name=name)
 
     def encode(self, **kwargs):
         self.vdrop = kwargs.get('variational', False)
@@ -394,8 +394,8 @@ class RNNTaggerModel(TaggerModelBase):
 @register_model(task='tagger', name='transformer')
 class TransformerTaggerModel(TaggerModelBase):
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, name=None):
+        super().__init__(name=name)
 
     def encode(self, **kwargs):
         layers = int(kwargs.get('layers', 1))
@@ -412,8 +412,8 @@ class TransformerTaggerModel(TaggerModelBase):
 @register_model(task='tagger', name='cnn')
 class CNNTaggerModel(TaggerModelBase):
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, name=None):
+        super().__init__(name=name)
 
     def encode(self, **kwargs):
         nlayers = kwargs.get('layers', 1)
