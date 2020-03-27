@@ -42,6 +42,7 @@ def main():
             "test": ["pytest", "mock", "contextdecorator", "pytest-forked"],
             "yaml": ["pyyaml"],
             "tf2": ["tensorflow_addons"],
+            "plot": ["matplotlib"],
         },
         entry_points={"console_scripts": ["bleu = eight_mile.bleu:main" "conlleval = eight_mile.conlleval:main"]},
         classifiers={

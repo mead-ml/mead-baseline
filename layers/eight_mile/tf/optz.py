@@ -626,6 +626,7 @@ def optimizer(loss_fn, **kwargs):
             clip_gradients=clip,
             learning_rate_decay_fn=lr_scheduler,
             increment_global_step=True,
+            variables=kwargs.get('variables')
         ),
     )
 
