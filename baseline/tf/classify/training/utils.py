@@ -129,10 +129,6 @@ class ClassifyTrainerTf(EpochReportingTrainer):
             skip_blocks = kwargs.get('blocks_to_skip', ['OptimizeLoss'])
             reload_checkpoint(self.model.sess, checkpoint, skip_blocks)
 
-    @staticmethod
-    def _get_batchsz(batch_dict):
-        return len(batch_dict['y'])
-
     def _train(self, loader, dataset=True, **kwargs):
         """Train an epoch of data using either the input loader or using `tf.dataset`
 
@@ -216,13 +212,11 @@ class ClassifyTrainerTf(EpochReportingTrainer):
             y = batch_dict['y']
             if use_dataset:
                 guess, lossv = self.sess.run([self.model.best, self.test_loss])
-                batchsz = len(guess)
             else:
                 feed_dict = self.model.make_input(batch_dict, False)
                 guess, lossv = self.sess.run([self.model.best, self.test_loss], feed_dict=feed_dict)
 
-                batchsz = self._get_batchsz(batch_dict)
-                assert len(guess) == batchsz
+            batchsz = len(guess)
             total_loss += lossv * batchsz
             total_norm += batchsz
             cm.add_batch(y, guess)
