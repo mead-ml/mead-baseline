@@ -162,10 +162,10 @@ class TaggerModelBase(tf.keras.Model, TaggerModel):
 
         return batch_for_model
 
-    def call(self, inputs, **kwargs):
+    def call(self, inputs, return_unaries=False):
         transduced = self.impl.transduce(inputs)
         best = self.impl.decode(transduced, self.lengths)
-        return transduced, best
+        return (transduced, best) if return_unaries else best
 
     @property
     def trainable_variables(self):
@@ -363,7 +363,7 @@ class TaggerModelBase(tf.keras.Model, TaggerModel):
 
         model.impl = TagSequenceModel(nc, embed_model, transduce_model, decode_model)
         if not tf.executing_eagerly():
-            model.probs, model.best = model(inputs)
+            model.probs, model.best = model(inputs, return_unaries=True)
         return model
 
 
