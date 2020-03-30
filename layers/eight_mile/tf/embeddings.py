@@ -62,7 +62,7 @@ class TensorFlowEmbeddings(tf.keras.layers.Layer):
 
 
 class LookupTableEmbeddings(TensorFlowEmbeddings):
-    def __init__(self, trainable=True, name=None, dtype=tf.float32, **kwargs):
+    def __init__(self, trainable=True, name=None, dtype=tf.float32, cpu_placement=False, **kwargs):
         """Create a lookup-table based embedding.
 
         :param name: The name of the feature/placeholder, and a key for the scope
@@ -87,7 +87,7 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
         self.dropin = kwargs.get("dropin", 0.0)
         self._weights = kwargs.get("weights")
         self.drop = tf.keras.layers.Dropout(rate=self.dropin, noise_shape=(self.get_vsz(), 1))
-
+        self.cpu_placement = cpu_placement
         if self._weights is None:
             unif = kwargs.get("unif", 0.1)
             self._weights = np.random.uniform(-unif, unif, (self.vsz, self.dsz))
@@ -96,13 +96,13 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
 
     def build(self, input_shape):
 
-        if tf.executing_eagerly():
+        if self.cpu_placement:
             with tf.device("cpu:0"):
                 self.W = self.add_weight(
-                    name=f"{self.scope}/Weight",
-                    shape=(self.vsz, self.dsz),
-                    initializer=tf.constant_initializer(self._weights),
-                    trainable=self.finetune,
+                        name=f"{self.scope}/Weight",
+                        shape=(self.vsz, self.dsz),
+                        initializer=tf.constant_initializer(self._weights),
+                        trainable=self.finetune,
                 )
         else:
             self.W = self.add_weight(
@@ -149,6 +149,7 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
         trainable = kwargs.get("finetune", trainable)
         super().__init__(trainable=trainable, name=name, dtype=dtype)
         self._name = name
+        self.cpu_placement = bool(kwargs.get('cpu_placement', False))
         self.scope = kwargs.get("scope", "CharConv")
         self.finetune = kwargs.get("finetune", trainable)
         self.nfeat_factor = kwargs.get("nfeat_factor", None)
