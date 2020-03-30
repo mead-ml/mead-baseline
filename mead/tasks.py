@@ -374,7 +374,21 @@ class Task(object):
                                                                        self.config_params.get('keep_unused', False))
 
             # Overlay any backend parameters
+
+            # Also, if we are in eager mode, we might have to place the embeddings explicitly on the CPU
+            embeddings_section['cpu_placement'] = bool(embeddings_section.get('cpu_placement', False))
             if self.backend.params is not None:
+                # If we are in eager mode
+                if bool(self.backend.params.get('prefer_eager', False)):
+                    train_block = self.config_params['train']
+                    optimizer_type = train_block.get('optim', 'sgd')
+                    # If the optimizer cannot handle embeddings on GPU
+                    if optimizer_type not in ['sgd', 'adam', 'adamw']:
+                        logger.warning("Running in eager mode with [%s] optimizer, forcing CPU placement", optimizer_type)
+                        embeddings_section['cpu_placement'] = True
+                    elif optimizer_type == 'sgd' and float(train_block.get('mom', 0.0)) > 0:
+                        logger.warning("Running in eager mode with momentum on, forcing CPU placement")
+                        embeddings_section['cpu_placement'] = True
                 for k, v in self.backend.params.items():
                     embeddings_section[k] = v
             if embed_label is not None:
