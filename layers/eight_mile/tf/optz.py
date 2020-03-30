@@ -21,7 +21,7 @@ __all__ = []
 export = exporter(__all__)
 
 
-if get_version(tf) < 2:
+if not tf.executing_eagerly():
 
     @register_lr_scheduler("default")
     class ConstantSchedulerTensorFlow1:
@@ -690,9 +690,9 @@ class EagerOptimizer(object):
 
         logger.info("clip gradients at %s", self.clip)
 
-    def update(self, model, x, y):
+    def update(self, model, x, y, num_replicas=1):
         with tf.GradientTape() as tape:
-            loss_value = self.loss(model, x, y)
+            loss_value = self.loss(model, x, y) / num_replicas
         grads = tape.gradient(loss_value, model.trainable_variables)
         grads, _ = tf.clip_by_global_norm(grads, self.clip)
         self.optimizer.apply_gradients(zip(grads, model.trainable_variables))
