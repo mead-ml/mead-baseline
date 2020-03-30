@@ -40,7 +40,7 @@ class Exporter(object):
             "version": model_version
         }
         for rep in self.task.reporting:
-            rep.step(msg, 0, 'Export', 'EPOCH')
+            rep.step(msg, 0, 'Export', 'EXPORT')
         self.task._close_reporting_hooks()
         return client_loc, server_loc
 

@@ -35,6 +35,8 @@ class ReportingHook(object):
             tick_type = 'STEP'
             if phase in {'Valid', 'Test'}:
                 tick_type = 'EPOCH'
+            if phase == 'Export':
+                tick_type = 'EXPORT'
         return tick_type
 
 
