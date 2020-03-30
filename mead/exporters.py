@@ -1,3 +1,4 @@
+import os
 from baseline.utils import exporter, optional_params
 
 __all__ = []
@@ -15,8 +16,33 @@ class Exporter(object):
     def preproc_type(cls):
         return 'client'
 
+    def _run(self, model_file, output_dir, project=None, name=None, model_version=None, **kwargs):
+        raise NotImplementedError
+
     def run(self, model_file, output_dir, project=None, name=None, model_version=None, **kwargs):
-        pass
+        client_loc, server_loc = self._run(
+            model_file,
+            output_dir,
+            project=project,
+            name=name,
+            model_version=model_version
+        )
+        if model_version is None:
+            try:
+                model_version = int(os.path.basename(client_loc))
+            except ValueError:
+                pass
+        msg = {
+            "client_bundle": client_loc,
+            "server_bundle": server_loc,
+            "project": project,
+            "name": name,
+            "version": model_version
+        }
+        for rep in self.task.reporting:
+            rep.step(msg, 0, 'Export', 'EPOCH')
+        self.task._close_reporting_hooks()
+        return client_loc, server_loc
 
 
 BASELINE_EXPORTERS = {}
