@@ -21,7 +21,7 @@ __all__ = []
 export = exporter(__all__)
 
 
-if get_version(tf) < 2:
+if not tf.executing_eagerly():
 
     @register_lr_scheduler("default")
     class ConstantSchedulerTensorFlow1:
