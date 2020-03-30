@@ -28,7 +28,7 @@ def save_checkpoint(model: torch.nn.Module, model_base: str, count: int, tick_ty
     checkpoint_name = checkpoint_for(model_base, count, tick_type=tick_type)
     # Its possible due to how its called that we might save the same checkpoint twice if we dont check first
     if os.path.exists(checkpoint_name):
-        logger.info("Checkpoint already exists: %d", count+1)
+        logger.info("Checkpoint already exists: %s", checkpoint_name)
         return
     logger.info("Creating checkpoint: %s", checkpoint_name)
     if hasattr(model, 'module'):
