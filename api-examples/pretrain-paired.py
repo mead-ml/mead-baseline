@@ -25,7 +25,7 @@ model (https://arxiv.org/pdf/1911.03688.pdf) or Seq2Seq with fastBPE with PyTorc
 
 def save_checkpoint(model: torch.nn.Module, model_base: str, count: int, tick_type: str = 'epoch'):
 
-    checkpoint_name = checkpoint_for(model_base, count+1, tick_type=tick_type)
+    checkpoint_name = checkpoint_for(model_base, count, tick_type=tick_type)
     # Its possible due to how its called that we might save the same checkpoint twice if we dont check first
     if os.path.exists(checkpoint_name):
         logger.info("Checkpoint already exists: %d", count+1)
@@ -36,7 +36,7 @@ def save_checkpoint(model: torch.nn.Module, model_base: str, count: int, tick_ty
     else:
         torch.save(model.state_dict(), checkpoint_name)
 
-    rm_old_checkpoints(model_base, count+1)
+    rm_old_checkpoints(model_base, count)
 
 
 def create_model(embeddings, d_model, d_ff, dropout, num_heads, num_layers, model_type, rpr_k, d_k):
@@ -207,8 +207,8 @@ def train():
             tick_type = vec[-2]
         step_num = int(vec[-1].split(".")[0])
         if tick_type == 'epoch':
-            start_epoch = step_num - 1
-            global_step = (start_epoch + 1) * steps_per_epoch
+            start_epoch = step_num
+            global_step = start_epoch * steps_per_epoch
 
         else:
             start_epoch = step_num // steps_per_epoch
@@ -227,7 +227,7 @@ def train():
     model_base = os.path.join(args.basedir, 'checkpoint')
 
     # This is the training loop
-    steps = 0
+    steps = global_step
     for epoch in range(start_epoch, args.epochs):
         avg_loss = Average('average_train_loss')
         metrics = {}
@@ -250,9 +250,9 @@ def train():
                 logging.info(avg_loss)
             if (i + 1) % update_on == 0 and args.local_rank < 1:
                 elapsed = (time.time() - start)/60
-                logging.info('elapsed time this epoch %d', elapsed)
+                logging.info('elapsed time this epoch %d min', elapsed)
                 logging.info('elapsed step time %f steps/min', i/elapsed)
-                save_checkpoint(model, model_base, steps)
+                save_checkpoint(model, model_base, steps, tick_type='step')
 
         # How much time elapsed in minutes
         elapsed = (time.time() - start)/60
@@ -280,7 +280,7 @@ def train():
         metrics['average_valid_loss'] = valid_avg_loss
         logger.info(metrics)
         if args.local_rank < 1:
-            save_checkpoint(model, model_base, steps)
+            save_checkpoint(model, model_base, epoch, tick_type='epoch')
 
 
 if __name__ == "__main__":
