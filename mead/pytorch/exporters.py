@@ -73,6 +73,7 @@ class PytorchONNXExporter(Exporter):
         super().__init__(task, **kwargs)
         self.transpose = kwargs.get('transpose', False)
         self.tracing = kwargs.get('tracing', True)
+        self.default_size = int(kwargs.get('default_size', 100))
 
     def apply_model_patches(self, model):
         return model
@@ -89,7 +90,7 @@ class PytorchONNXExporter(Exporter):
         logger.info("Saving serialized model to %s", server_output)
         model, vectorizers, model_name = self.load_model(basename)
         model = self.apply_model_patches(model)
-        data = create_data_dict(VECTORIZER_SHAPE_MAP, vectorizers, transpose=self.transpose)
+        data = create_data_dict(VECTORIZER_SHAPE_MAP, vectorizers, transpose=self.transpose, self.default_size)
 
         inputs = [k for k, _ in model.embeddings.items()] + ['lengths']
 
