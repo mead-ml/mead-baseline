@@ -363,7 +363,7 @@ def unzip_files(zip_path):
 
 @export
 def find_model_basename(directory):
-    path = os.path.join(directory, [x for x in os.listdir(directory) if 'model' in x and '-md' not in x and 'wgt' not in x][0])
+    path = os.path.join(directory, [x for x in os.listdir(directory) if 'model' in x and '-md' not in x and 'wgt' not in x and '.assets' not in x][0])
     logger.info(path)
     path = path.split('.')[:-1]
     return '.'.join(path)

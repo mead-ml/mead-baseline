@@ -1,6 +1,7 @@
+import collections
+from typing import Tuple
 import numpy as np
 from baseline.utils import exporter, optional_params, listify, register, Offsets, import_user_module
-import collections
 
 
 __all__ = []
@@ -19,7 +20,7 @@ class Vectorizer(object):
     def count(self, tokens):
         pass
 
-    def get_dims(self):
+    def get_dims(self) -> Tuple[int]:
         pass
 
     def iterable(self, tokens):

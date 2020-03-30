@@ -51,17 +51,11 @@ def create_fake_data(shapes, vectorizers, order, min_=0, max_=50,):
     return ordered_data, lengths
 
 
-def create_data_dict(shapes, vectorizers, transpose=False, min_=0, max_=50):
+def create_data_dict(shapes, vectorizers, transpose=False, min_=0, max_=50, default_size=100):
     data = {}
     for k, v in vectorizers.items():
-        mxlen = v.mxlen if hasattr(v, 'mxlen') else -1
-        mxwlen = v.mxwlen if hasattr(v, 'mxwlen') else -1
-        if mxwlen >= 0:
-            data[k] = torch.randint(min_, max_, (1, mxlen, mxwlen))
-        elif mxlen >= 0:
-            data[k] = torch.randint(min_, max_, (1, mxlen))
-        else:
-            data[k] = torch.randint(min_, max_, (1,))
+        dims = [d if d >= 0 else default_size for d in v.get_dims()]
+        data[k] = torch.randint(min_, max_, [1, *dims])
 
     lengths = torch.LongTensor([data[list(data.keys())[0]].shape[1]])
 
