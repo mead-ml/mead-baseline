@@ -3,7 +3,7 @@ import numpy as np
 import time
 import tensorflow as tf
 from eight_mile.utils import listify
-from eight_mile.tf.layers import SET_TRAIN_FLAG, get_shape_as_list
+from eight_mile.tf.layers import SET_TRAIN_FLAG, get_shape_as_list, autograph_options
 from eight_mile.tf.optz import EagerOptimizer
 from baseline.progress import create_progress_bar
 from baseline.utils import get_model_file, get_metric_cmp, convert_seq2seq_golds, convert_seq2seq_preds
@@ -75,11 +75,11 @@ class Seq2SeqTrainerEagerTf(Trainer):
 
     @staticmethod
     def _num_toks(y):
-        return np.prod(y.shape)
+        return tf.prod(get_shape_as_list(y))
 
 
     def _num_toks(self, lens):
-        return np.sum(lens)
+        return tf.reduce_sum(lens)
 
     def train(self, ts, reporting_fns, dataset=True):
         """Train by looping over the steps
@@ -93,31 +93,43 @@ class Seq2SeqTrainerEagerTf(Trainer):
         :param dataset: (`bool`) Are we using `tf.dataset`s
         :return: Metrics
         """
-        epoch_loss = 0.0
-        epoch_toks = 0
-        start = time.time()
         SET_TRAIN_FLAG(True)
-        self.nstep_start = start
-        for features, y in ts:
+        epoch_loss = tf.keras.metrics.Sum()
+        epoch_toks = tf.keras.metrics.Sum()
+        nstep_loss = tf.keras.metrics.Sum()
+        nstep_div = tf.keras.metrics.Sum()
+        self.nstep_start = time.time()
+        start = time.time()
 
-            # Optimize the model
-            features['dst'] = y[:, :-1]
-            loss_value = self.optimizer.update(self.model, features, y).numpy()
-            toks = self._num_toks(features['tgt_len'])
-            report_loss = loss_value * toks
-            epoch_loss += report_loss
-            epoch_toks += toks
-            self.nstep_agg += report_loss
-            self.nstep_div += toks
+        @tf.function
+        def _train_step(features, y):
+            """Replicated training step."""
 
-            if (self.optimizer.global_step + 1) % self.nsteps == 0:
-                metrics = self.calc_metrics(self.nstep_agg, self.nstep_div)
-                self.report(
-                    self.optimizer.global_step + 1, metrics, self.nstep_start,
-                    'Train', 'STEP', reporting_fns, self.nsteps
-                )
-                self.reset_nstep()
+            loss = self.optimizer.update(self.model, features, y)
+            toks = tf.cast(self._num_toks(features['tgt_len']), tf.float32)
+            report_loss = loss * toks
+            epoch_loss.update_state(report_loss)
+            nstep_loss.update_state(report_loss)
+            epoch_toks.update_state(toks)
+            nstep_div.update_state(toks)
 
+        with autograph_options({"function_optimization": False, "layout_optimizer": False}):
+            for features, y in ts:
+                features['dst'] = y[:, :-1]
+                _train_step(features, y)
+                step = self.optimizer.global_step.numpy() + 1
+                if step % self.nsteps == 0:
+                    metrics = self.calc_metrics(nstep_loss.result().numpy(), nstep_div.result().numpy())
+                    self.report(
+                        step, metrics, self.nstep_start,
+                        'Train', 'STEP', reporting_fns, self.nsteps
+                    )
+                    nstep_loss.reset_states()
+                    nstep_div.reset_states()
+                    self.nstep_start = time.time()
+
+        epoch_loss = epoch_loss.result().numpy()
+        epoch_toks = epoch_toks.result().numpy()
         metrics = self.calc_metrics(epoch_loss, epoch_toks)
         self.train_epochs += 1
         self.report(
@@ -185,7 +197,7 @@ class Seq2SeqTrainerEagerTf(Trainer):
             features['dst'] = tgt[:, :-1]
             top_preds = self.model.predict(features, beam=1)
             loss_value = loss(self.model, features, tgt).numpy()
-            toks = self._num_toks(features['tgt_len'])
+            toks = tf.cast(self._num_toks(features['tgt_len']), tf.float32).numpy()
             total_loss += loss_value * toks
             total_toks += toks
             preds.extend(convert_seq2seq_preds(top_preds[:, 0, :], self.tgt_rlut))
@@ -239,7 +251,7 @@ def fit_eager(model_params, ts, vs, es=None, **kwargs):
     epochs = int(kwargs.get('epochs', 5))
     patience = int(kwargs.get('patience', epochs))
 
-    model_file = get_model_file('lm', 'tf', kwargs.get('basedir'))
+    model_file = get_model_file('seq2seq', 'tf', kwargs.get('basedir'))
 
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
 

@@ -31,11 +31,10 @@
 	      "finetune": true
     },
     "train": {
-        "fit_func": "estimator",
-	      "epochs": 80,
-	      "optim": "sgd",
-	      "eta": 0.02,
-	      "early_stopping_metric": "acc",
+	"epochs": 80,
+	"optim": "sgd",
+	"eta": 0.02,
+	"early_stopping_metric": "acc",
         "verbose": true
     }
 }

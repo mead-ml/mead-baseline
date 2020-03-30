@@ -155,41 +155,39 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
         self.nfeat_factor = kwargs.get("nfeat_factor", None)
         self.cfiltsz = kwargs.get("cfiltsz", kwargs.get("filtsz", [3]))
         self.max_feat = kwargs.get("max_feat", 30)
-        self.gating = kwargs.get("gating", "skip")
-        self.num_gates = kwargs.get("num_gates", 1)
-        self.activation = kwargs.get("activation", "tanh")
+        gating = kwargs.get("gating", "skip")
+        num_gates = kwargs.get("num_gates", 1)
+        activation = kwargs.get("activation", "tanh")
         self.wsz = kwargs.get("wsz", 30)
         self.projsz = kwargs.get("projsz")
         self.x = None
         # These are the actual final filter sizes and num features
-        self.filtsz, self.nfeats = calc_nfeats(self.cfiltsz, self.nfeat_factor, self.max_feat, self.wsz)
-        self.conv_outsz = np.sum(self.nfeats)
+        filtsz, nfeats = calc_nfeats(self.cfiltsz, self.nfeat_factor, self.max_feat, self.wsz)
+        self.conv_outsz = np.sum(nfeats)
         self.outsz = self.conv_outsz
         if self.projsz is not None:
             self.outsz = self.projsz
             self.proj = tf.keras.layers.Dense(self.outsz, bias_initializer=tf.constant_initializer(0.0))
 
         self.embed = LookupTableEmbeddings(name=f"{self.name}/CharLUT", finetune=self.finetune, **kwargs)
+        dsz = self.embed.output_dim
+        self.parallel_conv = ParallelConv(dsz, self.conv_outsz, filtsz, activation)
+        self.gating_fns = tf.keras.Sequential()
+        for _ in range(num_gates):
+            if gating == 'skip':
+                self.gating_fns.add(SkipConnection(self.conv_outsz, activation))
+            else:
+                self.gating_fns.add(Highway(self.conv_outsz))
 
     def encode(self, x):
         self.x = x
 
         mxlen = tf.shape(self.x)[1]
-        gating_fn = highway_conns if self.gating.startswith("highway") else skip_conns
-
         mxwlen = tf.shape(self.x)[-1]
         char_bt_x_w = tf.reshape(self.x, [-1, mxwlen])
         cembed = self.embed(char_bt_x_w)
-        cmot, num_filts = char_word_conv_embeddings(
-            cembed,
-            self.filtsz,
-            self.embed.output_dim,
-            self.nfeats,
-            activation_fn=get_activation(self.activation),
-            gating=gating_fn,
-            num_gates=self.num_gates,
-        )
-
+        cmot = self.parallel_conv(cembed)
+        cmot = self.gating_fns(cmot)
         if self.projsz:
             cmot = self.proj(cmot)
         word_char = tf.reshape(cmot, [-1, mxlen, self.outsz])

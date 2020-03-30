@@ -7,6 +7,7 @@ import tensorflow as tf
 from eight_mile.confusion import ConfusionMatrix
 from baseline.progress import create_progress_bar
 from eight_mile.utils import listify, get_version
+from eight_mile.tf.layers import get_shape_as_list
 from eight_mile.tf.optz import *
 from baseline.utils import get_model_file, get_metric_cmp
 from baseline.tf.tfy import SET_TRAIN_FLAG
@@ -90,30 +91,44 @@ class ClassifyTrainerEagerTf(EpochReportingTrainer):
         :return: Metrics
         """
 
-        reporting_fns = kwargs.get('reporting_fns', [])
-        epoch_loss = 0
-        epoch_div = 0
-        step = 0
-        pg = create_progress_bar(steps)
         SET_TRAIN_FLAG(True)
+        reporting_fns = kwargs.get('reporting_fns', [])
+        pg = create_progress_bar(steps)
+        epoch_loss = tf.keras.metrics.Sum()
+        epoch_div = tf.keras.metrics.Sum()
+        nstep_loss = tf.keras.metrics.Sum()
+        nstep_div = tf.keras.metrics.Sum()
+        self.nstep_start = time.time()
 
-        for features, y in pg(loader):
-            lossv = self.optimizer.update(self.model, features, y).numpy()
-            batchsz = int(y.shape[0])
-            report_lossv = lossv * batchsz
-            epoch_loss += report_lossv
-            epoch_div += batchsz
-            self.nstep_agg += report_lossv
-            self.nstep_div += batchsz
-            step += 1
-            if (step + 1) % self.nsteps == 0:
-                metrics = self.calc_metrics(self.nstep_agg, self.nstep_div)
+        @tf.function
+        def _train_step(inputs):
+            """Replicated training step."""
+
+            features, y = inputs
+            loss = self.optimizer.update(self.model, features, y)
+            batchsz = tf.cast(get_shape_as_list(y)[0], tf.float32)
+            report_loss = loss * batchsz
+            epoch_loss.update_state(report_loss)
+            nstep_loss.update_state(report_loss)
+            epoch_div.update_state(batchsz)
+            nstep_div.update_state(batchsz)
+
+        for inputs in pg(loader):
+            _train_step(inputs)
+            step = self.optimizer.global_step.numpy() + 1
+
+            if step % self.nsteps == 0:
+                metrics = self.calc_metrics(nstep_loss.result().numpy(), nstep_div.result().numpy())
                 self.report(
-                    step + 1, metrics, self.nstep_start,
+                    step, metrics, self.nstep_start,
                     'Train', 'STEP', reporting_fns, self.nsteps
                 )
-                self.reset_nstep()
+                nstep_loss.reset_states()
+                nstep_div.reset_states()
+                self.nstep_start = time.time()
 
+        epoch_loss = epoch_loss.result().numpy()
+        epoch_div = epoch_div.result().numpy()
         metrics = self.calc_metrics(epoch_loss, epoch_div)
         return metrics
 

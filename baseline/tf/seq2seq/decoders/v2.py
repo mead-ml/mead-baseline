@@ -27,23 +27,20 @@ class ArcPolicy(tf.keras.layers.Layer):
 
 class AbstractArcPolicy(ArcPolicy):
 
-    def __init__(self):
-        super().__init__()
-
     def get_state(self, encoder_outputs):
         pass
 
+    # TODO: figure out how to add back the beam
     def forward(self, encoder_output, hsz, beam_width=1):
         h_i = self.get_state(encoder_output)
         context = encoder_output.output
-        if beam_width > 1:
-            context = repeat_batch(context, beam_width)
-            # What does the multi-RNN look like in old TF again?
-            if type(h_i) is tuple:
-                h_i = repeat_batch(h_i[0], beam_width, dim=1), repeat_batch(h_i[1], beam_width, dim=1)
-            else:
-                h_i = repeat_batch(h_i, beam_width, dim=1)
-        batch_size = context.shape[0]
+        context = repeat_batch(context, beam_width)
+        # What does the multi-RNN look like in old TF again?
+        if type(h_i) is tuple:
+            h_i = repeat_batch(h_i[0], beam_width, dim=1), repeat_batch(h_i[1], beam_width, dim=1)
+        else:
+            h_i = repeat_batch(h_i, beam_width, dim=1)
+        batch_size = get_shape_as_list(context)[0]
         init_zeros = tf.zeros((batch_size, hsz), dtype=context.dtype)
         return h_i, init_zeros, context
 
@@ -51,18 +48,12 @@ class AbstractArcPolicy(ArcPolicy):
 @register_arc_policy(name='default')
 class TransferLastHiddenPolicy(AbstractArcPolicy):
 
-    def __init__(self):
-        super().__init__()
-
     def get_state(self, encoder_outputs):
         return encoder_outputs.hidden
 
 
 @register_arc_policy(name='no_arc')
 class NoArcPolicy(AbstractArcPolicy):
-
-    def __init__(self):
-        super().__init__()
 
     def _zero_state(self, final_encoder_state):
         num_rnns = len(final_encoder_state)
