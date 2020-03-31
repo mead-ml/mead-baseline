@@ -38,10 +38,7 @@ class TensorFlowExporter(Exporter):
     def __init__(self, task, **kwargs):
         super(TensorFlowExporter, self).__init__(task, **kwargs)
 
-    def _run(self, sess, basename, **kwargs):
-        pass
-
-    def run(self, basename, output_dir, project=None, name=None, model_version=None, **kwargs):
+    def _run(self, basename, output_dir, project=None, name=None, model_version=None, **kwargs):
         basename = get_tf_index_from_unzipped(basename)
 
         with tf.compat.v1.Graph().as_default():

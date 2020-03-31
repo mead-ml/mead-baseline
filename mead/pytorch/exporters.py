@@ -83,7 +83,7 @@ class PytorchONNXExporter(Exporter):
     def apply_model_patches(self, model):
         return model
 
-    def run(self, basename, output_dir, project=None, name=None, model_version=None, **kwargs):
+    def _run(self, basename, output_dir, project=None, name=None, model_version=None, **kwargs):
         logger.warning("Pytorch exporting is experimental and is not guaranteed to work for plugin models.")
         client_output, server_output = get_output_paths(
             output_dir,
@@ -130,6 +130,7 @@ class PytorchONNXExporter(Exporter):
         logger.info("Saving metadata.")
         save_to_bundle(client_output, basename, assets=meta)
         logger.info('Successfully exported model to %s', output_dir)
+        return client_output, server_output
 
     def load_model(self, model_dir):
         model_name = find_model_basename(model_dir)
