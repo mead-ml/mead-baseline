@@ -90,7 +90,7 @@ class PytorchONNXExporter(Exporter):
         logger.info("Saving serialized model to %s", server_output)
         model, vectorizers, model_name = self.load_model(basename)
         model = self.apply_model_patches(model)
-        data = create_data_dict(VECTORIZER_SHAPE_MAP, vectorizers, transpose=self.transpose, self.default_size)
+        data = create_data_dict(VECTORIZER_SHAPE_MAP, vectorizers, transpose=self.transpose, default_size=self.default_size)
 
         inputs = [k for k, _ in model.embeddings.items()] + ['lengths']
 
