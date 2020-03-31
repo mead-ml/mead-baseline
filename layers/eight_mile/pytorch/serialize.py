@@ -174,17 +174,19 @@ def to_tlm_array(pytorch_tlm: nn.Module, embeddings_key: str = 'x', name: str = 
     return d
 
 
-def save_tlm_npz(pytorch_tlm: nn.Module, npz: str, embeddings_key: str = 'x', name: str = "TLM"):
+def save_tlm_npz(pytorch_tlm: nn.Module, npz: str, embeddings_key: str = 'x', name: str = "TLM", verbose: bool = False):
     """Save a TLM to an NPZ file
 
     :param pytorch_tlm: A Transformer LM-type module
     :param npz: A file to save
     :param embeddings_key: A key to get embeddings from (defaults to `x`)
     :param name: A name for this TLM
+    :param verbose: whether output 
     :return: None
     """
     d = to_tlm_array(pytorch_tlm, embeddings_key, name)
-    print(d.keys())
+    if verbose:
+        print(d.keys())
     np.savez(npz, **d)
 
 
