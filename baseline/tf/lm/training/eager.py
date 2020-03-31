@@ -3,7 +3,7 @@ import numpy as np
 import time
 import tensorflow as tf
 from eight_mile.utils import listify
-from eight_mile.tf.layers import SET_TRAIN_FLAG
+from eight_mile.tf.layers import SET_TRAIN_FLAG, get_shape_as_list
 from eight_mile.tf.optz import EagerOptimizer
 from baseline.utils import get_model_file, get_metric_cmp
 from baseline.model import create_model_for
@@ -76,7 +76,7 @@ class LanguageModelTrainerEagerTf(Trainer):
 
     @staticmethod
     def _num_toks(y):
-        return np.prod(y.shape)
+        return np.prod(get_shape_as_list(y))
 
     def train(self, ts, reporting_fns, dataset=True):
         """Train by looping over the steps
@@ -104,7 +104,7 @@ class LanguageModelTrainerEagerTf(Trainer):
             else:
                 loss_value = self.optimizer.update(self.model, features, y)
             loss_value = loss_value.numpy()
-            toks = self._num_toks(y)
+            toks = float(self._num_toks(y))
             report_loss = loss_value * toks
             epoch_loss += report_loss
             epoch_toks += toks
