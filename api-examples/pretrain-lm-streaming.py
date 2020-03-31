@@ -19,12 +19,12 @@ from transformer_utils import MultiFileDatasetReader
 logger = logging.getLogger(__file__)
 
 
-def save_checkpoint(model: torch.nn.Module, model_base: str, count: int):
+def save_checkpoint(model: torch.nn.Module, model_base: str, count: int, tick_type: str = 'epoch'):
 
-    checkpoint_name = checkpoint_for(model_base, count+1)
+    checkpoint_name = checkpoint_for(model_base, count, tick_type=tick_type)
     # Its possible due to how its called that we might save the same checkpoint twice if we dont check first
     if os.path.exists(checkpoint_name):
-        logger.info("Checkpoint already exists: %d", count+1)
+        logger.info("Checkpoint already exists: %s", checkpoint_name)
         return
     logger.info("Creating checkpoint: %s", checkpoint_name)
     if hasattr(model, 'module'):
@@ -32,7 +32,7 @@ def save_checkpoint(model: torch.nn.Module, model_base: str, count: int):
     else:
         torch.save(model.state_dict(), checkpoint_name)
 
-    rm_old_checkpoints(model_base, count+1)
+    rm_old_checkpoints(model_base, count)
 
 
 def train():
@@ -94,7 +94,9 @@ def train():
     logging.basicConfig(level=logging.INFO if args.local_rank in [-1, 0] else logging.WARN)
     logger.info("Cache directory [%s]", args.dataset_cache)
 
-    args.distributed = args.distributed or int(os.environ.get("WORLD_SIZE", 1)) > 1
+    num_gpus = int(os.environ.get("WORLD_SIZE", 1))
+    args.distributed = args.distributed or num_gpus > 1
+    logger.info(f"Using {num_gpus} GPUs in this job.")
 
     if args.distributed:
         if args.local_rank == -1:
@@ -198,11 +200,11 @@ def train():
 
     # according to pytorch, len(train_loader) will return len(train_set) when train_set is IterableDataset, so manually
     # correct it here
-    steps_per_epoch = len(train_loader) // args.batch_size
+    steps_per_epoch = len(train_loader) // (args.batch_size*num_gpus)
     update_on = steps_per_epoch // args.update_steps
     report_on = update_on // 10
-    logger.info(f"Total number of steps per epoch: {steps_per_epoch}. Saving checkpoint every {update_on} steps.")
-    cosine_decay = CosineDecaySchedulerPyTorch(len(train_loader) * args.epochs, lr=args.lr)
+    logger.info(f"Steps per epoch per GPU: {steps_per_epoch}. Saving checkpoint every {update_on} steps.")
+    cosine_decay = CosineDecaySchedulerPyTorch(steps_per_epoch * args.epochs, lr=args.lr)
     linear_warmup = WarmupLinearSchedulerPyTorch(args.warmup_steps, lr=args.lr)
     lr_sched = CompositeLRScheduler(linear_warmup, cosine_decay, lr=args.lr)
 
@@ -218,8 +220,8 @@ def train():
             tick_type = vec[-2]
         step_num = int(vec[-1].split(".")[0])
         if tick_type == 'epoch':
-            start_epoch = step_num - 1
-            global_step = (start_epoch + 1) * steps_per_epoch
+            start_epoch = step_num
+            global_step = start_epoch * steps_per_epoch
 
         else:
             start_epoch = step_num // steps_per_epoch
@@ -242,7 +244,7 @@ def train():
         logger.info("Model located on %s", args.device)
 
     # This is the training loop
-    steps = 0
+    steps = global_step
     model_base = os.path.join(args.basedir, 'checkpoint')
 
     for epoch in range(start_epoch, args.epochs):
@@ -287,9 +289,9 @@ def train():
                 logging.info(avg_loss)
             if (i + 1) % update_on == 0 and args.local_rank < 1:
                 elapsed = (time.time() - start)/60
-                logging.info('elapsed time this epoch %d', elapsed)
+                logging.info('elapsed time this epoch %d min', elapsed)
                 logging.info('elapsed step time %f steps/min', i/elapsed)
-                save_checkpoint(model, model_base, steps)
+                save_checkpoint(model, model_base, steps, tick_type='step')
 
         # How much time elapsed in minutes
         elapsed = (time.time() - start)/60
