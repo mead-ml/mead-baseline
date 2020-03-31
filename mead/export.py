@@ -1,6 +1,7 @@
 import os
 import logging
 import argparse
+from itertools import chain
 from baseline.utils import (
     unzip_files,
     read_config_file,
@@ -13,7 +14,9 @@ from mead.utils import (
     convert_path,
     configure_logger,
     get_export_params,
+    parse_extra_args,
     create_feature_exporter_field_map,
+    parse_and_merge_overrides,
 )
 
 
@@ -40,11 +43,13 @@ def main():
     parser.add_argument('--beam', help='beam_width', default=30, type=int)
     parser.add_argument('--is_remote', help='if True, separate items for remote server and client. If False bundle everything together (default True)', default=None)
     parser.add_argument('--backend', help='The deep learning backend to use')
+    parser.add_argument('--reporting', help='reporting hooks', nargs='+')
 
-    args = parser.parse_args()
+    args, overrides = parser.parse_known_args()
     configure_logger(args.logging)
 
     config_params = read_config_file(args.config)
+    config_params = parse_and_merge_overrides(config_params, overrides, pre='x')
 
     try:
         args.settings = read_config_stream(args.settings)
@@ -66,6 +71,11 @@ def main():
     config_params['modules'] = config_params.get('modules', []) + args.modules
     if args.backend is not None:
         config_params['backend'] = normalize_backend(args.backend)
+
+    cmd_hooks = args.reporting if args.reporting is not None else []
+    config_hooks = config_params.get('reporting') if config_params.get('reporting') is not None else []
+    reporting = parse_extra_args(set(chain(cmd_hooks, config_hooks)), overrides)
+    config_params['reporting'] = reporting
 
     args.vecs = read_config_stream(args.vecs)
 
