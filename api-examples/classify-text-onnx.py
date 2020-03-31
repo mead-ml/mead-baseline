@@ -96,13 +96,13 @@ class ONNXClassifierService(object):
             directory = unzip_files(bundle)
 
         model_basename = find_model_basename(directory).replace(".pyt", "")
-        model_name = f"{model_basename}.pyt.onnx"
+        model_name = f"{model_basename}.onnx"
 
         vocabs = load_vocabs(directory)
         vectorizers = load_vectorizers(directory)
 
         # Currently nothing to do here
-        labels = read_json(os.path.join(directory, model_basename) + '.labels')
+        labels = read_json(model_basename + '.labels')
 
         model = ort.InferenceSession(model_name)
         return cls(vocabs, vectorizers, model, labels)

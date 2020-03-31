@@ -51,17 +51,11 @@ def create_fake_data(shapes, vectorizers, order, min_=0, max_=50,):
     return ordered_data, lengths
 
 
-def create_data_dict(shapes, vectorizers, transpose=False, min_=0, max_=50):
+def create_data_dict(shapes, vectorizers, transpose=False, min_=0, max_=50, default_size=100):
     data = {}
     for k, v in vectorizers.items():
-        mxlen = v.mxlen if hasattr(v, 'mxlen') else -1
-        mxwlen = v.mxwlen if hasattr(v, 'mxwlen') else -1
-        if mxwlen >= 0:
-            data[k] = torch.randint(min_, max_, (1, mxlen, mxwlen))
-        elif mxlen >= 0:
-            data[k] = torch.randint(min_, max_, (1, mxlen))
-        else:
-            data[k] = torch.randint(min_, max_, (1,))
+        dims = [d if d >= 0 else default_size for d in v.get_dims()]
+        data[k] = torch.randint(min_, max_, [1, *dims])
 
     lengths = torch.LongTensor([data[list(data.keys())[0]].shape[1]])
 
@@ -79,6 +73,7 @@ class PytorchONNXExporter(Exporter):
         super().__init__(task, **kwargs)
         self.transpose = kwargs.get('transpose', False)
         self.tracing = kwargs.get('tracing', True)
+        self.default_size = int(kwargs.get('default_size', 100))
 
     def apply_model_patches(self, model):
         return model
@@ -95,7 +90,7 @@ class PytorchONNXExporter(Exporter):
         logger.info("Saving serialized model to %s", server_output)
         model, vectorizers, model_name = self.load_model(basename)
         model = self.apply_model_patches(model)
-        data = create_data_dict(VECTORIZER_SHAPE_MAP, vectorizers, transpose=self.transpose)
+        data = create_data_dict(VECTORIZER_SHAPE_MAP, vectorizers, transpose=self.transpose, self.default_size)
 
         inputs = [k for k, _ in model.embeddings.items()] + ['lengths']
 

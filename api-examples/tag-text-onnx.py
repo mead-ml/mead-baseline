@@ -103,7 +103,7 @@ class ONNXTaggerService(object):
         vectorizers = load_vectorizers(directory)
 
         # Currently nothing to do here
-        labels = revlut(read_json(os.path.join(directory, model_basename) + '.labels'))
+        labels = revlut(read_json(model_basename + '.labels'))
 
         model = ort.InferenceSession(model_name)
         return cls(vocabs, vectorizers, model, labels)
