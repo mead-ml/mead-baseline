@@ -12,7 +12,6 @@ from baseline.model import create_model_for
 from baseline.train import register_training_func, EpochReportingTrainer
 from baseline.utils import get_model_file, get_metric_cmp
 from baseline.tf.tagger.training.utils import to_tensors
-import contextlib
 # Number of batches to prefetch if using tf.datasets
 NUM_PREFETCH = 2
 # The shuffle buffer
