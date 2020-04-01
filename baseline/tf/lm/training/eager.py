@@ -12,15 +12,15 @@ from baseline.tf.lm.training.utils import to_tensors, SHUF_BUF_SZ, NUM_PREFETCH
 
 
 def loss_with_state(model, h, x, y):
-    x["h"] = h
-    logits, h = model(x)
+    xx = {**x, **{'h': h}}
+    logits, h_out = model(xx)
     vsz = model.embeddings[model.tgt_key].get_vsz()
     targets = tf.reshape(y, [-1])
     bt_x_v = tf.nn.log_softmax(tf.reshape(logits, [-1, vsz]), axis=-1)
     one_hots = tf.one_hot(targets, vsz)
     example_loss = -tf.reduce_sum(one_hots * bt_x_v, axis=-1)
     loss = tf.reduce_mean(example_loss)
-    return loss, h
+    return loss, h_out
 
 
 def loss_without_state(model, x, y):
@@ -91,50 +91,61 @@ class LanguageModelTrainerEagerTf(Trainer):
         :param dataset: (`bool`) Are we using `tf.dataset`s
         :return: Metrics
         """
+
+        SET_TRAIN_FLAG(True)
+
         epoch_loss = tf.keras.metrics.Sum()
         epoch_toks = tf.keras.metrics.Sum()
         start = time.time()
-        SET_TRAIN_FLAG(True)
+        nstep_loss = tf.keras.metrics.Sum()
+        nstep_div = tf.keras.metrics.Sum()
+        self.nstep_start = time.time()
 
-        def _train_steps_no_state():
+        def _train_step_no_state(inputs):
+            """Replicated training step."""
 
-            def _replicated_step(inputs):
-                """Replicated training step."""
+            features, y = inputs
+            loss = self.optimizer.update(self.model, features, y)
+            toks = tf.cast(self._num_toks(y), tf.float32)
+            report_loss = loss * toks
+            epoch_loss.update_state(report_loss)
+            nstep_loss.update_state(report_loss)
+            epoch_toks.update_state(toks)
+            nstep_div.update_state(toks)
 
-                features, y = inputs
-                loss = self.optimizer.update(self.model, features, y)
-                toks = tf.cast(self._num_toks(y), tf.float32)
-                report_loss = loss * toks
-                epoch_loss.update_state(report_loss)
-                epoch_toks.update_state(toks)
+        def _train_step_with_state(inputs, hidden):
+            """Replicated training step."""
 
-            for inputs in ts:
-                _replicated_step(inputs)
-
-        def _train_steps_with_state():
-
-            h = None
-            def _replicated_step(inputs, hidden):
-                """Replicated training step."""
-
-                features, y = inputs
-                loss, hidden = self.optimizer.update_with_hidden(self.model, hidden, features, y)
-                toks = tf.cast(self._num_toks(y), tf.float32)
-                report_loss = loss * toks
-                epoch_loss.update_state(report_loss)
-                epoch_toks.update_state(toks)
-
-            for inputs in ts:
-                _replicated_step(inputs, h)
-
+            features, y = inputs
+            loss, hidden = self.optimizer.update_with_hidden(self.model, hidden, features, y)
+            toks = tf.cast(self._num_toks(y), tf.float32)
+            report_loss = loss * toks
+            epoch_loss.update_state(report_loss)
+            nstep_loss.update_state(report_loss)
+            epoch_toks.update_state(toks)
+            nstep_div.update_state(toks)
+            return hidden
         if get_version(tf) >= 2:
-            _train_steps_with_state = tf.function(_train_steps_with_state)
-            _train_steps_no_state = tf.function(_train_steps_no_state)
+            _train_step_with_state = tf.function(_train_step_with_state)
+            _train_step_no_state = tf.function(_train_step_no_state)
 
-        if self.model.requires_state:
-            _train_steps_with_state()
-        else:
-            _train_steps_no_state()
+        h = None
+        for inputs in ts:
+            if self.model.requires_state:
+                h = _train_step_with_state(inputs, h)
+            else:
+                _train_step_no_state(inputs)
+
+            step = self.optimizer.global_step.numpy() + 1
+            if step % self.nsteps == 0:
+                metrics = self.calc_metrics(nstep_loss.result().numpy(), nstep_div.result().numpy())
+                self.report(
+                    step, metrics, self.nstep_start,
+                    'Train', 'STEP', reporting_fns, self.nsteps
+                )
+                nstep_loss.reset_states()
+                nstep_div.reset_states()
+                self.nstep_start = time.time()
 
         epoch_loss = epoch_loss.result().numpy()
         epoch_toks = epoch_toks.result().numpy()
