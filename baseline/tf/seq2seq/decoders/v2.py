@@ -30,7 +30,6 @@ class AbstractArcPolicy(ArcPolicy):
     def get_state(self, encoder_outputs):
         pass
 
-    # TODO: figure out how to add back the beam
     def forward(self, encoder_output, hsz, beam_width=1):
         h_i = self.get_state(encoder_output)
         context = encoder_output.output
