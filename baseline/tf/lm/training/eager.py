@@ -2,7 +2,7 @@ import os
 import numpy as np
 import time
 import tensorflow as tf
-from eight_mile.utils import listify
+from eight_mile.utils import listify, get_version
 from eight_mile.tf.layers import SET_TRAIN_FLAG, get_shape_as_list
 from eight_mile.tf.optz import EagerOptimizer
 from baseline.utils import get_model_file, get_metric_cmp
@@ -12,15 +12,15 @@ from baseline.tf.lm.training.utils import to_tensors, SHUF_BUF_SZ, NUM_PREFETCH
 
 
 def loss_with_state(model, h, x, y):
-    x["h"] = h
-    logits, h = model(x)
+    xx = {**x, **{'h': h}}
+    logits, h_out = model(xx)
     vsz = model.embeddings[model.tgt_key].get_vsz()
     targets = tf.reshape(y, [-1])
     bt_x_v = tf.nn.log_softmax(tf.reshape(logits, [-1, vsz]), axis=-1)
     one_hots = tf.one_hot(targets, vsz)
     example_loss = -tf.reduce_sum(one_hots * bt_x_v, axis=-1)
     loss = tf.reduce_mean(example_loss)
-    return loss, h
+    return loss, h_out
 
 
 def loss_without_state(model, x, y):
@@ -60,6 +60,7 @@ class LanguageModelTrainerEagerTf(Trainer):
                                                              directory=checkpoint_dir,
                                                              max_to_keep=5)
 
+
     def checkpoint(self):
         """This method saves a checkpoint
 
@@ -76,7 +77,7 @@ class LanguageModelTrainerEagerTf(Trainer):
 
     @staticmethod
     def _num_toks(y):
-        return np.prod(get_shape_as_list(y))
+        return tf.reduce_prod(get_shape_as_list(y))
 
     def train(self, ts, reporting_fns, dataset=True):
         """Train by looping over the steps
@@ -90,34 +91,64 @@ class LanguageModelTrainerEagerTf(Trainer):
         :param dataset: (`bool`) Are we using `tf.dataset`s
         :return: Metrics
         """
-        epoch_loss = 0.0
-        epoch_toks = 0
-        start = time.time()
+
         SET_TRAIN_FLAG(True)
-        self.nstep_start = start
+
+        epoch_loss = tf.keras.metrics.Sum()
+        epoch_toks = tf.keras.metrics.Sum()
+        start = time.time()
+        nstep_loss = tf.keras.metrics.Sum()
+        nstep_div = tf.keras.metrics.Sum()
+        self.nstep_start = time.time()
+
+        def _train_step_no_state(inputs):
+            """Replicated training step."""
+
+            features, y = inputs
+            loss = self.optimizer.update(self.model, features, y)
+            toks = tf.cast(self._num_toks(y), tf.float32)
+            report_loss = loss * toks
+            epoch_loss.update_state(report_loss)
+            nstep_loss.update_state(report_loss)
+            epoch_toks.update_state(toks)
+            nstep_div.update_state(toks)
+
+        def _train_step_with_state(inputs, hidden):
+            """Replicated training step."""
+
+            features, y = inputs
+            loss, hidden = self.optimizer.update_with_hidden(self.model, hidden, features, y)
+            toks = tf.cast(self._num_toks(y), tf.float32)
+            report_loss = loss * toks
+            epoch_loss.update_state(report_loss)
+            nstep_loss.update_state(report_loss)
+            epoch_toks.update_state(toks)
+            nstep_div.update_state(toks)
+            return hidden
+        if get_version(tf) >= 2:
+            _train_step_with_state = tf.function(_train_step_with_state)
+            _train_step_no_state = tf.function(_train_step_no_state)
+
         h = None
-        for features, y in ts:
-
-            # Optimize the model
+        for inputs in ts:
             if self.model.requires_state:
-                loss_value, h = self.optimizer.update_with_hidden(self.model, h, features, y)
+                h = _train_step_with_state(inputs, h)
             else:
-                loss_value = self.optimizer.update(self.model, features, y)
-            loss_value = loss_value.numpy()
-            toks = float(self._num_toks(y))
-            report_loss = loss_value * toks
-            epoch_loss += report_loss
-            epoch_toks += toks
-            self.nstep_agg += report_loss
-            self.nstep_div += toks
+                _train_step_no_state(inputs)
 
-            if (self.optimizer.global_step + 1) % self.nsteps == 0:
-                metrics = self.calc_metrics(self.nstep_agg, self.nstep_div)
+            step = self.optimizer.global_step.numpy() + 1
+            if step % self.nsteps == 0:
+                metrics = self.calc_metrics(nstep_loss.result().numpy(), nstep_div.result().numpy())
                 self.report(
-                    self.optimizer.global_step + 1, metrics, self.nstep_start,
+                    step, metrics, self.nstep_start,
                     'Train', 'STEP', reporting_fns, self.nsteps
                 )
-                self.reset_nstep()
+                nstep_loss.reset_states()
+                nstep_div.reset_states()
+                self.nstep_start = time.time()
+
+        epoch_loss = epoch_loss.result().numpy()
+        epoch_toks = epoch_toks.result().numpy()
 
         metrics = self.calc_metrics(epoch_loss, epoch_toks)
         self.train_epochs += 1
@@ -163,7 +194,7 @@ class LanguageModelTrainerEagerTf(Trainer):
             else:
                 loss_value = loss_without_state(self.model, features, y)
             loss_value = loss_value.numpy()
-            toks = self._num_toks(y)
+            toks = tf.cast(self._num_toks(y), tf.float32).numpy()
             total_loss += loss_value * toks
             total_toks += toks
 

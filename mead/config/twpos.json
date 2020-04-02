@@ -55,7 +55,7 @@
         "dropout": 0.5,
         "rnntype": "blstm",
         "layers": 1,
-        "crf": false
+        "crf": true 
     },
     "train": {
         "batchsz": 20,

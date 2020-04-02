@@ -3,12 +3,20 @@ import tensorflow as tf
 import numpy as np
 from eight_mile.utils import listify, Offsets, wraps, get_version, is_sequence
 from typing import Optional, Union, List, Dict, Any, Tuple
-
+import contextlib
 import math
 
 BASELINE_TF_TRAIN_FLAG = None
 LOGGER = logging.getLogger('mead.layers')
 
+@contextlib.contextmanager
+def autograph_options(options):
+    old_opts = tf.config.optimizer.get_experimental_options()
+    tf.config.optimizer.set_experimental_options(options)
+    try:
+        yield
+    finally:
+        tf.config.optimizer.set_experimental_options(old_opts)
 
 def set_tf_eager_mode(prefer_eager: bool = False):
     tf_version = get_version(tf)

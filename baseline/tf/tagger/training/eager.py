@@ -5,20 +5,20 @@ import numpy as np
 import tensorflow as tf
 import logging
 from eight_mile.utils import listify, revlut, to_spans, write_sentence_conll, per_entity_f1, span_f1, conlleval_output
-from eight_mile.tf.layers import TRAIN_FLAG, SET_TRAIN_FLAG, reload_checkpoint, get_shape_as_list
+from eight_mile.tf.layers import TRAIN_FLAG, SET_TRAIN_FLAG, reload_checkpoint, get_shape_as_list, autograph_options
 from eight_mile.tf.optz import EagerOptimizer
 from baseline.progress import create_progress_bar
 from baseline.model import create_model_for
 from baseline.train import register_training_func, EpochReportingTrainer
 from baseline.utils import get_model_file, get_metric_cmp
 from baseline.tf.tagger.training.utils import to_tensors
-
 # Number of batches to prefetch if using tf.datasets
 NUM_PREFETCH = 2
 # The shuffle buffer
 SHUF_BUF_SZ = 5000
 
 logger = logging.getLogger('baseline')
+
 
 
 def loss(model, x, y):
@@ -170,14 +170,14 @@ class TaggerTrainerEagerTf(EpochReportingTrainer):
     def _get_batchsz(batch_dict):
         return batch_dict['y'].shape[0]
 
-    def _train(self, ts, steps=0, **kwargs):
+    def _train(self, loader, steps=0, **kwargs):
         """Train an epoch of data using either the input loader or using `tf.dataset`
 
         In non-`tf.dataset` mode, we cycle the loader data feed, and pull a batch and feed it to the feed dict
         When we use `tf.dataset`s under the hood, this function simply uses the loader to know how many steps
         to train.  We do use a `feed_dict` for passing the `TRAIN_FLAG` in either case
 
-        :param ts: A data feed
+        :param loader: A data feed
         :param kwargs: See below
 
         :Keyword Arguments:
@@ -186,29 +186,42 @@ class TaggerTrainerEagerTf(EpochReportingTrainer):
 
         :return: Metrics
         """
+        SET_TRAIN_FLAG(True)
         reporting_fns = kwargs.get('reporting_fns', [])
-        step = 0
-        epoch_loss = 0
-        epoch_div = 0
         pg = create_progress_bar(steps)
-        for features, y in pg(ts):
+        epoch_loss = tf.keras.metrics.Sum()
+        epoch_div = tf.keras.metrics.Sum()
+        nstep_loss = tf.keras.metrics.Sum()
+        nstep_div = tf.keras.metrics.Sum()
+        self.nstep_start = time.time()
 
-            lossv = self.optimizer.update(self.model.impl, features, y).numpy()
-            step += 1
-            batchsz = get_shape_as_list(y)[0]
-            report_loss = lossv * batchsz
-            epoch_loss += report_loss
-            epoch_div += batchsz
-            self.nstep_agg += report_loss
-            self.nstep_div += batchsz
-            if (step + 1) % self.nsteps == 0:
-                metrics = self.calc_metrics(self.nstep_agg, self.nstep_div)
-                self.report(
-                    step + 1, metrics, self.nstep_start,
-                    'Train', 'STEP', reporting_fns, self.nsteps
-                )
-                self.reset_nstep()
+        @tf.function
+        def _train_step(inputs):
+            features, y = inputs
+            loss = self.optimizer.update(self.model.impl, features, y)
+            batchsz = tf.cast(get_shape_as_list(y)[0], tf.float32)
+            report_loss = loss * batchsz
+            epoch_loss.update_state(report_loss)
+            nstep_loss.update_state(report_loss)
+            epoch_div.update_state(batchsz)
+            nstep_div.update_state(batchsz)
 
+        with autograph_options({"function_optimization": False, "layout_optimizer": False}):
+            for inputs in pg(loader):
+                _train_step(inputs)
+                step = self.optimizer.global_step.numpy() + 1
+                if step % self.nsteps == 0:
+                    metrics = self.calc_metrics(nstep_loss.result().numpy(), nstep_div.result().numpy())
+                    self.report(
+                        step, metrics, self.nstep_start,
+                        'Train', 'STEP', reporting_fns, self.nsteps
+                    )
+                    nstep_loss.reset_states()
+                    nstep_div.reset_states()
+                    self.nstep_start = time.time()
+
+        epoch_loss = epoch_loss.result().numpy()
+        epoch_div = epoch_div.result().numpy()
         metrics = self.calc_metrics(epoch_loss, epoch_div)
         return metrics
 
