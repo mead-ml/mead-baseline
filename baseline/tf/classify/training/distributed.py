@@ -24,19 +24,14 @@ SHUF_BUF_SZ = 5000
 
 log = logging.getLogger('baseline.timing')
 
-TF_VERSION = get_version(tf)
-if TF_VERSION < 2:
-    tf.enable_eager_execution()
-
-
 def loss(model, x, y):
     y_ = model(x)
     return tf.compat.v1.losses.sparse_softmax_cross_entropy(labels=y, logits=y_)
 
 
 @register_trainer(task='classify')
-class ClassifyTrainerEagerTf(EpochReportingTrainer):
-    """A Trainer to use if using TF2.0
+class ClassifyTrainerDistributedTf(EpochReportingTrainer):
+    """A Trainer to use if using TF2.0 in distributed mode
     """
     def __init__(self, model_params, **kwargs):
         """Create a Trainer, and give it the parameters needed to instantiate the model
@@ -59,6 +54,7 @@ class ClassifyTrainerEagerTf(EpochReportingTrainer):
         """
         super().__init__()
 
+        self.gpus = int(kwargs.get('gpus', 1))
         if type(model_params) is dict:
             self.model = create_model_for('classify', **model_params)
         else:
@@ -72,6 +68,9 @@ class ClassifyTrainerEagerTf(EpochReportingTrainer):
         self.checkpoint_manager = tf.train.CheckpointManager(self._checkpoint,
                                                              directory=checkpoint_dir,
                                                              max_to_keep=5)
+        devices = ['/device:GPU:{}'.format(i) for i in range(self.gpus)]
+        self.strategy = tf.distribute.MirroredStrategy(devices)
+
 
     def _train(self, loader, steps=0, **kwargs):
         """Train an epoch of data using either the input loader or using `tf.dataset`
@@ -89,47 +88,56 @@ class ClassifyTrainerEagerTf(EpochReportingTrainer):
 
         :return: Metrics
         """
+        strategy = self.strategy
+        num_replicas = strategy.num_replicas_in_sync
 
-        SET_TRAIN_FLAG(True)
-        reporting_fns = kwargs.get('reporting_fns', [])
-        pg = create_progress_bar(steps)
-        epoch_loss = tf.Variable(0.0)
-        epoch_div = tf.Variable(0, dtype=tf.int32)
-        nstep_loss = tf.Variable(0.0)
-        nstep_div = tf.Variable(0, dtype=tf.int32)
-        self.nstep_start = time.time()
-
-        @tf.function
-        def _train_step(inputs):
+        def _replicated_train_step(inputs):
             """Replicated training step."""
             features, y = inputs
-            loss = self.optimizer.update(self.model, features, y)
-            batchsz = get_shape_as_list(y)[0]
-            report_loss = loss * batchsz
-            return report_loss, batchsz
+            per_replica_loss = self.optimizer.update(self.model, features, y, num_replicas)
+            per_replica_batchsz = get_shape_as_list(y)[0]
+            per_replica_report_loss = per_replica_loss * per_replica_batchsz
+            return per_replica_report_loss, per_replica_batchsz
 
-        for inputs in pg(loader):
-            step_report_loss, step_batchsz = _train_step(inputs)
-            epoch_loss.assign_add(step_report_loss)
-            nstep_loss.assign_add(step_report_loss)
-            epoch_div.assign_add(step_batchsz)
-            nstep_div.assign_add(step_batchsz)
-            step = self.optimizer.global_step.numpy() + 1
+        with strategy.scope():
 
-            if step % self.nsteps == 0:
-                metrics = self.calc_metrics(nstep_loss.numpy(), nstep_div.numpy())
-                self.report(
-                    step, metrics, self.nstep_start,
-                    'Train', 'STEP', reporting_fns, self.nsteps
-                )
-                nstep_loss.assign(0.0)
-                nstep_div.assign(0)
-                self.nstep_start = time.time()
+            SET_TRAIN_FLAG(True)
+            reporting_fns = kwargs.get('reporting_fns', [])
+            epoch_loss = tf.Variable(0.0)
+            epoch_div = tf.Variable(0, dtype=tf.int32)
+            nstep_loss = tf.Variable(0.0)
+            nstep_div = tf.Variable(0, dtype=tf.int32)
+            self.nstep_start = time.time()
 
-        epoch_loss = epoch_loss.numpy()
-        epoch_div = epoch_div.numpy()
-        metrics = self.calc_metrics(epoch_loss, epoch_div)
-        return metrics
+            @tf.function
+            def _distributed_train_step(inputs):
+                per_replica_loss, per_replica_batchsz = strategy.experimental_run_v2(_replicated_train_step, args=(inputs,))
+                return strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_loss, axis=None), strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_batchsz, axis=None)
+
+            train_iter = iter(loader)
+            for i in range(steps):
+                step_loss, step_batchsz = _distributed_train_step(next(train_iter))
+                epoch_loss.assign_add(step_loss)
+                nstep_loss.assign_add(step_loss)
+                epoch_div.assign_add(step_batchsz)
+                nstep_div.assign_add(step_batchsz)
+                step = self.optimizer.global_step.numpy() + 1
+
+                if step % self.nsteps == 0:
+                    metrics = self.calc_metrics(nstep_loss.numpy(), nstep_div.numpy())
+                    self.report(
+                        step, metrics, self.nstep_start,
+                        'Train', 'STEP', reporting_fns, self.nsteps
+                    )
+                    nstep_loss.assign(0.0)
+                    nstep_div.assign(0)
+                    self.nstep_start = time.time()
+
+            epoch_loss = epoch_loss.numpy()
+            epoch_div = epoch_div.numpy()
+
+            metrics = self.calc_metrics(epoch_loss, epoch_div)
+            return metrics
 
     def _test(self, loader, steps=0, **kwargs):
         """Test an epoch of data using either the input loader or using `tf.dataset`
@@ -149,30 +157,56 @@ class ClassifyTrainerEagerTf(EpochReportingTrainer):
         :return: Metrics
         """
 
+        strategy = self.strategy
         cm = ConfusionMatrix(self.model.labels)
-        total_loss = 0
-        total_norm = 0
-        verbose = kwargs.get("verbose", None)
+        nc = len(self.model.labels)
 
-        pg = create_progress_bar(steps)
-
-        SET_TRAIN_FLAG(False)
-        for features, y in pg(loader):
+        def _replica_test_step(inputs):
+            features, y = inputs
+            y = tf.cast(y, tf.int64)
+            per_replica_cm = tf.zeros((nc, nc), dtype=tf.int64)
             logits = self.model(features)
-            y_ = tf.argmax(logits, axis=1, output_type=tf.int32)
-            cm.add_batch(y, y_)
-            lossv = tf.compat.v1.losses.sparse_softmax_cross_entropy(labels=y, logits=logits).numpy()
-            batchsz = int(y.shape[0])
-            assert len(y_) == batchsz
-            total_loss += lossv * batchsz
-            total_norm += batchsz
-            cm.add_batch(y, y_)
+            y_ = tf.argmax(logits, axis=1, output_type=tf.int64)
+            indices = tf.stack((y, y_), axis=-1)
+            dense_shape = tf.cast(tf.shape(per_replica_cm), tf.int64)
+            sparse_ups = tf.SparseTensor(indices=indices, values=tf.ones(get_shape_as_list(indices)[0], dtype=tf.int64),
+                                         dense_shape=dense_shape)
+            per_replica_cm = tf.compat.v1.sparse_add(per_replica_cm, sparse_ups)
+            per_replica_loss = tf.compat.v1.losses.sparse_softmax_cross_entropy(labels=y, logits=logits)
+            per_replica_batchsz = get_shape_as_list(y)[0]
+            per_replica_report_loss = per_replica_loss * per_replica_batchsz
+            return per_replica_report_loss, per_replica_batchsz, per_replica_cm
 
-        metrics = cm.get_all_metrics()
-        metrics['avg_loss'] = total_loss / float(total_norm)
-        verbose_output(verbose, cm)
+        @tf.function
+        def _distributed_test_step(inputs):
+            per_replica_loss, per_replica_batchsz, per_replica_cm = strategy.experimental_run_v2(_replica_test_step, args=(inputs,))
+            step_loss = strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_loss, axis=None)
+            step_batchsz = strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_batchsz, axis=None)
+            step_cm = strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_cm, axis=None)
+            return step_loss, step_batchsz, step_cm
 
-        return metrics
+        with strategy.scope():
+
+            total_loss = tf.Variable(0.0)
+            total_norm = tf.Variable(0, dtype=tf.int32)
+            verbose = kwargs.get("verbose", None)
+
+            SET_TRAIN_FLAG(False)
+            test_iter = iter(loader)
+
+            for i in range(steps):
+                step_loss, step_batchsz, distributed_cm = _distributed_test_step(next(test_iter))
+                total_loss += step_loss
+                total_norm += step_batchsz
+                cm._cm += distributed_cm.numpy()
+
+            metrics = cm.get_all_metrics()
+            total_loss = total_loss.numpy()
+            total_norm = total_norm.numpy()
+            metrics['avg_loss'] = total_loss / float(total_norm)
+            verbose_output(verbose, cm)
+
+            return metrics
 
     def checkpoint(self):
         """This method saves a checkpoint
@@ -189,8 +223,8 @@ class ClassifyTrainerEagerTf(EpochReportingTrainer):
         print(self._checkpoint.restore(self.checkpoint_manager.latest_checkpoint))
 
 
-@register_training_func('classify', name='default')
-def fit_eager(model_params, ts, vs, es=None, **kwargs):
+@register_training_func('classify', name='distributed')
+def fit_eager_distributed(model_params, ts, vs, es=None, **kwargs):
 
     """
     Train a classifier using TensorFlow with `tf.dataset`.  This
@@ -257,7 +291,7 @@ def fit_eager(model_params, ts, vs, es=None, **kwargs):
     reporting_fns = listify(kwargs.get('reporting', []))
     print('reporting', reporting_fns)
     SET_TRAIN_FLAG(True)
-    trainer = ClassifyTrainerEagerTf(model_params, **kwargs)
+    trainer = ClassifyTrainerDistributedTf(model_params, **kwargs)
     last_improved = 0
 
     for epoch in range(epochs):

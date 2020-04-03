@@ -3,7 +3,7 @@
     "basedir": "ptb-transformer",
     "batchsz": 20,
     "unif": 0.1,
-    "nbptt": 60,
+    "nctx": 256,
     "preproc": {
     },
     "backend": "pytorch",
@@ -19,24 +19,24 @@
                 "type": "token1d",
                 "fields": "text"
             },
-            "embeddings": {"dsz":  300, "type": "positional"}
+            "embeddings": {"dsz":  512, "type": "positional", "dropin":  0.2}
 
         }
 
     ],
     "model": {
         "model_type": "transformer",
-        "hsz": 300,
-        "layers": 2,
-        "pdrop": 0.65
+        "hsz": 512,
+        "layers": 3,
+        "pdrop": 0.5
     },
     "train": {
         "epochs": 40,
         "optim": "adamw",
-        "weight_decay": 1.0e-8,
+        "weight_decay": 1.0e-4,
         "eta": 4.0e-4,
         "do_early_stopping": true,
-        "clip": 0.5 
+        "clip": 1.0
     }
 }
 

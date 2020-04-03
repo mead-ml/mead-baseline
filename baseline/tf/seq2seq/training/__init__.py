@@ -7,3 +7,4 @@ if not tf.executing_eagerly():
     from baseline.tf.seq2seq.training.feed import *
 else:
     from baseline.tf.seq2seq.training.eager import *
+    from baseline.tf.seq2seq.training.distributed import *

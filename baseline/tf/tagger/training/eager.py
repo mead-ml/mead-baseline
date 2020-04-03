@@ -189,39 +189,41 @@ class TaggerTrainerEagerTf(EpochReportingTrainer):
         SET_TRAIN_FLAG(True)
         reporting_fns = kwargs.get('reporting_fns', [])
         pg = create_progress_bar(steps)
-        epoch_loss = tf.keras.metrics.Sum()
-        epoch_div = tf.keras.metrics.Sum()
-        nstep_loss = tf.keras.metrics.Sum()
-        nstep_div = tf.keras.metrics.Sum()
+        epoch_loss = tf.Variable(0.0)
+        epoch_div = tf.Variable(0, dtype=tf.int32)
+        nstep_loss = tf.Variable(0.0)
+        nstep_div = tf.Variable(0, dtype=tf.int32)
         self.nstep_start = time.time()
 
         @tf.function
         def _train_step(inputs):
             features, y = inputs
             loss = self.optimizer.update(self.model.impl, features, y)
-            batchsz = tf.cast(get_shape_as_list(y)[0], tf.float32)
+            batchsz = get_shape_as_list(y)[0]
             report_loss = loss * batchsz
-            epoch_loss.update_state(report_loss)
-            nstep_loss.update_state(report_loss)
-            epoch_div.update_state(batchsz)
-            nstep_div.update_state(batchsz)
+            return report_loss, batchsz
 
         with autograph_options({"function_optimization": False, "layout_optimizer": False}):
             for inputs in pg(loader):
-                _train_step(inputs)
+                step_report_loss, step_batchsz = _train_step(inputs)
+                epoch_loss.assign_add(step_report_loss)
+                nstep_loss.assign_add(step_report_loss)
+                epoch_div.assign_add(step_batchsz)
+                nstep_div.assign_add(step_batchsz)
+
                 step = self.optimizer.global_step.numpy() + 1
                 if step % self.nsteps == 0:
-                    metrics = self.calc_metrics(nstep_loss.result().numpy(), nstep_div.result().numpy())
+                    metrics = self.calc_metrics(nstep_loss.numpy(), nstep_div.numpy())
                     self.report(
                         step, metrics, self.nstep_start,
                         'Train', 'STEP', reporting_fns, self.nsteps
                     )
-                    nstep_loss.reset_states()
-                    nstep_div.reset_states()
+                    nstep_loss.assign(0.0)
+                    nstep_div.assign(0)
                     self.nstep_start = time.time()
 
-        epoch_loss = epoch_loss.result().numpy()
-        epoch_div = epoch_div.result().numpy()
+        epoch_loss = epoch_loss.numpy()
+        epoch_div = epoch_div.numpy()
         metrics = self.calc_metrics(epoch_loss, epoch_div)
         return metrics
 

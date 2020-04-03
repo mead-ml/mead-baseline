@@ -34,7 +34,7 @@ def loss_without_state(model, x, y):
     loss = tf.reduce_mean(example_loss)
     return loss
 
-class LanguageModelTrainerEagerTf(Trainer):
+class LanguageModelTrainerDistributedTf(Trainer):
     """A Trainer to use if not using tf Estimators
 
     The trainer can run in 2 modes: `dataset` and `feed_dict`.  When the former, the graph is assumed to
@@ -44,6 +44,7 @@ class LanguageModelTrainerEagerTf(Trainer):
     """
     def __init__(self, model_params, **kwargs):
         super().__init__()
+        self.gpus = int(kwargs.get('gpus', 1))
 
         if type(model_params) is dict:
             self.model = create_model_for('lm', **model_params)
@@ -60,6 +61,8 @@ class LanguageModelTrainerEagerTf(Trainer):
                                                              directory=checkpoint_dir,
                                                              max_to_keep=5)
 
+        devices = ['/device:GPU:{}'.format(i) for i in range(self.gpus)]
+        self.strategy = tf.distribute.MirroredStrategy(devices)
 
     def checkpoint(self):
         """This method saves a checkpoint
@@ -79,7 +82,7 @@ class LanguageModelTrainerEagerTf(Trainer):
     def _num_toks(y):
         return tf.reduce_prod(get_shape_as_list(y))
 
-    def train(self, ts, reporting_fns, dataset=True):
+    def train(self, ts, reporting_fns, steps=0, dataset=True):
         """Train by looping over the steps
 
         For a `tf.dataset`-backed `fit_func`, we are using the previously wired `dataset`s
@@ -91,76 +94,81 @@ class LanguageModelTrainerEagerTf(Trainer):
         :param dataset: (`bool`) Are we using `tf.dataset`s
         :return: Metrics
         """
+        strategy = self.strategy
 
-        SET_TRAIN_FLAG(True)
-        epoch_loss = tf.Variable(0.0)
-        epoch_div = tf.Variable(0, dtype=tf.int32)
-        nstep_loss = tf.Variable(0.0)
-        nstep_div = tf.Variable(0, dtype=tf.int32)
-        self.nstep_start = time.time()
-        start = time.time()
-
-        def _train_step_no_state(inputs):
-            """Replicated training step."""
+        def _replicated_train_step_no_state(inputs):
 
             features, y = inputs
-            loss = self.optimizer.update(self.model, features, y)
-            toks = self._num_toks(y)
-            report_loss = loss * tf.cast(toks, tf.float32)
-            return report_loss, toks
+            per_replica_loss = self.optimizer.update(self.model, features, y)
+            per_replica_toks = self._num_toks(y)
+            per_replica_report_loss = per_replica_loss * tf.cast(per_replica_toks, tf.float32)
+            return per_replica_report_loss, per_replica_toks
 
-        def _train_step_with_state(inputs, hidden):
-            """Replicated training step."""
-
+        @tf.function
+        def _replicated_train_step_with_state(inputs, hidden):
             features, y = inputs
-            loss, hidden = self.optimizer.update_with_hidden(self.model, hidden, features, y)
-            toks = tf.cast(self._num_toks(y), tf.float32)
-            report_loss = loss * toks
-            return hidden, report_loss, toks
+            per_replica_loss, new_hidden = self.optimizer.update_with_hidden(self.model, hidden, features, y)
+            per_replica_toks = self._num_toks(y)
+            per_replica_report_loss = per_replica_loss * tf.cast(per_replica_toks, tf.float32)
+            return new_hidden, per_replica_report_loss, per_replica_toks
 
-        if get_version(tf) >= 2:
-            _train_step_with_state = tf.function(_train_step_with_state)
-            _train_step_no_state = tf.function(_train_step_no_state)
+        with strategy.scope():
+            train_iter = iter(ts)
+            SET_TRAIN_FLAG(True)
+            epoch_loss = tf.Variable(0.0)
+            epoch_div = tf.Variable(0, dtype=tf.int32)
+            nstep_loss = tf.Variable(0.0)
+            nstep_div = tf.Variable(0, dtype=tf.int32)
+            self.nstep_start = time.time()
+            start = time.time()
 
-        h = None
-        for inputs in ts:
-            if self.model.requires_state:
-                h, step_report_loss, step_toks = _train_step_with_state(inputs, h)
-            else:
-                step_report_loss, step_toks = _train_step_no_state(inputs)
+            @tf.function
+            def _distributed_train_no_state(inputs):
+                per_replica_loss, per_replica_toks = strategy.experimental_run_v2(_replicated_train_step_no_state, args=(inputs,))
+                return strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_loss, axis=None), strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_toks, axis=None)
 
-            epoch_loss.assign_add(step_report_loss)
-            nstep_loss.assign_add(step_report_loss)
-            epoch_div.assign_add(step_toks)
-            nstep_div.assign_add(step_toks)
+            h = None
+            for i in range(steps):
 
-            step = self.optimizer.global_step.numpy() + 1
-            if step % self.nsteps == 0:
-                metrics = self.calc_metrics(nstep_loss.numpy(), nstep_div.numpy())
-                self.report(
-                    step, metrics, self.nstep_start,
-                    'Train', 'STEP', reporting_fns, self.nsteps
-                )
-                nstep_loss.assign(0.0)
-                nstep_div.assign(0)
-                self.nstep_start = time.time()
+                inputs = next(train_iter)
+                if self.model.requires_state:
+                    h, per_replica_report_loss, per_replica_toks = strategy.experimental_run_v2(_replicated_train_step_with_state,
+                                                                                                args=(inputs, h,))
+                    step_loss = strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_report_loss, axis=None)
+                    step_toks = strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_toks, axis=None)
+                else:
+                    step_loss, step_toks = _distributed_train_no_state(inputs)
+                epoch_loss.assign_add(step_loss)
+                nstep_loss.assign_add(step_loss)
+                epoch_div.assign_add(step_toks)
+                nstep_div.assign_add(step_toks)
+                step = self.optimizer.global_step.numpy() + 1
+                if step % self.nsteps == 0:
+                    metrics = self.calc_metrics(nstep_loss.numpy(), nstep_div.numpy())
+                    self.report(
+                        step, metrics, self.nstep_start,
+                        'Train', 'STEP', reporting_fns, self.nsteps
+                    )
+                    nstep_loss.assign(0.0)
+                    nstep_div.assign(0)
+                    self.nstep_start = time.time()
 
-        epoch_loss = epoch_loss.numpy()
-        epoch_div = epoch_div.numpy()
-        metrics = self.calc_metrics(epoch_loss, epoch_div)
-        self.train_epochs += 1
-        self.report(
-            self.train_epochs, metrics, start,
-            'Train', 'EPOCH', reporting_fns
-        )
-        return metrics
+            epoch_loss = epoch_loss.numpy()
+            epoch_div = epoch_div.numpy()
+            metrics = self.calc_metrics(epoch_loss, epoch_div)
+            self.train_epochs += 1
+            self.report(
+                self.train_epochs, metrics, start,
+                'Train', 'EPOCH', reporting_fns
+            )
+            return metrics
 
     def calc_metrics(self, agg, norm):
         metrics = super().calc_metrics(agg, norm)
         metrics['perplexity'] = np.exp(metrics['avg_loss'])
         return metrics
 
-    def test(self, vs, reporting_fns, phase):
+    def test(self, vs, reporting_fns, phase, steps=0):
         """Run an epoch of testing over the dataset
 
         If we are using a `tf.dataset`-based `fit_func`, we will just
@@ -175,36 +183,57 @@ class LanguageModelTrainerEagerTf(Trainer):
         :param dataset: (`bool`) Are we using `tf.dataset`s
         :return: Metrics
         """
-        total_loss = 0.0
-        total_toks = 0
-        epochs = 0
-        if phase == 'Valid':
-            self.valid_epochs += 1
-            epochs = self.valid_epochs
-        SET_TRAIN_FLAG(False)
+        strategy = self.strategy
 
-        start = time.time()
-        h = None
-        for features, y in vs:
-            if self.model.requires_state:
-                loss_value, h = loss_with_state(self.model, h, features, y)
-            else:
-                loss_value = loss_without_state(self.model, features, y)
-            loss_value = loss_value.numpy()
-            toks = tf.cast(self._num_toks(y), tf.float32).numpy()
-            total_loss += loss_value * toks
-            total_toks += toks
+        @tf.function
+        def _replicated_test_step_no_state(inputs):
+            features, y = inputs
+            per_replica_loss = loss_without_state(self.model, features, y)
+            per_replica_toks = self._num_toks(y)
+            per_replica_report_loss = per_replica_loss * tf.cast(per_replica_toks, tf.float32)
+            return per_replica_report_loss, per_replica_toks
 
-        metrics = self.calc_metrics(total_loss, total_toks)
-        self.report(
-            epochs, metrics, start,
-            phase, 'EPOCH', reporting_fns
-        )
-        return metrics
+        @tf.function
+        def _replicated_test_step_with_state(inputs, hidden):
+            features, y = inputs
+            per_replica_loss, new_hidden = loss_with_state(self.model, hidden, features, y)
+            per_replica_toks = self._num_toks(y)
+            per_replica_report_loss = per_replica_loss * tf.cast(per_replica_toks, tf.float32)
+            return new_hidden, per_replica_report_loss, per_replica_toks
+
+        with strategy.scope():
+            SET_TRAIN_FLAG(False)
+            test_iter = iter(vs)
+            epoch_loss = tf.Variable(0.0)
+            epoch_div = tf.Variable(0, dtype=tf.int32)
+            self.nstep_start = time.time()
+            start = time.time()
+
+            epochs = 0
+            if phase == 'Valid':
+                self.valid_epochs += 1
+                epochs = self.valid_epochs
+
+            h = None
+            for i in range(steps):
+                inputs = next(test_iter)
+                if self.model.requires_state:
+                    h, per_replica_loss, per_replica_toks = _replicated_test_step_with_state(inputs, h)
+                else:
+                    per_replica_loss, per_replica_toks = _replicated_test_step_no_state(inputs)
+                epoch_loss.assign_add(strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_loss, axis=None))
+                epoch_div.assign_add(strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_toks, axis=None))
+
+            metrics = self.calc_metrics(epoch_loss.numpy(), epoch_div.numpy())
+            self.report(
+                epochs, metrics, start,
+                phase, 'EPOCH', reporting_fns
+            )
+            return metrics
 
 
-@register_training_func('lm')
-def fit_eager(model_params, ts, vs, es=None, **kwargs):
+@register_training_func('lm', name='distributed')
+def fit_eager_distributed(model_params, ts, vs, es=None, **kwargs):
     """
     Train an language model using TensorFlow with `tf.dataset`.  This
     is the default behavior for training.
@@ -273,14 +302,14 @@ def fit_eager(model_params, ts, vs, es=None, **kwargs):
     test_dataset = test_dataset.batch(test_batchsz, drop_remainder=False)
     test_dataset = test_dataset.prefetch(NUM_PREFETCH)
 
-    trainer = LanguageModelTrainerEagerTf(model_params, **kwargs)
+    trainer = LanguageModelTrainerDistributedTf(model_params, **kwargs)
     last_improved = 0
     SET_TRAIN_FLAG(True)
 
     for epoch in range(epochs):
 
-        trainer.train(train_dataset, reporting_fns)
-        test_metrics = trainer.test(valid_dataset, reporting_fns, phase='Valid')
+        trainer.train(train_dataset, reporting_fns, steps=len(ts))
+        test_metrics = trainer.test(valid_dataset, reporting_fns, phase='Valid', steps=len(vs))
 
         if do_early_stopping is False:
             trainer.checkpoint()
@@ -303,5 +332,5 @@ def fit_eager(model_params, ts, vs, es=None, **kwargs):
     if es is not None:
         print('Reloading best checkpoint')
         trainer.recover_last_checkpoint()
-        trainer.test(test_dataset, reporting_fns, phase='Test')
+        trainer.test(test_dataset, reporting_fns, phase='Test', steps=len(es))
 
