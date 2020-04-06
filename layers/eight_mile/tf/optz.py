@@ -239,12 +239,7 @@ else:
 
     @register_lr_scheduler("composite")
     class CompositeLRSchedulerTensorFlow2(CompositeLRScheduler, tf.keras.optimizers.schedules.LearningRateSchedule):
-        def __init__(self, warm=None, rest=None, **kwargs):
-            super().__init__(warm, rest, **kwargs)
-
-        @tf.function
-        def __call__(self, global_step):
-            super().__call__(global_step)
+        pass
 
     @register_lr_scheduler("piecewise")
     class PiecewiseConstantDecayTensorFlow2(tf.keras.optimizers.schedules.PiecewiseConstantDecay):
