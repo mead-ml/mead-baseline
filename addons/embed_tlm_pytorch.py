@@ -80,24 +80,7 @@ class WordPieceVectorizer1D(AbstractVectorizer):
 
 @register_vectorizer(name='tlm-bpe')
 class BPEVectorizer1DFT(BPEVectorizer1D):
-    """Override bpe1d to geneate [CLS] """
-    def iterable(self, tokens):
-        for x in super().iterable(tokens):
-            yield x
-        yield '[CLS]'
-
-    def run(self, tokens, vocab):
-        if self.mxlen < 0:
-            self.mxlen = self.max_seen
-        vec1d = np.zeros(self.mxlen, dtype=np.long)
-        for i, atom in enumerate(self._next_element(tokens, vocab)):
-            if i == self.mxlen:
-                i -= 1
-                vec1d[i] = vocab.get('[CLS]')
-                break
-            vec1d[i] = atom
-        valid_length = i + 1
-        return vec1d, valid_length
+    pass
 
 
 class TransformerLMEmbeddings(PyTorchEmbeddings):
