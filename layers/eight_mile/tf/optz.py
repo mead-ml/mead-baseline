@@ -258,6 +258,17 @@ else:
             lr = kwargs.get("lr", kwargs.get("eta", 0.01))
             super().__init__(lr, decay_steps, decay_rate, staircase, kwargs.get("name"))
 
+    @register_lr_scheduler("cosine")
+    class CosineDecayTensorFlow2(CosineDecayScheduler):
+        def __init__(self, decay_steps=16000, alpha=0.0, **kwargs):
+            kwargs['lr'] = kwargs.get("lr", kwargs.get("eta", 0.01))
+            super().__init__(decay_steps, alpha, **kwargs)
+
+        def __call__(self, global_step):
+            global_step = tf.math.minimum(global_step, self.decay_steps)
+            cosine_decay = 0.5 * (1.0 + tf.cos(3.14159265 * global_step / self.decay_steps))
+            decayed = (1 - self.alpha) * cosine_decay + self.alpha
+            return self.lr * decayed
 
 @export
 class AdamWOptimizer(tf.compat.v1.train.Optimizer):

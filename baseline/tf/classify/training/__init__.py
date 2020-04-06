@@ -7,3 +7,4 @@ if not tf.executing_eagerly():
     from baseline.tf.classify.training.feed import *
 else:
     from baseline.tf.classify.training.eager import *
+    from baseline.tf.classify.training.distributed import *

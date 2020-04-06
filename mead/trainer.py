@@ -78,6 +78,7 @@ def main():
     parser.add_argument('--mod_train_file', help='override the training set')
     parser.add_argument('--mod_valid_file', help='override the validation set')
     parser.add_argument('--mod_test_file', help='override the test set')
+    parser.add_argument('--fit_func', help='override the fit function')
     parser.add_argument('--embeddings', help='index of embeddings: local file, remote URL or mead-ml/hub ref', default='config/embeddings.json', type=convert_path)
     parser.add_argument('--vecs', help='index of vectorizers: local file, remote URL or hub mead-ml/ref', default='config/vecs.json', type=convert_path)
     parser.add_argument('--logging', help='json file for logging', default='config/logging.json', type=convert_path)
@@ -116,10 +117,12 @@ def main():
 
     args.embeddings = read_config_stream(args.embeddings)
     args.vecs = read_config_stream(args.vecs)
-    if args.gpus is not None:
-        config_params['model']['gpus'] = args.gpus
-
-    if args.backend is not None:
+    if args.gpus:
+        # why does it go to model and not to train?
+        config_params['train']['gpus'] = args.gpus
+    if args.fit_func:
+        config_params['train']['fit_func'] = args.fit_func
+    if args.backend:
         config_params['backend'] = normalize_backend(args.backend)
 
     config_params['modules'] = list(set(chain(config_params.get('modules', []), args.modules)))
