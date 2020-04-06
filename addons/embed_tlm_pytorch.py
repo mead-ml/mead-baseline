@@ -82,17 +82,8 @@ class WordPieceVectorizer1D(AbstractVectorizer):
 class BPEVectorizer1DFT(BPEVectorizer1D):
     """Override bpe1d to geneate [CLS] """
     def iterable(self, tokens):
-        for t in tokens:
-            if t in Offsets.VALUES:
-                yield t
-            elif t == '<unk>':
-                yield Offsets.VALUES[Offsets.UNK]
-            elif t == '<eos>':
-                yield Offsets.VALUES[Offsets.EOS]
-            else:
-                subwords = self.tokenizer.apply([t])[0].split()
-                for x in subwords:
-                    yield x
+        for x in super().iterable(tokens):
+            yield x
         yield '[CLS]'
 
     def run(self, tokens, vocab):
