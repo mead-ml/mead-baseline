@@ -112,7 +112,7 @@ for batch in test_loader:
             targets = y.to(args.device)
             query = model.encode_query(inputs).unsqueeze(1)  # [B, 1, H]
             response = model.encode_response(targets).unsqueeze(0)  # [1, B, H]
-            all_score = nn.CosineSimilarity(dim=-1)(query, response)
+            all_score = nn.CosineSimilarity(dim=-1)(query, response).to('cpu')
 
         elif args.model_type == 'clm':
             contexts, responses = batch
@@ -132,27 +132,27 @@ for batch in test_loader:
                 targets = targets[:, 1:]
                 token_probs = torch.gather(softmaxes, -1, targets.unsqueeze(-1)).squeeze(-1)
                 token_logprobs = torch.log(token_probs)
-                for j in range(args.recall_k):
-                    print(sequences[j])
-                    print([ind2tok[i] for i in sequences[j].numpy()])
-                    print(token_probs[j])
+                # for j in range(args.recall_k):
+                #     print(sequences[j, :32])
+                #     tokens = [ind2tok[i] for i in sequences[j, :32].numpy()]
+                #     probs = [p for p in token_probs[j, :32].numpy()]
+                #     print(list(zip(tokens, probs)))
                 token_logprobs = token_logprobs*mask[:, 1:]
                 avg_logprobs = token_logprobs[:, context_lengths[i]:].sum(axis=1)/response_lengths
-                scores.append(avg_logprobs)
-                break
+                scores.append(avg_logprobs.to('cpu'))
             all_score = torch.stack(scores, axis=0)
 
         elif args.model_type == 'encoder-decoder':
             pass
 
-        _, max_indices = torch.max(all_score.to('cpu'), 1)
+        _, max_indices = torch.max(all_score, 1)
         correct = (max_indices == torch.arange(args.recall_k)).sum()
         numerator += correct
-        # print(f"Selected {correct} correct responses out of {args.recall_k}")
+        print(f"Selected {correct} correct responses out of {args.recall_k}")
         denominator += args.recall_k
     pg.update()
 pg.done()
 acc = float(numerator)/denominator
 
-print(f"The 1@100 accuracy is {acc}")
+print(f"The 1@{args.recall_k} accuracy is {acc}")
 
