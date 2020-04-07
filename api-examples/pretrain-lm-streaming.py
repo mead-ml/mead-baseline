@@ -150,7 +150,7 @@ def train():
     logger.info("Using embedding type [%s]", args.embed_type)
 
     if args.mlm:
-        mask_from = vocabs['x']
+        mask_from = vocabs
         vocab_size = len(mask_from)
         mask_value = mask_from.get("[MASK]", mask_from.get("<MASK>", -1))
         if mask_value == -1:
