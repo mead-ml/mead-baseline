@@ -81,7 +81,7 @@ def transition_mask(vocab, span_type, s_idx, e_idx, pad_idx=None):
     """
     mask = transition_mask_np(vocab, span_type, s_idx, e_idx, pad_idx).T
     inv_mask = (mask == 0).astype(np.float32)
-    return tf.constant(mask), tf.constant(inv_mask)
+    return mask, inv_mask
 
 
 def dense_layer(output_layer_depth):

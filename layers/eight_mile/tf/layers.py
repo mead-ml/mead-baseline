@@ -2500,15 +2500,31 @@ class FFN(tf.keras.layers.Layer):
 
 class TaggerGreedyDecoder(tf.keras.layers.Layer):
     def __init__(self, num_tags: int, constraint_mask: Optional[Tuple[Any, Any]] = None, name: Optional[str] = None):
+        """Initialize the object.
+        :param num_tags: int, The number of tags in your output (emission size)
+        :param constraint_mask: Tuple[np.ndarray, np.ndarray], Constraints on the transitions [1, N, N]
+        :param name: str, Optional name, defaults to `None`
+        """
         super().__init__(name=name)
         self.num_tags = num_tags
         self.inv_mask = None
         if constraint_mask is not None:
             _, inv_mask = constraint_mask
-            self.inv_mask = inv_mask * tf.constant(-1e4)
+            inv_mask = inv_mask * -1e4
 
             self.A = self.add_weight(
-                "transitions_raw", shape=(num_tags, num_tags), dtype=tf.float32, init="zeros", trainable=False
+                "transitions_raw",
+                shape=(num_tags, num_tags),
+                dtype=tf.float32,
+                initializer="zeros",
+                trainable=False
+            )
+            self.inv_mask = self.add_weight(
+                "inv_constraint_mask",
+                shape=(num_tags, num_tags),
+                dtype=tf.float32,
+                initializer=tf.constant_initializer(inv_mask),
+                trainable=False
             )
 
     @property
@@ -2551,7 +2567,7 @@ class CRF(tf.keras.layers.Layer):
     def __init__(self, num_tags: int, constraint_mask: Optional[Tuple[Any, Any]] = None, name: Optional[str] = None):
         """Initialize the object.
         :param num_tags: int, The number of tags in your output (emission size)
-        :param constraint_mask: torch.ByteTensor, Constraints on the transitions [1, N, N]
+        :param constraint_mask: Tuple[np.ndarray, np.ndarray], Constraints on the transitions [1, N, N]
         :param name: str, Optional name, defaults to `None`
         """
         super().__init__(name=name)
@@ -2561,8 +2577,22 @@ class CRF(tf.keras.layers.Layer):
         self.mask = None
         self.inv_mask = None
         if constraint_mask is not None:
-            self.mask, inv_mask = constraint_mask
-            self.inv_mask = inv_mask * tf.constant(-1e4)
+            mask, inv_mask = constraint_mask
+            inv_mask = inv_mask * -1e4
+            self.mask = self.add_weight(
+                "constraint_mask",
+                shape=(num_tags, num_tags),
+                dtype=tf.float32,
+                trainable=False,
+                initializer=tf.constant_initializer(mask)
+            )
+            self.inv_mask = self.add_weight(
+                "inverse_constraint_mask",
+                shape=(num_tags, num_tags),
+                dtype=tf.float32,
+                trainable=False,
+                initializer=tf.constant_initializer(inv_mask)
+            )
 
     @property
     def transitions(self):
