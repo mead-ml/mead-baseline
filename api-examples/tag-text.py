@@ -22,6 +22,7 @@ parser.add_argument('--export_mapping', help='mapping between features and the f
                                                          '`exporter_field` definition in the mead config',
                     default=[], nargs='+')
 parser.add_argument('--prefer_eager', help="If running in TensorFlow, should we prefer eager model", type=str2bool)
+parser.add_argument('--batchsz', default=64, help="How many examples to run through the model at once", type=int)
 
 args = parser.parse_args()
 
@@ -66,7 +67,11 @@ else:
 
 m = bl.TaggerService.load(args.model, backend=args.backend, remote=args.remote,
                           name=args.name, preproc=args.preproc, device=args.device)
-for sen in m.predict(texts, export_mapping=create_export_mapping(args.export_mapping)):
-    for word_tag in sen:
-        print("{} {}".format(word_tag['text'], word_tag['label']))
-    print()
+
+batched = [texts[i:i+args.batchsz] for i in range(0, len(texts), args.batchsz)]
+
+for texts in batched:
+    for sen in m.predict(texts, export_mapping=create_export_mapping(args.export_mapping)):
+        for word_tag in sen:
+            print("{} {}".format(word_tag['text'], word_tag['label']))
+        print()
