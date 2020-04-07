@@ -7,8 +7,8 @@ import logging
 logger = logging.getLogger("baseline")
 
 
-def create_model(model_type, embeddings, d_model=512, d_ff=2048, dropout=0., num_heads=8, num_layers=6, rpr_k=[],
-                 d_k=None):
+def create_model(model_type, embeddings, d_model=512, d_ff=2048, dropout=0., num_heads=8, num_layers=6,
+                 stacking_layers=None, rpr_k=[], d_k=None):
     if len(rpr_k) == 0 or rpr_k[0] < 1:
         rpr_k = None
     if model_type == "encoder-decoder":
@@ -26,7 +26,8 @@ def create_model(model_type, embeddings, d_model=512, d_ff=2048, dropout=0., num
                "rpr_k": rpr_k}
         model = TiedEmbeddingsSeq2SeqModel(embeddings, **hps)
     elif model_type == 'dual-encoder':
-        model = PairedModel(embeddings, d_model, d_ff, dropout, num_heads, num_layers, rpr_k=rpr_k, d_k=d_k)
+        model = PairedModel(embeddings, d_model, d_ff, dropout, num_heads, num_layers, stacking_layers=stacking_layers,
+                            rpr_k=rpr_k, d_k=d_k)
     else:
         model = TransformerLanguageModel.create({'x': embeddings},
                                                 hsz=d_model,
@@ -45,15 +46,24 @@ def create_model(model_type, embeddings, d_model=512, d_ff=2048, dropout=0., num
 
 
 parser = argparse.ArgumentParser("Load a dual-encoder model and do response selection on testing data")
-parser.add_argument("--ckpt", type=str, help="path to the model checkpoint")
-parser.add_argument("--test_file", type=str, help="path to the testing data")
 parser.add_argument("--model_type", type=str, choices=['dual-encoder', 'encoder-decoder', 'clm'])
-parser.add_argument("--subword_model_file", type=str, required=True)
-parser.add_argument("--subword_vocab_file", type=str, required=True)
+parser.add_argument("--d_model", type=int, default=512, help="Model dimension (and embedding dsz)")
+parser.add_argument("--d_ff", type=int, default=2048, help="FFN dimension")
+parser.add_argument("--d_k", type=int, default=None, help="Dimension per head.  Use if num_heads=1 to reduce dims")
+parser.add_argument("--num_heads", type=int, default=8, help="Number of heads")
+parser.add_argument("--num_ft_workers", type=int, default=4, help="Number train workers")
+parser.add_argument("--num_test_workers", type=int, default=2, help="Number valid workers")
+parser.add_argument("--num_layers", type=int, default=6, help="Number of layers")
 parser.add_argument("--nctx", type=int, default=64, help="Max context length (for both encoder and decoder)")
-parser.add_argument("--reader_type", type=str, default='ntp', choices=['ntp', 'nsp'])
 parser.add_argument("--embed_type", type=str, default='positional',
                     help="register label of the embeddings, so far support positional or learned-positional")
+parser.add_argument("--stacking_layers", type=int, nargs='+', default=[1024, 1024, 1024])
+parser.add_argument('--rpr_k', help='Relative attention positional sizes pass 0 if you dont want relative attention',
+                    type=int, default=[3, 5, 48, 48, 48, 48], nargs='+')
+parser.add_argument("--ckpt", type=str, help="path to the model checkpoint")
+parser.add_argument("--test_file", type=str, help="path to the testing data")
+parser.add_argument("--subword_model_file", type=str, required=True)
+parser.add_argument("--subword_vocab_file", type=str, required=True)
 parser.add_argument("--recall_k", type=int, default=100, help="select the response from how many candidates")
 parser.add_argument("--device", type=str,
                     default="cuda" if torch.cuda.is_available() else "cpu",
@@ -69,17 +79,24 @@ embeddings = preproc_data['embeddings']
 logger.info("Loaded embeddings")
 
 test_set = reader.load(args.test_file, vocabs)
+ind2tok = {ind: tok for tok, ind in vocabs.items()}
 
-# use other samples in a batch as negative samples, reference usually reports selection acc from 100 samples, so hard
-# coded here. Don't shuffle to compare with conveRT benchmarks
-test_loader = DataLoader(test_set, batch_size=args.recall_k, num_workers=4)
+# use other samples in a batch as negative samples. Don't shuffle to compare with conveRT benchmarks
+test_loader = DataLoader(test_set, batch_size=args.recall_k, num_workers=args.num_test_workers)
 logger.info("Loaded datasets")
 
-model = create_model(args.model_type, embeddings)
+model = create_model(args.model_type,
+                     embeddings,
+                     d_model=args.d_model,
+                     d_ff=args.d_ff,
+                     dropout=0.,
+                     num_heads=args.num_heads,
+                     num_layers=args.num_layers,
+                     stacking_layers=args.stacking_layers,
+                     rpr_k=args.rpr_k,
+                     d_k=args.d_k)
 model.load_state_dict(torch.load(args.ckpt))
 model.to(args.device)
-loss_function = model.create_loss()
-loss_function.to(args.device)
 
 numerator = 0
 denominator = 0
@@ -99,32 +116,39 @@ for batch in test_loader:
 
         elif args.model_type == 'clm':
             contexts, responses = batch
-            # expand the tensors so each response is paired to each context
-            # [B*B, T] make B copies of each sample
-            contexts = contexts.expand(args.recall_k, -1, -1).transpose(0, 1).reshape(-1, args.nctx)
-            # [B*B, T] make B copies of the whole batch
-            responses = responses.expand(args.recall_k, -1, -1).reshape(-1, args.nctx)
             context_lengths = torch.sum(contexts != 0, 1)
-            expand_batchsz = args.recall_k**2
-            losses = torch.zeros(expand_batchsz).to(args.device)
-            for i in range(expand_batchsz):
-                sequence = torch.cat((contexts[i, :context_lengths[i]], responses[i], contexts[i, context_lengths[i]:]))
-                sequence = sequence.unsqueeze(0)  # make a batch with bsz=1
-                inputs = {'x': sequence.to(args.device)}
-                labels = sequence.to(args.device)
-                labels = labels.transpose(0, 1).contiguous()
-                logits = model(inputs, None)[0].transpose(0, 1).contiguous()
-                shift_logits = logits[:-1]
-                shift_labels = labels[1:]
-                losses[i] = loss_function(shift_logits, shift_labels)
-            all_score = - losses.reshape(args.recall_k, -1)
-            print(all_score)
+            response_lengths = torch.sum(responses != 0, 1).to(args.device)
+            scores = []
+            for i in range(args.recall_k):
+                # make recall_k copies of one context and remove padding
+                context = contexts[i][:context_lengths[i]].expand(args.recall_k, -1)
+                # pair the same context with all candidate responses
+                sequences = torch.cat([context, responses], axis=1)
+                mask = (sequences != 0).to(args.device)
+                inputs = {'x': sequences.to(args.device)}
+                targets = sequences.to(args.device)
+                softmaxes = model.predict(inputs, numpy_to_tensor=False)
+                softmaxes = softmaxes[:, :-1]
+                targets = targets[:, 1:]
+                token_probs = torch.gather(softmaxes, -1, targets.unsqueeze(-1)).squeeze(-1)
+                token_logprobs = torch.log(token_probs)
+                for j in range(args.recall_k):
+                    print(sequences[j])
+                    print([ind2tok[i] for i in sequences[j].numpy()])
+                    print(token_probs[j])
+                token_logprobs = token_logprobs*mask[:, 1:]
+                avg_logprobs = token_logprobs[:, context_lengths[i]:].sum(axis=1)/response_lengths
+                scores.append(avg_logprobs)
+                break
+            all_score = torch.stack(scores, axis=0)
 
         elif args.model_type == 'encoder-decoder':
             pass
 
-        _, max_indices = torch.max(all_score, 1)
-        numerator += (max_indices == torch.arange(args.recall_k).to(args.device)).sum()
+        _, max_indices = torch.max(all_score.to('cpu'), 1)
+        correct = (max_indices == torch.arange(args.recall_k)).sum()
+        numerator += correct
+        # print(f"Selected {correct} correct responses out of {args.recall_k}")
         denominator += args.recall_k
     pg.update()
 pg.done()
