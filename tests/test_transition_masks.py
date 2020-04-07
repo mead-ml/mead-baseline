@@ -1,7 +1,7 @@
 import pytest
 from eight_mile.utils import transition_mask
 
-IOBv = {"<PAD>": 0, "<GO>": 1, "<EOS>": 2, "B-X": 3, "I-X": 4, "B-Y": 5, "I-Y": 6, "O": 7}
+IOBv = {"<PAD>": 0, "<GO>": 1, "<EOS>": 2, "B-X": 3, "I-X": 4, "B-X-Y": 5, "I-X-Y": 6, "O": 7}
 
 BIOv = IOBv
 
@@ -13,10 +13,10 @@ IOBESv = {
     "I-X": 4,
     "E-X": 5,
     "S-X": 6,
-    "B-Y": 7,
-    "I-Y": 8,
-    "E-Y": 9,
-    "S-Y": 10,
+    "B-X-Y": 7,
+    "I-X-Y": 8,
+    "E-X-Y": 9,
+    "S-X-Y": 10,
     "O": 11,
 }
 
@@ -51,7 +51,7 @@ def test_IOBES_shape(IOBES):
 
 
 def test_IOB_I_B_mismatch(IOB):
-    assert IOB[IOBv["B-X"], IOBv["I-Y"]] == 0
+    assert IOB[IOBv["B-X"], IOBv["I-X-Y"]] == 0
 
 
 def test_ION_I_I_match(IOB):
@@ -59,7 +59,7 @@ def test_ION_I_I_match(IOB):
 
 
 def test_IOB_I_I_mismatch(IOB):
-    assert IOB[IOBv["I-Y"], IOBv["I-X"]] == 1
+    assert IOB[IOBv["I-X-Y"], IOBv["I-X"]] == 1
 
 
 def test_IOB_to_pad(IOB):
@@ -124,8 +124,8 @@ def test_IOBES_O(IOBES):
 def test_IOBES_B(IOBES):
     assert IOBES[IOBESv["I-X"], IOBESv["B-X"]] == 1
     assert IOBES[IOBESv["E-X"], IOBESv["B-X"]] == 1
-    assert IOBES[IOBESv["I-Y"], IOBESv["B-X"]] == 0
-    assert IOBES[IOBESv["E-Y"], IOBESv["B-X"]] == 0
+    assert IOBES[IOBESv["I-X-Y"], IOBESv["B-X"]] == 0
+    assert IOBES[IOBESv["E-X-Y"], IOBESv["B-X"]] == 0
     assert IOBES[IOBESv["S-X"], IOBESv["B-X"]] == 0
     assert IOBES[IOBESv["B-X"], IOBESv["B-X"]] == 0
     assert IOBES[IOBESv["O"], IOBESv["B-X"]] == 0
@@ -134,8 +134,8 @@ def test_IOBES_B(IOBES):
 def test_IOBES_I(IOBES):
     assert IOBES[IOBESv["I-X"], IOBESv["I-X"]] == 1
     assert IOBES[IOBESv["E-X"], IOBESv["I-X"]] == 1
-    assert IOBES[IOBESv["I-Y"], IOBESv["I-X"]] == 0
-    assert IOBES[IOBESv["E-Y"], IOBESv["I-X"]] == 0
+    assert IOBES[IOBESv["I-X-Y"], IOBESv["I-X"]] == 0
+    assert IOBES[IOBESv["E-X-Y"], IOBESv["I-X"]] == 0
     assert IOBES[IOBESv["S-X"], IOBESv["I-X"]] == 0
     assert IOBES[IOBESv["B-X"], IOBESv["I-X"]] == 0
     assert IOBES[IOBESv["O"], IOBESv["I-X"]] == 0
@@ -153,11 +153,11 @@ def test_IOBES_to_E(IOBES):
     assert IOBES[IOBESv["E-X"], IOBESv["B-X"]] == 1
     assert IOBES[IOBESv["E-X"], IOBESv["I-X"]] == 1
     assert IOBES[IOBESv["E-X"], IOBESv["E-X"]] == 0
-    assert IOBES[IOBESv["E-X"], IOBESv["B-Y"]] == 0
-    assert IOBES[IOBESv["E-X"], IOBESv["I-Y"]] == 0
-    assert IOBES[IOBESv["E-X"], IOBESv["E-Y"]] == 0
+    assert IOBES[IOBESv["E-X"], IOBESv["B-X-Y"]] == 0
+    assert IOBES[IOBESv["E-X"], IOBESv["I-X-Y"]] == 0
+    assert IOBES[IOBESv["E-X"], IOBESv["E-X-Y"]] == 0
     assert IOBES[IOBESv["E-X"], IOBESv["S-X"]] == 0
-    assert IOBES[IOBESv["E-X"], IOBESv["S-Y"]] == 0
+    assert IOBES[IOBESv["E-X"], IOBESv["S-X-Y"]] == 0
     assert IOBES[IOBESv["E-X"], IOBESv["O"]] == 0
 
 
