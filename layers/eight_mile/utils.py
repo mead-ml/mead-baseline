@@ -210,15 +210,15 @@ def iob_mask(vocab, start, end, pad=None):
                 if from_.startswith("B-"):
                     # Can't move from a B to a B of another type
                     if to.startswith("B-"):
-                        from_type = from_.split("-")[1]
-                        to_type = to.split("-")[1]
+                        from_type = from_.split("-", maxsplit=1)[1]
+                        to_type = to.split("-", maxsplit=1)[1]
                         if from_type != to_type:
                             mask[vocab[to], vocab[from_]] = small
                 elif from_.startswith("I-"):
                     # Can't move from an I to a B of another type
                     if to.startswith("B-"):
-                        from_type = from_.split("-")[1]
-                        to_type = to.split("-")[1]
+                        from_type = from_.split("-", maxsplit=1)[1]
+                        to_type = to.split("-", maxsplit=1)[1]
                         if from_type != to_type:
                             mask[vocab[to], vocab[from_]] = small
                 elif from_.startswith("O"):
@@ -252,15 +252,15 @@ def iob2_mask(vocab, start, end, pad=None):
                 if from_.startswith("B-"):
                     # Can't move from a B to an I of a different type
                     if to.startswith("I-"):
-                        from_type = from_.split("-")[1]
-                        to_type = to.split("-")[1]
+                        from_type = from_.split("-", maxsplit=1)[1]
+                        to_type = to.split("-", maxsplit=1)[1]
                         if from_type != to_type:
                             mask[vocab[to], vocab[from_]] = small
                 elif from_.startswith("I-"):
                     # Can't move from an I to an I of another type
                     if to.startswith("I-"):
-                        from_type = from_.split("-")[1]
-                        to_type = to.split("-")[1]
+                        from_type = from_.split("-", maxsplit=1)[1]
+                        to_type = to.split("-", maxsplit=1)[1]
                         if from_type != to_type:
                             mask[vocab[to], vocab[from_]] = small
                 elif from_.startswith("O"):
@@ -297,8 +297,8 @@ def iobes_mask(vocab, start, end, pad=None):
                         mask[vocab[to], vocab[from_]] = small
                     # Can only move to matching I or E
                     elif to.startswith("I-") or to.startswith("E-"):
-                        from_type = from_.split("-")[1]
-                        to_type = to.split("-")[1]
+                        from_type = from_.split("-", maxsplit=1)[1]
+                        to_type = to.split("-", maxsplit=1)[1]
                         if from_type != to_type:
                             mask[vocab[to], vocab[from_]] = small
                 elif from_.startswith("I-"):
@@ -307,13 +307,12 @@ def iobes_mask(vocab, start, end, pad=None):
                         mask[vocab[to], vocab[from_]] = small
                     # Can only move to matching I or E
                     elif to.startswith("I-") or to.startswith("E-"):
-                        from_type = from_.split("-")[1]
-                        to_type = to.split("-")[1]
+                        from_type = from_.split("-", maxsplit=1)[1]
+                        to_type = to.split("-", maxsplit=1)[1]
                         if from_type != to_type:
                             mask[vocab[to], vocab[from_]] = small
-                elif from_.startswith(("E-", "I-", "S-", "O")):
+                elif from_.startswith(("E-", "S-", "O")):
                     # Can't move from E to I or E
-                    # Can't move from I to I or E
                     # Can't move from S to I or E
                     # Can't move from O to I or E
                     if to.startswith("I-") or to.startswith("E-"):
