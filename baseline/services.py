@@ -329,7 +329,7 @@ class TaggerService(Service):
                         tokens_batch += [utt_dict_seq]
                 # Its already in List[List[dict]] form, do nothing
                 elif isinstance(tokens[0][0], dict):
-                    tokens_batch = [tokens]
+                    tokens_batch = tokens
             # If its a dict, we just wrap it up
             elif isinstance(tokens[0], dict):
                 tokens_batch = [tokens]

@@ -215,7 +215,7 @@ class TaggerModelBase(tf.keras.Model, TaggerModel):
                 labels = read_json("{}.labels".format(basename))
                 if _state.get('constraint_mask') is not None:
                     # Dummy constraint values that will be filled in by the check pointing
-                    _state['constraint_mask'] = [tf.zeros((len(labels), len(labels))) for _ in range(2)]
+                    _state['constraint_mask'] = [np.zeros((len(labels), len(labels))) for _ in range(2)]
                 model = cls.create(embeddings, labels, **_state)
                 model._state = _state
                 model.create_loss()
@@ -234,7 +234,7 @@ class TaggerModelBase(tf.keras.Model, TaggerModel):
             labels = read_json("{}.labels".format(basename))
             if _state.get('constraint_mask') is not None:
                 # Dummy constraint values that will be filled in by the check pointing
-                _state['constraint_mask'] = [tf.zeros((len(labels), len(labels))) for _ in range(2)]
+                _state['constraint_mask'] = [np.zeros((len(labels), len(labels))) for _ in range(2)]
             model = cls.create(embeddings, labels, **_state)
             model._state = _state
             model.load_weights(f"{basename}.wgt")
