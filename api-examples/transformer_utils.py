@@ -154,7 +154,7 @@ class PairedModel(nn.Module):
 
 class MultiFileLoader(IterableDataset):
 
-    def __init__(self, directory, pattern, vocabs, vectorizer, nctx):
+    def __init__(self, directory, pattern, vocabs, vectorizer, nctx, last_turn_only=True):
         super().__init__()
         self.vectorizer = vectorizer
         self.pattern = pattern
@@ -164,6 +164,7 @@ class MultiFileLoader(IterableDataset):
         self.samples = 0
         self.rank = 0
         self.world_size = 1
+        self.last_turn_only = last_turn_only
         if torch.distributed.is_initialized():
             self.rank = torch.distributed.get_rank()
             self.world_size = torch.distributed.get_world_size()
@@ -232,8 +233,14 @@ class NextTurnPredictionFileLoader(MultiFileLoader):
         q, r = pair
         if q == '' or r == '':
             return None
-        q_vec, q_valid_lengths = self.vectorizer.run(reversed(q.split()), self.vocab)
-        q_vec = np.roll(q_vec[::-1], -(self.vectorizer.mxlen - q_valid_lengths))
+        if self.last_turn_only:
+            turns = q.split('<EOU>')
+            q = turns[-1] if turns[-1] != '' else turns[-2]
+            q_vec, q_valid_lengths = self.vectorizer.run(q.split(), self.vocab)
+        else:
+            q_vec, q_valid_lengths = self.vectorizer.run(reversed(q.split()), self.vocab)
+            q_vec = np.roll(q_vec[::-1], -(self.vectorizer.mxlen - q_valid_lengths))
+
         r_vec, r_valid_lengths = self.vectorizer.run(r.split(), self.vocab)
         return q_vec, r_vec
 
@@ -245,10 +252,9 @@ class SequencePredictionFileLoader(MultiFileLoader):
         if not line:
             return None
 
-        vec, valid_lengths = self.vectorizer.run(reversed(line.split()), self.vocab)
+        vec, valid_lengths = self.vectorizer.run(line.split(), self.vocab)
         if valid_lengths < 2:
             return None
-        vec = np.roll(vec[::-1], -(self.vectorizer.mxlen - valid_lengths))
         return vec, vec
 
 
@@ -258,8 +264,7 @@ class NextSequencePredictionFileLoader(MultiFileLoader):
         line = line.strip()
         if not line:
             return None
-        vec, valid_lengths = self.vectorizer.run(reversed(line.split()), self.vocab)
-        vec = np.roll(vec[::-1], -(self.vectorizer.mxlen - valid_lengths))
+        vec, valid_lengths = self.vectorizer.run(line.split(), self.vocab)
         if valid_lengths < 2:
             return None
         pair_entry_length = self.vectorizer.mxlen//2
