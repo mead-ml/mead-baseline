@@ -8,6 +8,7 @@ from eight_mile.confusion import ConfusionMatrix
 from eight_mile.utils import listify
 from eight_mile.tf.layers import reload_checkpoint
 from eight_mile.tf.optz import optimizer
+import eight_mile.metrics.multilabel as ml
 
 from baseline.progress import create_progress_bar
 from baseline.utils import get_model_file, get_metric_cmp
@@ -252,3 +253,85 @@ class ClassifyTrainerTf(EpochReportingTrainer):
         print('Reloading ' + latest)
         self.model.saver.restore(self.model.sess, latest)
 
+
+@register_trainer(task='classify', name='multi-label')
+class MultiLabelClassifyTrainerTf(ClassifyTrainerTf):
+    """A Trainer to use if not using tf Estimators
+
+    The trainer can run in 2 modes: `dataset` and `feed_dict`.  When the former, the graph is assumed to
+    be connected by features attached to the input so the `feed_dict` will only be used to pass dropout information.
+
+    When the latter, we will use the baseline DataFeed to read the object into the `feed_dict`
+    """
+    def __init__(self, model_params, **kwargs):
+        """Create a Trainer, and give it the parameters needed to instantiate the model
+
+        :param model_params: The model parameters
+        :param kwargs: See below
+
+        :Keyword Arguments:
+
+          * *nsteps* (`int`) -- If we should report every n-steps, this should be passed
+          * *ema_decay* (`float`) -- If we are doing an exponential moving average, what decay to us4e
+          * *clip* (`int`) -- If we are doing gradient clipping, what value to use
+          * *optim* (`str`) -- The name of the optimizer we are using
+          * *lr* (`float`) -- The learning rate we are using
+          * *mom* (`float`) -- If we are using SGD, what value to use for momentum
+          * *beta1* (`float`) -- Adam-specific hyper-param, defaults to `0.9`
+          * *beta2* (`float`) -- Adam-specific hyper-param, defaults to `0.999`
+          * *epsilon* (`float`) -- Adam-specific hyper-param, defaults to `1e-8
+
+        """
+        super().__init__(model_params, **kwargs)
+        self.threshold = float(kwargs.get("output_threshold", 0.5))
+
+    def _test(self, loader, **kwargs):
+        """Test an epoch of data using either the input loader or using `tf.dataset`
+
+        In non-`tf.dataset` mode, we cycle the loader data feed, and pull a batch and feed it to the feed dict
+        When we use `tf.dataset`s under the hood, this function simply uses the loader to know how many steps
+        to train.
+
+        :param loader: A data feed
+        :param kwargs: See below
+
+        :Keyword Arguments:
+          * *dataset* (`bool`) Set to `True` if using `tf.dataset`s, defaults to `True`
+          * *reporting_fns* (`list`) A list of reporting hooks to use
+          * *verbose* (`dict`) A dictionary containing `console` boolean and `file` name if on
+
+        :return: Metrics
+        """
+        if self.ema:
+            self.sess.run(self.ema_load)
+
+        use_dataset = kwargs.get('dataset', True)
+
+        gold_labels = []
+        pred_labels = []
+        steps = len(loader)
+        total_loss = 0
+        total_norm = 0
+        verbose = kwargs.get("verbose", None)
+
+        pg = create_progress_bar(steps)
+        for i, batch_dict in enumerate(pg(loader)):
+            y = batch_dict['y']
+            if use_dataset:
+                preds, lossv = self.sess.run([self.model.probs, self.test_loss])
+            else:
+                feed_dict = self.model.make_input(batch_dict, False)
+                preds, lossv = self.sess.run([self.model.probs, self.test_loss], feed_dict=feed_dict)
+
+            batchsz = len(preds)
+            total_loss += lossv * batchsz
+            total_norm += batchsz
+
+            gold_labels.append(y.astype(np.int32))
+            preds[preds > self.threshold] = 1
+            pred_labels.append(preds.astype(np.int32))
+
+        metrics = ml.get_all_metrics(np.concatenate(gold_labels, axis=0), np.concatenate(pred_labels, axis=0))
+        metrics['avg_loss'] = total_loss / float(total_norm)
+
+        return metrics

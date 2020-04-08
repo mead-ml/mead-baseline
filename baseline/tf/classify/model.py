@@ -29,6 +29,7 @@ from baseline.tf.tfy import (
 logger = logging.getLogger('baseline')
 
 
+
 class ClassifierModelBase(tf.keras.Model, ClassifierModel):
     """Base for all baseline implementations of token-based classifiers
 
@@ -360,6 +361,125 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
         return EmbeddingsStack(self.embeddings)
 
 
+class MultiLabelMixin(ClassifierModelBase):
+    @classmethod
+    def create(cls, embeddings, labels, **kwargs):
+        """The main method for creating all :class:`ClassifierBasedModel` types.
+
+        This method instantiates a model with pooling and optional stacking layers.
+        Many of the arguments provided are reused by each implementation, but some sub-classes need more
+        information in order to properly initialize.  For this reason, the full list of keyword args are passed
+        to the :method:`pool` and :method:`stacked` methods.
+
+        :param embeddings: This is a dictionary of embeddings, mapped to their numerical indices in the lookup table
+        :param labels: This is a list of the `str` labels
+        :param kwargs: There are sub-graph specific Keyword Args allowed for e.g. embeddings. See below for known args:
+
+        :Keyword Arguments:
+        * *gpus* -- (``int``) How many GPUs to split training across.  If called this function delegates to
+            another class `ClassifyParallelModel` which creates a parent graph and splits its inputs across each
+            sub-model, by calling back into this exact method (w/o this argument), once per GPU
+        * *model_type* -- The string name for the model (defaults to `default`)
+        * *sess* -- An optional tensorflow session.  If not passed, a new session is
+            created
+        * *lengths_key* -- (``str``) Specifies which `batch_dict` property should be used to determine the temporal length
+            if this is not set, it defaults to either `word`, or `x` if `word` is also not a feature
+        * *finetune* -- Are we doing fine-tuning of word embeddings (defaults to `True`)
+        * *mxlen* -- The maximum signal (`x` tensor temporal) length (defaults to `100`)
+        * *dropout* -- This indicates how much dropout should be applied to the model when training.
+        * *filtsz* -- This is actually a top-level param due to an unfortunate coupling between the pooling layer
+            and the input, which, for convolution, requires input padding.
+
+        :return: A fully-initialized tensorflow classifier
+        """
+        model = cls(name=kwargs.get('name'))
+        model.embeddings = {}
+        for k, embedding in embeddings.items():
+            model.embeddings[k] = embedding.detached_ref()
+
+        model.lengths_key = kwargs.get('lengths_key')
+
+        if not tf.executing_eagerly():
+
+            inputs = {}
+            if model.lengths_key is not None:
+                model._unserializable.append(model.lengths_key)
+                model.lengths = kwargs.get('lengths', tf.compat.v1.placeholder(tf.int32, [None], name="lengths"))
+                inputs['lengths'] = model.lengths
+            else:
+                model.lengths = None
+
+        model._record_state(**kwargs)
+
+        nc = len(labels)
+        if not tf.executing_eagerly():
+            model.y = kwargs.get('y', tf.compat.v1.placeholder(tf.float32, [None, nc], name="y"))
+            for k, embedding in model.embeddings.items():
+                x = kwargs.get(k, embedding.create_placeholder(name=k))
+                inputs[k] = x
+
+            model.sess = kwargs.get('sess', create_session())
+
+        model.pdrop_value = kwargs.get('dropout', 0.5)
+        model.labels = labels
+        model.create_layers(**kwargs)
+
+        if not tf.executing_eagerly():
+            model.logits = tf.identity(model(inputs), name="logits")
+            model.probs = tf.nn.sigmoid(model.logits, name="probs")
+        return model
+
+    def make_input(self, batch_dict, train=False):
+        """Transform a `batch_dict` into a TensorFlow `feed_dict`
+
+        :param batch_dict: (``dict``) A dictionary containing all inputs to the embeddings for this model
+        :param train: (``bool``) Are we training.  Defaults to False
+        :return:
+        """
+        y = batch_dict.get('y', None)
+        if not tf.executing_eagerly():
+            batch_for_model = new_placeholder_dict(train)
+
+            for k in self.embeddings.keys():
+                batch_for_model["{}:0".format(k)] = batch_dict[k]
+
+            # Allow us to track a length, which is needed for BLSTMs
+            if self.lengths_key is not None:
+                batch_for_model[self.lengths] = batch_dict[self.lengths_key]
+
+            if y is not None:
+                batch_for_model[self.y] = y
+
+        else:
+            SET_TRAIN_FLAG(train)
+            batch_for_model = {}
+            for k in self.embeddings.keys():
+                batch_for_model[k] = batch_dict[k]
+
+            # Allow us to track a length, which is needed for BLSTMs
+            if self.lengths_key is not None:
+                batch_for_model["lengths"] = batch_dict[self.lengths_key]
+
+        return batch_for_model
+
+    def create_test_loss(self):
+        with tf.name_scope("test_loss"):
+            loss = tf.nn.sigmoid_cross_entropy_with_logits(logits=self.logits, labels=self.y)
+            all_loss = tf.reduce_mean(loss)
+        return all_loss
+
+    def create_loss(self):
+        """The loss function is currently provided here, although this is not a great place for it
+        as it provides a coupling between the model and its loss function.  Just here for convenience at the moment.
+
+        :return:
+        """
+        with tf.name_scope("loss"):
+            loss = tf.nn.sigmoid_cross_entropy_with_logits(logits=self.logits, labels=self.y)
+            all_loss = tf.reduce_mean(loss)
+        return all_loss
+
+
 class EmbedPoolStackClassifier(ClassifierModelBase):
 
     def create_layers(self, **kwargs):
@@ -426,6 +546,11 @@ class ConvModel(EmbedPoolStackClassifier):
         return WithDropout(ParallelConv(dsz, cmotsz, filtsz), self.pdrop_value)
 
 
+@register_model(task='classify', name='multi-label-conv')
+class MultiLabelConvModel(MultiLabelMixin, ConvModel):
+    pass
+
+
 @register_model(task='classify', name='lstm')
 class LSTMModel(EmbedPoolStackClassifier):
     """A simple single-directional single-layer LSTM. No layer-stacking.
@@ -471,6 +596,11 @@ class LSTMModel(EmbedPoolStackClassifier):
         return LSTMEncoderHidden(None, hsz, nlayers, self.pdrop_value, vdrop)
 
 
+@register_model(task='classify', name='multi-label-lstm')
+class MultiLabelLSTMModel(MultiLabelMixin, LSTMModel):
+    pass
+
+
 class NBowBase(EmbedPoolStackClassifier):
     """Neural Bag-of-Words Model base class.  Defines stacking of fully-connected layers, but leaves pooling to derived
     """
@@ -501,6 +631,11 @@ class NBowModel(NBowBase):
         return MeanPool1D(dsz)
 
 
+@register_model(task='classify', name='multi-label-nbow')
+class MultiLabelNBowModel(MultiLabelMixin, NBowModel):
+    pass
+
+
 @register_model(task='classify', name='nbowmax')
 class NBowMaxModel(NBowBase):
     """Max-pooling model for Neural Bag-of-Words.  Sometimes does better than avg pooling
@@ -516,6 +651,11 @@ class NBowMaxModel(NBowBase):
         :return: The max pooling representation
         """
         return tf.keras.layers.GlobalMaxPooling1D()
+
+
+@register_model(task='classify', name="multi-label-nbowmax")
+class MultiLabelNBowMaxModel(MultiLabelMixin, NBowMaxModel):
+    pass
 
 
 @register_model(task='classify', name='fine-tune')
@@ -547,3 +687,8 @@ class CompositePoolingModel(EmbedPoolStackClassifier):
         for SubClass in SubModels:
             models.append(SubClass.pool(self, dsz, **kwargs))
         return CompositeModel(models)
+
+
+@register_model(task='classify', name="multi-label-compoite")
+class MultiLabelCompositePoolingModel(MultiLabelMixin, CompositePoolingModel):
+    pass

@@ -143,5 +143,13 @@
     "download": "https://www.dropbox.com/s/lsrdntgu30ftg5l/snips.tar.gz?dl=1",
     "sha1": "c3dd1bff7ad965303065549a05a7f420fc6f3279",
     "label": "snips"
+  },
+  {
+    "label": "conll-multilabel",
+    "train_file": "eng.train.multilabel",
+    "valid_file": "eng.testa.multilabel",
+    "test_file": "eng.testb.multilabel",
+    "download": "https://www.dropbox.com/s/zyslmu3ud6zq44t/conll-multilabel.tar.gz?dl=1",
+    "sha1": "62e055f07c101439e786bd04722f0c0e2192348a"
   }
 ]

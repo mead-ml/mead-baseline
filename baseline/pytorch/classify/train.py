@@ -4,6 +4,9 @@ import torch
 import torch.autograd
 import os
 
+import numpy as np
+
+import eight_mile.metrics.multilabel as ml
 from eight_mile.confusion import ConfusionMatrix
 from eight_mile.utils import listify
 from eight_mile.pytorch.optz import OptimizerManager
@@ -30,7 +33,7 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
 
         if type(model) is dict:
             model = create_model_for('classify', **model)
-        super(ClassifyTrainerPyTorch, self).__init__()
+        super().__init__()
         if type(model) is dict:
             model = create_model_for('classify', **model)
         self.clip = float(kwargs.get('clip', 5))
@@ -137,6 +140,133 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
                 self.reset_nstep()
 
         metrics = cm.get_all_metrics()
+        metrics['avg_loss'] = epoch_loss / float(epoch_div)
+        return metrics
+
+
+@register_trainer(task='classify', name='multi-label')
+class MultiLabelClassifyTrainerPyTorch(EpochReportingTrainer):
+
+    def __init__(self, model, **kwargs):
+
+        if type(model) is dict:
+            model = create_model_for('classify', **model)
+        super().__init__()
+        if type(model) is dict:
+            model = create_model_for('classify', **model)
+        self.clip = float(kwargs.get('clip', 5))
+        self.labels = model.labels
+        self.gpus = int(kwargs.get('gpus', 1))
+        if self.gpus == -1:
+            self.gpus = len(os.getenv('CUDA_VISIBLE_DEVICES', os.getenv('NV_GPU', '0')).split(','))
+
+        self.optimizer = OptimizerManager(model, **kwargs)
+        self.model = model
+        if self.gpus > 0:
+            self.crit = model.create_loss().cuda()
+            if self.gpus > 1:
+                self.model = torch.nn.DataParallel(model).cuda()
+            else:
+                self.model.cuda()
+        else:
+            logger.warning("Requested training on CPU.  This will be slow.")
+            self.crit = model.create_loss()
+            self.model = model
+        self.nsteps = kwargs.get('nsteps', six.MAXSIZE)
+        self.threshold = float(kwargs.get('output_threshold', 0.5))
+
+    def _get_pytorch_model(self):
+        return self.model.module if self.gpus > 1 else self.model
+
+    def save(self, model_file):
+        self._get_pytorch_model().save(model_file)
+
+    def _make_input(self, batch_dict, **kwargs):
+        return self._get_pytorch_model().make_input(batch_dict, **kwargs)
+
+    @staticmethod
+    def _get_batchsz(batch_dict):
+        return len(batch_dict['y'])
+
+    def _test(self, loader, **kwargs):
+        self.model.eval()
+        total_loss = 0
+        total_norm = 0
+        steps = len(loader)
+        pg = create_progress_bar(steps)
+        gold_labels = []
+        pred_labels = []
+        verbose = kwargs.get("verbose", None)
+        output = kwargs.get('output')
+        txts = kwargs.get('txts')
+        handle = None
+        line_number = 0
+        if output is not None and txts is not None:
+            handle = open(output, "w")
+
+        for batch_dict in pg(loader):
+            example = self._make_input(batch_dict)
+            ys = example.pop('y')
+            pred = self.model(example)
+            loss = self.crit(pred, ys)
+            if handle is not None:
+                for p, y in zip(pred, ys):
+                    handle.write('{}\t{}\t{}\n'.format(" ".join(txts[line_number]), self.model.labels[p], self.model.labels[y]))
+                    line_number += 1
+            batchsz = self._get_batchsz(batch_dict)
+            total_loss += loss.item() * batchsz
+            total_norm += batchsz
+            ons = torch.sigmoid(pred)
+            ons[pred > self.threshold] = 1
+            gold_labels.append(ys.to(torch.int).cpu().numpy())
+            pred_labels.append(ons.to(torch.int).cpu().numpy())
+
+        metrics = ml.get_all_metrics(np.concatenate(gold_labels, axis=0), np.concatenate(pred_labels, axis=0))
+        metrics['avg_loss'] = total_loss / float(total_norm)
+        if handle is not None:
+            handle.close()
+
+        return metrics
+
+    def _train(self, loader, **kwargs):
+        self.model.train()
+        reporting_fns = kwargs.get('reporting_fns', [])
+        steps = len(loader)
+        pg = create_progress_bar(steps)
+        gold_labels = []
+        pred_labels = []
+        epoch_loss = 0
+        epoch_div = 0
+        for batch_dict in pg(loader):
+            self.optimizer.zero_grad()
+            example = self._make_input(batch_dict)
+            ys = example.pop('y')
+            pred = self.model(example)
+            loss = self.crit(pred, ys)
+            batchsz = self._get_batchsz(batch_dict)
+            report_loss = loss.item() * batchsz
+            epoch_loss += report_loss
+            epoch_div += batchsz
+            self.nstep_agg += report_loss
+            self.nstep_div += batchsz
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.clip)
+            self.optimizer.step()
+
+            if (self.optimizer.global_step + 1) % self.nsteps == 0:
+                metrics = self.calc_metrics(self.nstep_agg, self.nstep_div)
+                self.report(
+                    self.optimizer.global_step + 1, metrics, self.nstep_start,
+                    'Train', 'STEP', reporting_fns, self.nsteps
+                )
+                self.reset_nstep()
+
+            ons = torch.sigmoid(pred)
+            ons[pred > self.threshold] = 1
+            gold_labels.append(ys.to(torch.int).cpu().numpy())
+            pred_labels.append(ons.to(torch.int).cpu().numpy())
+
+        metrics = ml.get_all_metrics(np.concatenate(gold_labels, axis=0), np.concatenate(pred_labels, axis=0))
         metrics['avg_loss'] = epoch_loss / float(epoch_div)
         return metrics
 

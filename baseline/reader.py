@@ -6,7 +6,7 @@ from collections import Counter
 import numpy as np
 import baseline.data
 from baseline.vectorizers import Dict1DVectorizer, GOVectorizer, Token1DVectorizer, create_vectorizer
-from baseline.utils import import_user_module, revlut, exporter, optional_params, Offsets, listify
+from baseline.utils import import_user_module, revlut, exporter, optional_params, Offsets, listify, multi_hot, str2bool
 
 __all__ = []
 export = exporter(__all__)
@@ -492,6 +492,7 @@ class TSVSeqLabelReader(SeqLabelReader):
     def __init__(self, vectorizers, trim=False, truncate=False, **kwargs):
         super().__init__()
 
+        self.is_multilabel = str2bool(kwargs.get("multilabel", False))
         self.label2index = {}
         self.vectorizers = vectorizers
         self.clean_fn = kwargs.get('clean_fn')
@@ -517,11 +518,11 @@ class TSVSeqLabelReader(SeqLabelReader):
     @staticmethod
     def label_and_sentence(line, clean_fn):
         label_text = re.split(TSVSeqLabelReader.SPLIT_ON, line)
-        label = label_text[0]
+        labels = [l.strip() for l in label_text[0].split(",")]
         text = label_text[1:]
         text = ' '.join(list(filter(lambda s: len(s) != 0, [clean_fn(w) for w in text])))
         text = list(filter(lambda s: len(s) != 0, re.split('\s+', text)))
-        return label, text
+        return labels, text
 
     def build_vocab(self, files, **kwargs):
         """Take a directory (as a string), or an array of files and build a vocabulary
@@ -556,17 +557,20 @@ class TSVSeqLabelReader(SeqLabelReader):
                 continue
             with codecs.open(file_name, encoding='utf-8', mode='r') as f:
                 for il, line in enumerate(f):
-                    label, text = TSVSeqLabelReader.label_and_sentence(line, self.clean_fn)
-                    if len(text) == 0:
+                    labels, text = TSVSeqLabelReader.label_and_sentence(line, self.clean_fn)
+                    if not text:
                         continue
 
                     for k, vectorizer in self.vectorizers.items():
                         vocab_file = vectorizer.count(text)
                         vocab[k].update(vocab_file)
 
-                    if label not in self.label2index:
-                        self.label2index[label] = label_idx
-                        label_idx += 1
+                    if len(labels) > 1:
+                        self.is_multilabel = True
+                    for label in labels:
+                        if label not in self.label2index:
+                            self.label2index[label] = label_idx
+                            label_idx += 1
 
         vocab = _filter_vocab(vocab, kwargs.get('min_f', {}))
 
@@ -589,11 +593,16 @@ class TSVSeqLabelReader(SeqLabelReader):
         texts = []
         with codecs.open(filename, encoding='utf-8', mode='r') as f:
             for il, line in enumerate(f):
-                label, text = TSVSeqLabelReader.label_and_sentence(line, self.clean_fn)
-                texts.append(text)
-                if len(text) == 0:
+                labels, text = TSVSeqLabelReader.label_and_sentence(line, self.clean_fn)
+                if not text:
                     continue
-                y = self.label2index[label]
+                texts.append(text)
+                if self.is_multilabel:
+                    # convert the list of labels into a numpy array, size [# labels in this example]
+                    sparse = np.array([self.label2index[label] for label in labels])
+                    y = multi_hot(len(self.label2index), sparse)
+                else:
+                    y = self.label2index[labels[0]]
                 example_dict = dict()
                 for k, vectorizer in self.vectorizers.items():
                     example_dict[k], lengths = vectorizer.run(text, vocabs[k])
@@ -607,6 +616,7 @@ class TSVSeqLabelReader(SeqLabelReader):
                                                                         sort_key=sort_key),
                                              batchsz=batchsz, shuffle=shuffle, trim=self.trim, truncate=self.truncate), texts
 
+
     def load(self, filename, vocabs, batchsz, **kwargs):
     
         shuffle = kwargs.get('shuffle', False)
@@ -618,10 +628,14 @@ class TSVSeqLabelReader(SeqLabelReader):
     
         with codecs.open(filename, encoding='utf-8', mode='r') as f:
             for il, line in enumerate(f):
-                label, text = TSVSeqLabelReader.label_and_sentence(line, self.clean_fn)
-                if len(text) == 0:
+                labels, text = TSVSeqLabelReader.label_and_sentence(line, self.clean_fn)
+                if not text:
                     continue
-                y = self.label2index[label]
+                if self.is_multilabel:
+                    sparse = np.array([self.label2index[label] for label in labels])
+                    y = multi_hot(len(self.label2index), sparse)
+                else:
+                    y = self.label2index[labels[0]]
                 example_dict = dict()
                 for k, vectorizer in self.vectorizers.items():
                     example_dict[k], lengths = vectorizer.run(text, vocabs[k])

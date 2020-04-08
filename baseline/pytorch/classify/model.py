@@ -115,8 +115,8 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
         probs = self.predict_batch(batch_dict, **kwargs)
         if raw and not dense:
             logger.warning(
-                "Warning: `raw` parameter is deprecated pass `dense=True` to get back values as a single tensor")
-
+                "Warning: `raw` parameter is deprecated pass `dense=True` to get back values as a single tensor"
+            )
             dense = True
         if dense:
             return probs
@@ -163,6 +163,18 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
         if input_dim is None:
             return None
         return Dense(input_dim, output_dim, activation=kwargs.get('output_activation', 'log_softmax'))
+
+
+class MultiLabelMixin(ClassifierModelBase):
+    def init_output(self, input_dim, output_dim, **kwargs):
+        if input_dim is None:
+            return None
+        if kwargs.get('output_activation') is not None:
+            logger.warning("Output activation of `%s` found, this is incompatible with multi-label classification, setting output to Identity")
+        return Dense(input_dim, output_dim, activation=None)
+
+    def create_loss(self):
+        return nn.BCEWithLogitsLoss()
 
 
 @register_model(task='classify', name='default')
@@ -267,3 +279,28 @@ class FineTuneBaselineModel(ClassifierModelBase):
         model.layers = FineTuneModel(len(labels), embeddings, stack_model)
         logger.info(model)
         return model
+
+
+@register_model(task='classify', name='multi-label-conv')
+class MultiLabelConvModel(MultiLabelMixin, ConvModel):
+    pass
+
+
+@register_model(task='classify', name='multi-label-lstm')
+class MultiLabelLSTMModel(MultiLabelMixin, LSTMModel):
+    pass
+
+
+@register_model(task='classify', name='multi-label-nbow')
+class MultiLabelNBowModel(MultiLabelMixin, NBowModel):
+    pass
+
+
+@register_model(task='classify', name='multi-label-nbowmax')
+class MultiLabelNBowMaxModel(MultiLabelMixin, NBowMaxModel):
+    pass
+
+
+@register_model(task='classify', name='multi-label-composite')
+class MultiLabelCompositePoolingModel(MultiLabelMixin, CompositePoolingModel):
+    pass

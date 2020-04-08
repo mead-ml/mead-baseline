@@ -533,6 +533,21 @@ def fill_y(nc, yidx):
 
 
 @export
+def multi_hot(num_labels: int, labels: np.array) -> np.array:
+    """Convert a list of examples into a multihot representation.
+
+    :param num_labels: The number of possible labels
+    :param labels: The number of labels in this example
+    :return: A dense array with `1` in the indices given in labesl
+    """
+    # convert to one hot with each label as a separate example [# labels in this example, # of possible labels]
+    one_hot = fill_y(num_labels, np.unique(labels))
+    # Sum all the 0th access to combine into a single multihot vector
+    mh = one_hot.sum(0).squeeze()
+    return mh.astype(np.float32)
+
+
+@export
 @optional_params
 def str_file(func, **kwargs):
     """A decorator to automatically open arguments that are files.
