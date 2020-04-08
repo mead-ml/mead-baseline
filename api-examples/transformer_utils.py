@@ -236,7 +236,7 @@ class NextTurnPredictionFileLoader(MultiFileLoader):
         if self.last_turn_only:
             turns = q.split('<EOU>')
             q = turns[-1] if turns[-1].strip() != '' else turns[-2]
-            if q == '':
+            if q.strip() == '':
                 return None
             q_vec, q_valid_lengths = self.vectorizer.run(q.split(), self.vocab)
         else:
