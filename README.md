@@ -87,7 +87,7 @@ backwards compatible. We recommend recent versions of each framework. Baseline
 is known to work on most versions of TensorFlow, and is currently being run on
 versions between 1.5 and 1.15. The PyTorch backend requires at least version 1.0.
 
-Version 2.0 of MEAD is currently tested primarily on PyTorch 1.1+ and TF 1.14 - 1.15 as well as TF 2.1
+Version 2.0 of MEAD is currently tested primarily on PyTorch 1.3+ and TF 1.14 - 1.15 as well as TF 2.1
 
 ## Citing
 
