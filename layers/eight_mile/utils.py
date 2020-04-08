@@ -20,6 +20,7 @@ from six.moves.urllib.request import urlretrieve
 logger = logging.getLogger("mead.layers")
 
 __all__ = ["exporter", "optional_params", "parameterize"]
+CONLL_EXTS = {".bio", ".iobes", ".iob", ".conll"}
 
 
 def optional_params(func):
@@ -794,6 +795,19 @@ def sniff_conll_file(f, delim=None, comment_pattern="#", doc_pattern="# begin do
         if len(parts) > 1:
             f.seek(start)
             return len(parts)
+
+
+@export
+def remove_extensions(path: str, exts: Set[str]) -> str:
+    path, ext = os.path.splitext(path)
+    while ext in exts:
+        path, ext = os.path.splitext(path)
+    return path + ext
+
+
+@export
+def remove_conll_extensions(path: str, exts: Set[str] = CONLL_EXTS) -> str:
+    return remove_extensions(path, exts)
 
 
 @export

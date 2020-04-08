@@ -1,11 +1,12 @@
 import os
 import string
 import random
+from copy import deepcopy
 from itertools import chain
 import pytest
 import numpy as np
 from mock import patch
-from eight_mile.utils import get_env_gpus, idempotent_append, parse_module_as_path, to_numpy, get_version
+from eight_mile.utils import get_env_gpus, idempotent_append, parse_module_as_path, to_numpy, get_version, remove_extensions
 
 
 @pytest.fixture
@@ -195,3 +196,21 @@ def test_to_numpy_pyt():
     tensor = torch.from_numpy(gold)
     np_ = to_numpy(tensor)
     np.testing.assert_allclose(np_, gold)
+
+
+def test_remove_ext():
+    exts = {"." + rand_str() for _ in range(np.random.randint(2, 4))}
+    ext_list = list(exts)
+    gold = rand_str()
+    path = deepcopy(gold)
+    for _ in range(np.random.randint(1, 2)):
+        path += random.choice(ext_list)
+    res = remove_extensions(path, exts)
+    assert res == gold
+
+def test_remove_ext_not_in_middle():
+    gold = "example.bio.more-stuff"
+    exts = {".bio"}
+    path = deepcopy(gold)
+    res = remove_extensions(path, exts)
+    assert res == gold
