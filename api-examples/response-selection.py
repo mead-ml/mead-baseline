@@ -57,7 +57,7 @@ parser.add_argument("--num_layers", type=int, default=6, help="Number of layers"
 parser.add_argument("--nctx", type=int, default=64, help="Max context length (for both encoder and decoder)")
 parser.add_argument("--embed_type", type=str, default='positional',
                     help="register label of the embeddings, so far support positional or learned-positional")
-parser.add_argument("--stacking_layers", type=int, nargs='+', default=[1024, 1024, 1024])
+parser.add_argument("--stacking_layers", type=int, nargs='+', default=[512, 512, 512])
 parser.add_argument('--rpr_k', help='Relative attention positional sizes pass 0 if you dont want relative attention',
                     type=int, default=[3, 5, 48, 48, 48, 48], nargs='+')
 parser.add_argument("--ckpt", type=str, help="path to the model checkpoint")
@@ -65,6 +65,7 @@ parser.add_argument("--test_file", type=str, help="path to the testing data")
 parser.add_argument("--subword_model_file", type=str, required=True)
 parser.add_argument("--subword_vocab_file", type=str, required=True)
 parser.add_argument("--recall_k", type=int, default=100, help="select the response from how many candidates")
+parser.add_argument("--recall_top", type=int, default=1, help="whether the correct response is ranked top x")
 parser.add_argument("--device", type=str,
                     default="cuda" if torch.cuda.is_available() else "cpu",
                     help="Device (cuda or cpu)")
@@ -145,8 +146,9 @@ for batch in test_loader:
         elif args.model_type == 'encoder-decoder':
             pass
 
-        _, max_indices = torch.max(all_score, 1)
-        correct = (max_indices == torch.arange(args.recall_k)).sum()
+        # _, max_indices = torch.max(all_score, 1)
+        _, indices = torch.topk(all_score, args.recall_top, dim=1)
+        correct = (indices == torch.arange(args.recall_k).unsqueeze(1).expand(-1, args.recall_top)).sum()
         numerator += correct
         print(f"Selected {correct} correct responses out of {args.recall_k}")
         denominator += args.recall_k
