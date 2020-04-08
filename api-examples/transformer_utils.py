@@ -78,7 +78,7 @@ class AllLoss(nn.Module):
         # Because we are minimizing the negative log we turned the division into a subtraction here
         loss = pos_score - vec_log_sum_exp(all_score, -1).squeeze()
         # Batch loss
-        loss = torch.mean(loss)
+        loss = torch.sum(loss)
         # minimize the negative loss
         return -loss
 
