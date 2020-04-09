@@ -611,7 +611,7 @@ def optimizer(loss_fn, **kwargs):
         beta1 = float(kwargs.get("beta1", 0.9))
         beta2 = float(kwargs.get("beta2", 0.999))
         eps = float(kwargs.get("epsilon", 1e-8))
-        logger.info("adamw(eta=%f beta1=%f, beta2=%f, eps=%f)", eta, beta1, beta2, eps)
+        logger.info("adamw(eta=%f beta1=%f, beta2=%f, eps=%f, wd=%f)", eta, beta1, beta2, eps, wd)
         optz = lambda lr: AdamWOptimizer(lr, wd, beta1, beta2, eps)
     elif optim == "rmsprop":
         # Get mom again with difference default
@@ -683,7 +683,7 @@ class EagerOptimizer(object):
                 beta1 = float(kwargs.get("beta1", 0.9))
                 beta2 = float(kwargs.get("beta2", 0.999))
                 eps = float(kwargs.get("epsilon", 1e-8))
-                logger.info("adamw(eta=%f beta1=%f, beta2=%f, eps=%f)", lr, beta1, beta2, eps)
+                logger.info("adamw(eta=%f beta1=%f, beta2=%f, eps=%f, wd=%f)", lr, beta1, beta2, eps, wd)
                 self.optimizer = tfa.optimizers.AdamW(
                     weight_decay=wd, learning_rate=lr_function, beta_1=beta1, beta_2=beta2, epsilon=eps
                 )
