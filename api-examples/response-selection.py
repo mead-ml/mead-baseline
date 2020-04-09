@@ -45,6 +45,23 @@ def create_model(model_type, embeddings, d_model=512, d_ff=2048, dropout=0., num
     return model
 
 
+def get_joint_logprob(model: nn.Module, sequences: torch.Tensor, context_length: int):
+    mask = (sequences != 0).to(args.device)
+    inputs = {'x': sequences.to(args.device)}
+    targets = sequences.to(args.device)
+    softmaxes = model.predict(inputs, numpy_to_tensor=False)
+    softmaxes = softmaxes[:, :-1]
+    targets = targets[:, 1:]
+    token_logprobs = torch.log(torch.gather(softmaxes, -1, targets.unsqueeze(-1)).squeeze(-1))
+    # for j in range(args.recall_k):
+    #     print(sequences[j, :32])
+    #     tokens = [ind2tok[i] for i in sequences[j, :32].numpy()]
+    #     probs = [p for p in token_probs[j, :32].numpy()]
+    #     print(list(zip(tokens, probs)))
+    token_logprobs = token_logprobs*mask[:, 1:]
+    return token_logprobs[:, context_length:].sum(axis=1)
+
+
 parser = argparse.ArgumentParser("Load a dual-encoder model and do response selection on testing data")
 parser.add_argument("--model_type", type=str, choices=['dual-encoder', 'encoder-decoder', 'clm'])
 parser.add_argument("--d_model", type=int, default=512, help="Model dimension (and embedding dsz)")
@@ -125,22 +142,9 @@ for batch in test_loader:
                 context = contexts[i][:context_lengths[i]].expand(args.recall_k, -1)
                 # pair the same context with all candidate responses
                 sequences = torch.cat([context, responses], axis=1)
-                mask = (sequences != 0).to(args.device)
-                inputs = {'x': sequences.to(args.device)}
-                targets = sequences.to(args.device)
-                softmaxes = model.predict(inputs, numpy_to_tensor=False)
-                softmaxes = softmaxes[:, :-1]
-                targets = targets[:, 1:]
-                token_probs = torch.gather(softmaxes, -1, targets.unsqueeze(-1)).squeeze(-1)
-                token_logprobs = torch.log(token_probs)
-                # for j in range(args.recall_k):
-                #     print(sequences[j, :32])
-                #     tokens = [ind2tok[i] for i in sequences[j, :32].numpy()]
-                #     probs = [p for p in token_probs[j, :32].numpy()]
-                #     print(list(zip(tokens, probs)))
-                token_logprobs = token_logprobs*mask[:, 1:]
-                avg_logprobs = token_logprobs[:, context_lengths[i]:].sum(axis=1)/response_lengths
-                scores.append(avg_logprobs.to('cpu'))
+                total_logprobs = get_joint_logprob(model, sequences, context_lengths[i])
+                response_logprobs = get_joint_logprob(model, responses, 0)
+                scores.append((total_logprobs - response_logprobs).to('cpu'))
             all_score = torch.stack(scores, axis=0)
 
         elif args.model_type == 'encoder-decoder':
