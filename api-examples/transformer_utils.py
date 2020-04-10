@@ -152,6 +152,38 @@ class PairedModel(nn.Module):
         return TripletLoss(self)
 
 
+class TransformerDiscriminator(nn.Module):
+
+    def __init__(self, embeddings, d_model, d_ff, dropout, num_heads, num_layers, rpr_k, d_k, **kwargs):
+        super().__init__()
+        self.embeddings = EmbeddingsStack(embeddings, dropout)
+        self.weight_std = kwargs.get('weight_std', 0.02)
+        assert self.embeddings.dsz == d_model
+        self.transformer = TransformerEncoderStack(num_heads, d_model=d_model, pdrop=dropout, scale=True,
+                                                   layers=num_layers, d_ff=d_ff, rpr_k=rpr_k, d_k=d_k)
+        self.proj_to_output = pytorch_linear(d_model, 1)
+
+        self.apply(self.init_layer_weights)
+        self.lengths_feature = kwargs.get('lengths_feature', self.embeddings.keys()[0])
+
+    def init_layer_weights(self, module):
+        if isinstance(module, (nn.Linear, nn.Embedding, nn.LayerNorm)):
+            module.weight.data.normal_(mean=0.0, std=self.weight_std)
+        if isinstance(module, (nn.Linear, nn.LayerNorm)) and module.bias is not None:
+            module.bias.data.zero_()
+
+    def forward(self, features):
+        embedded = self.embeddings(features)
+        x = features[self.lengths_feature]
+        input_mask = torch.zeros(x.shape, device=x.device, dtype=torch.long).masked_fill(x != 0, 1).unsqueeze(1).unsqueeze(1)
+        transformer_out = self.transformer((embedded, input_mask))
+        binary = self.proj_to_output(transformer_out)
+        return torch.sigmoid(binary)
+
+    def create_loss(self):
+        return nn.BCELoss()
+
+
 class MultiFileLoader(IterableDataset):
 
     def __init__(self, directory, pattern, vocabs, vectorizer, nctx, last_turn_only=True):
