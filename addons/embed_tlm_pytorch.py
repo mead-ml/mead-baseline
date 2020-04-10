@@ -78,11 +78,6 @@ class WordPieceVectorizer1D(AbstractVectorizer):
         return self.mxlen,
 
 
-@register_vectorizer(name='tlm-bpe')
-class BPEVectorizer1DFT(BPEVectorizer1D):
-    pass
-
-
 class TransformerLMEmbeddings(PyTorchEmbeddings):
     """Support embeddings trained with the TransformerLanguageModel class
 
