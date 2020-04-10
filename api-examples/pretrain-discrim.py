@@ -69,6 +69,7 @@ def create_generator(embeddings, d_model, d_ff, dropout, num_heads, num_layers, 
 def best_from(x_preds):
     return x_preds.argmax(axis=-1)
 
+
 def get_accuracy(preds, true_or_fake, logits):
     flat_logits = logits.reshape(-1)
     nz_preds = preds.view(-1)[flat_logits != 0]
@@ -77,7 +78,7 @@ def get_accuracy(preds, true_or_fake, logits):
     preds_true = (nz_preds > 0.5).squeeze().to(nz_true_or_fake.dtype)
     num = torch.sum((nz_true_or_fake == preds_true).to(torch.float32))
     denom = nz_true_or_fake.nelement()
-    return num / denom
+    return (num / denom).item()
 
 
 def train():
