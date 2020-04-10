@@ -17,10 +17,10 @@ from baseline.pytorch.lm import TransformerMaskedLanguageModel
 from eight_mile.pytorch.layers import TransformerEncoderStack, EmbeddingsStack, subsequent_mask
 from transformer_utils import MultiFileDatasetReader, TransformerDiscriminator
 
-"""Pre-train an ELECTRA model in PyTorch
+"""Pre-train an discriminator Transformer model in PyTorch
 
 This file uses Baseline to train a Transformer-based discriminative model
-model (https://openreview.net/pdf?id=r1xMH1BtvB)
+model, similar to (https://openreview.net/pdf?id=r1xMH1BtvB)
 """
 
 
