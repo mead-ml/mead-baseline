@@ -94,8 +94,8 @@ def train():
     parser.add_argument("--discrim_d_k", type=int, default=None, help="Dimension per head.  Use if num_heads=1 to reduce dims")
     parser.add_argument("--gen_num_heads", type=int, default=8, help="Number of heads")
     parser.add_argument("--discrim_num_heads", type=int, default=8, help="Number of heads")
-    parser.add_argument("--gen_num_layers", type=int, default=6, help="Number of layers")
-    parser.add_argument("--discrim_num_layers", type=int, default=6, help="Number of layers")
+    parser.add_argument("--gen_num_layers", type=int, default=8, help="Number of layers")
+    parser.add_argument("--discrim_num_layers", type=int, default=8, help="Number of layers")
     parser.add_argument("--gen_dropout", type=float, default=0.1, help="Dropout")
     parser.add_argument("--discrim_dropout", type=float, default=0.1, help="Dropout")
     parser.add_argument('--gen_rpr_k', help='Relative attention positional sizes pass 0 if you dont want relative attention',
@@ -217,7 +217,6 @@ def train():
     os.makedirs(args.basedir, exist_ok=True)
     vocab_size = len(vocabs)
     # We want to make sure to save our input vocab into the basedir for reuse later
-    write_json(vocabs['x'], os.path.join(args.basedir, 'vocabs.json'))
     # Get this from a YAML file?
     logger.info("Loaded embeddings")
     logger.info("Loaded datasets")
