@@ -734,7 +734,7 @@ class BasicTokenizer(object):
 
 
 @register_vectorizer(name='wordpiece1d')
-class WordPieceVectorizer1D(AbstractVectorizer):
+class WordpieceVectorizer1D(AbstractVectorizer):
 
     def __init__(self, **kwargs):
         super().__init__(kwargs.get('transform_fn'))
@@ -773,7 +773,7 @@ class WordPieceVectorizer1D(AbstractVectorizer):
         valid_length = i + 1
         return vec1d, valid_length
 
-class WordpieceTokenizer(object):
+class WordpieceTokenizer:
     """Runs WordPiece tokenziation."""
 
     def __init__(self, vocab, unk_token="[UNK]", max_input_chars_per_word=200):

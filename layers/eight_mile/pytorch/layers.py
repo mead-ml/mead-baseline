@@ -2754,7 +2754,8 @@ class TransformerEncoder(nn.Module):
         d_k: Optional[int] = None,
         rpr_k: Optional[int] = None,
         ffn_pdrop: Optional[float] = 0.0,
-        layer_norms_after=False
+        layer_norms_after: bool = False,
+        layer_norm_eps: float = 1.0e-6
     ):
         super().__init__()
         # to properly execute BERT models, we have to follow T2T and do layer norms after
@@ -2774,8 +2775,8 @@ class TransformerEncoder(nn.Module):
         # Slightly late for a name change
         # LN1 = ln_x
         # LN2 = ln_attn_output
-        self.ln1 = nn.LayerNorm(self.d_model, eps=1e-6)
-        self.ln2 = nn.LayerNorm(self.d_model, eps=1e-6)
+        self.ln1 = nn.LayerNorm(self.d_model, eps=layer_norm_eps)
+        self.ln2 = nn.LayerNorm(self.d_model, eps=layer_norm_eps)
         self.dropout = nn.Dropout(pdrop)
 
     def forward(self, inputs: Tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
@@ -2859,12 +2860,13 @@ class TransformerEncoderStack(nn.Module):
         d_k: Optional[int] = None,
         rpr_k: Optional[Union[int, List[int]]] = None,
         ffn_pdrop: Optional[float] = 0.0,
-        layer_norms_after = False,
+        layer_norms_after: bool = False,
+        layer_norm_eps: float = 1.0e-6,
         **kwargs,
     ):
         super().__init__()
         self.encoders = nn.ModuleList()
-        self.ln = nn.Identity() if layer_norms_after else nn.LayerNorm(d_model, eps=1e-6)
+        self.ln = nn.Identity() if layer_norms_after else nn.LayerNorm(d_model, eps=layer_norms_eps)
         self.output_dim = d_model
 
         if not is_sequence(rpr_k):
@@ -2874,7 +2876,7 @@ class TransformerEncoderStack(nn.Module):
             self.encoders.append(
                 TransformerEncoder(
                     num_heads, d_model, pdrop, scale, activation, d_ff, d_k,
-                    rpr_k=rpr_k[i], ffn_pdrop=ffn_pdrop, layer_norms_after=layer_norms_after
+                    rpr_k=rpr_k[i], ffn_pdrop=ffn_pdrop, layer_norms_after=layer_norms_after, layer_norm_eps=layer_norm_eps
                 )
             )
 
@@ -2899,6 +2901,7 @@ class TransformerEncoderStackWithLengths(TransformerEncoderStack):
         rpr_k: Optional[Union[int, List[int]]] = None,
         input_sz: Optional[int] = None,
         layer_norms_after = False,
+        layer_norm_eps=1e-6,
         **kwargs,
     ):
         super().__init__(num_heads, d_model, pdrop, scale, layers, activation, d_ff, d_k, rpr_k)

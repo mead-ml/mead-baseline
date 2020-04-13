@@ -260,7 +260,7 @@ class BERTLookupTableEmbeddings(LookupTableEmbeddings):
         self.tok_type_vsz = kwargs['tok_type_vsz']
         self.pos_embeddings = nn.Embedding(self.mxlen, self.get_dsz())
         self.tok_embeddings = nn.Embedding(self.tok_type_vsz, self.get_dsz())
-        self.ln = nn.LayerNorm(self.get_dsz(), eps=1e-6)
+        self.ln = nn.LayerNorm(self.get_dsz(), eps=1e-12)
 
     def forward(self, x):
         zeros = torch.zeros_like(x)
