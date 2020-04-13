@@ -91,7 +91,7 @@ args = parser.parse_args()
 reader = MultiFileDatasetReader(args.nctx, args.subword_model_file, args.subword_vocab_file, '*.txt', 'ntp')
 vocab = reader.build_vocab()
 
-preproc_data = baseline.embeddings.load_embeddings('x', dsz=512, known_vocab=vocab['x'], embed_type=args.embed_type)
+preproc_data = baseline.embeddings.load_embeddings('x', dsz=args.d_model, known_vocab=vocab['x'], embed_type=args.embed_type)
 vocabs = preproc_data['vocab']
 embeddings = preproc_data['embeddings']
 logger.info("Loaded embeddings")
@@ -143,14 +143,14 @@ for batch in test_loader:
                 # pair the same context with all candidate responses
                 sequences = torch.cat([context, responses], axis=1)
                 total_logprobs = get_joint_logprob(model, sequences, context_lengths[i])
-                response_logprobs = get_joint_logprob(model, responses, 0)
-                scores.append((total_logprobs - response_logprobs).to('cpu'))
-            all_score = torch.stack(scores, axis=0)
+                # response_logprobs = get_joint_logprob(model, responses, 0)
+                # scores.append((total_logprobs - response_logprobs).to('cpu'))
+                scores.append(total_logprobs.to('cpu'))
+            all_score = torch.stack(scores, axis=1)
 
         elif args.model_type == 'encoder-decoder':
             pass
 
-        # _, max_indices = torch.max(all_score, 1)
         _, indices = torch.topk(all_score, args.recall_top, dim=1)
         correct = (indices == torch.arange(args.recall_k).unsqueeze(1).expand(-1, args.recall_top)).sum()
         numerator += correct
