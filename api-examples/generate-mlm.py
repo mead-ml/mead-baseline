@@ -33,9 +33,7 @@ def decode_sentence(model, vectorizer, query, word2index, index2word, device, sa
         #predictions = model({'x': toks, 'src_len': length, 'h': None}).squeeze(0)
         words = []
         for i in range(length):
-            #output = torch.argmax(predictions[i], -1).item()
 
-            #words.append(word)
             if vec[i] == MASK:
                 if not sample:
                     output = torch.argmax(predictions[i], -1).item()
@@ -46,10 +44,6 @@ def decode_sentence(model, vectorizer, query, word2index, index2word, device, sa
                     output = output.squeeze(0).item()
 
                     word = index2word[output]
-            #        # using a multinomial distribution to predict the word returned by the model
-            #        predictions = predictions.exp().squeeze(0)
-            #        output = torch.multinomial(predictions, num_samples=1).squeeze(0)[-1].item()
-            #        word = index2word[output]
                 words.append(word)
             else:
                 words.append(index2word[vec[i]])
@@ -94,7 +88,7 @@ def run():
     parser = ArgumentParser()
     parser.add_argument("--basedir", type=str)
     parser.add_argument("--checkpoint", type=str, help='Checkpoint name or directory to load')
-    parser.add_argument("--sample", type=str2bool, help='Sample from the decoder?  Defaults to `true`', default=1)
+    parser.add_argument("--sample", type=str2bool, help='Sample from the decoder?  Defaults to `false`', default=0)
     parser.add_argument("--vocab", type=str, help='Vocab file to load', required=False)
     parser.add_argument("--query", type=str, default='hello , <unk> are you today ?')
     parser.add_argument("--dataset_cache", type=str, default=os.path.expanduser('~/.bl-data'),
