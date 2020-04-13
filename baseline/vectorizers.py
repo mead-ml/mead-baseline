@@ -750,7 +750,7 @@ class WordPieceVectorizer1D(AbstractVectorizer):
             elif tok == '<EOS>':
                 yield '[SEP]'
             else:
-                for subtok in self.wordpiece_tok.tokenize(tok):
+                for subtok in self.wordpiece_tok.tokenize(self.transform_fn(tok)):
                     yield subtok
         yield '[SEP]'
 
