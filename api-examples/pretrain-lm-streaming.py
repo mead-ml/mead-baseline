@@ -156,12 +156,6 @@ def train():
         if mask_value == -1:
             logger.error("We could not find a suitable masking token in the vocab")
             return
-    os.makedirs(args.basedir, exist_ok=True)
-    # We want to make sure to save our input vocab into the basedir for reuse later
-    write_json(vocabs['x'], os.path.join(args.basedir, 'vocabs.json'))
-    # Get this from a YAML file?
-    logger.info("Loaded embeddings")
-    logger.info("Loaded datasets")
 
     if len(args.rpr_k) == 0 or args.rpr_k[0] < 1:
         rpr_k = None
