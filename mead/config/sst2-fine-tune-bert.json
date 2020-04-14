@@ -11,7 +11,8 @@
       "vectorizer": {
         "type": "wordpiece1d",
         "vocab_file": "/home/dpressel/dev/work/bert/uncased_L-12_H-768_A-12/vocab.txt",
-        "dtype": "int32"
+        "dtype": "int32",
+        "transform": "baseline.lowercase"
       },
       "embeddings": {
         "type": "bert-pooled",
@@ -37,7 +38,7 @@
   "train": {
     "epochs": 2,
     "optim": "adamw",
-    "eta":  0.00001,
+    "eta": 4.0e-5,
     "weight_decay": 1.0e-8,
     "early_stopping_metric": "acc",
     "verbose": {
