@@ -5,7 +5,8 @@ import os
 import glob
 from argparse import ArgumentParser
 import baseline
-from transformer_utils import TiedEmbeddingsSeq2SeqModel
+from transformer_utils import TiedEmbeddingsSeq2SeqModel, find_latest_checkpoint
+
 from baseline.utils import str2bool, read_json, Offsets, revlut
 from baseline.vectorizers import Token1DVectorizer, BPEVectorizer1D
 
@@ -38,18 +39,6 @@ def decode_sentence(model, vectorizer, query, word2index, index2word, device, ma
             if output == Offsets.EOS or output == EOU:
                 break
     return response
-
-
-def find_latest_checkpoint(checkpoint_dir: str) -> str:
-    step_num = 0
-    for f in glob.glob(os.path.join(checkpoint_dir, "checkpoint*")):
-        this_step_num = int(f.split("-")[-1])
-        if this_step_num > step_num:
-            checkpoint = f
-            step_num = this_step_num
-    logger.warning("Found latest checkpoint %s", checkpoint)
-
-    return checkpoint
 
 
 def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, d_k, checkpoint_name):
@@ -111,8 +100,10 @@ def run():
     if os.path.isdir(args.checkpoint):
         vocab_file = os.path.join(args.checkpoint, 'vocabs.json')
         checkpoint = find_latest_checkpoint(args.checkpoint)
+        logger.warning("Found latest checkpoint %s", checkpoint)
     else:
         checkpoint = args.checkpoint
+
 
     vocab = read_json(vocab_file)
     # If we are not using chars, then use 'x' for both input and output

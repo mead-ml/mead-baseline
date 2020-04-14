@@ -10,6 +10,7 @@ from baseline.pytorch.lm import TransformerMaskedLanguageModel
 from baseline.utils import str2bool, read_json, Offsets, revlut
 from baseline.vectorizers import Token1DVectorizer, BPEVectorizer1D
 from baseline.pytorch.embeddings import *
+from transformer_utils import find_latest_checkpoint
 logger = logging.getLogger(__file__)
 
 
@@ -49,18 +50,6 @@ def decode_sentence(model, vectorizer, query, word2index, index2word, device, sa
                 words.append(index2word[vec[i]])
 
         return words
-
-
-def find_latest_checkpoint(checkpoint_dir: str) -> str:
-    step_num = 0
-    for f in glob.glob(os.path.join(checkpoint_dir, "checkpoint*")):
-        this_step_num = int(f.split("-")[-1])
-        if this_step_num > step_num:
-            checkpoint = f
-            step_num = this_step_num
-    logger.warning("Found latest checkpoint %s", checkpoint)
-
-    return checkpoint
 
 
 def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, d_k, checkpoint_name):
@@ -121,6 +110,7 @@ def run():
     if os.path.isdir(args.checkpoint):
         vocab_file = os.path.join(args.checkpoint, 'vocabs.json')
         checkpoint = find_latest_checkpoint(args.checkpoint)
+        logger.warning("Found latest checkpoint %s", checkpoint)
     else:
         checkpoint = args.checkpoint
 

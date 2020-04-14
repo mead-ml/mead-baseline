@@ -2,10 +2,11 @@ import logging
 import time
 import os
 from argparse import ArgumentParser
+from collections import namedtuple
 import baseline
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader
-from eight_mile.utils import str2bool, write_json
+from eight_mile.utils import str2bool, write_json, revlut, print_table
 import glob
 from baseline.pytorch.embeddings import *
 import baseline.embeddings
@@ -15,7 +16,7 @@ from eight_mile.pytorch.layers import Average, checkpoint_for, rm_old_checkpoint
 logger = logging.getLogger(__file__)
 from baseline.pytorch.lm import TransformerMaskedLanguageModel
 from eight_mile.pytorch.layers import TransformerEncoderStack, EmbeddingsStack, subsequent_mask
-from transformer_utils import MultiFileDatasetReader, TransformerDiscriminator
+from transformer_utils import MultiFileDatasetReader, TransformerDiscriminator, find_latest_checkpoint
 
 """Pre-train an discriminator Transformer model in PyTorch
 
@@ -23,6 +24,25 @@ This file uses Baseline to train a Transformer-based discriminative model
 model, similar to (https://openreview.net/pdf?id=r1xMH1BtvB)
 """
 
+Row = namedtuple('Row', 'original reconstructed guess')
+
+def print_batch(index2word, labels, recon_labels, logits):
+    j = 0
+
+    for orig, recon, guess in zip(labels, recon_labels, logits):
+        rows = []
+        orig = orig.tolist()
+        recon = recon.tolist()
+        guess = guess.squeeze()
+        guess = (guess > 0.5).tolist()
+
+        for i in range(10):
+            rows.append(Row(original=index2word[orig[i]], reconstructed=index2word[recon[i]], guess=str(guess[i])))
+        print_table(rows)
+        print('\n')
+        if j == 3:
+            return
+        j += 1
 
 def save_checkpoint(model: torch.nn.Module, model_base: str, count: int, tick_type: str = 'epoch'):
 
@@ -120,8 +140,10 @@ def train():
     parser.add_argument("--clip", type=float, default=0.25, help="Clipping gradient norm")
     parser.add_argument("--weight_decay", type=float, default=0.0, help="Weight decay")
     parser.add_argument("--epochs", type=int, default=20, help="Num training epochs")
-    parser.add_argument("--restart_from", type=str, help="Option allows you to restart from a previous checkpoint")
-    parser.add_argument("--restart_tt", type=str, help="Optional param for legacy checkpoints (step|epoch)")
+    parser.add_argument("--restart_from", type=str, help="Option allows you to restart from the latest checkpoint in a directory")
+    parser.add_argument("--restart_tt", type=str, choices=['step', 'epoch'],
+                        default='step',
+                        help="Optional param for legacy checkpoints (step|epoch)")
     parser.add_argument("--warmup_steps", type=int, default=10000, help="Num warmup steps")
     parser.add_argument("--update_steps", type=int, default=100, help="The number of steps to take before saving a checkpoint")
     parser.add_argument("--device", type=str,
@@ -192,6 +214,7 @@ def train():
     gen_embed = baseline.embeddings.load_embeddings('x', dsz=args.gen_d_model, known_vocab=vocab['x'],
                                                     embed_type=args.embed_type)
     vocabs = gen_embed['vocab']
+    index2word = revlut(vocabs)
     discrim_embed = baseline.embeddings.load_embeddings('x', dsz=args.discrim_d_model, known_vocab=vocab['x'],
                                                         embed_type=args.embed_type)
 
@@ -255,24 +278,21 @@ def train():
 
     global_step = 0
     start_epoch = 0
-    #if args.restart_from:
-    #    gen_model.load_state_dict(torch.load(args.restart_from))
-    #    discrim_model.load_state_dict(torch.load(args.restart_from))
-    #    vec = args.restart_from.split("-")
-    #    if args.restart_tt:
-    #        tick_type = args.restart_tt
-    #    else:
-    #        tick_type = vec[-2]
-    #    step_num = int(vec[-1].split(".")[0])
-    #    if tick_type == 'epoch':
-    #        start_epoch = step_num
-    #        global_step = start_epoch * steps_per_epoch
-    #    else:
-    #        start_epoch = step_num // steps_per_epoch
-    #        global_step = step_num
-    #
-    #    logger.info("Restarting from a previous checkpoint %s.\n\tStarting at global_step=%d, epoch=%d",
-    #                args.restart_from, global_step, start_epoch+1)
+    if args.restart_from:
+        if not os.path.isdir(args.restart_from):
+            raise Exception(f"Cannot restart from {args.restart_from}, directory not found")
+        tick_type = args.restart_tt
+        discrim_latest = find_latest_checkpoint(args.restart_from, wildcard=f'checkpoint-discrim-{tick_type}')
+        step_num = int(discrim_latest.split("-")[-1])
+        gen_latest = find_latest_checkpoint(args.restart_from, wildcard=f'checkpoint-gen-{tick_type}')
+        discrim_model.load_state_dict(torch.load(discrim_latest))
+        gen_model.load_state_dict(torch.load(gen_latest))
+        if tick_type == 'step':
+            start_epoch = step_num // steps_per_epoch
+            global_step = step_num
+        else:
+            start_epoch = step_num
+            global_step = steps_per_epoch * start_epoch
 
     discrim_optz = OptimizerManager(discrim_model, global_step, optim=args.optim, lr=args.lr, lr_function=lr_sched, weight_decay=args.weight_decay)
     gen_optz = OptimizerManager(gen_model, global_step, optim=args.optim, lr=args.lr, lr_function=lr_sched, weight_decay=args.weight_decay)
@@ -308,6 +328,7 @@ def train():
             steps += 1
             x, y = batch
             noised_x = x.to(args.device)
+            # We are going to mask inplace and that will leave us with <PAD> anywhere that isnt MLM
             labels = y.to(args.device)
             # Replace 15% of tokens
             masked_indices = torch.bernoulli(torch.full(labels.shape, 0.15)).type(torch.bool)
@@ -321,17 +342,19 @@ def train():
             random_words = torch.randint(vocab_size, labels.shape, dtype=torch.long, device=args.device)
             noised_x[indices_random] = random_words[indices_random]
             labels = labels.transpose(0, 1).contiguous()
-            logits = gen_model({'x': noised_x}, None)[0].transpose(0, 1).contiguous()
-            gen_loss_step = gen_loss_fn(logits, labels)
+            logits = gen_model({'x': noised_x}, None)[0]
+            gen_loss_step = gen_loss_fn(logits.transpose(0, 1).contiguous(), labels)
             gen_loss_step.backward()
             avg_gen_loss.update(gen_loss_step.item())
             torch.nn.utils.clip_grad_norm_(gen_model.parameters(), args.clip)
             gen_optz.step()
             gen_optz.zero_grad()
-            labels = y.to(args.device).transpose(0, 1)
+            # Re-read labels from device, this clears the masked <PAD>
+            labels = y.to(args.device)
 
             # The logits needs to be replaced with either argmax or sampling.  Which?
             recon_labels = best_from(logits)
+            recon_labels[~masked_indices] = labels[~masked_indices]
             true_or_fake = (recon_labels == labels).to(torch.float32)
             logits = discrim_model({'x': recon_labels})
             discrim_loss_step = discrim_loss_fn(logits.squeeze(), true_or_fake)
@@ -343,6 +366,9 @@ def train():
             discrim_optz.zero_grad()
             if (i + 1) % report_on == 0:
                 logging.info('Loss g=%f, d=%f, Per token acc=%f', avg_gen_loss.avg, avg_discrim_loss.avg, avg_discrim_acc.avg)
+                print_batch(index2word, labels, recon_labels, logits)
+
+
             if (i + 1) % update_on == 0 and args.local_rank < 1:
                 elapsed = (time.time() - start)/60
                 logging.info('elapsed time this epoch %d min', elapsed)

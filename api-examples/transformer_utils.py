@@ -12,6 +12,15 @@ from collections import Counter
 import glob
 
 
+def find_latest_checkpoint(checkpoint_dir: str, wildcard="checkpoint") -> str:
+    step_num = 0
+    for f in glob.glob(os.path.join(checkpoint_dir, f"{wildcard}*")):
+        this_step_num = int(f.split("-")[-1])
+        if this_step_num > step_num:
+            checkpoint = f
+            step_num = this_step_num
+    return checkpoint
+
 class TripletLoss(nn.Module):
     """Provide a Triplet Loss using the reversed batch for negatives"""
     def __init__(self, model):
