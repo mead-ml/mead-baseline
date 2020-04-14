@@ -3,7 +3,7 @@
   "basedir": "./sst2",
   "batchsz": 10,
   "modules": [
-    "embed_bert"
+    "embed_bert_tf"
   ],
   "features": [
     {

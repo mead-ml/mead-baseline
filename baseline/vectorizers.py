@@ -741,6 +741,7 @@ class WordpieceVectorizer1D(AbstractVectorizer):
         self.max_seen = 128
         self.wordpiece_tok = WordpieceTokenizer(load_bert_vocab(kwargs.get('vocab_file')))
         self.mxlen = kwargs.get('mxlen', -1)
+        self.dtype = kwargs.get('dtype', 'int')
 
     def iterable(self, tokens):
         yield '[CLS]'
@@ -764,7 +765,7 @@ class WordpieceVectorizer1D(AbstractVectorizer):
     def run(self, tokens, vocab):
         if self.mxlen < 0:
             self.mxlen = self.max_seen
-        vec1d = np.zeros(self.mxlen, dtype=int)
+        vec1d = np.zeros(self.mxlen, dtype=self.dtype)
         for i, atom in enumerate(self._next_element(tokens, vocab)):
             if i == self.mxlen:
                 i -= 1

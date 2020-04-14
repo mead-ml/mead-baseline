@@ -1,15 +1,14 @@
+# This is from the official BERT codebase with some modifications where necessary
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 import collections
-import unicodedata
 import six
 import numpy as np
 from baseline.utils import write_json
 from baseline.embeddings import register_embeddings
 from baseline.tf.embeddings import TensorFlowEmbeddings
-from baseline.vectorizers import register_vectorizer, AbstractVectorizer
-
+from baseline.vectorizers import load_bert_vocab
 import copy
 import json
 import math
@@ -91,8 +90,6 @@ class BertConfig(object):
     def to_json_string(self):
         """Serializes this instance to a JSON string."""
         return json.dumps(self.to_dict(), indent=2, sort_keys=True) + "\n"
-
-
 
 
 class BertModel(object):
@@ -1008,9 +1005,6 @@ def model_fn(input_ids, input_mask, input_type_ids, bert_config, init_checkpoint
     return all_layers
 
 
-
-
-
 @register_embeddings(name='bert')
 class BERTEmbeddings(TensorFlowEmbeddings):
 
@@ -1024,7 +1018,7 @@ class BERTEmbeddings(TensorFlowEmbeddings):
 
         self.dsz = kwargs.get('dsz')
         self.bert_config = BertConfig.from_json_file(kwargs.get('bert_config'))
-        self.vocab = load_vocab(kwargs.get('vocab_file'))
+        self.vocab = load_bert_vocab(kwargs.get('vocab_file'))
         self.vsz = self.bert_config.vocab_size
         assert self.vsz == len(self.vocab)
         self.use_one_hot_embeddings = kwargs.get('use_one_hot_embeddings', False)
@@ -1072,6 +1066,7 @@ class BERTEmbeddings(TensorFlowEmbeddings):
 
 class BERTHubModel(TensorFlowEmbeddings):
     TF_HUB_URL = "https://tfhub.dev/google/"
+
     @classmethod
     def create_placeholder(cls, name):
         # input_ids = tf.placeholder(tf.int32, shape=(None, FLAGS.max_seq_length), name='input_ids')
@@ -1083,7 +1078,7 @@ class BERTHubModel(TensorFlowEmbeddings):
         if 'vocab' in kwargs:
             self.vocab = kwargs['vocab']
         else:
-            self.vocab = load_vocab(kwargs.get('vocab_file'))
+            self.vocab = load_bert_vocab(kwargs.get('vocab_file'))
 
         self.vsz = len(self.vocab)
         self.dsz = kwargs.get('dsz')
