@@ -1,7 +1,7 @@
 {
   "task": "classify",
   "basedir": "./sst2-bert",
-  "batchsz": 50,
+  "batchsz": 12,
   "modules": [
     "embed_bert_tf"
   ],
@@ -32,11 +32,10 @@
   },
   "unif": 0.25,
   "model": {
-    "model_type": "fine-tune",
-    "finetune": true
+    "model_type": "fine-tune"
   },
   "train": {
-    "epochs": 1,
+    "epochs": 2,
     "optim": "adamw",
     "eta":  0.00001,
     "weight_decay": 1.0e-8,
