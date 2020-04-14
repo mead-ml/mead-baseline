@@ -35,7 +35,7 @@ class BERTEmbeddings(PyTorchEmbeddings):
         self.proj_to_dsz = pytorch_linear(self.dsz, self.d_model) if self.dsz != self.d_model else _identity
         self.transformer = TransformerEncoderStack(num_heads, d_model=self.d_model, pdrop=pdrop, scale=True,
                                                    activation='gelu',
-                                                   layers=layers, d_ff=d_ff, layer_norms_after=True)
+                                                   layers=layers, d_ff=d_ff, layer_norms_after=True, layer_norm_eps=1e-12)
         self.finetune = kwargs.get('finetune', True)
 
     def embed(self, input):

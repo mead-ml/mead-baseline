@@ -9,15 +9,12 @@
     {
       "name": "bert",
       "vectorizer": {
-        "type": "wordpiece1d",
-        "vocab_file": "/home/dpressel/dev/work/bert/uncased_L-12_H-768_A-12/vocab.txt",
-        "dtype": "int32",
-        "transform": "baseline.lowercase"
+        "label": "bert-base-uncased",
+        "dtype": "int32"
       },
       "embeddings": {
         "type": "bert-pooled",
         "embed_file": "bert_uncased_L-12_H-768_A-12/1",
-        "vocab_file": "/home/dpressel/dev/work/bert/uncased_L-12_H-768_A-12/vocab.txt",
         "dsz": 768,
         "trainable": true
       }
@@ -37,9 +34,8 @@
   },
   "train": {
     "epochs": 2,
-    "optim": "adamw",
+    "optim": "adam",
     "eta": 4.0e-5,
-    "weight_decay": 1.0e-8,
     "early_stopping_metric": "acc",
     "verbose": {
       "console": true,

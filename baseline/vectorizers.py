@@ -3,7 +3,7 @@ import tempfile
 import unicodedata
 from typing import Tuple
 import numpy as np
-from baseline.utils import exporter, optional_params, listify, register, Offsets, import_user_module
+from baseline.utils import exporter, optional_params, listify, register, Offsets, import_user_module, validate_url, urlretrieve
 
 
 __all__ = []
@@ -580,6 +580,10 @@ def load_bert_vocab(vocab_file):
     if BERT_VOCAB is not None:
         return BERT_VOCAB
 
+    if validate_url(vocab_file):
+        print(f'Downloading {vocab_file}')
+        vocab_file, _ = urlretrieve(vocab_file)
+
     vocab = collections.OrderedDict()
     index = 0
     with open(vocab_file, "r") as rf:
@@ -595,7 +599,7 @@ def load_bert_vocab(vocab_file):
 
 
 class FullTokenizer(object):
-    """Runs end-to-end tokenziation."""
+    """Runs end-to-end tokenization."""
 
     def __init__(self, vocab_file, do_lower_case=True):
         self.vocab = load_bert_vocab(vocab_file)
