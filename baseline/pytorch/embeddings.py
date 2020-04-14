@@ -47,6 +47,10 @@ class LearnedPositionalLookupTableEmbeddingsModel(PyTorchEmbeddingsModel, Learne
     pass
 
 
+@register_embeddings(name='bert-lookup-table-embeddings')
+class BERTLookupTableEmbeddingsModel(PyTorchEmbeddingsModel, BERTLookupTableEmbeddings):
+    pass
+
 @register_embeddings(name='positional-char-conv')
 class PositionalCharConvEmbeddingsModel(PyTorchEmbeddingsModel, PositionalCharConvEmbeddings):
     pass

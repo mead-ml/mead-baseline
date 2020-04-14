@@ -5,6 +5,56 @@ from typing import Dict
 from eight_mile.pytorch.layers import Dense, TransformerEncoderStack, TransformerEncoder, MultiHeadedAttention
 
 
+# BERT HuggingFace Tokenizers checkpoints can be converted into MEAD Baseline Transformer checkpoints
+# With a simple name change
+BERT_HF_LAYER_MAP = {
+    ## FFN weights
+    'bert.encoder.layer.{}.intermediate.dense.weight': 'transformer.encoders.{}.ffn.0.layer.weight',
+    'bert.encoder.layer.{}.intermediate.dense.bias': 'transformer.encoders.{}.ffn.0.layer.bias',
+    'bert.encoder.layer.{}.output.dense.weight': 'transformer.encoders.{}.ffn.3.layer.weight',
+    'bert.encoder.layer.{}.output.dense.bias': 'transformer.encoders.{}.ffn.3.layer.bias',
+
+    ## MHA weights
+    'bert.encoder.layer.{}.attention.self.key.weight': 'transformer.encoders.{}.self_attn.w_K.layer.weight',
+    'bert.encoder.layer.{}.attention.self.key.bias': 'transformer.encoders.{}.self_attn.w_K.layer.bias',
+    'bert.encoder.layer.{}.attention.self.query.weight': 'transformer.encoders.{}.self_attn.w_Q.layer.weight',
+    'bert.encoder.layer.{}.attention.self.query.bias': 'transformer.encoders.{}.self_attn.w_Q.layer.bias',
+    'bert.encoder.layer.{}.attention.self.value.weight': 'transformer.encoders.{}.self_attn.w_V.layer.weight',
+    'bert.encoder.layer.{}.attention.self.value.bias': 'transformer.encoders.{}.self_attn.w_V.layer.bias',
+    'bert.encoder.layer.{}.attention.output.dense.weight': 'transformer.encoders.{}.self_attn.w_O.layer.weight',
+    'bert.encoder.layer.{}.attention.output.dense.bias': 'transformer.encoders.{}.self_attn.w_O.layer.bias',
+
+    ## LN weights
+    # The names in of layer norm our transformers are a bit unspecific
+    # think of ln1 as ln_x and ln2 as ln_attn_output
+    'bert.encoder.layer.{}.output.LayerNorm.beta': 'transformer.encoders.{}.ln1.bias',
+    'bert.encoder.layer.{}.output.LayerNorm.gamma': 'transformer.encoders.{}.ln1.weight',
+    'bert.encoder.layer.{}.attention.output.LayerNorm.beta': 'transformer.encoders.{}.ln2.bias',
+    'bert.encoder.layer.{}.attention.output.LayerNorm.gamma': 'transformer.encoders.{}.ln2.weight'
+}
+
+BERT_HF_EMBED_MAP = {
+    ## Embedding weights
+    'bert.embeddings.word_embeddings.weight': 'embeddings.embeddings.0.embeddings.weight',
+    'bert.embeddings.position_embeddings.weight': 'embeddings.embeddings.0.pos_embeddings.weight',
+    'bert.embeddings.token_type_embeddings.weight': 'embeddings.embeddings.0.tok_embeddings.weight',
+    'bert.embeddings.LayerNorm.beta': 'embeddings.embeddings.0.ln.bias',
+    'bert.embeddings.LayerNorm.gamma': 'embeddings.embeddings.0.ln.weight',
+}
+
+
+def convert_transformers_keys(num_layers: int, d: Dict, replace_layer_map: Dict, replace_embed_map: Dict) -> Dict:
+    m = {}
+    for i in range(num_layers):
+        for k, v in replace_layer_map.items():
+            m[v.format(i)] = d[k.format(i)]
+
+    for k, v in replace_embed_map.items():
+        m[v] = d[k]
+
+    return m
+
+
 def to_weight_array(pytorch_layer: nn.Module, name: str) -> Dict:
     """Convert a {`LayerNorm`, `Linear`, `layers.Dense`} to `weights` and `bias` arrays
 
@@ -251,3 +301,10 @@ def load_tlm_npz(pytorch_tlm: nn.Module, npz: str, embeddings_key: str = 'x', na
     """
     d = np.load(npz)
     from_tlm_array(pytorch_tlm, d, embeddings_key, name)
+
+def load_tlm_transformers_bin(pytorch_tlm: nn.Module, bin_file: str, replace_layers=BERT_HF_LAYER_MAP, replace_embeds=BERT_HF_EMBED_MAP):
+    d = torch.load(bin_file)
+    num_layers = len(pytorch_tlm.transformer.encoders)
+    mapped_keys = convert_transformers_keys(num_layers, d, replace_layers, replace_embeds)
+    unknown_keys = pytorch_tlm.load_state_dict(mapped_keys, strict=False)
+    print('Ignored ', unknown_keys)

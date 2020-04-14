@@ -251,6 +251,30 @@ class LearnedPositionalMixin(PositionalMixin):
         ).unsqueeze(0)
 
 
+class BERTLookupTableEmbeddings(LookupTableEmbeddings):
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.dropout = nn.Dropout(kwargs.get('dropout', 0.1))
+        self.mxlen = int(kwargs.get('mxlen', 512))
+        self.tok_type_vsz = kwargs['tok_type_vsz']
+        self.pos_embeddings = nn.Embedding(self.mxlen, self.get_dsz())
+        self.tok_embeddings = nn.Embedding(self.tok_type_vsz, self.get_dsz())
+        self.ln = nn.LayerNorm(self.get_dsz(), eps=1e-12)
+
+    def forward(self, x):
+        zeros = torch.zeros_like(x)
+        x = super().forward(x)
+        x = x + self.positional(x.size(1)) + self.tok_embeddings(zeros)
+        x = self.ln(x)
+        return self.dropout(x)
+
+    def positional(self, length):
+        return self.pos_embeddings(
+            torch.arange(length, dtype=torch.long, device=self.pos_embeddings.weight.device)
+        ).unsqueeze(0)
+
+
 class PositionalLookupTableEmbeddings(SinusoidalPositionalMixin, LookupTableEmbeddings):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
