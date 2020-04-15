@@ -23,8 +23,9 @@ from transformer_utils import MultiFileDatasetReader, TransformerDiscriminator, 
 This file uses Baseline to train a Transformer-based discriminative model
 model, similar to (https://openreview.net/pdf?id=r1xMH1BtvB)
 """
-
+LAMBDA = 50
 Row = namedtuple('Row', 'original reconstructed guess')
+
 
 def print_batch(index2word, labels, recon_labels, logits):
     j = 0
@@ -361,7 +362,7 @@ def train():
             logits = discrim_model({'x': recon_labels})
             discrim_loss_step = discrim_loss_fn(logits.view(-1), true_or_fake.view(-1))
 
-            total_loss_step = gen_loss_step + 50 * discrim_loss_step
+            total_loss_step = gen_loss_step + LAMBDA * discrim_loss_step
             total_loss_step.backward()
             avg_discrim_loss.update(discrim_loss_step.item())
             avg_train_loss.update(total_loss_step.item())
@@ -414,19 +415,20 @@ def train():
                 random_words = torch.randint(vocab_size, labels.shape, dtype=torch.long, device=args.device)
                 noised_x[indices_random] = random_words[indices_random]
                 labels = labels.transpose(0, 1).contiguous()
-                logits = gen_model({'x': noised_x}, None)[0].transpose(0, 1).contiguous()
+                logits = gen_model({'x': noised_x}, None)[0]
 
-                gen_loss_step = gen_loss_fn(logits, labels)
+                gen_loss_step = gen_loss_fn(logits.transpose(0, 1).contiguous(), labels)
                 avg_valid_gen_loss.update(gen_loss_step.item())
 
-                labels = y.to(args.device).transpose(0, 1).contiguous()
+                labels = y.to(args.device)
                 recon_labels = best_from(logits)
+                recon_labels[~masked_indices] = labels[~masked_indices]
+                true_or_fake = (recon_labels == labels).to(torch.float32).view(-1)
                 logits = discrim_model({'x': recon_labels})
-                true_or_fake = (recon_labels == labels).to(torch.float32)
-                discrim_loss_step = discrim_loss_fn(logits.squeeze(), true_or_fake)
+                discrim_loss_step = discrim_loss_fn(logits.view(-1), true_or_fake.view(-1))
                 avg_valid_discrim_acc.update(get_accuracy(logits, true_or_fake, labels))
                 avg_valid_discrim_loss.update(discrim_loss_step.item())
-                total_loss_step = gen_loss_step + 50 * discrim_loss_step
+                total_loss_step = gen_loss_step + LAMBDA * discrim_loss_step
                 avg_valid_loss.update(total_loss_step.item())
         elapsed = (time.time() - start)/60
         metrics['valid_elapsed_min'] = elapsed
