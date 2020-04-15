@@ -12,6 +12,15 @@ from collections import Counter
 import glob
 
 
+def find_latest_checkpoint(checkpoint_dir: str, wildcard="checkpoint") -> str:
+    step_num = 0
+    for f in glob.glob(os.path.join(checkpoint_dir, f"{wildcard}*")):
+        this_step_num = int(f.split("-")[-1])
+        if this_step_num > step_num:
+            checkpoint = f
+            step_num = this_step_num
+    return checkpoint
+
 class TripletLoss(nn.Module):
     """Provide a Triplet Loss using the reversed batch for negatives"""
     def __init__(self, model):
@@ -150,6 +159,47 @@ class PairedModel(nn.Module):
         if loss_type == 'all':
             return AllLoss(self)
         return TripletLoss(self)
+
+
+class TransformerDiscriminator(nn.Module):
+
+    def __init__(self, embeddings, d_model, d_ff, dropout, num_heads, num_layers, rpr_k, d_k, **kwargs):
+        super().__init__()
+        self.embeddings = EmbeddingsStack(embeddings, dropout)
+        self.weight_std = kwargs.get('weight_std', 0.02)
+        assert self.embeddings.dsz == d_model
+        self.transformer = TransformerEncoderStack(num_heads, d_model=d_model, pdrop=dropout, scale=True,
+                                                   layers=num_layers, d_ff=d_ff, rpr_k=rpr_k, d_k=d_k)
+        self.proj_to_output = pytorch_linear(d_model, 1)
+
+        self.apply(self.init_layer_weights)
+        self.lengths_feature = kwargs.get('lengths_feature', self.embeddings.keys()[0])
+
+    def init_layer_weights(self, module):
+        if isinstance(module, (nn.Linear, nn.Embedding, nn.LayerNorm)):
+            module.weight.data.normal_(mean=0.0, std=self.weight_std)
+        if isinstance(module, (nn.Linear, nn.LayerNorm)) and module.bias is not None:
+            module.bias.data.zero_()
+
+    def forward(self, features):
+        embedded = self.embeddings(features)
+        x = features[self.lengths_feature]
+        input_mask = torch.zeros(x.shape, device=x.device, dtype=torch.long).masked_fill(x != 0, 1).unsqueeze(1).unsqueeze(1)
+        transformer_out = self.transformer((embedded, input_mask))
+        binary = self.proj_to_output(transformer_out)
+        return torch.sigmoid(binary)
+
+    def create_loss(self):
+        class Loss(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.loss = nn.BCELoss()
+
+            def forward(self, input, target):
+                fake_loss = self.loss(input[target == 0], target[target == 0])
+                real_loss = self.loss(input[target != 0], target[target != 0])
+                return real_loss + fake_loss
+        return Loss()
 
 
 class MultiFileLoader(IterableDataset):

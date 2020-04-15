@@ -139,7 +139,11 @@ class AdamW(torch.optim.Optimizer):
 
 
 class OptimizerManager(object):
-    def __init__(self, model, global_step=0, **kwargs):
+    def __init__(self, model_or_params, global_step=0, **kwargs):
+        if isinstance(model_or_params, torch.nn.Module):
+            parameters = model_or_params.parameters()
+        else:
+            parameters = model_or_params
         self.global_step = global_step
         if "lr_function" in kwargs:
             self.lr_function = kwargs["lr_function"]
@@ -147,7 +151,7 @@ class OptimizerManager(object):
             if "lr_scheduler_type" not in kwargs:
                 kwargs["lr_scheduler_type"] = "default"
             self.lr_function = create_lr_scheduler(**kwargs)
-        self._init_optimizer(model, **kwargs)
+        self._init_optimizer(model_or_params, **kwargs)
 
     @property
     def global_step(self):
@@ -157,14 +161,14 @@ class OptimizerManager(object):
     def global_step(self, value):
         self._global_step = value
 
-    def _init_optimizer(self, model, **kwargs):
+    def _init_optimizer(self, parameters, **kwargs):
         wd = float(kwargs.get("weight_decay", 0))
         optim = kwargs.get("optim", "sgd")
         self.current_lr = kwargs.get("eta", kwargs.get("lr", 0.01))
         self.step = self._step_then_update
         if optim == "adadelta":
             logger.info("adadelta(eta=%f, wd=%f)", self.current_lr, wd)
-            self.optimizer = torch.optim.Adadelta(model.parameters(), lr=self.current_lr, weight_decay=wd)
+            self.optimizer = torch.optim.Adadelta(parameters, lr=self.current_lr, weight_decay=wd)
         elif optim.startswith("adam"):
             beta1 = kwargs.get("beta1", 0.9)
             beta2 = kwargs.get("beta2", 0.999)
@@ -174,14 +178,14 @@ class OptimizerManager(object):
                     "adam(eta=%f, beta1=%f, beta2=%f, epsilon=%f, wd=%f)", self.current_lr, beta1, beta2, eps, wd
                 )
                 self.optimizer = torch.optim.Adam(
-                    model.parameters(), lr=self.current_lr, betas=(beta1, beta2), eps=eps, weight_decay=wd
+                    parameters, lr=self.current_lr, betas=(beta1, beta2), eps=eps, weight_decay=wd
                 )
             elif optim == "adamw":
                 logger.info(
                     "adamw(eta=%f, beta1=%f, beta2=%f, epsilon=%f, wd=%f)", self.current_lr, beta1, beta2, eps, wd
                 )
                 self.optimizer = AdamW(
-                    model.parameters(),
+                    parameters,
                     set_lr=self.update_lr,
                     lr=self.current_lr,
                     betas=(beta1, beta2),
@@ -192,14 +196,14 @@ class OptimizerManager(object):
         elif optim == "rmsprop":
             mom = kwargs.get("mom", 0.0)
             logger.info("rmsprop(eta=%f, wd=%f, mom=%f)", self.current_lr, wd, mom)
-            self.optimizer = torch.optim.RMSprop(model.parameters(), lr=self.current_lr, weight_decay=wd, momentum=mom)
+            self.optimizer = torch.optim.RMSprop(parameters, lr=self.current_lr, weight_decay=wd, momentum=mom)
         elif optim == "asgd":
             logger.info("asgd(eta=%f, wd=%f)", self.current_lr, wd)
-            self.optimizer = torch.optim.ASGD(model.parameters(), lr=self.current_lr, weight_decay=wd)
+            self.optimizer = torch.optim.ASGD(parameters, lr=self.current_lr, weight_decay=wd)
         else:
             mom = kwargs.get("mom", 0.9)
             logger.info("sgd(eta=%f, mom=%f, wd=%f)", self.current_lr, mom, wd)
-            self.optimizer = torch.optim.SGD(model.parameters(), lr=self.current_lr, momentum=mom, weight_decay=wd)
+            self.optimizer = torch.optim.SGD(parameters, lr=self.current_lr, momentum=mom, weight_decay=wd)
 
     def _identity(self, _):
         return self.current_lr
