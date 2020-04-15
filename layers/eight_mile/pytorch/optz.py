@@ -151,7 +151,7 @@ class OptimizerManager(object):
             if "lr_scheduler_type" not in kwargs:
                 kwargs["lr_scheduler_type"] = "default"
             self.lr_function = create_lr_scheduler(**kwargs)
-        self._init_optimizer(model_or_params, **kwargs)
+        self._init_optimizer(parameters, **kwargs)
 
     @property
     def global_step(self):
