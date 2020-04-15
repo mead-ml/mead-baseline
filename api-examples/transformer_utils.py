@@ -190,7 +190,16 @@ class TransformerDiscriminator(nn.Module):
         return torch.sigmoid(binary)
 
     def create_loss(self):
-        return nn.BCELoss()
+        class Loss(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.loss = nn.BCELoss()
+
+            def forward(self, input, target):
+                fake_loss = self.loss(input[target == 0], target[target == 0])
+                real_loss = self.loss(input[target != 0], target[target != 0])
+                return real_loss + fake_loss
+        return Loss()
 
 
 class MultiFileLoader(IterableDataset):

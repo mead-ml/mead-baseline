@@ -87,7 +87,12 @@ def create_generator(embeddings, d_model, d_ff, dropout, num_heads, num_layers, 
 
 
 def best_from(x_preds):
-    return x_preds.argmax(axis=-1)
+    #return x_preds.argmax(axis=-1)
+    B, T, V = x_preds.shape
+    sample_dist = x_preds.exp().view(B * T, V)
+    output = torch.multinomial(sample_dist, num_samples=1).view(B, T)
+    #output = output.squeeze(0).item()
+    return output
 
 
 def get_accuracy(preds, true_or_fake, logits):
@@ -135,7 +140,7 @@ def train():
                         help="dataset key for basedir")
     parser.add_argument("--subword_model_file", type=str, required=True)
     parser.add_argument("--subword_vocab_file", type=str, required=True)
-    parser.add_argument("--optim", default="adam", type=str, help="Optimizer to use (defaults to adam)")
+    #parser.add_argument("--optim", default="adam", type=str, help="Optimizer to use (defaults to adam)")
     parser.add_argument("--lr", type=float, default=4.0e-4, help="Learning rate")
     parser.add_argument("--clip", type=float, default=0.25, help="Clipping gradient norm")
     parser.add_argument("--weight_decay", type=float, default=0.0, help="Weight decay")
@@ -146,6 +151,7 @@ def train():
                         help="Optional param for legacy checkpoints (step|epoch)")
     parser.add_argument("--warmup_steps", type=int, default=10000, help="Num warmup steps")
     parser.add_argument("--update_steps", type=int, default=100, help="The number of steps to take before saving a checkpoint")
+    parser.add_argument("--print", type=str2bool, default=True, help="Print some output")
     parser.add_argument("--device", type=str,
                         default="cuda" if torch.cuda.is_available() else "cpu",
                         help="Device (cuda or cpu)")
@@ -294,11 +300,13 @@ def train():
             start_epoch = step_num
             global_step = steps_per_epoch * start_epoch
 
-    discrim_optz = OptimizerManager(discrim_model, global_step, optim=args.optim, lr=args.lr, lr_function=lr_sched, weight_decay=args.weight_decay)
-    gen_optz = OptimizerManager(gen_model, global_step, optim=args.optim, lr=args.lr, lr_function=lr_sched, weight_decay=args.weight_decay)
+    parameters = [p for p in discrim_model.parameters() if p.requires_grad] + [p for p in gen_model.parameters() if p.requires_grad]
+    optz = torch.optim.Adam(parameters, args.lr)
+    #optz = AdamW(parameters, lr_sched, args.lr, weight_decay=args.weight_decay)
+    #discrim_optz = OptimizerManager(discrim_model, global_step, optim=args.optim, lr=args.lr, lr_function=lr_sched, weight_decay=args.weight_decay)
+    #gen_optz = OptimizerManager(gen_model, global_step, optim=args.optim, lr=args.lr, lr_function=lr_sched, weight_decay=args.weight_decay)
     logger.info("Generator has {:,} parameters".format(sum(p.numel() for p in gen_model.parameters() if p.requires_grad)))
     logger.info("Discriminator has {:,} parameters".format(sum(p.numel() for p in discrim_model.parameters() if p.requires_grad)))
-
     # Prepare model for distributed training if needed
     if args.distributed:
         # This program assume pure data parallelism, each model is on a single gpu
@@ -321,8 +329,9 @@ def train():
         avg_gen_loss = Average('average_train_gen_loss')
         avg_discrim_loss = Average('average_train_discrim_loss')
         avg_discrim_acc = Average('average_train_discrim_acc')
+        avg_train_loss = Average('average5_train_loss')
         metrics = {}
-        gen_optz.zero_grad()
+        optz.zero_grad()
         start = time.time()
         for i, batch in enumerate(train_loader):
             steps += 1
@@ -344,30 +353,33 @@ def train():
             labels = labels.transpose(0, 1).contiguous()
             logits = gen_model({'x': noised_x}, None)[0]
             gen_loss_step = gen_loss_fn(logits.transpose(0, 1).contiguous(), labels)
-            gen_loss_step.backward()
+            #gen_loss_step.backward()
             avg_gen_loss.update(gen_loss_step.item())
             torch.nn.utils.clip_grad_norm_(gen_model.parameters(), args.clip)
-            gen_optz.step()
-            gen_optz.zero_grad()
+            #gen_optz.step()
+            #gen_optz.zero_grad()
             # Re-read labels from device, this clears the masked <PAD>
             labels = y.to(args.device)
 
             # The logits needs to be replaced with either argmax or sampling.  Which?
             recon_labels = best_from(logits)
             recon_labels[~masked_indices] = labels[~masked_indices]
-            true_or_fake = (recon_labels == labels).to(torch.float32)
+            true_or_fake = (recon_labels == labels).to(torch.float32).view(-1)
             logits = discrim_model({'x': recon_labels})
-            discrim_loss_step = discrim_loss_fn(logits.squeeze(), true_or_fake)
-            discrim_loss_step.backward()
-            avg_discrim_loss.update(discrim_loss_step.item())
-            avg_discrim_acc.update(get_accuracy(logits, true_or_fake, labels))
-            torch.nn.utils.clip_grad_norm_(discrim_model.parameters(), args.clip)
-            discrim_optz.step()
-            discrim_optz.zero_grad()
-            if (i + 1) % report_on == 0:
-                logging.info('Loss g=%f, d=%f, Per token acc=%f', avg_gen_loss.avg, avg_discrim_loss.avg, avg_discrim_acc.avg)
-                print_batch(index2word, labels, recon_labels, logits)
+            discrim_loss_step = discrim_loss_fn(logits.view(-1), true_or_fake.view(-1))
 
+            total_loss_step = gen_loss_step + 50 * discrim_loss_step
+            total_loss_step.backward()
+            avg_discrim_loss.update(discrim_loss_step.item())
+            avg_train_loss.update(total_loss_step.item())
+            avg_discrim_acc.update(get_accuracy(logits, true_or_fake, labels))
+            torch.nn.utils.clip_grad_norm_(parameters, args.clip)
+            optz.step()
+            optz.zero_grad()
+            if (i + 1) % report_on == 0:
+                logging.info('Loss g=%f, d=%f total=%f, Per token acc=%f', avg_gen_loss.avg, avg_discrim_loss.avg, avg_train_loss.avg, avg_discrim_acc.avg)
+                if args.print:
+                    print_batch(index2word, labels, recon_labels, logits)
 
             if (i + 1) % update_on == 0 and args.local_rank < 1:
                 elapsed = (time.time() - start)/60
@@ -383,10 +395,12 @@ def train():
         metrics['average_train_gen_loss'] = avg_gen_loss.avg
         metrics['average_train_discrim_loss'] = avg_discrim_loss.avg
         metrics['average_train_discrim_per_token_accuracy'] = avg_discrim_acc.avg
+        metrics['average_train_loss'] - avg_train_loss.avg
 
         avg_valid_gen_loss = Average('average_valid_gen_loss')
         avg_valid_discrim_loss = Average('average_valid_discrim_loss')
         avg_valid_discrim_acc = Average('average_valid_discrim_acc')
+        avg_valid_loss = Average('average_valid_loss')
         start = time.time()
         gen_model.eval()
         discrim_model.eval()
@@ -419,12 +433,14 @@ def train():
                 discrim_loss_step = discrim_loss_fn(logits.squeeze(), true_or_fake)
                 avg_valid_discrim_acc.update(get_accuracy(logits, true_or_fake, labels))
                 avg_valid_discrim_loss.update(discrim_loss_step.item())
-
+                total_loss_step = gen_loss_step + 50 * discrim_loss_step
+                avg_valid_loss.update(total_loss_step.item())
         elapsed = (time.time() - start)/60
         metrics['valid_elapsed_min'] = elapsed
         metrics['average_valid_gen_loss'] = avg_valid_gen_loss.avg
         metrics['average_valid_discrim_loss'] = avg_valid_discrim_loss.avg
         metrics['average_valid_discrim_per_token_accuracy'] = avg_valid_discrim_acc.avg
+        metrics['average_valid_loss'] = avg_valid_loss.avg
         logger.info(metrics)
 
         if args.local_rank < 1:
