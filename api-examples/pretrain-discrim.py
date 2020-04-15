@@ -140,7 +140,7 @@ def train():
                         help="dataset key for basedir")
     parser.add_argument("--subword_model_file", type=str, required=True)
     parser.add_argument("--subword_vocab_file", type=str, required=True)
-    #parser.add_argument("--optim", default="adam", type=str, help="Optimizer to use (defaults to adam)")
+    parser.add_argument("--optim", default="adam", type=str, help="Optimizer to use (defaults to adam)")
     parser.add_argument("--lr", type=float, default=4.0e-4, help="Learning rate")
     parser.add_argument("--clip", type=float, default=0.25, help="Clipping gradient norm")
     parser.add_argument("--weight_decay", type=float, default=0.0, help="Weight decay")
@@ -216,7 +216,6 @@ def train():
     # This looks a bit funny but the streaming reader ignores our vocab and gives us the one from the subword_model
     # However, we do need to get counts from our dataset for validation so we can calculate the perplexity
     vocab = reader.build_vocab([args.valid_file])
-    # If we are not using chars, then use 'x' for both input and output
     gen_embed = baseline.embeddings.load_embeddings('x', dsz=args.gen_d_model, known_vocab=vocab['x'],
                                                     embed_type=args.embed_type)
     vocabs = gen_embed['vocab']
@@ -234,8 +233,8 @@ def train():
     train_set = reader.load(args.train_file, vocabs)
     valid_set = reader.load(args.valid_file, vocabs)
 
-    train_loader = DataLoader(train_set, batch_size=args.batch_size, num_workers=0)#args.num_train_workers)
-    valid_loader = DataLoader(valid_set, batch_size=args.batch_size, num_workers=0)#args.num_valid_workers)
+    train_loader = DataLoader(train_set, batch_size=args.batch_size, num_workers=args.num_train_workers)
+    valid_loader = DataLoader(valid_set, batch_size=args.batch_size, num_workers=args.num_valid_workers)
     logger.info("Loaded datasets")
     logger.info("Using embedding type [%s]", args.embed_type)
 
@@ -300,11 +299,8 @@ def train():
             start_epoch = step_num
             global_step = steps_per_epoch * start_epoch
 
-    parameters = [p for p in discrim_model.parameters() if p.requires_grad] + [p for p in gen_model.parameters() if p.requires_grad]
-    optz = torch.optim.Adam(parameters, args.lr)
-    #optz = AdamW(parameters, lr_sched, args.lr, weight_decay=args.weight_decay)
-    #discrim_optz = OptimizerManager(discrim_model, global_step, optim=args.optim, lr=args.lr, lr_function=lr_sched, weight_decay=args.weight_decay)
-    #gen_optz = OptimizerManager(gen_model, global_step, optim=args.optim, lr=args.lr, lr_function=lr_sched, weight_decay=args.weight_decay)
+    parameters = list(discrim_model.parameters()) + list(gen_model.parameters())
+    optz = OptimizerManager(parameters, global_step, optim=args.optim, lr=args.lr, lr_function=lr_sched, weight_decay=args.weight_decay)
     logger.info("Generator has {:,} parameters".format(sum(p.numel() for p in gen_model.parameters() if p.requires_grad)))
     logger.info("Discriminator has {:,} parameters".format(sum(p.numel() for p in discrim_model.parameters() if p.requires_grad)))
     # Prepare model for distributed training if needed
@@ -353,11 +349,8 @@ def train():
             labels = labels.transpose(0, 1).contiguous()
             logits = gen_model({'x': noised_x}, None)[0]
             gen_loss_step = gen_loss_fn(logits.transpose(0, 1).contiguous(), labels)
-            #gen_loss_step.backward()
             avg_gen_loss.update(gen_loss_step.item())
             torch.nn.utils.clip_grad_norm_(gen_model.parameters(), args.clip)
-            #gen_optz.step()
-            #gen_optz.zero_grad()
             # Re-read labels from device, this clears the masked <PAD>
             labels = y.to(args.device)
 
@@ -395,7 +388,7 @@ def train():
         metrics['average_train_gen_loss'] = avg_gen_loss.avg
         metrics['average_train_discrim_loss'] = avg_discrim_loss.avg
         metrics['average_train_discrim_per_token_accuracy'] = avg_discrim_acc.avg
-        metrics['average_train_loss'] - avg_train_loss.avg
+        metrics['average_train_loss'] = avg_train_loss.avg
 
         avg_valid_gen_loss = Average('average_valid_gen_loss')
         avg_valid_discrim_loss = Average('average_valid_discrim_loss')
