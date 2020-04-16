@@ -796,18 +796,29 @@ def sniff_conll_file(f, delim=None, comment_pattern="#", doc_pattern="# begin do
             f.seek(start)
             return len(parts)
 
+@export
+def split_extensions(path: str, exts: Set[str]) -> Tuple[str, str]:
+    all_ext = []
+    path, ext = os.path.splitext(path)
+    while ext in exts:
+        all_ext.append(ext)
+        path, ext = os.path.splitext(path)
+    return path + ext, "".join(all_ext[::-1])
 
 @export
 def remove_extensions(path: str, exts: Set[str]) -> str:
-    path, ext = os.path.splitext(path)
-    while ext in exts:
-        path, ext = os.path.splitext(path)
-    return path + ext
+    path, _ = split_extensions(path, exts)
+    return path
 
 
 @export
 def remove_conll_extensions(path: str, exts: Set[str] = CONLL_EXTS) -> str:
     return remove_extensions(path, exts)
+
+
+@export
+def split_conll_extensions(path: str, exts: Set[str] = CONLL_EXTS) -> Tuple[str, str]:
+    return split_extensions(path, exts)
 
 
 @export
