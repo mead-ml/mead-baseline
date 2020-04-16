@@ -6,7 +6,15 @@ from itertools import chain
 import pytest
 import numpy as np
 from mock import patch
-from eight_mile.utils import get_env_gpus, idempotent_append, parse_module_as_path, to_numpy, get_version, remove_extensions
+from eight_mile.utils import (
+    get_env_gpus,
+    idempotent_append,
+    parse_module_as_path,
+    to_numpy,
+    get_version,
+    remove_extensions,
+    split_extensions,
+)
 
 
 @pytest.fixture
@@ -208,9 +216,30 @@ def test_remove_ext():
     res = remove_extensions(path, exts)
     assert res == gold
 
+
 def test_remove_ext_not_in_middle():
     gold = "example.bio.more-stuff"
     exts = {".bio"}
     path = deepcopy(gold)
     res = remove_extensions(path, exts)
     assert res == gold
+
+
+def test_split_ext():
+    exts = {"." + rand_str() for _ in range(np.random.randint(2, 4))}
+    ext_list = list(exts)
+    gold_path = rand_str()
+    gold_exts = "".join(random.choice(ext_list) for _ in range(np.random.randint(1, 4)))
+    path = gold_path + gold_exts
+    path, ext = split_extensions(path, exts)
+    assert path == gold_path
+    assert ext == gold_exts
+
+
+def test_split_ext_not_in_middle():
+    gold = "example.bio.more-stuff"
+    exts = {".bio"}
+    path = deepcopy(gold)
+    res, ext = split_extensions(path, exts)
+    assert res == gold
+    assert ext == ''
