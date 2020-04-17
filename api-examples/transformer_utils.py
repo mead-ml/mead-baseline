@@ -246,13 +246,11 @@ class PairedModel(nn.Module):
     def encode_query(self, query):
         query_mask = (query != Offsets.PAD)
         query_length = query_mask.sum(-1)
-        query_mask = query_mask.unsqueeze(1).unsqueeze(1)
+        att_mask = query_mask.unsqueeze(1).unsqueeze(1)
         embedded = self.embedding_layers(query)
-        encoded_query = self.transformer_layers((embedded, query_mask))
-        print(encoded_query.shape)
-        print(encoded_query[0])
-        print(encoded_query[:, :, 0])
-        encoded_query = self.attention_layer((encoded_query, encoded_query, encoded_query, query_mask))
+        encoded_query = self.transformer_layers((embedded, att_mask))
+        encoded_query = self.attention_layer((encoded_query, encoded_query, encoded_query, att_mask))
+        encoded_query = encoded_query*query_mask.unsqueeze(-1)
         encoded_query = encoded_query.sum(1) / query_length.float().sqrt().unsqueeze(1)
         encoded_query = self.ff1(encoded_query)
         return encoded_query
@@ -260,10 +258,11 @@ class PairedModel(nn.Module):
     def encode_response(self, response):
         response_mask = (response != Offsets.PAD)
         response_length = response_mask.sum(-1)
-        response_mask = response_mask.unsqueeze(1).unsqueeze(1)
+        att_mask = response_mask.unsqueeze(1).unsqueeze(1)
         embedded = self.embedding_layers(response)
-        encoded_response = self.transformer_layers((embedded, response_mask))
-        encoded_response = self.attention_layer((encoded_response, encoded_response, encoded_response, response_mask))
+        encoded_response = self.transformer_layers((embedded, att_mask))
+        encoded_response = self.attention_layer((encoded_response, encoded_response, encoded_response, att_mask))
+        encoded_response = encoded_response*response_mask.unsqueeze(-1)
         encoded_response = encoded_response.sum(1) / response_length.float().sqrt().unsqueeze(1)
         encoded_response = self.ff2(encoded_response)
         return encoded_response
