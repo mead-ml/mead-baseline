@@ -2314,9 +2314,12 @@ class TransformerEncoder(tf.keras.layers.Layer):
         d_k: Optional[int] = None,
         rpr_k: Optional[int] = None,
         ffn_pdrop: Optional[float] = 0.0,
-        name: Optional[str] = None,
+        layer_norms_after: bool = False,
+        layer_norm_eps: float = 1.0e-6,
+        name: Optional[str] = None
     ):
         super().__init__(name=name)
+        self.layer_norms_after = layer_norms_after
         self.d_model = d_model
         self.d_ff = d_ff if d_ff is not None else 4 * d_model
         if rpr_k is not None:
@@ -2325,8 +2328,8 @@ class TransformerEncoder(tf.keras.layers.Layer):
             self.self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale=scale, d_k=d_k)
 
         self.ffn = FFN(d_model, activation_type, d_ff, ffn_pdrop, name="ffn")
-        self.ln1 = tf.keras.layers.LayerNormalization(epsilon=1e-6)
-        self.ln2 = tf.keras.layers.LayerNormalization(epsilon=1e-6)
+        self.ln1 = tf.keras.layers.LayerNormalization(epsilon=layer_norm_eps)
+        self.ln2 = tf.keras.layers.LayerNormalization(epsilon=layer_norm_eps)
         self.dropout = tf.keras.layers.Dropout(pdrop)
 
     def call(self, inputs):
@@ -2335,13 +2338,14 @@ class TransformerEncoder(tf.keras.layers.Layer):
         :return: The output tensor
         """
         x, mask = inputs
-
-        x = self.ln1(x)
+        if not self.layer_norms_after:
+            x = self.ln1(x)
         h = self.self_attn((x, x, x, mask))
         x = x + self.dropout(h, TRAIN_FLAG())
-
         x = self.ln2(x)
         x = x + self.dropout(self.ffn(x), TRAIN_FLAG())
+        if self.layer_norms_after:
+            x = self.ln1(x)
         return x
 
 
@@ -2354,23 +2358,35 @@ class TransformerDecoder(tf.keras.layers.Layer):
         scale: bool = True,
         activation_type: str = "relu",
         d_ff: Optional[int] = None,
-        ffn_pdrop: float = 0.0,
-        name: str = None,
+        d_k: Optional[int] = None,
+        rpr_k: Optional[int] = None,
+        ffn_pdrop: Optional[float] = 0.0,
+        layer_norms_after: bool = False,
+        layer_norm_eps: float = 1.0e-6,
+        name: str = None
     ):
         super().__init__(name=name)
         self.d_model = d_model
+        self.layer_norms_after = layer_norms_after
         self.d_ff = d_ff if d_ff is not None else 4 * d_model
-        self.self_attn = MultiHeadedAttention(num_heads, self.d_model, pdrop, scale=scale, name="self_attention")
-        self.src_attn = MultiHeadedAttention(num_heads, self.d_model, pdrop, scale=scale, name="src_attention")
+        if rpr_k is not None:
+            self.self_attn = MultiHeadedRelativeAttention(num_heads, d_model, rpr_k, pdrop, scale, d_k=d_k, name="self_attention")
+            self.src_attn = MultiHeadedRelativeAttention(num_heads, d_model, rpr_k, pdrop, scale, d_k=d_k, name="src_attention")
+
+        else:
+            self.self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale, d_k=d_k, name="self_attention")
+            self.src_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale, d_k=d_k, name="src_attention")
+
         self.ffn = FFN(d_model, activation_type, d_ff, pdrop=ffn_pdrop, name="ffn")
-        self.ln1 = tf.keras.layers.LayerNormalization(epsilon=1e-6)
-        self.ln2 = tf.keras.layers.LayerNormalization(epsilon=1e-6)
-        self.ln3 = tf.keras.layers.LayerNormalization(epsilon=1e-6)
+        self.ln1 = tf.keras.layers.LayerNormalization(epsilon=layer_norm_eps)
+        self.ln2 = tf.keras.layers.LayerNormalization(epsilon=layer_norm_eps)
+        self.ln3 = tf.keras.layers.LayerNormalization(epsilon=layer_norm_eps)
         self.dropout = tf.keras.layers.Dropout(pdrop)
 
     def call(self, inputs):
         x, memory, src_mask, tgt_mask = inputs
-        x = self.ln1(x)
+        if not self.layer_norms_after:
+            x = self.ln1(x)
         x = x + self.dropout(self.self_attn((x, x, x, tgt_mask)), TRAIN_FLAG())
 
         x = self.ln2(x)
@@ -2378,6 +2394,8 @@ class TransformerDecoder(tf.keras.layers.Layer):
 
         x = self.ln3(x)
         x = x + self.dropout(self.ffn(x), TRAIN_FLAG())
+        if self.layer_norms_after:
+            x = self.ln1(x)
         return x
 
 
@@ -2394,13 +2412,15 @@ class TransformerEncoderStack(tf.keras.layers.Layer):
         d_k: Optional[int] = None,
         rpr_k: Optional[Union[int, List[int]]] = None,
         ffn_pdrop: Optional[float] = 0.0,
+        layer_norms_after: bool = False,
+        layer_norm_eps: float = 1.0e-6,
         name=None,
         **kwargs,
     ):
 
         super().__init__(name=name)
         self.encoders = []
-        self.ln = tf.keras.layers.LayerNormalization(epsilon=1e-6)
+        self.ln = tf.identity if layer_norms_after else tf.keras.layers.LayerNormalization(epsilon=layer_norm_eps)
 
         if not is_sequence(rpr_k):
             rpr_k = [rpr_k] * layers
@@ -2408,15 +2428,9 @@ class TransformerEncoderStack(tf.keras.layers.Layer):
         for i in range(layers):
             self.encoders.append(
                 TransformerEncoder(
-                    num_heads,
-                    d_model,
-                    pdrop,
-                    scale,
-                    activation,
-                    d_ff,
-                    d_k,
-                    rpr_k=rpr_k[i],
-                    ffn_pdrop=ffn_pdrop,
+                    num_heads, d_model, pdrop, scale, activation, d_ff, d_k,
+                    rpr_k=rpr_k[i], ffn_pdrop=ffn_pdrop,
+                    layer_norms_after=layer_norms_after, layer_norm_eps=layer_norm_eps,
                     name=name,
                 )
             )
@@ -2440,10 +2454,12 @@ class TransformerEncoderStackWithLengths(TransformerEncoderStack):
         d_ff: Optional[int] = None,
         d_k: Optional[int] = None,
         rpr_k: Optional[Union[int, List[int]]] = None,
+        layer_norms_after: bool = False,
+        layer_norm_eps: float = 1.0e-6,
         name: Optional[str] = None,
         **kwargs,
     ):
-        super().__init__(num_heads, d_model, pdrop, scale, layers, activation, d_ff, d_k, rpr_k, name=name)
+        super().__init__(num_heads, d_model, pdrop, scale, layers, activation, d_ff, d_k, rpr_k, layer_norms_after, layer_norm_eps, name=name)
         self.proj = WithDropout(tf.keras.layers.Dense(d_model), pdrop)
 
     def call(self, inputs):
@@ -2466,10 +2482,12 @@ class TransformerEncoderStackWithTimeMask(TransformerEncoderStack):
         d_ff: Optional[int] = None,
         d_k: Optional[int] = None,
         rpr_k: Optional[Union[int, List[int]]] = None,
+        layer_norms_after: bool = False,
+        layer_norm_eps: float = 1.0e-6,
         name: Optional[str] = None,
         **kwargs,
     ):
-        super().__init__(num_heads, d_model, pdrop, scale, layers, activation, d_ff, d_k, rpr_k, name=name)
+        super().__init__(num_heads, d_model, pdrop, scale, layers, activation, d_ff, d_k, rpr_k, layer_norms_after, layer_norm_eps, name=name)
         self.proj = WithDropout(tf.keras.layers.Dense(d_model), pdrop)
 
     def call(self, inputs):
@@ -2490,13 +2508,17 @@ class TransformerDecoderStack(tf.keras.layers.Layer):
         layers: int = 1,
         activation: str = "relu",
         d_ff: Optional[int] = None,
+        d_k: Optional[int] = None,
+        rpr_k: Optional[Union[int, List[int]]] = None,
         ffn_pdrop: float = 0.0,
+        layer_norms_after: bool = False,
+        layer_norm_eps: float = 1.0e-6,
         name: Optional[str] = None,
         **kwargs,
     ):
         super().__init__(name=name)
         self.decoders = []
-        self.ln = tf.keras.layers.LayerNormalization(epsilon=1e-6)
+        self.ln = tf.identity if layer_norms_after else tf.keras.layers.LayerNormalization(epsilon=1e-6)
         for i in range(layers):
             self.decoders.append(
                 TransformerDecoder(d_model, num_heads, pdrop, scale, activation, d_ff, ffn_pdrop=ffn_pdrop)

@@ -105,8 +105,8 @@ class Seq2SeqTrainerEagerTf(Trainer):
             """Replicated training step."""
 
             loss = self.optimizer.update(self.model, features, y)
-            toks = tf.cast(self._num_toks(features['tgt_len']), tf.float32)
-            report_loss = loss * toks
+            toks = self._num_toks(features['tgt_len'])
+            report_loss = loss * tf.cast(toks, tf.float32)
             return report_loss, toks
 
         with autograph_options({"function_optimization": False, "layout_optimizer": False}):

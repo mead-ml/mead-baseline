@@ -2847,12 +2847,12 @@ class TransformerDecoder(nn.Module):
         d_k: Optional[int] = None,
         rpr_k: Optional[int] = None,
         ffn_pdrop: Optional[float] = 0.0,
-        layer_norm_after: bool = False,
+        layer_norms_after: bool = False,
         layer_norm_eps: float = 1.0e-6
     ):
         super().__init__()
         self.d_model = d_model
-        self.layer_norm_after = layer_norm_after
+        self.layer_norms_after = layer_norms_after
         self.d_ff = d_ff if d_ff is not None else 4 * d_model
         if rpr_k is not None:
             self.self_attn = MultiHeadedRelativeAttention(num_heads, d_model, rpr_k, pdrop, scale, d_k=d_k)
@@ -2877,7 +2877,7 @@ class TransformerDecoder(nn.Module):
     def forward(self, inputs: Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]) -> torch.Tensor:
 
         x, memory, src_mask, tgt_mask = inputs
-        if not self.layer_norm_after:
+        if not self.layer_norms_after:
             x = self.ln1(x)
         x = x + self.dropout(self.self_attn((x, x, x, tgt_mask)))
 
@@ -2886,7 +2886,7 @@ class TransformerDecoder(nn.Module):
 
         x = self.ln3(x)
         x = x + self.dropout(self.ffn(x))
-        if self.layer_norm_after:
+        if self.layer_norms_after:
             x = self.ln1(x)
         return x
 
@@ -2945,8 +2945,8 @@ class TransformerEncoderStackWithLengths(TransformerEncoderStack):
         d_k: Optional[int] = None,
         rpr_k: Optional[Union[int, List[int]]] = None,
         input_sz: Optional[int] = None,
-        layer_norms_after = False,
-        layer_norm_eps=1.0e-6,
+        layer_norms_after: bool = False,
+        layer_norm_eps: float = 1.0e-6,
         **kwargs,
     ):
         super().__init__(num_heads, d_model, pdrop, scale, layers, activation, d_ff, d_k, rpr_k,
@@ -3002,13 +3002,13 @@ class TransformerDecoderStack(nn.Module):
         d_k: Optional[int] = None,
         rpr_k: Optional[Union[int, List[int]]] = None,
         ffn_pdrop: Optional[float] = 0.0,
-        layer_norm_after: bool = False,
+        layer_norms_after: bool = False,
         layer_norm_eps: float = 1.0e-6
 
     ):
         super().__init__()
         self.decoders = nn.ModuleList()
-        self.ln = nn.Identity() if layer_norm_after else nn.LayerNorm(d_model, eps=layer_norm_eps)
+        self.ln = nn.Identity() if layer_norms_after else nn.LayerNorm(d_model, eps=layer_norm_eps)
 
         if not is_sequence(rpr_k):
             rpr_k = [rpr_k] * layers
@@ -3017,7 +3017,7 @@ class TransformerDecoderStack(nn.Module):
             self.decoders.append(
                 TransformerDecoder(num_heads, d_model, pdrop, scale, activation_type, d_ff,
                                    d_k=d_k, rpr_k=rpr_k[i], ffn_pdrop=ffn_pdrop,
-                                   layer_norm_after=layer_norm_after, layer_norm_eps=layer_norm_eps)
+                                   layer_norms_after=layer_norms_after, layer_norm_eps=layer_norm_eps)
             )
 
     def forward(self, inputs):
