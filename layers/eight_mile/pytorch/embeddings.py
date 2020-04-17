@@ -250,9 +250,18 @@ class LearnedPositionalMixin(PositionalMixin):
             torch.arange(length, dtype=torch.long, device=self.pos_embeddings.weight.device)
         ).unsqueeze(0)
 
-
 class BERTLookupTableEmbeddings(LookupTableEmbeddings):
+    """
+    BERT style embeddings with a 0 token type
 
+    TODO: Get rid of this, we dont need it anymore
+    If you want to use BERT with token types, make a LearnedPositionalLookupTableEmbeddings feature
+    and a LookupTableEmbeddings feature (for the token type)
+    and put them in an EmbedStack with an embeddings_reduction='sum' on the model
+    And if you dont want that, use the LearnedPositionalLookupTableEmbeddingsWithBias, which
+    will add the BERT token_type=0 weights into the pos + word_embed and is more efficient
+    than this class, since it doesnt do any memory allocation on the fly
+    """
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.dropout = nn.Dropout(kwargs.get('dropout', 0.1))
@@ -276,7 +285,13 @@ class BERTLookupTableEmbeddings(LookupTableEmbeddings):
 
 
 class LearnedPositionalLookupTableEmbeddingsWithBias(LookupTableEmbeddings):
+    """Learned positional lookup table embeddings wih a bias and layer norm
 
+    This is just a typical learned positional embedding but with a learnable
+    bias and a layer norm.  This is equivalent to BERT embeddings when the
+    token_type is not set
+
+    """
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.dropout = nn.Dropout(kwargs.get('dropout', 0.1))

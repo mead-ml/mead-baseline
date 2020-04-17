@@ -363,7 +363,6 @@ class LearnedPositionalMixin(PositionalMixin):
 
 class PositionalLookupTableEmbeddings(SinusoidalPositionalMixin, LookupTableEmbeddings):
     def __init__(self, trainable=True, name=None, dtype=tf.float32, **kwargs):
-        trainable = kwargs.get("finetune", trainable)
         super().__init__(name=name, **kwargs)
         self.scale = math.sqrt(self.get_dsz())
         self.dropout = tf.keras.layers.Dropout(kwargs.get("dropout", 0.1))
@@ -377,7 +376,6 @@ class PositionalLookupTableEmbeddings(SinusoidalPositionalMixin, LookupTableEmbe
 
 class LearnedPositionalLookupTableEmbeddings(LearnedPositionalMixin, LookupTableEmbeddings):
     def __init__(self, trainable=True, name=None, dtype=tf.float32, **kwargs):
-        trainable = kwargs.get("finetune", trainable)
         super().__init__(name=name, **kwargs)
         self.dropout = tf.keras.layers.Dropout(kwargs.get("dropout", 0.1))
 
@@ -386,6 +384,36 @@ class LearnedPositionalLookupTableEmbeddings(LearnedPositionalMixin, LookupTable
         T = tf.shape(x)[1]
         pos = self.positional(T)
         return self.dropout(x + pos, training=TRAIN_FLAG())
+
+
+class LearnedPositionalLookupTableEmbeddingsWithBias(LearnedPositionalMixin, LookupTableEmbeddings):
+    """Learned positional lookup table embeddings wih a bias and layer norm
+
+    This is just a typical learned positional embedding but with a learnable
+    bias and a layer norm.  This is equivalent to BERT embeddings when the
+    token_type is not set
+
+    """
+    def __init__(self, trainable=True, name=None, dtype=tf.float32, **kwargs):
+        super().__init__(name=name, **kwargs)
+        self.dropout = tf.keras.layers.Dropout(kwargs.get("dropout", 0.1))
+        self.ln = tf.keras.layers.LayerNormalization(epsilon=1e-12)
+
+    def build(self, input_shape):
+        super().build(input_shape)
+        self.bias = self.add_weight(
+            name="bias",
+            initializer=tf.constant_initializer(0.0),
+            shape=[1, self.get_dsz()],
+            trainable=self.finetune,
+        )
+
+    def encode(self, x):
+        x = super().encode(x)
+        T = tf.shape(x)[1]
+        pos = self.positional(T)
+        x = x + pos + self.bias
+        return self.dropout(x, training=TRAIN_FLAG())
 
 
 class PositionalCharConvEmbeddings(SinusoidalPositionalMixin, CharConvEmbeddings):
