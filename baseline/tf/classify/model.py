@@ -357,7 +357,7 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
 
         :return: A 3-d vector where the last dimension is the concatenated dimensions of all embeddings
         """
-        return EmbeddingsStack(self.embeddings)
+        return EmbeddingsStack(self.embeddings, reduction=kwargs.get('embeddings_reduction', 'concat'))
 
 
 class EmbedPoolStackClassifier(ClassifierModelBase):

@@ -1520,6 +1520,34 @@ class BiGRUEncoderHidden(BiGRUEncoderBase):
         output, _ = torch.nn.utils.rnn.pad_packed_sequence(output, batch_first=self.batch_first)
         return self.extract_top_state(_cat_dir(hidden))
 
+class Reduction(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, inputs: List[torch.Tensor]) -> torch.Tensor:
+        pass
+
+
+class ConcatReduction(Reduction):
+    def __init__(self, output_dims: List[int], axis=-1):
+        super().__init__()
+        self.axis = axis
+        self.output_dim = sum(output_dims)
+
+    def forward(self, inputs: List[torch.Tensor]) -> torch.Tensor:
+        return torch.cat(inputs, self.axis)
+
+
+class SumReduction(Reduction):
+    def __init__(self, output_dims: List[int]):
+        super().__init__()
+        # We could actually project if we needed, or at least should validate
+        self.output_dim = output_dims[0]
+
+    def forward(self, inputs: List[torch.Tensor]) -> torch.Tensor:
+        return sum(inputs)
+
 
 class EmbeddingsStack(nn.Module):
     def __init__(
@@ -1527,6 +1555,7 @@ class EmbeddingsStack(nn.Module):
         embeddings_dict: Dict[str, nn.Embedding],
         dropout_rate: float = 0.0,
         requires_length: bool = False,
+        reduction: Optional[Union[str, nn.Module]] = 'concat',
         **kwargs,
     ):
         """Takes in a dictionary where the keys are the input tensor names, and the values are the embeddings
@@ -1537,16 +1566,25 @@ class EmbeddingsStack(nn.Module):
         super().__init__()
 
         self._keys: List[str] = []
-
         self.output_dim = 0
         embeddings_list = []
+        output_dims = []
         for k, embedding in embeddings_dict.items():
+
             embeddings_list.append(embedding)
             self._keys.append(k)
-            self.output_dim += embedding.get_dsz()
+            output_dims += [embedding.get_dsz()]
 
         self.embeddings: nn.ModuleList = nn.ModuleList(embeddings_list)
-        self.dsz = self.output_dim
+        # TODO: should we make a registry of options?
+        if isinstance(reduction, str):
+            if reduction == 'sum':
+                self.reduction = SumReduction(output_dims)
+            else:
+                self.reduction = ConcatReduction(output_dims)
+        else:
+            self.reduction = reduction
+        self.dsz = self.reduction.output_dim
         self.dropout = nn.Dropout(dropout_rate)
         self.requires_length = requires_length
 
@@ -1569,7 +1607,7 @@ class EmbeddingsStack(nn.Module):
             embeddings_out = embedding(x)
             all_embeddings_out.append(embeddings_out)
             i += 1
-        word_embeddings = torch.cat(all_embeddings_out, -1)
+        word_embeddings = self.reduction(all_embeddings_out)
         return self.dropout(word_embeddings)
 
     def keys(self):

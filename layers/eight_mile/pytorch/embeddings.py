@@ -275,6 +275,28 @@ class BERTLookupTableEmbeddings(LookupTableEmbeddings):
         ).unsqueeze(0)
 
 
+class LearnedPositionalLookupTableEmbeddingsWithBias(LookupTableEmbeddings):
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.dropout = nn.Dropout(kwargs.get('dropout', 0.1))
+        self.mxlen = int(kwargs.get('mxlen', 512))
+        self.pos_embeddings = nn.Embedding(self.mxlen, self.get_dsz())
+        self.bias = nn.Parameter(torch.zeros(self.get_dsz()))
+        self.ln = nn.LayerNorm(self.get_dsz(), eps=1e-12)
+
+    def forward(self, x):
+        x = super().forward(x)
+        x = x + self.positional(x.size(1)) + self.bias
+        x = self.ln(x)
+        return self.dropout(x)
+
+    def positional(self, length):
+        return self.pos_embeddings(
+            torch.arange(length, dtype=torch.long, device=self.pos_embeddings.weight.device)
+        ).unsqueeze(0)
+
+
 class PositionalLookupTableEmbeddings(SinusoidalPositionalMixin, LookupTableEmbeddings):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
