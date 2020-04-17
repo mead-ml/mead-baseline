@@ -2341,7 +2341,7 @@ class TransformerDecoder(tf.keras.layers.Layer):
 
     def call(self, inputs):
         x, memory, src_mask, tgt_mask = inputs
-        if not self.layer_norm_after:
+        if not self.layer_norms_after:
             x = self.ln1(x)
         x = x + self.dropout(self.self_attn((x, x, x, tgt_mask)), TRAIN_FLAG())
 
@@ -2350,7 +2350,7 @@ class TransformerDecoder(tf.keras.layers.Layer):
 
         x = self.ln3(x)
         x = x + self.dropout(self.ffn(x), TRAIN_FLAG())
-        if self.layer_norm_after:
+        if self.layer_norms_after:
             x = self.ln1(x)
         return x
 
