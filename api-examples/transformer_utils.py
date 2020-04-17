@@ -92,6 +92,122 @@ class AllLoss(nn.Module):
         return -loss
 
 
+class DenseLN(nn.Module):
+    """Dense (Linear) layer with optional activation given
+
+    This module is the equivalent of the tf.keras.layer.Dense, module with optional activations applied
+    """
+
+    def __init__(
+            self,
+            insz: int,
+            outsz: int,
+            activation: Optional[str] = None,
+            unif: float = 0,
+            initializer: Optional[str] = None,
+    ):
+        """Constructor for "dense" or "linear" layer, with optional activation applied
+
+        :param insz: The number of hidden units in the input
+        :param outsz: The number of hidden units in the output
+        :param activation: The activation function by name, defaults to `None`, meaning no activation is applied
+        :param unif: An optional initialization value which can set the linear weights.  If given, biases will init to 0
+        :param initializer: An initialization scheme by string name: `ortho`, `kaiming` or `he`, `xavier` or `glorot`
+        """
+        super().__init__()
+        if insz == outsz:
+            self.layer = SkipConnection(insz)
+        else:
+            self.layer = Dense(insz, outsz, get_activation(activation))
+
+        self.output_dim = outsz
+        self.ln = nn.LayerNorm(outsz, eps=1e-6)
+
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
+        """Run a linear projection over the input, followed by an optional activation given by constructor
+
+        :param input: the input tensor
+        :return: the transformed output
+        """
+        return self.ln(self.layer(input))
+
+
+class DenseLNStack(nn.Module):
+    """A stack of one or more hidden layers
+    """
+
+    def __init__(
+            self,
+            insz: int,
+            hsz: Union[int, List[int]],
+            activation: str = "relu",
+            pdrop_value: float = 0.5,
+            init=None,
+            **kwargs,
+    ):
+        """Stack 1 or more hidden layers, optionally (forming an MLP)
+
+        :param insz: The number of input units
+        :param hsz: The number of hidden units
+        :param activation: The name of the activation function to use
+        :param pdrop_value: The dropout probability
+        :param init: The initializer
+
+        """
+        super().__init__()
+        hszs = listify(hsz)
+        self.output_dim = hsz[-1]
+        current = insz
+        layer_stack = []
+        for hsz in hszs:
+            layer_stack.append(WithDropout(DenseLN(current, hsz, activation=activation), pdrop_value))
+            current = hsz
+        self.layer_stack = nn.Sequential(*layer_stack)
+        self.requires_length = False
+
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        """Stack 1 or more hidden layers, optionally (forming an MLP)
+
+        :param inputs: The fixed representation of the model
+
+        :Keyword Arguments:
+        * *hsz* -- (``int``) The number of hidden units (defaults to `100`)
+
+        :return: The final layer
+        """
+        x = inputs
+        for layer in self.layer_stack:
+            x = layer(x)
+        return x
+
+
+class TwoHeadConcat(nn.Module):
+    """The 2-head attention layer of the conveRT model"""
+
+    def __init__(self, d_model, dropout, scale=False, d_k=None):
+        """Two parallel 1-head self-attention, then concatenate the output
+
+        :param d_model: dim of the self-attention
+        :param dropout: dropout of the self-attention
+        :param scale: scale fo the self-attention
+        :param d_k: d_k of the self-attention
+
+        :return: concatenation of the two 1-head attention
+        """
+        super().__init__()
+        self.attention1 = MultiHeadedAttention(1, d_model, dropout, scale=scale, d_k=d_k)
+        self.attention2 = MultiHeadedAttention(1, d_model, dropout, scale=scale, d_k=d_k)
+        self.ln = nn.LayerNorm(2*d_model, eps=1.e-6)
+
+    def forward(self, inputs: torch.Tensor):
+        x = inputs
+        att1 = self.attention1(x)
+        # print(att1[0])
+        att2 = self.attention2(x)
+        x = torch.cat([att1, att2], dim=-1)
+        return self.ln(x)
+
+
 class PairedModel(nn.Module):
 
     def __init__(self, embeddings,
@@ -114,11 +230,11 @@ class PairedModel(nn.Module):
         transformer = TransformerEncoderStack(num_heads=num_heads, d_model=d_model,
                                               pdrop=dropout, layers=num_layers, activation='gelu', d_ff=d_ff,
                                               d_k=d_k, rpr_k=rpr_k)
-        self.attention_layer = MultiHeadedAttention(2, d_model, dropout, scale=False, d_k=d_k)
+        self.attention_layer = TwoHeadConcat(d_model, dropout, scale=False, d_k=d_k)
         self.transformer_layers = transformer
         self.embedding_layers = embeddings
-        self.ff1 = DenseStack(d_model, stacking_layers + [d_out], activation='gelu')
-        self.ff2 = DenseStack(d_model, stacking_layers + [d_out], activation='gelu')
+        self.ff1 = DenseLNStack(2*d_model, stacking_layers + [d_out], activation='gelu', pdrop_value=0.2)
+        self.ff2 = DenseLNStack(2*d_model, stacking_layers + [d_out], activation='gelu', pdrop_value=0.2)
         self.apply(self.init_layer_weights)
 
     def init_layer_weights(self, module):
@@ -133,6 +249,9 @@ class PairedModel(nn.Module):
         query_mask = query_mask.unsqueeze(1).unsqueeze(1)
         embedded = self.embedding_layers(query)
         encoded_query = self.transformer_layers((embedded, query_mask))
+        print(encoded_query.shape)
+        print(encoded_query[0])
+        print(encoded_query[:, :, 0])
         encoded_query = self.attention_layer((encoded_query, encoded_query, encoded_query, query_mask))
         encoded_query = encoded_query.sum(1) / query_length.float().sqrt().unsqueeze(1)
         encoded_query = self.ff1(encoded_query)
@@ -147,7 +266,6 @@ class PairedModel(nn.Module):
         encoded_response = self.attention_layer((encoded_response, encoded_response, encoded_response, response_mask))
         encoded_response = encoded_response.sum(1) / response_length.float().sqrt().unsqueeze(1)
         encoded_response = self.ff2(encoded_response)
-
         return encoded_response
 
     def forward(self, query, response):
