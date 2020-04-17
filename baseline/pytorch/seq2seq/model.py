@@ -31,11 +31,8 @@ class EncoderDecoderModelBase(nn.Module, EncoderDecoderModel):
         :param kwargs:
         :return: Return the aggregate embedding input size
         """
-        self.src_embeddings = EmbeddingsStack(src_embeddings)
-        input_sz = 0
-        for k, embedding in src_embeddings.items():
-            input_sz += embedding.get_dsz()
-        return input_sz
+        self.src_embeddings = EmbeddingsStack(src_embeddings, reduction=kwargs.get('embeddings_reduction', 'concat'))
+        return self.src_embeddings.output_dim
 
     def init_encoder(self, input_sz, **kwargs):
         # This is a hack since TF never needs this one, there is not a general constructor param, so shoehorn

@@ -42,7 +42,7 @@ class TaggerModelBase(nn.Module, TaggerModel):
         self.gpu = False
 
     def init_embed(self, **kwargs):
-        return EmbeddingsStack(self.embeddings, self.pdrop)
+        return EmbeddingsStack(self.embeddings, self.pdrop, reduction=kwargs.get('embeddings_reduction', 'concat'))
 
     def init_encoder(self, input_sz, **kwargs):
         pass
