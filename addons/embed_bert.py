@@ -4,9 +4,9 @@ from __future__ import print_function
 
 
 from eight_mile.pytorch.layers import TransformerEncoderStack, subsequent_mask
-from eight_mile.pytorch.embeddings import PyTorchEmbeddings, PositionalLookupTableEmbeddings, LearnedPositionalLookupTableEmbeddings
+from eight_mile.pytorch.embeddings import PyTorchEmbeddings, LearnedPositionalLookupTableEmbeddingsWithBias
 from baseline.embeddings import register_embeddings, create_embeddings
-from baseline.pytorch.embeddings import PyTorchEmbeddingsModel, BERTLookupTableEmbeddingsModel
+from baseline.pytorch.embeddings import PyTorchEmbeddingsModel
 from baseline.vectorizers import register_vectorizer, AbstractVectorizer, BPEVectorizer1D
 from baseline.pytorch.torchy import *
 from baseline.vectorizers import load_bert_vocab
@@ -30,7 +30,7 @@ class BERTEmbeddings(PyTorchEmbeddings):
         pdrop = kwargs.get('dropout', 0.1)
         self.d_model = int(kwargs.get('dsz', kwargs.get('d_model', 768)))
         d_ff = int(kwargs.get('d_ff', 3072))
-        x_embedding = BERTLookupTableEmbeddingsModel(vsz=self.vsz, dsz=self.d_model, tok_type_vsz=2)
+        x_embedding = LearnedPositionalLookupTableEmbeddingsWithBias(vsz=self.vsz, dsz=self.d_model)
         self.dsz = self.init_embed({'x': x_embedding})
         self.proj_to_dsz = pytorch_linear(self.dsz, self.d_model) if self.dsz != self.d_model else _identity
         self.transformer = TransformerEncoderStack(num_heads, d_model=self.d_model, pdrop=pdrop, scale=True,
