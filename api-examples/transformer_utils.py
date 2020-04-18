@@ -116,9 +116,9 @@ class DenseLN(nn.Module):
         """
         super().__init__()
         if insz == outsz:
-            self.layer = SkipConnection(insz)
+            self.layer = SkipConnection(insz, activation)
         else:
-            self.layer = Dense(insz, outsz, get_activation(activation))
+            self.layer = Dense(insz, outsz, activation)
 
         self.output_dim = outsz
         self.ln = nn.LayerNorm(outsz, eps=1e-6)
@@ -233,8 +233,10 @@ class PairedModel(nn.Module):
         self.attention_layer = TwoHeadConcat(d_model, dropout, scale=False, d_k=d_k)
         self.transformer_layers = transformer
         self.embedding_layers = embeddings
-        self.ff1 = DenseLNStack(2*d_model, stacking_layers + [d_out], activation='gelu', pdrop_value=0.2)
-        self.ff2 = DenseLNStack(2*d_model, stacking_layers + [d_out], activation='gelu', pdrop_value=0.2)
+        self.ff1 = DenseLNStack(2*d_model, stacking_layers, activation='gelu', pdrop_value=0.2)
+        self.ff2 = DenseLNStack(2*d_model, stacking_layers, activation='gelu', pdrop_value=0.2)
+        self.output_layer1 = pytorch_linear(stacking_layers[-1], d_out)
+        self.output_layer2 = pytorch_linear(stacking_layers[-1], d_out)
         self.apply(self.init_layer_weights)
 
     def init_layer_weights(self, module):
@@ -253,6 +255,7 @@ class PairedModel(nn.Module):
         encoded_query = encoded_query*query_mask.unsqueeze(-1)
         encoded_query = encoded_query.sum(1) / query_length.float().sqrt().unsqueeze(1)
         encoded_query = self.ff1(encoded_query)
+        encoded_query = self.output_layer1(encoded_query)
         return encoded_query
 
     def encode_response(self, response):
@@ -265,6 +268,7 @@ class PairedModel(nn.Module):
         encoded_response = encoded_response*response_mask.unsqueeze(-1)
         encoded_response = encoded_response.sum(1) / response_length.float().sqrt().unsqueeze(1)
         encoded_response = self.ff2(encoded_response)
+        encoded_response = self.output_layer1(encoded_response)
         return encoded_response
 
     def forward(self, query, response):
