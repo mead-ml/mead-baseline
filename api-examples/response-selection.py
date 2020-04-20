@@ -169,4 +169,4 @@ pg.done()
 acc = float(numerator)/denominator
 
 with open('./results.txt', 'a') as wf:
-    wf.write(f"Checkpoint: {checkpoint}; 1@{args.recall_k} accuracy: {acc}\n")
+    wf.write(f"Checkpoint: {checkpoint}; {args.recall_top}@{args.recall_k} accuracy: {acc}\n")

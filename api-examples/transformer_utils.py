@@ -220,7 +220,8 @@ class PairedModel(nn.Module):
                  d_out=512,
                  d_k=64,
                  weight_std=0.02,
-                 rpr_k=None):
+                 rpr_k=None,
+                 ff_pdrop=0.2):
         super().__init__()
         if stacking_layers is None:
             stacking_layers = [d_model] * 3
@@ -233,8 +234,8 @@ class PairedModel(nn.Module):
         self.attention_layer = TwoHeadConcat(d_model, dropout, scale=False, d_k=d_k)
         self.transformer_layers = transformer
         self.embedding_layers = embeddings
-        self.ff1 = DenseLNStack(2*d_model, stacking_layers, activation='gelu', pdrop_value=0.2)
-        self.ff2 = DenseLNStack(2*d_model, stacking_layers, activation='gelu', pdrop_value=0.2)
+        self.ff1 = DenseLNStack(2*d_model, stacking_layers, activation='gelu', pdrop_value=ff_pdrop)
+        self.ff2 = DenseLNStack(2*d_model, stacking_layers, activation='gelu', pdrop_value=ff_pdrop)
         self.output_layer1 = pytorch_linear(stacking_layers[-1], d_out)
         self.output_layer2 = pytorch_linear(stacking_layers[-1], d_out)
         self.apply(self.init_layer_weights)
