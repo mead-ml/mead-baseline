@@ -221,7 +221,8 @@ class PairedModel(nn.Module):
                  d_k=64,
                  weight_std=0.02,
                  rpr_k=None,
-                 ff_pdrop=0.2):
+                 ff_pdrop=0.2,
+                 att_layer=True):
         super().__init__()
         if stacking_layers is None:
             stacking_layers = [d_model] * 3
@@ -231,11 +232,16 @@ class PairedModel(nn.Module):
         transformer = TransformerEncoderStack(num_heads=num_heads, d_model=d_model,
                                               pdrop=dropout, layers=num_layers, activation='gelu', d_ff=d_ff,
                                               d_k=d_k, rpr_k=rpr_k)
-        self.attention_layer = TwoHeadConcat(d_model, dropout, scale=False, d_k=d_k)
+        if att_layer:
+            self.attention_layer = TwoHeadConcat(d_model, dropout, scale=False, d_k=d_k)
+            ff_input_size = 2*d_model
+        else:
+            self.attention_layer = None
+            ff_input_size = d_model
         self.transformer_layers = transformer
         self.embedding_layers = embeddings
-        self.ff1 = DenseLNStack(2*d_model, stacking_layers, activation='gelu', pdrop_value=ff_pdrop)
-        self.ff2 = DenseLNStack(2*d_model, stacking_layers, activation='gelu', pdrop_value=ff_pdrop)
+        self.ff1 = DenseLNStack(ff_input_size, stacking_layers, activation='gelu', pdrop_value=ff_pdrop)
+        self.ff2 = DenseLNStack(ff_input_size, stacking_layers, activation='gelu', pdrop_value=ff_pdrop)
         self.output_layer1 = pytorch_linear(stacking_layers[-1], d_out)
         self.output_layer2 = pytorch_linear(stacking_layers[-1], d_out)
         self.apply(self.init_layer_weights)
@@ -252,7 +258,8 @@ class PairedModel(nn.Module):
         att_mask = query_mask.unsqueeze(1).unsqueeze(1)
         embedded = self.embedding_layers(query)
         encoded_query = self.transformer_layers((embedded, att_mask))
-        encoded_query = self.attention_layer((encoded_query, encoded_query, encoded_query, att_mask))
+        if self.attention_layer:
+            encoded_query = self.attention_layer((encoded_query, encoded_query, encoded_query, att_mask))
         encoded_query = encoded_query*query_mask.unsqueeze(-1)
         encoded_query = encoded_query.sum(1) / query_length.float().sqrt().unsqueeze(1)
         encoded_query = self.ff1(encoded_query)
@@ -265,7 +272,8 @@ class PairedModel(nn.Module):
         att_mask = response_mask.unsqueeze(1).unsqueeze(1)
         embedded = self.embedding_layers(response)
         encoded_response = self.transformer_layers((embedded, att_mask))
-        encoded_response = self.attention_layer((encoded_response, encoded_response, encoded_response, att_mask))
+        if self.attention_layer:
+            encoded_response = self.attention_layer((encoded_response, encoded_response, encoded_response, att_mask))
         encoded_response = encoded_response*response_mask.unsqueeze(-1)
         encoded_response = encoded_response.sum(1) / response_length.float().sqrt().unsqueeze(1)
         encoded_response = self.ff2(encoded_response)
