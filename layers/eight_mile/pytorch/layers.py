@@ -1616,6 +1616,7 @@ class EmbeddingsStack(nn.Module):
     def output_dim(self):
         return self.dsz
 
+
 class DenseStack(nn.Module):
     """A stack of one or more hidden layers
     """

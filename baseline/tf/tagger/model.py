@@ -14,10 +14,12 @@ logger = logging.getLogger('baseline')
 
 
 class TaggerModelBase(tf.keras.Model, TaggerModel):
-    """Tagger model base class for TensorFlow
-    This class provides the implementation of the TaggerModel for TensorFlow
-    """
+    """Base class for tagger models
 
+    This class provides the model base for tagging.  To create a tagger, overload `create_layers()` and `forward()`.
+    Most implementations should be able to subclass the TransducerTaggerModel, which inherits from this and imposes
+    additional structure
+    """
     def __init__(self):
         """Create a tagger, nothing marked as unserializable
         """
@@ -68,7 +70,7 @@ class TaggerModelBase(tf.keras.Model, TaggerModel):
         for key, embedding in self.embeddings.items():
             embedding.save_md('{}-{}-md.json'.format(basename, key))
 
-    def _record_state(self, **kwargs):
+    def _record_state(self, embeddings, **kwargs):
         """
         First, write out the embedding names, so we can recover those.  Then do a deepcopy on the model init params
         so that it can be recreated later.  Anything that is a placeholder directly on this model needs to be removed
@@ -77,14 +79,14 @@ class TaggerModelBase(tf.keras.Model, TaggerModel):
         :return:
         """
         embeddings_info = {}
-        for k, v in self.embeddings.items():
+        for k, v in embeddings.items():
             embeddings_info[k] = v.__class__.__name__
 
         blacklist = set(chain(
             self._unserializable,
             MAGIC_VARS,
-            self.embeddings.keys(),
-            (f"{k}_lengths" for k in self.embeddings.keys())
+            embeddings.keys(),
+            (f"{k}_lengths" for k in embeddings.keys())
         ))
         self._state = {k: v for k, v in kwargs.items() if k not in blacklist}
         self._state.update({
@@ -95,7 +97,6 @@ class TaggerModelBase(tf.keras.Model, TaggerModel):
         })
         if 'constraint_mask' in kwargs:
             self._state['constraint_mask'] = True
-
 
     @property
     def dropin_value(self):
@@ -131,12 +132,12 @@ class TaggerModelBase(tf.keras.Model, TaggerModel):
             x[drop_indices[0], drop_indices[1]] = Offsets.UNK
         return x
 
-    def make_input(self, batch_dict, train=False):
-        """Transform a `batch_dict` into a TensorFlow `feed_dict`
+    def make_input(self, batch_dict: Dict[str, TensorDef], train: bool = False) -> Dict[str, TensorDef]:
+        """Transform a `batch_dict` into format suitable for tagging
 
         :param batch_dict: (``dict``) A dictionary containing all inputs to the embeddings for this model
         :param train: (``bool``) Are we training.  Defaults to False
-        :return:
+        :return: A dictionary representation of this batch suitable for processing
         """
         y = batch_dict.get('y', None)
         if not tf.executing_eagerly():
@@ -162,18 +163,17 @@ class TaggerModelBase(tf.keras.Model, TaggerModel):
 
         return batch_for_model
 
-    def call(self, *args, **kwargs):
-        return self.impl(*args, **kwargs)
+    def create_layers(self, embeddings: Dict[str, TensorDef], **kwargs):
+        """This method defines the model itself, and must be overloaded by derived classes
 
-    @property
-    def trainable_variables(self):
-        return self.impl.trainable_variables
+        This function will update `self` with the layers required to execute the `call()` method
 
-    @property
-    def variables(self):
-        return self.impl.variables
+        :param embeddings: The input feature indices
+        :param kwargs:
+        :return:
+        """
 
-    def save(self, basename):
+    def save(self, basename: str):
         """Save a model, using the parameter as a prefix
 
         :param basename: The prefix for the model including the directories and the base of the name to use
@@ -213,6 +213,7 @@ class TaggerModelBase(tf.keras.Model, TaggerModel):
                     if k in kwargs:
                         _state[k] = kwargs[k]
                 labels = read_json("{}.labels".format(basename))
+                # FIXME: referring to the `constraint_mask` in the base where its not mentioned isnt really clean
                 if _state.get('constraint_mask') is not None:
                     # Dummy constraint values that will be filled in by the check pointing
                     _state['constraint_mask'] = [np.zeros((len(labels), len(labels))) for _ in range(2)]
@@ -232,6 +233,7 @@ class TaggerModelBase(tf.keras.Model, TaggerModel):
                     _state[k] = kwargs[k]
             # TODO: convert labels into just another vocab and pass number of labels to models.
             labels = read_json("{}.labels".format(basename))
+            # FIXME: referring to the `constraint_mask` in the base where its not mentioned isnt really clean
             if _state.get('constraint_mask') is not None:
                 # Dummy constraint values that will be filled in by the check pointing
                 _state['constraint_mask'] = [np.zeros((len(labels), len(labels))) for _ in range(2)]
@@ -248,21 +250,14 @@ class TaggerModelBase(tf.keras.Model, TaggerModel):
         """
         self.saver = saver
 
-    def create_loss(self):
-        """Create the loss function and return it
-
-        :return: The loss function
-        """
-        return self.impl.neg_log_loss(self.probs, self.y, self.lengths)
-
-    def get_labels(self):
+    def get_labels(self) -> List[str]:
         """Get the labels (names of each class)
 
         :return: (`List[str]`) The labels
         """
         return self.labels
 
-    def predict(self, batch_dict):
+    def predict(self, batch_dict: Dict[str, TensorDef]) -> TensorDef:
         """Take in a batch of data, and predict the tags
 
         :param batch_dict: A `Dict[str, tensor]` that is to be predicted
@@ -275,38 +270,15 @@ class TaggerModelBase(tf.keras.Model, TaggerModel):
         else:
             return self(batch_dict).numpy()
 
-    def embed(self, **kwargs):
-        """This method performs "embedding" of the inputs.  The base method here then concatenates along depth
-        dimension to form word embeddings
-        :param kwargs:
+    def call(self, inputs: Dict[str, TensorDef]) -> TensorDef:
+        """Take the input and produce the best path of labels out
 
-        :return: A layer representing the embeddings
+        :param inputs: The feature indices for the input
+        :return: The most likely path through the output labels
         """
-        return EmbeddingsStack(self.embeddings, self.pdrop_value, reduction=kwargs.get('embeddings_reduction', 'concat'))
-
-    def encode(self, **kwargs):
-        """Provide a layer object that represents the `encode` phase of the model
-       :param kwargs:
-       :return: The encoder
-       """
-        pass
-
-    def decode(self, **kwargs):
-        """Provide a layer object that represents the `decode` phase of the model
-        This will typically produce a CRF layer, or a greedy decoder
-
-        :param kwargs:
-        :return: Some decoder for the model
-        """
-        self.crf = bool(kwargs.get('crf', False))
-        self.crf_mask = bool(kwargs.get('crf_mask', False))
-        self.constraint_mask = kwargs.get('constraint_mask')
-        if self.crf:
-            return CRF(len(self.labels), self.constraint_mask)
-        return TaggerGreedyDecoder(len(self.labels), self.constraint_mask)
 
     @classmethod
-    def create(cls, embeddings, labels, **kwargs):
+    def create(cls, embeddings, labels, **kwargs) -> 'TaggerModelBase':
         """Create the model
         :param embeddings: A `dict` of input embeddings
         :param labels: The output labels for sequence tagging
@@ -325,10 +297,9 @@ class TaggerModelBase(tf.keras.Model, TaggerModel):
         * *layers* -- (`int`) -- The number of layers to apply on the encoder
         * *hsz* -- (`int`) -- The number of hidden units for the encoder
 
-        :return:
+        :return: A newly created tagger
         """
         model = cls()
-        model.embeddings = embeddings
 
         model.lengths_key = kwargs.get('lengths_key')
 
@@ -344,10 +315,8 @@ class TaggerModelBase(tf.keras.Model, TaggerModel):
             model.y = kwargs.get('y', tf.compat.v1.placeholder(tf.int32, [None, None], name="y"))
             model.sess = kwargs.get('sess', create_session())
 
-        model._record_state(**kwargs)
+        model._record_state(embeddings, **kwargs)
         model.labels = labels
-        nc = len(labels)
-
         # This only exists to make exporting easier
         model.pdrop_value = kwargs.get('dropout', 0.5)
         model.dropin_value = kwargs.get('dropin', {})
@@ -355,19 +324,130 @@ class TaggerModelBase(tf.keras.Model, TaggerModel):
         model.labels = labels
         model.span_type = kwargs.get('span_type')
 
-        embed_model = model.embed(**kwargs)
-        transduce_model = model.encode(**kwargs)
-        decode_model = model.decode(**kwargs)
-
-        model.impl = TagSequenceModel(nc, embed_model, transduce_model, decode_model)
+        model.create_layers(embeddings, **kwargs)
         if not tf.executing_eagerly():
-            model.probs = model.impl.transduce(inputs)
-            model.best = model.impl.decode(model.probs, model.lengths)
+            model.best = model(inputs)
         return model
+
+    def create_loss(self):
+        """Create the loss function and return it
+
+        :return: The loss function
+        """
+
+
+class TransducerTaggerModel(TaggerModelBase):
+
+    def __init__(self):
+        super().__init__()
+
+    def create_layers(self, embeddings: Dict[str, TensorDef], **kwargs):
+        self.embeddings = self.init_embed(embeddings, **kwargs)
+        self.encoder = self.init_encode(**kwargs)
+        self.proj_layer = tf.keras.layers.Dense(len(self.labels))
+        self.decoder = self.init_decode(**kwargs)
+
+    def call(self, inputs: Dict[str, TensorDef]) -> TensorDef:
+        """Take the input and produce the best path of labels out
+
+        :param inputs: The feature indices for the input
+        :return: The most likely path through the output labels
+        """
+        self.probs = self.transduce(inputs)
+        return self.decode(self.probs, inputs.get("lengths"))
+
+    def create_loss(self):
+        """Create the loss function and return it
+
+        :return: The loss function
+        """
+        return self.decoder.neg_log_loss(self.probs, self.y, self.lengths)
+
+    def init_embed(self, embeddings: Dict[str, TensorDef], **kwargs) -> BaseLayer:
+        """This method creates the "embedding" layer of the inputs, with an optional reduction
+
+        :param embeddings: A dictionary of embeddings
+
+        :Keyword Arguments: See below
+        * *embeddings_reduction* (defaults to `concat`) An operator to perform on a stack of embeddings
+
+        :return: The output of the embedding stack followed by its reduction.  This will typically be an output
+          with an additional dimension which is the hidden representation of the input
+        """
+        return EmbeddingsStack(embeddings, self.pdrop_value, reduction=kwargs.get('embeddings_reduction', 'concat'))
+
+    def init_encode(self, **kwargs) -> BaseLayer:
+        """Provide a layer object that represents the `encode` phase of the model
+       :param kwargs:
+       :return: The encoder
+       """
+
+    def init_decode(self, **kwargs) -> BaseLayer:
+        """Provide a layer object that represents the `decode` phase of the model
+        This will typically produce a CRF layer, or a greedy decoder
+
+        :param kwargs:
+        :return: Some decoder for the model
+        """
+        self.crf = bool(kwargs.get('crf', False))
+        self.crf_mask = bool(kwargs.get('crf_mask', False))
+        self.constraint_mask = kwargs.get('constraint_mask')
+        if self.crf:
+            return CRF(len(self.labels), self.constraint_mask)
+        return TaggerGreedyDecoder(len(self.labels), self.constraint_mask)
+
+    def transduce(self, inputs: Dict[str, TensorDef]) -> TensorDef:
+        """This operation performs embedding of the input, followed by encoding
+
+        :param inputs: The feature indices to embed
+        :return: Transduced (post-encoding) output
+        """
+        lengths = inputs["lengths"]
+        embedded = self.embeddings(inputs)
+        embedded = (embedded, lengths)
+        transduced = self.proj_layer(self.encoder(embedded))
+        return transduced
+
+    def decode(self, tensor: TensorDef, lengths: TensorDef) -> TensorDef:
+        """Take in the transduced (encoded) input and decode it
+
+        :param tensor: Transduced input
+        :param lengths: Valid lengths of the transduced input
+        :return: A best path through the output
+        """
+        path, self.path_scores = self.decoder((tensor, lengths))
+        return path
 
 
 @register_model(task='tagger', name='default')
-class RNNTaggerModel(TaggerModelBase):
+class RNNTaggerModel(TransducerTaggerModel):
+    """RNN-based tagger implementation: this is the default tagger for mead-baseline
+
+    Overload the encoder, typically as a BiLSTM
+    """
+    def __init__(self):
+        super().__init__()
+
+    def init_encode(self, **kwargs):
+        """Override the base method to produce an RNN transducer
+
+        :param kwargs: See below
+
+        :Keyword Arguments:
+        * *rnntype* (``str``) The type of RNN, defaults to `blstm`
+        * *layers* (``int``) The number of layers to stack
+        * *hsz* (``int``) The number of hidden units for each layer in the encoder
+        * *variational* (``bool``) Variational dropout
+
+        :return: An encoder
+        """
+        self.vdrop = kwargs.get('variational', False)
+        rnntype = kwargs.get('rnntype', 'blstm')
+        nlayers = int(kwargs.get('layers', 1))
+        hsz = int(kwargs['hsz'])
+
+        Encoder = BiLSTMEncoderSequence if rnntype == 'blstm' else LSTMEncoderSequence
+        return Encoder(None, hsz, nlayers, self.pdrop_value, self.vdrop)
 
     @property
     def vdrop(self):
@@ -377,27 +457,31 @@ class RNNTaggerModel(TaggerModelBase):
     def vdrop(self, value):
         self._vdrop = value
 
-    def __init__(self):
-        super().__init__()
-
-    def encode(self, **kwargs):
-        self.vdrop = kwargs.get('variational', False)
-        rnntype = kwargs.get('rnntype', 'blstm')
-        nlayers = int(kwargs.get('layers', 1))
-        hsz = int(kwargs['hsz'])
-
-        Encoder = BiLSTMEncoderSequence if rnntype == 'blstm' else LSTMEncoderSequence
-        return Encoder(None, hsz, nlayers, self.pdrop_value, self.vdrop)
-
-
 
 @register_model(task='tagger', name='transformer')
-class TransformerTaggerModel(TaggerModelBase):
+class TransformerTaggerModel(TransducerTaggerModel):
+    """Transformer-based tagger model
 
+    Overload the encoder using a length-aware Transformer
+    """
     def __init__(self):
         super().__init__()
 
-    def encode(self, **kwargs):
+    def init_encode(self, **kwargs):
+        """Override the base method to produce an RNN transducer
+
+        :param kwargs: See below
+
+        :Keyword Arguments:
+        * *num_heads* (``int``) The number of heads for multi-headed attention
+        * *layers* (``int``) The number of layers to stack
+        * *hsz* (``int``) The number of hidden units for each layer in the encoder
+        * *dropout* (``float``) The dropout rate, defaults
+        * *d_ff* (``int``) The feed-forward layer size
+        * *rpr_k* (``list`` or ``int``) The relative attention sizes.  If its a list, one scalar per layer, if its
+          a scalar, apply same size to each layer
+        :return: An encoder
+        """
         layers = int(kwargs.get('layers', 1))
         num_heads = int(kwargs.get('num_heads', 4))
         pdrop = float(kwargs.get('dropout', 0.5))
@@ -410,12 +494,27 @@ class TransformerTaggerModel(TaggerModelBase):
 
 
 @register_model(task='tagger', name='cnn')
-class CNNTaggerModel(TaggerModelBase):
+class CNNTaggerModel(TransducerTaggerModel):
+    """Convolutional (AKA TDNN) tagger
 
+    Overload the encoder using a conv layer
+
+    """
     def __init__(self):
         super().__init__()
 
-    def encode(self, **kwargs):
+    def init_encode(self, **kwargs):
+        """Override the base method to produce an RNN transducer
+
+        :param kwargs: See below
+
+        :Keyword Arguments:
+        * *layers* (``int``) The number of layers to stack
+        * *hsz* (``int``) The number of hidden units for each layer in the encoder
+        * *dropout* (``float``) The dropout rate, defaults
+        * *wfiltsz* (``int``) The 1D filter size for the convolution
+        :return: An encoder
+        """
         nlayers = kwargs.get('layers', 1)
         hsz = int(kwargs['hsz'])
         filts = kwargs.get('wfiltsz', None)
@@ -424,3 +523,24 @@ class CNNTaggerModel(TaggerModelBase):
 
         cnnout = ConvEncoderStack(None, hsz, filts, self.pdrop_value, nlayers)
         return cnnout
+
+
+@register_model(task='tagger', name='pass')
+class PassThruTaggerModel(TransducerTaggerModel):
+    """A Pass-thru implementation of the encoder
+
+    When we fine-tune our taggers from things like BERT embeddings, we might want to just pass through our
+    embedding result directly to the output decoder.  This model provides a mechanism for this by providing
+    a simple identity layer
+    """
+    def __init__(self):
+        super().__init__()
+
+    def init_encode(self, **kwargs) -> BaseLayer:
+        """Identity layer encoder
+
+        :param kwargs: None
+        :return: An encoder
+        """
+        input_dim = self.embeddings.output_dim
+        return WithoutLength(PassThru(input_dim))

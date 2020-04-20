@@ -232,6 +232,16 @@ class ConvEncoderStack(tf.keras.layers.Layer):
         return x
 
 
+class PassThru(tf.keras.layers.Layer):
+
+    def __init__(self, input_dim):
+        super().__init__()
+        self.output_dim = input_dim
+
+    def call(self, inputs: tf.Tensor) -> tf.Tensor:
+        return inputs
+
+
 # Mapped
 class ParallelConv(tf.keras.layers.Layer):
     DUMMY_AXIS = 1

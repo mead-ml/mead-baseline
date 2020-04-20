@@ -96,7 +96,7 @@ class ClassifyTrainerDistributedTf(EpochReportingTrainer):
             features, y = inputs
             per_replica_loss = self.optimizer.update(self.model, features, y, num_replicas)
             per_replica_batchsz = get_shape_as_list(y)[0]
-            per_replica_report_loss = per_replica_loss * per_replica_batchsz
+            per_replica_report_loss = per_replica_loss * tf.cast(per_replica_batchsz, tf.float32)
             return per_replica_report_loss, per_replica_batchsz
 
         with strategy.scope():
@@ -174,7 +174,7 @@ class ClassifyTrainerDistributedTf(EpochReportingTrainer):
             per_replica_cm = tf.compat.v1.sparse_add(per_replica_cm, sparse_ups)
             per_replica_loss = tf.compat.v1.losses.sparse_softmax_cross_entropy(labels=y, logits=logits)
             per_replica_batchsz = get_shape_as_list(y)[0]
-            per_replica_report_loss = per_replica_loss * per_replica_batchsz
+            per_replica_report_loss = per_replica_loss * tf.cast(per_replica_batchsz, tf.float32)
             return per_replica_report_loss, per_replica_batchsz, per_replica_cm
 
         @tf.function

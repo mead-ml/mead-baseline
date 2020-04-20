@@ -10,6 +10,8 @@ from eight_mile.pytorch.layers import *
 
 PYT_MAJOR_VERSION = get_version(torch)
 
+BaseLayer = nn.Module
+TensorDef = torch.Tensor
 
 class SequenceCriterion(nn.Module):
 

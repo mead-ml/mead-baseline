@@ -54,7 +54,7 @@
     "dropout": 0.5,
     "rnntype": "blstm",
     "layers": 1,
-    "constrain_decode": true,
+    "constrain_decode": true, 
     "crf": 0 
   },
   "train": {
