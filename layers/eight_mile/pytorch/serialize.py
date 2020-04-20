@@ -2,8 +2,8 @@ import torch
 import torch.nn as nn
 import numpy as np
 from typing import Dict
-from eight_mile.pytorch.layers import Dense, TransformerEncoderStack, TransformerEncoder, MultiHeadedAttention
-
+from eight_mile.pytorch.layers import Dense, TransformerEncoderStack, TransformerEncoder, EmbeddingsStack
+from eight_mile.pytorch.embeddings import LookupTableEmbeddings, LearnedPositionalLookupTableEmbeddingsWithBias
 
 # BERT HuggingFace Tokenizers checkpoints can be converted into MEAD Baseline Transformer checkpoints
 # With a simple name change
@@ -37,7 +37,7 @@ BERT_HF_EMBED_MAP = {
     ## Embedding weights
     'bert.embeddings.word_embeddings.weight': 'embeddings.embeddings.0.embeddings.weight',
     'bert.embeddings.position_embeddings.weight': 'embeddings.embeddings.0.pos_embeddings.weight',
-    'bert.embeddings.token_type_embeddings.weight': 'embeddings.embeddings.0.tok_embeddings.weight',
+    'bert.embeddings.token_type_embeddings.weight': 'embeddings.embeddings.1.embeddings.weight',
     'bert.embeddings.LayerNorm.beta': 'embeddings.embeddings.0.ln.bias',
     'bert.embeddings.LayerNorm.gamma': 'embeddings.embeddings.0.ln.weight',
 }
@@ -51,6 +51,7 @@ def convert_transformers_keys(num_layers: int, d: Dict, replace_layer_map: Dict,
 
     for k, v in replace_embed_map.items():
         m[v] = d[k]
+
 
     return m
 
@@ -302,9 +303,26 @@ def load_tlm_npz(pytorch_tlm: nn.Module, npz: str, embeddings_key: str = 'x', na
     d = np.load(npz)
     from_tlm_array(pytorch_tlm, d, embeddings_key, name)
 
+
 def load_tlm_transformers_bin(pytorch_tlm: nn.Module, bin_file: str, replace_layers=BERT_HF_LAYER_MAP, replace_embeds=BERT_HF_EMBED_MAP):
     d = torch.load(bin_file)
     num_layers = len(pytorch_tlm.transformer.encoders)
     mapped_keys = convert_transformers_keys(num_layers, d, replace_layers, replace_embeds)
+    old_embeddings_stack = None
+    k_0 = pytorch_tlm.embeddings.keys()[0]
+
+    # There are 2 options to consider here
+    # Option 1: the user doesnt care about token type embeddings, which means that the embedding type will just be
+    #   the usual LP embeddings with an added bias term set to weight 0
+    # Option 2: the user does care about token types and has provided a token type feature (presumed to be in the
+    #   second key of the embeddings stack
+    if isinstance(pytorch_tlm.embeddings[k_0], LearnedPositionalLookupTableEmbeddingsWithBias):
+        old_embeddings_stack = pytorch_tlm.embeddings
+        # we need to temporarily monkey patch the embeddings to load them, and then we can reset them to what they were
+        d = {k_0: pytorch_tlm.embeddings[k_0], 'tt':  LookupTableEmbeddings(vsz=2, dsz=pytorch_tlm.transformer.output_dim)}
+        pytorch_tlm.embeddings = EmbeddingsStack(d)
     unknown_keys = pytorch_tlm.load_state_dict(mapped_keys, strict=False)
-    print('Ignored ', unknown_keys)
+    if old_embeddings_stack:
+        old_embeddings_stack[k_0].bias = nn.Parameter(pytorch_tlm.embeddings['tt'].embeddings.weight[0])
+        pytorch_tlm.embeddings = old_embeddings_stack
+    return unknown_keys

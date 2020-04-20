@@ -282,7 +282,7 @@ class TaggerModelBase(tf.keras.Model, TaggerModel):
 
         :return: A layer representing the embeddings
         """
-        return EmbeddingsStack(self.embeddings, self.pdrop_value)
+        return EmbeddingsStack(self.embeddings, self.pdrop_value, reduction=kwargs.get('embeddings_reduction', 'concat'))
 
     def encode(self, **kwargs):
         """Provide a layer object that represents the `encode` phase of the model

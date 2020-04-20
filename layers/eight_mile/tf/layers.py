@@ -1694,12 +1694,44 @@ else:
     from tensorflow_addons.text.crf import crf_decode, crf_sequence_score, crf_log_norm
 
 
+
+class Reduction(tf.keras.layers.Layer):
+
+    def __init__(self):
+        super().__init__()
+
+    def call(self, inputs: List[tf.Tensor]) -> tf.Tensor:
+        pass
+
+
+class ConcatReduction(Reduction):
+    def __init__(self, output_dims: List[int], axis=-1):
+        super().__init__()
+        self.axis = axis
+        self.output_dim = sum(output_dims)
+
+    def call(self, inputs: List[tf.Tensor]) -> tf.Tensor:
+        return tf.concat(values=inputs, axis=-1)
+
+
+class SumReduction(Reduction):
+    def __init__(self, output_dims: List[int]):
+        super().__init__()
+        # We could actually project if we needed, or at least should validate
+        self.output_dim = output_dims[0]
+
+    def call(self, inputs: List[tf.Tensor]) -> tf.Tensor:
+        return tf.add_n(inputs)
+
+
+
 class EmbeddingsStack(tf.keras.layers.Layer):
     def __init__(
         self,
         embeddings_dict: Dict[str, tf.keras.layers.Layer],
         dropout_rate: float = 0.0,
         requires_length: bool = False,
+        reduction: Optional[Union[str, tf.keras.layers.Layer]] = 'concat',
         name: Optional[str] = None,
         **kwargs,
     ):
@@ -1710,8 +1742,20 @@ class EmbeddingsStack(tf.keras.layers.Layer):
 
         super().__init__(name=name)
         self.embeddings = embeddings_dict
+
+        output_dims = []
+        for embedding in embeddings_dict.values():
+            output_dims += [embedding.get_dsz()]
         self.dropout = tf.keras.layers.Dropout(dropout_rate)
         self._requires_length = requires_length
+        if isinstance(reduction, str):
+            if reduction == 'sum':
+                self.reduction = SumReduction(output_dims)
+            else:
+                self.reduction = ConcatReduction(output_dims)
+        else:
+            self.reduction = reduction
+        self.dsz = self.reduction.output_dim
 
     def items(self):
         return self.embeddings.items()
@@ -1727,15 +1771,15 @@ class EmbeddingsStack(tf.keras.layers.Layer):
             x = inputs[k]
             embeddings_out = embedding(x)
             all_embeddings_out.append(embeddings_out)
-        word_embeddings = tf.concat(values=all_embeddings_out, axis=-1)
+        word_embeddings = self.reduction(all_embeddings_out)
         return self.dropout(word_embeddings, TRAIN_FLAG())
 
-    @property
-    def dsz(self) -> int:
-        total_dsz = 0
-        for embeddings in self.embeddings.values():
-            total_dsz += embeddings.get_dsz()
-        return total_dsz
+    #@property
+    #def dsz(self) -> int:
+    #    total_dsz = 0
+    #    for embeddings in self.embeddings.values():
+    #        total_dsz += embeddings.get_dsz()
+    #    return total_dsz
 
     @property
     def requires_length(self) -> bool:

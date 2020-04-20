@@ -136,7 +136,7 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
         :param kwargs:
         :return: An embeddings operation
         """
-        return EmbeddingsStack(self.embeddings)
+        return EmbeddingsStack(self.embeddings, reduction=kwargs.get('embeddings_reduction', 'concat'))
 
     def init_pool(self, dsz, **kwargs):
         """Produce a pooling operation that will be used in the model

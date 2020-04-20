@@ -25,6 +25,7 @@
     },
     "unif": 0.25,
     "model": {
+	"embeddings_reduction": "sum",
 	"model_type": "lstm",
 	"hsz": 200,
 	"dropout": 0.5,
