@@ -1566,7 +1566,6 @@ class EmbeddingsStack(nn.Module):
         super().__init__()
 
         self._keys: List[str] = []
-        self.output_dim = 0
         embeddings_list = []
         output_dims = []
         for k, embedding in embeddings_dict.items():
@@ -1613,6 +1612,9 @@ class EmbeddingsStack(nn.Module):
     def keys(self):
         return self._keys
 
+    @property
+    def output_dim(self):
+        return self.dsz
 
 class DenseStack(nn.Module):
     """A stack of one or more hidden layers
