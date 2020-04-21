@@ -10,7 +10,7 @@ logger = logging.getLogger("baseline")
 
 
 def create_model(model_type, embeddings, d_model=512, d_ff=2048, dropout=0., num_heads=8, num_layers=6,
-                 stacking_layers=None, rpr_k=[], d_k=None, ff_pdrop=0.0, att_layer=True):
+                 stacking_layers=None, rpr_k=[], d_k=None, att_layer=True):
     if len(rpr_k) == 0 or rpr_k[0] < 1:
         rpr_k = None
     if model_type == "encoder-decoder":
@@ -29,7 +29,7 @@ def create_model(model_type, embeddings, d_model=512, d_ff=2048, dropout=0., num
         model = TiedEmbeddingsSeq2SeqModel(embeddings, **hps)
     elif model_type == 'dual-encoder':
         model = PairedModel(embeddings, d_model, d_ff, dropout, num_heads, num_layers, stacking_layers=stacking_layers,
-                            rpr_k=rpr_k, d_k=d_k, ff_pdrop=ff_pdrop, att_layer=att_layer)
+                            rpr_k=rpr_k, d_k=d_k, att_layer=att_layer)
     else:
         model = TransformerLanguageModel.create({'x': embeddings},
                                                 hsz=d_model,
@@ -77,7 +77,6 @@ parser.add_argument("--nctx", type=int, default=64, help="Max context length (fo
 parser.add_argument("--embed_type", type=str, default='positional',
                     help="register label of the embeddings, so far support positional or learned-positional")
 parser.add_argument("--stacking_layers", type=int, nargs='+', default=[512, 512, 512])
-parser.add_argument("--ff_pdrop", type=float, default=0.0, help="dropout of the FFNs")
 parser.add_argument("--att_layer", type=str2bool, default=True, help="whether use 2-head attention")
 parser.add_argument('--rpr_k', help='Relative attention positional sizes pass 0 if you dont want relative attention',
                     type=int, default=[3, 5, 48, 48, 48, 48], nargs='+')
@@ -117,7 +116,6 @@ model = create_model(args.model_type,
                      stacking_layers=args.stacking_layers,
                      rpr_k=args.rpr_k,
                      d_k=args.d_k,
-                     ff_pdrop=args.ff_pdrop,
                      att_layer=args.att_layer)
 
 if os.path.isdir(args.ckpt):
