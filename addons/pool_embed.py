@@ -100,5 +100,5 @@ class MeanBoWEmbeddingsModel(TensorFlowEmbeddingsModel):
 
     @classmethod
     def create_placeholder(cls, name):
-        return tf.comat.v1.placeholder(tf.int32, [None, None, None], name=name)
+        return tf.compat.v1.placeholder(tf.int32, [None, None, None], name=name)
 
