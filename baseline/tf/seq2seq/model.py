@@ -53,7 +53,10 @@ def _temporal_cross_entropy_loss(logits, labels, label_lengths, mx_seq_length):
         return losses
 
 if not tf.executing_eagerly():
-    class EncoderDecoderModelBase(EncoderDecoderModel):
+    class EncoderDecoderModelBase(EncoderDecoderModel, tf.keras.Model):
+
+        def __init__(self, name=None):
+            super().__init__(name=name)
 
         def create_loss(self):
             with tf.variable_scope('loss'):
@@ -159,7 +162,7 @@ if not tf.executing_eagerly():
             model.sess = kwargs.get('sess', create_session())
             model.pdrop_value = kwargs.get('dropout', 0.5)
             model.dropin_value = kwargs.get('dropin', {})
-            model.layers = kwargs.get('layers', 1)
+            model.num_layers = kwargs.get('layers', 1)
             model.hsz = kwargs['hsz']
 
             embed_in = model.embed(**kwargs)

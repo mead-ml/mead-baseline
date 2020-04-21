@@ -96,7 +96,7 @@ class LanguageModelTrainerTf(Trainer):
         self.sess = self.model.sess
         self.loss = self.model.create_loss()
         self.test_loss = self.model.create_test_loss()
-        self.global_step, self.train_op = optimizer(self.loss, **kwargs)
+        self.global_step, self.train_op = optimizer(self.loss, colocate_gradients_with_ops=True, variables=self.model.trainable_variables, **kwargs)
         self.nsteps = kwargs.get('nsteps', 500)
         init = tf.compat.v1.global_variables_initializer()
         self.model.sess.run(init)

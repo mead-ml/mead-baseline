@@ -193,7 +193,7 @@ class TaggerTrainerTf(EpochReportingTrainer):
         span_type = kwargs.get('span_type', 'iob')
         verbose = kwargs.get('verbose', False)
         self.evaluator = TaggerEvaluatorTf(self.model, span_type, verbose)
-        self.global_step, self.train_op = optimizer(self.loss, **kwargs)
+        self.global_step, self.train_op = optimizer(self.loss, colocate_gradients_with_ops=True, variables=self.model.trainable_variables, **kwargs)
         self.nsteps = kwargs.get('nsteps', six.MAXSIZE)
         tables = tf.compat.v1.tables_initializer()
         self.model.sess.run(tables)
