@@ -2,16 +2,14 @@
   "task": "classify",
   "basedir": "./trec-bert",
   "batchsz": 10,
-  "modules": ["hub:v1:addons:embed_bert_pytorch"],
   "features": [
     {
       "name": "bert",
       "vectorizer": {
-        "type": "wordpiece1d",
-        "embed_file": "bert-base-uncased"
+        "label": "bert-base-uncased"
       },
       "embeddings": {
-	"label": "bert-base-uncased-pooled-pytorch"
+	    "label": "bert-base-uncased-pooled-pytorch"
       }
     }
   ],

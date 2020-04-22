@@ -68,6 +68,9 @@ def load_embeddings(name, **kwargs):
 
     :param name: A unique string name for these embeddings
     :param kwargs:
+
+    :Keyword Arguments:
+    * *embed_type*  The key identifying the embedding type in the registry
     :return:
     """
     embed_type = kwargs.pop("embed_type", "default")

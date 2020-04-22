@@ -20,10 +20,9 @@ SHUF_BUF_SZ = 5000
 logger = logging.getLogger('baseline')
 
 
-
 def loss(model, x, y):
     unary = model.transduce(x)
-    return model.decoder_model.neg_log_loss(unary, y, x['lengths'])
+    return model.decoder.neg_log_loss(unary, y, x['lengths'])
 
 
 class TaggerEvaluatorEagerTf:
@@ -198,7 +197,7 @@ class TaggerTrainerEagerTf(EpochReportingTrainer):
         @tf.function
         def _train_step(inputs):
             features, y = inputs
-            loss = self.optimizer.update(self.model.impl, features, y)
+            loss = self.optimizer.update(self.model, features, y)
             batchsz = get_shape_as_list(y)[0]
             report_loss = loss * batchsz
             return report_loss, batchsz

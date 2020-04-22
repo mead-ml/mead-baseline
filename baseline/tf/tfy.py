@@ -4,6 +4,8 @@ from baseline.utils import transition_mask as transition_mask_np, listify, read_
 from eight_mile.tf.layers import *
 from functools import wraps
 
+BaseLayer = tf.keras.layers.Layer
+TensorDef = tf.Tensor
 
 def reload_embeddings(embeddings_dict, basename):
     embeddings = {}

@@ -22,12 +22,14 @@ class TensorFlowEmbeddingsModel(tf.keras.Model):
     def detached_ref(self):
         """This will detach any attached input and reference the same sub-graph otherwise
 
+        TODO: this should not longer be required and can be removed
+
         :return:
         """
         if getattr(self.embedding_layer, '_weights', None) is not None:
             return type(self)(self._name, weights=self.embedding_layer._weights, **self._state)
-        if hasattr(self.embedding_layer, 'embed') and getattr(self.embedding_layer.embed, '_weights') is not None:
-            return type(self)(self._name, weights=self.embedding_layer.embed._weights, **self._state)
+        if hasattr(self.embedding_layer, 'embed') and getattr(self.embedding_layer.init_embed, '_weights') is not None:
+            return type(self)(self._name, weights=self.embedding_layer.init_embed._weights, **self._state)
         raise Exception('You must initialize `weights` in order to use this method')
 
     def get_dsz(self):

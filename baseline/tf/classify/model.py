@@ -22,7 +22,9 @@ from baseline.tf.tfy import (
     reload_embeddings,
     new_placeholder_dict,
     tf_device_wrapper,
-    create_session
+    create_session,
+    BaseLayer,
+    TensorDef
 )
 
 
@@ -33,15 +35,10 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
     """Base for all baseline implementations of token-based classifiers
 
     This class provides a loose skeleton around which the baseline models
-    are built.  This essentially consists of dividing up the network into a logical separation between "embedding",
-    or composition of lookup tables to build a vector representation of a temporal input, "pooling",
-    or the conversion of temporal data to a fixed representation, and "stacking" layers, which are (optional)
-    fully-connected layers below, followed by a projection to output space and a softmax
-
-    For instance, the baseline convolutional and LSTM models implement pooling as CMOT, and LSTM last time
-    respectively, whereas, neural bag-of-words (NBoW) do simple max or mean pooling followed by multiple fully-
-    connected layers.
-
+    are built.  It is built on the Keras Model base, and fulfills the `ClassifierModel` interface.
+    To override this class, the use would typically override the `create_layers` function which will
+    create and attach all sub-layers of this model into the class, and the `call` function which will
+    give the model some implementation to call on forward.
     """
     def __init__(self, name=None):
         """Base
@@ -76,16 +73,16 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
             if hasattr(embedding, 'save_md'):
                 embedding.save_md('{}-{}-md.json'.format(basename, key))
 
-    def _record_state(self, **kwargs):
+    def _record_state(self, embeddings: Dict[str, BaseLayer], **kwargs):
         embeddings_info = {}
-        for k, v in self.embeddings.items():
+        for k, v in embeddings.items():
             embeddings_info[k] = v.__class__.__name__
 
         blacklist = set(chain(
             self._unserializable,
             MAGIC_VARS,
-            self.embeddings.keys(),
-            (f'{k}_lengths' for k in self.embeddings.keys())
+            embeddings.keys(),
+            (f'{k}_lengths' for k in embeddings.keys())
         ))
         self._state = {k: v for k, v in kwargs.items() if k not in blacklist}
         self._state.update({
@@ -197,7 +194,7 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
 
         return batch_for_model
 
-    def get_labels(self):
+    def get_labels(self) -> List[str]:
         """Get the string labels back
 
         :return: labels
@@ -206,7 +203,7 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
 
     @classmethod
     @tf_device_wrapper
-    def load(cls, basename, **kwargs):
+    def load(cls, basename: str, **kwargs) -> 'ClassifierModelBase':
         """Reload the model from a graph file and a checkpoint
 
         The model that is loaded is independent of the pooling and stacking layers, making this class reusable
@@ -262,18 +259,18 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
         return model
 
     @property
-    def lengths_key(self):
+    def lengths_key(self) -> str:
         return self._lengths_key
 
     @lengths_key.setter
-    def lengths_key(self, value):
+    def lengths_key(self, value: str):
         self._lengths_key = value
 
     @classmethod
-    def create(cls, embeddings, labels, **kwargs):
+    def create(cls, embeddings: Dict[str, BaseLayer], labels: List[str], **kwargs) -> 'ClassifierModelBase':
         """The main method for creating all :class:`ClassifierBasedModel` types.
 
-        This method instantiates a model with pooling and optional stacking layers.
+        This method typically instantiates a model with pooling and optional stacking layers.
         Many of the arguments provided are reused by each implementation, but some sub-classes need more
         information in order to properly initialize.  For this reason, the full list of keyword args are passed
         to the :method:`pool` and :method:`stacked` methods.
@@ -300,9 +297,9 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
         :return: A fully-initialized tensorflow classifier
         """
         model = cls(name=kwargs.get('name'))
-        model.embeddings = {}
+        embeddings_ = {}
         for k, embedding in embeddings.items():
-            model.embeddings[k] = embedding.detached_ref()
+            embeddings_[k] = embedding.detached_ref()
 
         model.lengths_key = kwargs.get('lengths_key')
 
@@ -316,12 +313,12 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
             else:
                 model.lengths = None
 
-        model._record_state(**kwargs)
+        model._record_state(embeddings_, **kwargs)
 
         nc = len(labels)
         if not tf.executing_eagerly():
             model.y = kwargs.get('y', tf.compat.v1.placeholder(tf.int32, [None, nc], name="y"))
-            for k, embedding in model.embeddings.items():
+            for k, embedding in embeddings_.items():
                 x = kwargs.get(k, embedding.create_placeholder(name=k))
                 inputs[k] = x
 
@@ -329,7 +326,7 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
 
         model.pdrop_value = kwargs.get('dropout', 0.5)
         model.labels = labels
-        model.create_layers(**kwargs)
+        model.create_layers(embeddings_, **kwargs)
 
         if not tf.executing_eagerly():
             model.logits = tf.identity(model(inputs), name="logits")
@@ -337,81 +334,97 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
             model.probs = tf.nn.softmax(model.logits, name="probs")
         return model
 
-    def call(self, *args, **kwargs):
-        return self.impl(*args, **kwargs)
+    def create_layers(self, embeddings: Dict[str, TensorDef], **kwargs):
+        """This method defines the model itself, and must be overloaded by derived classes
 
-    @property
-    def trainable_variables(self):
-        return self.impl.trainable_variables
+        This function will update `self` with the layers required to execute the `call()` method
 
-    @property
-    def variables(self):
-        return self.impl.variables
-
-    def create_layers(self, **kwargs):
-        pass
-
-    def embed(self, **kwargs):
-        """This method performs "embedding" of the inputs.  The base method here then concatenates along depth
-        dimension to form word embeddings
-
-        :return: A 3-d vector where the last dimension is the concatenated dimensions of all embeddings
+        :param embeddings: The input feature indices
+        :param kwargs:
+        :return:
         """
-        return EmbeddingsStack(self.embeddings, reduction=kwargs.get('embeddings_reduction', 'concat'))
 
 
 class EmbedPoolStackClassifier(ClassifierModelBase):
+    """Provides a simple but effective base for most `ClassifierModel`s
 
-    def create_layers(self, **kwargs):
-        embeddings_stack = self.embed(**kwargs)
+    This class provides a common base for classifiers by identifying and codifying
+    and idiomatic pattern where a typical classifier may be though of as a composition
+    between a stack of embeddings, followed by a pooling operation yielding a fixed length
+    tensor, followed by one or more dense layers, and ultimately, a projection to the output space.
 
-        nc = len(self.labels)
-        pool = self.pool(embeddings_stack.dsz, **kwargs)
-        stacking = self.stacked(**kwargs)
-        output = self.output(nc, **kwargs)
-        self.impl = EmbedPoolStackModel(nc, embeddings_stack, pool, stacking, output)
+    To provide an useful interface to sub-classes, we override the `create_layers` to provide a hook
+    for each layer identified in this idiom, and leave the implementations up to the sub-class.
 
-    def pool(self, dsz, **kwargs):
-        """This method performs a transformation between a temporal signal and a fixed representation
+    We also fully implement the `call` method.
 
-        :param word_embeddings: The output of the embedded lookup, which is the starting point for this operation
-            :param dsz: The depth of the embeddings
-        :param init: The tensorflow initializer to use for these methods
-            :param kwargs: Model-specific arguments
-        :return: A fixed representation of the data"""
+    """
+    def create_layers(self, embeddings: Dict[str, TensorDef], **kwargs):
+        self.embeddings = self.init_embed(embeddings, **kwargs)
+        self.pool_model = self.init_pool(self.embeddings.output_dim, **kwargs)
+        self.stack_model = self.init_stacked(self.pool_model.output_dim, **kwargs)
+        self.output_layer = self.init_output(**kwargs)
 
-    def stacked(self, **kwargs):
-        """Stack 1 or more hidden layers, optionally (forming an MLP)
+    def init_embed(self, embeddings: Dict[str, TensorDef], **kwargs) -> BaseLayer:
+        """This method creates the "embedding" layer of the inputs, with an optional reduction
+        :Keyword Arguments: See below
+        * *embeddings_reduction* (defaults to `concat`) An operator to perform on a stack of embeddings
 
-        :param pooled: The fixed representation of the model
-        :param init: The tensorflow initializer
-        :param kwargs: See below
+        :return: The output of the embedding stack followed by its reduction.  This will typically be an output
+          with an additional dimension which is the hidden representation of the input
+        """
+        return EmbeddingsStack(embeddings, reduction=kwargs.get('embeddings_reduction', 'concat'))
 
-        :Keyword Arguments:
-        * *hsz* -- (``int``) The number of hidden units (defaults to `100`)
+    def init_pool(self, input_dim: int, **kwargs) -> BaseLayer:
+        """Produce a pooling operation that will be used in the model
 
-        :return: The final layer
+        :param input_dim: The input dimension size
+        :param kwargs:
+        :return: A pooling operation
         """
 
-        hszs = listify(kwargs.get('hsz', []))
-        if len(hszs) == 0:
-            return None
-        return DenseStack(None, hszs, pdrop_value=self.pdrop_value)
+    def init_stacked(self, input_dim: int, **kwargs) -> BaseLayer:
+        """Produce a stacking operation that will be used in the model
 
-    def output(self, output_dim, **kwargs):
-        return tf.keras.layers.Dense(output_dim)
+        :param input_dim: The input dimension size
+        :param kwargs:
+        :return: A stacking operation (or None)
+        """
+        hszs = listify(kwargs.get('hsz', []))
+        if not hszs:
+            return PassThru(input_dim)
+        return DenseStack(input_dim, hszs, pdrop_value=self.pdrop_value)
+
+    def init_output(self, **kwargs) -> BaseLayer:
+        """Produce the final output layer in the model
+        :param kwargs:
+        :return:
+        """
+        return tf.keras.layers.Dense(len(self.labels))
+
+    def call(self, inputs: Dict[str, TensorDef]) -> TensorDef:
+        """Forward execution of the model.  Sub-classes typically shouldnt need to override
+
+        :param inputs: An input dictionary containing the features and the primary key length
+        :return: A tensor
+        """
+        lengths = inputs.get("lengths")
+        embedded = self.embeddings(inputs)
+        embedded = (embedded, lengths)
+        pooled = self.pool_model(embedded)
+        stacked = self.stack_model(pooled)
+        return self.output_layer(stacked)
 
 
 @register_model(task='classify', name='default')
 class ConvModel(EmbedPoolStackClassifier):
     """Current default model for `baseline` classification.  Parallel convolutions of varying receptive field width
-
     """
 
-    def pool(self, dsz, **kwargs):
+    def init_pool(self, input_dim: int, **kwargs) -> BaseLayer:
         """Do parallel convolutional filtering with varied receptive field widths, followed by max-over-time pooling
 
-        :param dsz: Embedding output size
+        :param input_dim: Embedding output size
         :param kwargs: See below
 
         :Keyword Arguments:
@@ -419,17 +432,16 @@ class ConvModel(EmbedPoolStackClassifier):
             These are MOT-filtered, leaving this # of units per parallel filter
         * *filtsz* -- (``list``) This is a list of filter widths to use
 
-        :return:
+        :return: A pooling layer
         """
         cmotsz = kwargs['cmotsz']
         filtsz = kwargs['filtsz']
-        return WithDropout(ParallelConv(dsz, cmotsz, filtsz), self.pdrop_value)
+        return WithoutLength(WithDropout(ParallelConv(input_dim, cmotsz, filtsz), self.pdrop_value))
 
 
 @register_model(task='classify', name='lstm')
 class LSTMModel(EmbedPoolStackClassifier):
     """A simple single-directional single-layer LSTM. No layer-stacking.
-
     """
 
     def __init__(self, name=None):
@@ -444,19 +456,19 @@ class LSTMModel(EmbedPoolStackClassifier):
     def vdrop(self, value):
         self._vdrop = value
 
-    def pool(self, dsz, **kwargs):
+    def init_pool(self, input_dim: int, **kwargs) -> BaseLayer:
         """LSTM with dropout yielding a final-state as output
 
-        :param word_embeddings: The input word embeddings
-        :param dsz: The input word embedding depth
+        :param input_dim: The input word embedding depth
         :param kwargs: See below
 
         :Keyword Arguments:
         * *rnnsz* -- (``int``) The number of hidden units (defaults to `hsz`)
+        * *rnntype/rnn_type* -- (``str``) The RNN type, defaults to `lstm`, other valid values: `blstm`
         * *hsz* -- (``int``) backoff for `rnnsz`, typically a result of stacking params.  This keeps things simple so
           its easy to do things like residual connections between LSTM and post-LSTM stacking layers
 
-        :return:
+        :return: A pooling layer
         """
         hsz = kwargs.get('rnnsz', kwargs.get('hsz', 100))
         vdrop = bool(kwargs.get('variational', False))
@@ -471,61 +483,93 @@ class LSTMModel(EmbedPoolStackClassifier):
         return LSTMEncoderHidden(None, hsz, nlayers, self.pdrop_value, vdrop)
 
 
-class NBowBase(EmbedPoolStackClassifier):
+class NBowModelBase(EmbedPoolStackClassifier):
     """Neural Bag-of-Words Model base class.  Defines stacking of fully-connected layers, but leaves pooling to derived
     """
 
-    def stacked(self, **kwargs):
-        """Force at least one hidden layer here
+    def init_stacked(self, **kwargs):
+        """Produce a stacking operation that will be used in the model, defaulting to a single layer
 
-        :param kwargs:
-        :return:
+        :param input_dim: The input dimension size
+        :param kwargs: See below
+
+        :Keyword Arguments:
+        * *hsz* -- (``List[int]``) The number of hidden units (defaults to 100)
         """
         kwargs.setdefault('hsz', [100])
-        return super(NBowBase, self).stacked(**kwargs)
+        return super().stacked(**kwargs)
 
 
 @register_model(task='classify', name='nbow')
-class NBowModel(NBowBase):
+class NBowModel(NBowModelBase):
     """Neural Bag-of-Words average pooling (standard) model"""
 
-    def pool(self, dsz, **kwargs):
+    def init_pool(self, input_dim: int, **kwargs):
         """Do average pooling on input embeddings, yielding a `dsz` output layer
 
-        :param word_embeddings: The word embedding input
-        :param dsz: The word embedding depth
-        :param init: The tensorflow initializer
+        :param input_dim: The word embedding depth
         :param kwargs: None
         :return: The average pooling representation
         """
-        return MeanPool1D(dsz)
+        return MeanPool1D(input_dim)
 
 
 @register_model(task='classify', name='nbowmax')
-class NBowMaxModel(NBowBase):
+class NBowMaxModel(NBowModelBase):
     """Max-pooling model for Neural Bag-of-Words.  Sometimes does better than avg pooling
     """
 
-    def pool(self, dsz, **kwargs):
+    def init_pool(self, input_dim: int, **kwargs) -> BaseLayer:
         """Do max pooling on input embeddings, yielding a `dsz` output layer
 
-        :param word_embeddings: The word embedding input
-        :param dsz: The word embedding depth
-        :param init: The tensorflow initializer
+        :param input_dim: The word embedding depth
         :param kwargs: None
         :return: The max pooling representation
         """
-        return tf.keras.layers.GlobalMaxPooling1D()
+        return WithoutLength(tf.keras.layers.GlobalMaxPooling1D())
 
 
 @register_model(task='classify', name='fine-tune')
 class FineTuneModelClassifier(ClassifierModelBase):
     """Fine-tune based on pre-pooled representations"""
 
-    def create_layers(self, **kwargs):
-        embeddings_stack = self.embed(**kwargs)
-        nc = len(self.labels)
-        self.impl = FineTuneModel(nc, embeddings_stack)
+    def init_embed(self, embeddings: Dict[str, TensorDef], **kwargs) -> BaseLayer:
+        """This method creates the "embedding" layer of the inputs, with an optional reduction
+
+        :param embeddings: A dictionary of embeddings
+
+        :Keyword Arguments: See below
+        * *embeddings_reduction* (defaults to `concat`) An operator to perform on a stack of embeddings
+
+        :return: The output of the embedding stack followed by its reduction.  This will typically be an output
+          with an additional dimension which is the hidden representation of the input
+        """
+        return EmbeddingsStack(embeddings, reduction=kwargs.get('embeddings_reduction', 'concat'))
+
+    def init_stacked(self, input_dim: int, **kwargs) -> BaseLayer:
+        """Produce a stacking operation that will be used in the model
+
+        :param input_dim: The input dimension size
+        :param kwargs:
+        :return: A stacking operation (or None)
+        """
+        hszs = listify(kwargs.get('hsz', []))
+        if not hszs:
+            return PassThru(input_dim)
+        return DenseStack(input_dim, hszs, pdrop_value=self.pdrop_value)
+
+    def init_output(self, **kwargs):
+        return tf.keras.layers.Dense(len(self.labels))
+
+    def create_layers(self, embeddings, **kwargs):
+        self.embeddings = self.init_embed(embeddings, **kwargs)
+        self.stack_model = self.init_stacked(self.embeddings.output_dim, **kwargs)
+        self.output_layer = self.init_output(**kwargs)
+
+    def call(self, inputs):
+        base_layers = self.embeddings(inputs)
+        stacked = self.stack_model(base_layers)
+        return self.output_layer(stacked)
 
 
 @register_model(task='classify', name='composite')
