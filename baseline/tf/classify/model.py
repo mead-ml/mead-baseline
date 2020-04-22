@@ -73,7 +73,7 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
             if hasattr(embedding, 'save_md'):
                 embedding.save_md('{}-{}-md.json'.format(basename, key))
 
-    def _record_state(self, embeddings: Dict[str, TensorDef], **kwargs):
+    def _record_state(self, embeddings: Dict[str, BaseLayer], **kwargs):
         embeddings_info = {}
         for k, v in embeddings.items():
             embeddings_info[k] = v.__class__.__name__
@@ -267,7 +267,7 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
         self._lengths_key = value
 
     @classmethod
-    def create(cls, embeddings: Dict[str, TensorDef], labels: List[str], **kwargs) -> 'ClassifierModelBase':
+    def create(cls, embeddings: Dict[str, BaseLayer], labels: List[str], **kwargs) -> 'ClassifierModelBase':
         """The main method for creating all :class:`ClassifierBasedModel` types.
 
         This method typically instantiates a model with pooling and optional stacking layers.
