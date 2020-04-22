@@ -129,13 +129,6 @@ class TaggerModelBase(nn.Module, TaggerModel):
             return example_dict, perm_idx
         return example_dict
 
-    def get_vocab(self, vocab_type='word'):
-        """Produce a dictionary for the vocab feature name
-
-        :param vocab_type: The feature name
-        """
-        return self.word_vocab if vocab_type == 'word' else self.char_vocab
-
     def get_labels(self) -> List[str]:
         """Get the labels (names of each class)
 
