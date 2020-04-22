@@ -271,42 +271,6 @@ class TransducerTaggerModel(TaggerModelBase):
             )
         return decoder
 
-    def init_embed(self, embeddings: Dict[str, TensorDef], **kwargs) -> BaseLayer:
-        """This method creates the "embedding" layer of the inputs, with an optional reduction
-
-        :param embeddings: A dictionary of embeddings
-
-        :Keyword Arguments: See below
-        * *embeddings_reduction* (defaults to `concat`) An operator to perform on a stack of embeddings
-
-        :return: The output of the embedding stack followed by its reduction.  This will typically be an output
-          with an additional dimension which is the hidden representation of the input
-        """
-        return EmbeddingsStack(embeddings, self.pdrop, reduction=kwargs.get('embeddings_reduction', 'concat'))
-
-    def init_encode(self, input_dim, **kwargs) -> BaseLayer:
-        """Provide a layer object that represents the `encode` phase of the model
-        :param input_dim: The hidden input size
-        :param kwargs:
-        :return: The encoder
-        """
-
-    def init_decode(self, **kwargs) -> BaseLayer:
-        use_crf = bool(kwargs.get('crf', False))
-        constraint_mask = kwargs.get('constraint_mask')
-        if constraint_mask is not None:
-            constraint_mask = constraint_mask.unsqueeze(0)
-
-        if use_crf:
-            decoder = CRF(len(self.labels), constraint_mask=constraint_mask, batch_first=True)
-        else:
-            decoder = TaggerGreedyDecoder(
-                len(self.labels),
-                constraint_mask=constraint_mask,
-                batch_first=True,
-                reduction=kwargs.get('reduction', 'batch')
-            )
-        return decoder
 
     def create_layers(self, embeddings: Dict[str, TensorDef], **kwargs):
         """This class overrides this method to produce the outline of steps for a transduction tagger
