@@ -102,7 +102,7 @@ The only real requirement to provide mead with your own classifier is to extend 
 - Use the mead layers (8 mile) API to define your layers
   - This will minimize any incompatibility and make it easy to switch frameworks later
   - Determine if your model can sub-class the `EmbedPoolStackClassifer`.  If it follows this idiom, it may be very succinct to define a new classifer by overriding a single function (typically the `init_pool()` function).
-- If you are overriding the `EmbedPoolStackClassifier`, remember that the pooling layer is expecting 2 arguments -- the input tensor itself and a tensor containing the length.  If you want to adapt an existing Layer from Keras/PyTorch or elsewhere that requires a single input Tensor, use the `WithoutLengths(YourLayer)` adapter layer to provide the callee with the input tensor
+- If you are overriding the `EmbedPoolStackClassifier`, remember that the pooling layer is expecting 2 arguments -- the input tensor itself and a tensor containing the length.  If you want to adapt an existing Layer from Keras/PyTorch or elsewhere that requires a single input Tensor, use the `WithoutLengths(YourLayer)` adapter which strips the length tensor and provides a single input tensor to `YourLayer`
 
 ### Some Notes on the TensorFlow implementation
 
