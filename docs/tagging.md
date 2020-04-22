@@ -128,7 +128,7 @@ There is a base interface `TaggerModel` defined for taggers inside of baseline/m
 
 The `TaggerModelBase` provides fulfills the `create()` function required in the base interface (`TaggerModel`) but leaves an abstract method for creation of the layers: `create_layers()` and leaves an abstract forward method (`forward()` for PyTorch and `call()` for Keras).
 
-While this interface provides lots of flexibility, its sub-class `TransducerTaggerModel(TaggerModelBase)` provides much more utility and structure to tagging and as typically the best place to extend from when writing your own tagger.
+While this interface provides lots of flexibility, its sub-class `AbstractEncoderTaggerModel(TaggerModelBase)` provides much more utility and structure to tagging and as typically the best place to extend from when writing your own tagger.
 
 The `TaggerModelBase` follows a single basic pattern for modeling tagging consisting for 4 basic steps:
 
@@ -157,7 +157,7 @@ For fine-tuning a language model like BERT, the typical approach is to remove th
 - Do not override the `create()` from the base class unless absolutely necessary.  `create_layers()` is the typical extension point for the `TaggerModelBase`
 - Use the mead layers (8 mile) API to define your layers
   - This will minimize any incompatibility and make it easy to switch frameworks later
-- Use `TransducerTaggerModel` for simple models involving overriding the `init_encode()` method.  If you can do this, avoid overidding `create_layers()`
+- Use `AbstractEncoderTaggerModel` for simple models involving overriding the `init_encode()` method.  If you can do this, avoid overidding `create_layers()`
 
 ### Some Notes on the TensorFlow implementation
 

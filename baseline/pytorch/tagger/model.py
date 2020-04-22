@@ -13,7 +13,7 @@ class TaggerModelBase(nn.Module, TaggerModel):
     """Base class for tagger models
 
     This class provides the model base for tagging.  To create a tagger, overload `create_layers()` and `forward()`.
-    Most implementations should be able to subclass the TransducerTaggerModel, which inherits from this and imposes
+    Most implementations should be able to subclass the `AbstractEncoderTaggerModel`, which inherits from this and imposes
     additional structure
     """
     def __init__(self):
@@ -195,7 +195,7 @@ class TaggerModelBase(nn.Module, TaggerModel):
         """
 
 
-class TransducerTaggerModel(TaggerModelBase):
+class AbstractEncoderTaggerModel(TaggerModelBase):
     """Class defining a typical flow for taggers.  Most taggers should extend this class
 
     This class provides the model base for tagging by providing specific hooks for each phase.  There are
@@ -332,7 +332,7 @@ class TransducerTaggerModel(TaggerModelBase):
 
 
 @register_model(task='tagger', name='default')
-class RNNTaggerModel(TransducerTaggerModel):
+class RNNTaggerModel(AbstractEncoderTaggerModel):
     """RNN-based tagger implementation: this is the default tagger for mead-baseline
 
     Overload the encoder, typically as a BiLSTM
@@ -366,7 +366,7 @@ class RNNTaggerModel(TransducerTaggerModel):
 
 
 @register_model(task='tagger', name='transformer')
-class TransformerTaggerModel(TransducerTaggerModel):
+class TransformerTaggerModel(AbstractEncoderTaggerModel):
     """Transformer-based tagger model
 
     Overload the encoder using a length-aware Transformer
@@ -402,7 +402,7 @@ class TransformerTaggerModel(TransducerTaggerModel):
 
 
 @register_model(task='tagger', name='cnn')
-class CNNTaggerModel(TransducerTaggerModel):
+class CNNTaggerModel(AbstractEncoderTaggerModel):
     """Convolutional (AKA TDNN) tagger
 
     Overload the encoder using a conv layer
@@ -434,7 +434,7 @@ class CNNTaggerModel(TransducerTaggerModel):
 
 
 @register_model(task='tagger', name='pass')
-class PassThruTaggerModel(TransducerTaggerModel):
+class PassThruTaggerModel(AbstractEncoderTaggerModel):
     """A Pass-thru implementation of the encoder
 
     When we fine-tune our taggers from things like BERT embeddings, we might want to just pass through our
