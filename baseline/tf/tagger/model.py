@@ -337,14 +337,32 @@ class TaggerModelBase(tf.keras.Model, TaggerModel):
 
 
 class TransducerTaggerModel(TaggerModelBase):
+    """Class defining a typical flow for taggers.  Most taggers should extend this class
 
+    This class provides the model base for tagging by providing specific hooks for each phase.  There are
+    4 basic steps identified in this class:
+
+    1. embed
+    2. encode (transduction)
+    3. proj (projection to the final number of labels)
+    4. decode
+
+    There is an `init_* method for each of this phases, allowing you to
+    define and return a custom layer.
+
+    The actual forward method is defined as a combination of these 3 steps, which includes a
+    projection from the encoder output to the number of labels.
+
+    Decoding in taggers refers to the process of selecting the best path through the labels and is typically
+    implemented either as a constrained greedy decoder or as a CRF layer
+    """
     def __init__(self):
         super().__init__()
 
     def create_layers(self, embeddings: Dict[str, TensorDef], **kwargs):
         self.embeddings = self.init_embed(embeddings, **kwargs)
         self.encoder = self.init_encode(**kwargs)
-        self.proj_layer = tf.keras.layers.Dense(len(self.labels))
+        self.proj_layer = self.init_proj(**kwargs)
         self.decoder = self.init_decode(**kwargs)
 
     def call(self, inputs: Dict[str, TensorDef]) -> TensorDef:
@@ -382,6 +400,17 @@ class TransducerTaggerModel(TaggerModelBase):
        :return: The encoder
        """
 
+    def init_proj(self, **kwargs) -> BaseLayer:
+        """Provide a projection from the encoder output to the number of labels
+
+        This projection typically will not include any activation, since its output is the logits that
+        the decoder is built on
+
+        :param kwargs:
+        :return: A projection from the encoder output size to the final number of labels
+        """
+        return tf.keras.layers.Dense(len(self.labels))
+
     def init_decode(self, **kwargs) -> BaseLayer:
         """Provide a layer object that represents the `decode` phase of the model
         This will typically produce a CRF layer, or a greedy decoder
@@ -397,7 +426,7 @@ class TransducerTaggerModel(TaggerModelBase):
         return TaggerGreedyDecoder(len(self.labels), self.constraint_mask)
 
     def transduce(self, inputs: Dict[str, TensorDef]) -> TensorDef:
-        """This operation performs embedding of the input, followed by encoding
+        """This operation performs embedding of the input, followed by encoding and projection to logits
 
         :param inputs: The feature indices to embed
         :return: Transduced (post-encoding) output

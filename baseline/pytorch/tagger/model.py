@@ -24,7 +24,7 @@ class TaggerModelBase(nn.Module, TaggerModel):
     def save(self, outname: str):
         """Save out the model
 
-        :param outname:
+        :param outname: The name of the checkpoint to write
         :return:
         """
         torch.save(self, outname)
@@ -88,10 +88,10 @@ class TaggerModelBase(nn.Module, TaggerModel):
             tensor = tensor.cuda()
         return tensor
 
-    def make_input(self, batch_dict, perm=False, numpy_to_tensor=False):
+    def make_input(self, batch_dict: Dict[str, TensorDef], perm: bool = False, numpy_to_tensor: bool = False) -> Dict[str, TensorDef]:
         """Transform a `batch_dict` into format suitable for tagging
 
-        :param batch_dict: (``dict``) A dictionary containing all inputs to the embeddings for this model
+        :param batch_dict: A dictionary containing all inputs to the embeddings for this model
         :param perm: Should we sort data by length descending?
         :param numpy_to_tensor: Do we need to convert the input from numpy to a torch.Tensor?
         :return: A dictionary representation of this batch suitable for processing
@@ -136,7 +136,7 @@ class TaggerModelBase(nn.Module, TaggerModel):
         """
         return self.labels
 
-    def predict(self, batch_dict: Dict[str, TensorDef], **kwargs):
+    def predict(self, batch_dict: Dict[str, TensorDef], **kwargs) -> TensorDef:
         """Take in a batch of data, and predict the tags
 
         :param batch_dict: A batch of features that is to be predicted
@@ -145,7 +145,7 @@ class TaggerModelBase(nn.Module, TaggerModel):
         :Keyword Arguments:
 
         * *numpy_to_tensor* (``bool``) Should we convert input from numpy to `torch.Tensor` Defaults to `True`
-        :return: A batch-sized list of predictions
+        :return: A batch-sized tensor of predictions
         """
         numpy_to_tensor = bool(kwargs.get('numpy_to_tensor', True))
         inputs, perm_idx = self.make_input(batch_dict, perm=True, numpy_to_tensor=numpy_to_tensor)
@@ -199,11 +199,12 @@ class TransducerTaggerModel(TaggerModelBase):
     """Class defining a typical flow for taggers.  Most taggers should extend this class
 
     This class provides the model base for tagging by providing specific hooks for each phase.  There are
-    3 basic operations identified in this class:
+    4 basic steps identified in this class:
 
     1. embed
     2. encode (transduction)
-    3. decode
+    3. proj (projection to the final number of labels)
+    4. decode
 
     There is an `init_* method for each of this phases, allowing you to
     define and return a custom layer.
@@ -238,6 +239,17 @@ class TransducerTaggerModel(TaggerModelBase):
         :return: The encoder
         """
 
+    def init_proj(self, **kwargs) -> BaseLayer:
+        """Provide a projection from the encoder output to the number of labels
+
+        This projection typically will not include any activation, since its output is the logits that
+        the decoder is built on
+
+        :param kwargs:
+        :return: A projection from the encoder output size to the final number of labels
+        """
+        return Dense(self.encoder.output_dim, len(self.labels))
+
     def init_decode(self, **kwargs) -> BaseLayer:
         """Define a decoder from the inputs
 
@@ -264,7 +276,6 @@ class TransducerTaggerModel(TaggerModelBase):
             )
         return decoder
 
-
     def create_layers(self, embeddings: Dict[str, TensorDef], **kwargs):
         """This class overrides this method to produce the outline of steps for a transduction tagger
 
@@ -274,11 +285,11 @@ class TransducerTaggerModel(TaggerModelBase):
         """
         self.embeddings = self.init_embed(embeddings, **kwargs)
         self.encoder = self.init_encode(self.embeddings.output_dim, **kwargs)
-        self.proj_layer = Dense(self.encoder.output_dim, len(self.labels))
+        self.proj_layer = self.init_proj(**kwargs)
         self.decoder = self.init_decode(**kwargs)
 
     def transduce(self, inputs: Dict[str, TensorDef]) -> TensorDef:
-        """This operation performs embedding of the input, followed by encoding
+        """This operation performs embedding of the input, followed by encoding and projection to logits
 
         :param inputs: The feature indices to embed
         :return: Transduced (post-encoding) output

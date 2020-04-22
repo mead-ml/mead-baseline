@@ -130,11 +130,12 @@ The `TaggerModelBase` provides fulfills the `create()` function required in the 
 
 While this interface provides lots of flexibility, its sub-class `TransducerTaggerModel(TaggerModelBase)` provides much more utility and structure to tagging and as typically the best place to extend from when writing your own tagger.
 
-The `TaggerModelBase` follows a single basic pattern for modeling tagging consisting for 3 basic steps:
+The `TaggerModelBase` follows a single basic pattern for modeling tagging consisting for 4 basic steps:
 
 1. embeddings
 2. encoder (transduction and projection to final number of labels)
-3. decoder (typically a constrained greedy decoder or a CRF)
+3. projection to logits space (the number of labels)
+4. decoder (typically a constrained greedy decoder or a CRF)
 
 All of the MEAD-Baseline tagger models reuse steps 1. and 3. and define their own encoders by overriding the `init_encode()` method.  These hooks are called from the concrete implementation of `create_layers()`, and the forward method is implemented by a simple flow that executes these layers.
 
@@ -142,7 +143,8 @@ Most taggers can be composed together by providing the encoder layer and wiring 
 
 1. embeddings via concatenation of `LookupTableEmbeddingsModel` and `CharConvEmbeddingsModel`
 2. encoder via `RNNTaggerModel`
-3. decoder via `CRF`
+3. default linear projection
+4. decoder via `CRF`
 
 For fine-tuning a language model like BERT, the typical approach is to remove the head from the model (AKA the final linear projection out to the vocab and the normalizing softmax), and to put a final linear projection to the output number of classes in its place.  In MEAD-Baseline, the headless LM would be lodaded as an embedding object and passed into an `EmbeddingsStack` so the encoder itself should be pass through.
 
