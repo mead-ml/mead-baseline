@@ -737,47 +737,6 @@ class BasicTokenizer(object):
         return "".join(output)
 
 
-@register_vectorizer(name='wordpiece1d')
-class WordpieceVectorizer1D(AbstractVectorizer):
-
-    def __init__(self, **kwargs):
-        super().__init__(kwargs.get('transform_fn'))
-        self.max_seen = 128
-        self.wordpiece_tok = WordpieceTokenizer(load_bert_vocab(kwargs.get('vocab_file')))
-        self.mxlen = kwargs.get('mxlen', -1)
-        self.dtype = kwargs.get('dtype', 'int')
-
-    def iterable(self, tokens):
-        yield '[CLS]'
-        for tok in tokens:
-            if tok == '<unk>':
-                yield '[UNK]'
-            elif tok == '<EOS>':
-                yield '[SEP]'
-            else:
-                for subtok in self.wordpiece_tok.tokenize(self.transform_fn(tok)):
-                    yield subtok
-        yield '[SEP]'
-
-    def _next_element(self, tokens, vocab):
-        for atom in self.iterable(tokens):
-            value = vocab.get(atom)
-            if value is None:
-                value = vocab['[UNK]']
-            yield value
-
-    def run(self, tokens, vocab):
-        if self.mxlen < 0:
-            self.mxlen = self.max_seen
-        vec1d = np.zeros(self.mxlen, dtype=self.dtype)
-        for i, atom in enumerate(self._next_element(tokens, vocab)):
-            if i == self.mxlen:
-                i -= 1
-                break
-            vec1d[i] = atom
-        valid_length = i + 1
-        return vec1d, valid_length
-
 class WordpieceTokenizer:
     """Runs WordPiece tokenziation."""
 
@@ -878,6 +837,101 @@ def _is_punctuation(char):
     if cat.startswith("P"):
         return True
     return False
+
+
+@register_vectorizer(name='wordpiece1d')
+class WordpieceVectorizer1D(AbstractVectorizer):
+
+    def __init__(self, **kwargs):
+        super().__init__(kwargs.get('transform_fn'))
+        self.max_seen = 128
+        self.tokenizer = WordpieceTokenizer(load_bert_vocab(kwargs.get('vocab_file')))
+        self.mxlen = kwargs.get('mxlen', -1)
+        self.dtype = kwargs.get('dtype', 'int')
+
+    def iterable(self, tokens):
+        yield '[CLS]'
+        for tok in tokens:
+            if tok == '<unk>':
+                yield '[UNK]'
+            elif tok == '<EOS>':
+                yield '[SEP]'
+            else:
+                for subtok in self.tokenizer.tokenize(self.transform_fn(tok)):
+                    yield subtok
+        yield '[SEP]'
+
+    def _next_element(self, tokens, vocab):
+        for atom in self.iterable(tokens):
+            value = vocab.get(atom)
+            if value is None:
+                value = vocab['[UNK]']
+            yield value
+
+    def run(self, tokens, vocab):
+        if self.mxlen < 0:
+            self.mxlen = self.max_seen
+        vec1d = np.zeros(self.mxlen, dtype=self.dtype)
+        for i, atom in enumerate(self._next_element(tokens, vocab)):
+            if i == self.mxlen:
+                i -= 1
+                break
+            vec1d[i] = atom
+        valid_length = i + 1
+        return vec1d, valid_length
+
+
+@register_vectorizer(name='wordpiece-label-dict1d')
+class WordpieceLabelDict1DVectorizer(WordpieceVectorizer1D):
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.field = kwargs.get('fields', kwargs.get('field', 'text'))
+        self.label = kwargs.get('label', 'label')
+
+    def iterable(self, tokens):
+        yield Offsets.VALUES[Offsets.PAD]
+        for t in tokens:
+            t_word = t[self.field]
+            t_label = t[self.label]
+            subwords = [x for x in self.tokenizer.tokenize(t_word)]
+            subwords = [Offsets.VALUES[Offsets.PAD]] * len(subwords)
+            # TODO: The tokenizer sometimes cuts up the token and leaves nothing
+            # how to handle this since we cannot get anything for it
+            if len(subwords):
+                subwords[0] = t_label
+            for x in subwords:
+                yield x
+        yield Offsets.VALUES[Offsets.PAD]
+
+    def run(self, tokens, vocab):
+        return super().run(tokens, vocab)
+
+    def count(self, tokens):
+        seen = 0
+        counter = collections.Counter()
+        for tok in self.iterable(tokens):
+            counter[tok] += 1
+            seen += 1
+        self.max_seen = max(self.max_seen, seen)
+        return counter
+
+
+@register_vectorizer(name='wordpiece-dict1d')
+class WordpieceDict1DVectorizer(WordpieceVectorizer1D):
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.field = kwargs.get('fields', kwargs.get('field', 'text'))
+        self.delim = kwargs.get('token_delim', '~~')
+
+    def iterable(self, tokens):
+        yield '[CLS]'
+        for t in tokens:
+            tok = t[self.field]
+            for subtok in self.tokenizer.tokenize(tok):
+                yield subtok
+        yield '[SEP]'
 
 
 @export

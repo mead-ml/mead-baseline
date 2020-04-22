@@ -402,12 +402,11 @@ class Task(object):
                     embeddings_global_config_i = embeddings_set[embed_label]
                     if 'type' in embeddings_global_config_i:
                         embed_type_i = embeddings_global_config_i['type']
-                        if embed_type != 'default':
-                            embed_type = embed_type_i
-                        elif embed_type_i != 'default':
+                        embed_type = embed_type_i
+                        if embed_type_i != 'default' and is_stacked:
                             raise Exception("Stacking embeddings only works for 'default' pretrained word embeddings")
 
-                    embed_file = embeddings_global_config_i['file']
+                    embed_file = embeddings_global_config_i.get('file')
                     embed_dsz = embeddings_global_config_i['dsz']
                     embed_sha1 = embeddings_global_config_i.get('sha1')
                     # Should we grab vocab here too?
@@ -418,12 +417,19 @@ class Task(object):
 
                     embeddings_section = {**embed_model, **embeddings_section}
                     try:
-                        embed_file = EmbeddingDownloader(embed_file, embed_dsz, embed_sha1, self.data_download_cache).download()
-                        embed_files.append(embed_file)
+                        # We arent necessarily going to get an `embed_file`. For instance, using the HuggingFace
+                        # models in the Hub addon, the `embed_file` should be downloaded using HuggingFace's library,
+                        # not by us.  In this case we want it to be None and we dont want to download it
+                        if embed_file:
+                            embed_file = EmbeddingDownloader(embed_file, embed_dsz, embed_sha1, self.data_download_cache).download()
+                            embed_files.append(embed_file)
+                        else:
+                            embed_files.append(None)
                     except Exception as e:
                         if is_stacked:
                             raise e
-
+                # If we have stacked embeddings (which only works with `default` model, we need to pass the list
+                # If not, grab the first item
                 embed_file = embed_files if is_stacked else embed_files[0]
                 embedding_bundle = baseline.embeddings.load_embeddings(name,
                                                                        embed_file=embed_file,
