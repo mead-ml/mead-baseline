@@ -558,10 +558,13 @@ class FineTuneModelClassifier(ClassifierModelBase):
             return PassThru(input_dim)
         return DenseStack(input_dim, hszs, pdrop_value=self.pdrop_value)
 
+    def init_output(self, **kwargs):
+        return tf.keras.layers.Dense(len(self.labels))
+
     def create_layers(self, embeddings, **kwargs):
         self.embeddings = self.init_embed(embeddings, **kwargs)
         self.stack_model = self.init_stacked(self.embeddings.output_dim, **kwargs)
-        self.output_layer = tf.keras.layers.Dense(len(self.labels))
+        self.output_layer = self.init_output(**kwargs)
 
     def call(self, inputs):
         base_layers = self.embeddings(inputs)

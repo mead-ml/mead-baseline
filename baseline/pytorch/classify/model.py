@@ -140,6 +140,7 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
         :return:
         """
 
+
 class EmbedPoolStackClassifier(ClassifierModelBase):
 
     """Provides a simple but effective base for most `ClassifierModel`s
@@ -267,21 +268,6 @@ class LSTMModel(EmbedPoolStackClassifier):
             return BiLSTMEncoderHidden(input_dim, hsz, 1, self.pdrop, unif=unif, batch_first=True, initializer=weight_init)
         return LSTMEncoderHidden(input_dim, hsz, 1, self.pdrop, unif=unif, batch_first=True, initializer=weight_init)
 
-    def make_input(self, batch_dict):
-        """In PyTorch, we typically set the lengths to sort descending and permute the batch accordingly
-
-        This function just calls the parent, then permutes the batch
-
-        :param batch_dict: The input
-        :return: The permuted tensor outputs
-        """
-        inputs = super().make_input(batch_dict)
-        lengths = inputs['lengths']
-        lengths, perm_idx = lengths.sort(0, descending=True)
-        for k, value in inputs.items():
-            inputs[k] = value[perm_idx]
-        return inputs
-
 
 class NBowModelBase(EmbedPoolStackClassifier):
     """Neural Bag-of-Words Model base class.  Defines stacking of fully-connected layers, but leaves pooling to derived
@@ -358,10 +344,19 @@ class FineTuneModelClassifier(ClassifierModelBase):
             return PassThru(input_dim)
         return DenseStack(input_dim, hszs, pdrop_value=self.pdrop)
 
+    def init_output(self, input_dim: int, **kwargs) -> BaseLayer:
+        """Produce the final output layer in the model
+
+        :param input_dim: The input hidden size
+        :param kwargs:
+        :return:
+        """
+        return Dense(input_dim, len(self.labels), activation=kwargs.get('output_activation', 'log_softmax'))
+
     def create_layers(self, embeddings: Dict[str, TensorDef], **kwargs):
         self.embeddings = self.init_embed(embeddings, **kwargs)
         self.stack_model = self.init_stacked(self.embeddings.output_dim, **kwargs)
-        self.output_layer = Dense(self.stack_model.output_dim, len(self.labels), activation="log_softmax")
+        self.output_layer = self.init_output(self.stack_model.output_dim, **kwargs)
 
     def forward(self, inputs):
         base_layers = self.embeddings(inputs)
