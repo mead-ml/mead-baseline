@@ -367,13 +367,19 @@ class EmbedPoolStackClassifier(ClassifierModelBase):
 
     def init_embed(self, embeddings: Dict[str, TensorDef], **kwargs) -> BaseLayer:
         """This method creates the "embedding" layer of the inputs, with an optional reduction
-        :Keyword Arguments: See below
-        * *embeddings_reduction* (defaults to `concat`) An operator to perform on a stack of embeddings
 
+        :param embeddings: A dictionary of embeddings
+        :param kwargs: See below
+
+        :Keyword Arguments:
+        * *embeddings_reduction* (defaults to `concat`) An operator to perform on a stack of embeddings
+        * *embeddings_name* (``str``) Optional override to Keras default names
         :return: The output of the embedding stack followed by its reduction.  This will typically be an output
           with an additional dimension which is the hidden representation of the input
         """
-        return EmbeddingsStack(embeddings, reduction=kwargs.get('embeddings_reduction', 'concat'))
+        reduction = kwargs.get('embeddings_reduction', 'concat')
+        name = kwargs.get('embeddings_name')
+        return EmbeddingsStack(embeddings, self.pdrop_value, reduction=reduction, name=name)
 
     def init_pool(self, input_dim: int, **kwargs) -> BaseLayer:
         """Produce a pooling operation that will be used in the model
@@ -387,20 +393,35 @@ class EmbedPoolStackClassifier(ClassifierModelBase):
         """Produce a stacking operation that will be used in the model
 
         :param input_dim: The input dimension size
-        :param kwargs:
+        :param kwargs: See below
+
+        :keyword arguments:
+
+        * *hsz* (``list``), defaults to nothing, in which case this function is pass-through
+        * *stacked_name* (``str``) Optional override to stacking name
+
         :return: A stacking operation (or None)
         """
         hszs = listify(kwargs.get('hsz', []))
         if not hszs:
             return PassThru(input_dim)
-        return DenseStack(input_dim, hszs, pdrop_value=self.pdrop_value)
+        name = kwargs.get('stacked_name')
+        return DenseStack(input_dim, hszs, pdrop_value=self.pdrop_value, name=name)
 
-    def init_output(self, **kwargs) -> BaseLayer:
-        """Produce the final output layer in the model
-        :param kwargs:
-        :return:
+    def init_output(self, **kwargs):
+        """Provide a projection from the encoder output to the number of labels
+
+        This projection typically will not include any activation, since its output is the logits that
+        the decoder is built on
+
+        :param kwargs: See below
+
+        :keyword arguments:
+        * *output_name* (``str``) Optional override to default Keras layer name
+        :return: A projection from the encoder output size to the final number of labels
         """
-        return tf.keras.layers.Dense(len(self.labels))
+        name = kwargs.get('output_name')
+        return tf.keras.layers.Dense(len(self.labels), name=name)
 
     def call(self, inputs: Dict[str, TensorDef]) -> TensorDef:
         """Forward execution of the model.  Sub-classes typically shouldnt need to override
@@ -431,12 +452,13 @@ class ConvModel(EmbedPoolStackClassifier):
         * *cmotsz* -- (``int``) The number of convolutional feature maps for each filter
             These are MOT-filtered, leaving this # of units per parallel filter
         * *filtsz* -- (``list``) This is a list of filter widths to use
-
+        * *pool_name* -- (``str``) Optional name to override default Keras layer name
         :return: A pooling layer
         """
         cmotsz = kwargs['cmotsz']
         filtsz = kwargs['filtsz']
-        return WithoutLength(WithDropout(ParallelConv(input_dim, cmotsz, filtsz), self.pdrop_value))
+        name = kwargs.get('pool_name')
+        return WithoutLength(WithDropout(ParallelConv(input_dim, cmotsz, filtsz, name=name), self.pdrop_value))
 
 
 @register_model(task='classify', name='lstm')
@@ -467,6 +489,7 @@ class LSTMModel(EmbedPoolStackClassifier):
         * *rnntype/rnn_type* -- (``str``) The RNN type, defaults to `lstm`, other valid values: `blstm`
         * *hsz* -- (``int``) backoff for `rnnsz`, typically a result of stacking params.  This keeps things simple so
           its easy to do things like residual connections between LSTM and post-LSTM stacking layers
+        * *pool_name* -- (``str``) Optional name to override default Keras layer name
 
         :return: A pooling layer
         """
@@ -477,10 +500,10 @@ class LSTMModel(EmbedPoolStackClassifier):
 
         rnntype = kwargs.get('rnn_type', kwargs.get('rnntype', 'lstm'))
         nlayers = int(kwargs.get('layers', 1))
-
+        name = kwargs.get('pool_name')
         if rnntype == 'blstm':
-            return BiLSTMEncoderHidden(None, hsz, nlayers, self.pdrop_value, vdrop)
-        return LSTMEncoderHidden(None, hsz, nlayers, self.pdrop_value, vdrop)
+            return BiLSTMEncoderHidden(None, hsz, nlayers, self.pdrop_value, vdrop, name=name)
+        return LSTMEncoderHidden(None, hsz, nlayers, self.pdrop_value, vdrop, name=name)
 
 
 class NBowModelBase(EmbedPoolStackClassifier):
@@ -495,6 +518,7 @@ class NBowModelBase(EmbedPoolStackClassifier):
 
         :Keyword Arguments:
         * *hsz* -- (``List[int]``) The number of hidden units (defaults to 100)
+        * *stacked_name* -- (``str``) Optional name to override default Keras layer name
         """
         kwargs.setdefault('hsz', [100])
         return super().stacked(**kwargs)
@@ -508,10 +532,17 @@ class NBowModel(NBowModelBase):
         """Do average pooling on input embeddings, yielding a `dsz` output layer
 
         :param input_dim: The word embedding depth
-        :param kwargs: None
+        :param kwargs: See below
+
+        :keyword arguments:
+
+        * *pool_name* -- (``str``) Optional name to override default Keras layer name
+
+
         :return: The average pooling representation
         """
-        return MeanPool1D(input_dim)
+        name = kwargs.get('pool_name')
+        return MeanPool1D(input_dim, name=name)
 
 
 @register_model(task='classify', name='nbowmax')
@@ -523,10 +554,15 @@ class NBowMaxModel(NBowModelBase):
         """Do max pooling on input embeddings, yielding a `dsz` output layer
 
         :param input_dim: The word embedding depth
-        :param kwargs: None
+        :param kwargs: See below
+
+        :keyword arguments:
+        * *pool_name* -- (``str``) Optional name to override default Keras layer name
+
         :return: The max pooling representation
         """
-        return WithoutLength(tf.keras.layers.GlobalMaxPooling1D())
+        name = kwargs.get('pool_name')
+        return WithoutLength(tf.keras.layers.GlobalMaxPooling1D(name=name))
 
 
 @register_model(task='classify', name='fine-tune')
@@ -534,32 +570,57 @@ class FineTuneModelClassifier(ClassifierModelBase):
     """Fine-tune based on pre-pooled representations"""
 
     def init_embed(self, embeddings: Dict[str, TensorDef], **kwargs) -> BaseLayer:
+
         """This method creates the "embedding" layer of the inputs, with an optional reduction
 
         :param embeddings: A dictionary of embeddings
+        :param kwargs: See below
 
-        :Keyword Arguments: See below
+        :Keyword Arguments:
         * *embeddings_reduction* (defaults to `concat`) An operator to perform on a stack of embeddings
-
+        * *embeddings_name* (``str``) Optional override to Keras default names
+        * *embeddings_dropout* (``float``) how much dropout post-reduction (defaults to 0.0)
         :return: The output of the embedding stack followed by its reduction.  This will typically be an output
           with an additional dimension which is the hidden representation of the input
         """
-        return EmbeddingsStack(embeddings, reduction=kwargs.get('embeddings_reduction', 'concat'))
+        reduction = kwargs.get('embeddings_reduction', 'concat')
+        embeddings_dropout = float(kwargs.get('embeddings_dropout', 0.0))
+        name = kwargs.get('embeddings_name')
+        return EmbeddingsStack(embeddings, embeddings_dropout, reduction=reduction, name=name)
 
     def init_stacked(self, input_dim: int, **kwargs) -> BaseLayer:
         """Produce a stacking operation that will be used in the model
 
         :param input_dim: The input dimension size
-        :param kwargs:
+        :param kwargs: See below
+
+        :keyword arguments:
+
+        * *hsz* (``list``), defaults to nothing, in which case this function is pass-through
+        * *stacked_name* (``str``) Optional override to stacking name
+
         :return: A stacking operation (or None)
         """
         hszs = listify(kwargs.get('hsz', []))
         if not hszs:
             return PassThru(input_dim)
-        return DenseStack(input_dim, hszs, pdrop_value=self.pdrop_value)
+        name = kwargs.get('stacked_name')
+        return DenseStack(input_dim, hszs, pdrop_value=self.pdrop_value, name=name)
 
     def init_output(self, **kwargs):
-        return tf.keras.layers.Dense(len(self.labels))
+        """Provide a projection from the encoder output to the number of labels
+
+        This projection typically will not include any activation, since its output is the logits that
+        the decoder is built on
+
+        :param kwargs: See below
+
+        :keyword arguments:
+        * *output_name* (``str``) Optional override to default Keras layer name
+        :return: A projection from the encoder output size to the final number of labels
+        """
+        name = kwargs.get('output_name')
+        return tf.keras.layers.Dense(len(self.labels), name=name)
 
     def create_layers(self, embeddings, **kwargs):
         self.embeddings = self.init_embed(embeddings, **kwargs)
