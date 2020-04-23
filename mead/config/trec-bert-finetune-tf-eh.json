@@ -6,7 +6,8 @@
     {
       "name": "bert",
       "vectorizer": {
-	  "label": "bert-base-uncased-tf"
+	  "label": "bert-base-uncased",
+        "dtype": "int32"
       },
       "embeddings": {
 	  "label": "bert-base-uncased-pooled-tf"
@@ -27,7 +28,7 @@
   },
   "train": {
     "epochs": 5,
-    "optim": "adamw",
+    "optim": "adam",
     "eta":  0.00001,
     "weight_decay": 1.0e-8,
     "early_stopping_metric": "acc",

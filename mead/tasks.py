@@ -428,6 +428,8 @@ class Task(object):
                     except Exception as e:
                         if is_stacked:
                             raise e
+                        logger.warning(f"We were not able to download {embed_file}, passing to the addon")
+                        embed_files.append(embed_file)
                 # If we have stacked embeddings (which only works with `default` model, we need to pass the list
                 # If not, grab the first item
                 embed_file = embed_files if is_stacked else embed_files[0]

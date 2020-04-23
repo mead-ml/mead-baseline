@@ -165,13 +165,19 @@ class EmbedPoolStackClassifier(ClassifierModelBase):
 
     def init_embed(self, embeddings: Dict[str, TensorDef], **kwargs) -> BaseLayer:
         """This method creates the "embedding" layer of the inputs, with an optional reduction
+
+        :param embeddings: A dictionary of embeddings
+
         :Keyword Arguments: See below
         * *embeddings_reduction* (defaults to `concat`) An operator to perform on a stack of embeddings
+        * *embeddings_dropout = float(kwargs.get('embeddings_dropout', 0.0))
 
         :return: The output of the embedding stack followed by its reduction.  This will typically be an output
           with an additional dimension which is the hidden representation of the input
         """
-        return EmbeddingsStack(embeddings, reduction=kwargs.get('embeddings_reduction', 'concat'))
+        reduction = kwargs.get('embeddings_reduction', 'concat')
+        embeddings_dropout = float(kwargs.get('embeddings_dropout', 0.0))
+        return EmbeddingsStack(embeddings, embeddings_dropout, reduction=reduction)
 
     def init_pool(self, input_dim: int, **kwargs) -> BaseLayer:
         """Produce a pooling operation that will be used in the model
@@ -326,11 +332,14 @@ class FineTuneModelClassifier(ClassifierModelBase):
 
         :Keyword Arguments: See below
         * *embeddings_reduction* (defaults to `concat`) An operator to perform on a stack of embeddings
+        * *embeddings_dropout = float(kwargs.get('embeddings_dropout', 0.0))
 
         :return: The output of the embedding stack followed by its reduction.  This will typically be an output
           with an additional dimension which is the hidden representation of the input
         """
-        return EmbeddingsStack(embeddings, reduction=kwargs.get('embeddings_reduction', 'concat'))
+        reduction = kwargs.get('embeddings_reduction', 'concat')
+        embeddings_dropout = float(kwargs.get('embeddings_dropout', 0.0))
+        return EmbeddingsStack(embeddings, embeddings_dropout, reduction=reduction)
 
     def init_stacked(self, input_dim: int, **kwargs) -> BaseLayer:
         """Produce a stacking operation that will be used in the model

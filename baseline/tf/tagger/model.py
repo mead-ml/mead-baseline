@@ -385,14 +385,17 @@ class AbstractEncoderTaggerModel(TaggerModelBase):
         """This method creates the "embedding" layer of the inputs, with an optional reduction
 
         :param embeddings: A dictionary of embeddings
+        :param kwargs: See below
 
-        :Keyword Arguments: See below
+        :Keyword Arguments:
         * *embeddings_reduction* (defaults to `concat`) An operator to perform on a stack of embeddings
-
+        * *embeddings_name* (``str``) Optional override to Keras default names
         :return: The output of the embedding stack followed by its reduction.  This will typically be an output
           with an additional dimension which is the hidden representation of the input
         """
-        return EmbeddingsStack(embeddings, self.pdrop_value, reduction=kwargs.get('embeddings_reduction', 'concat'))
+        reduction = kwargs.get('embeddings_reduction', 'concat')
+        name = kwargs.get('embeddings_name')
+        return EmbeddingsStack(embeddings, self.pdrop_value, reduction=reduction, name=name)
 
     def init_encode(self, **kwargs) -> BaseLayer:
         """Provide a layer object that represents the `encode` phase of the model
@@ -406,24 +409,33 @@ class AbstractEncoderTaggerModel(TaggerModelBase):
         This projection typically will not include any activation, since its output is the logits that
         the decoder is built on
 
-        :param kwargs:
+        :param kwargs: See below
+
+        :keyword arguments:
+        * *proj_name* (``str``) Optional override to default Keras layer name
         :return: A projection from the encoder output size to the final number of labels
         """
-        return tf.keras.layers.Dense(len(self.labels))
+        name = kwargs.get('proj_name')
+        return tf.keras.layers.Dense(len(self.labels), name=name)
 
     def init_decode(self, **kwargs) -> BaseLayer:
         """Provide a layer object that represents the `decode` phase of the model
         This will typically produce a CRF layer, or a greedy decoder
 
-        :param kwargs:
+        :param kwargs: See below
+
+        :keyword arguments:
+        * *crf* (``bool``) Is it a CRF?
+        * *constraint_mask* (``bool``) Is there a CRF mask?
+        * *decode_name* (``str``) Optional TF graph name to use, defaults to Keras layer default
         :return: Some decoder for the model
         """
         self.crf = bool(kwargs.get('crf', False))
-        self.crf_mask = bool(kwargs.get('crf_mask', False))
         self.constraint_mask = kwargs.get('constraint_mask')
+        name = kwargs.get('decode_name')
         if self.crf:
-            return CRF(len(self.labels), self.constraint_mask)
-        return TaggerGreedyDecoder(len(self.labels), self.constraint_mask)
+            return CRF(len(self.labels), self.constraint_mask, name=name)
+        return TaggerGreedyDecoder(len(self.labels), self.constraint_mask, name=name)
 
     def transduce(self, inputs: Dict[str, TensorDef]) -> TensorDef:
         """This operation performs embedding of the input, followed by encoding and projection to logits
@@ -467,16 +479,16 @@ class RNNTaggerModel(AbstractEncoderTaggerModel):
         * *layers* (``int``) The number of layers to stack
         * *hsz* (``int``) The number of hidden units for each layer in the encoder
         * *variational* (``bool``) Variational dropout
-
+        * *encode_name* (``str``) A Keras layer name to provide to the encoder, default to Keras layer name
         :return: An encoder
         """
         self.vdrop = kwargs.get('variational', False)
         rnntype = kwargs.get('rnntype', 'blstm')
         nlayers = int(kwargs.get('layers', 1))
         hsz = int(kwargs['hsz'])
-
+        name = kwargs.get('encode_name')
         Encoder = BiLSTMEncoderSequence if rnntype == 'blstm' else LSTMEncoderSequence
-        return Encoder(None, hsz, nlayers, self.pdrop_value, self.vdrop)
+        return Encoder(None, hsz, nlayers, self.pdrop_value, self.vdrop, name=name)
 
     @property
     def vdrop(self):
