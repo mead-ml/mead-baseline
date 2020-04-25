@@ -530,8 +530,8 @@ class ClassifierTask(Task):
 
     def _reorganize_params(self):
         train_params = self.config_params['train']
-        train_params['batchsz'] = self.config_params['batchsz']
-        train_params['test_batchsz'] = self.config_params.get('test_batchsz', 1)
+        train_params['batchsz'] = train_params['batchsz'] if 'batchsz' in train_params else self.config_params['batchsz']
+        train_params['test_batchsz'] = train_params.get('test_batchsz', self.config_params.get('test_batchsz', 1))
         unif = self.config_params.get('unif', 0.1)
         model = self.config_params['model']
         model['unif'] = model.get('unif', unif)
@@ -612,7 +612,7 @@ class TaggerTask(Task):
 
     def _reorganize_params(self):
         train_params = self.config_params['train']
-        train_params['batchsz'] = train_params.get('batchsz', self.config_params.get('batchsz'))
+        train_params['batchsz'] = train_params['batchsz'] if 'batchsz' in train_params else self.config_params['batchsz']
         train_params['test_batchsz'] = train_params.get('test_batchsz', self.config_params.get('test_batchsz', 1))
         labels = self.reader.label2index
         span_type = self.config_params['train'].get('span_type')
@@ -776,9 +776,8 @@ class EncoderDecoderTask(Task):
 
     def _reorganize_params(self):
         train_params = self.config_params['train']
-        train_params['batchsz'] = train_params.get('batchsz', self.config_params.get('batchsz'))
-        train_params['test_batchsz'] = train_params.get('test_batchsz',
-                                                        self.config_params.get('test_batchsz', 1))
+        train_params['batchsz'] = train_params['batchsz'] if 'batchsz' in train_params else self.config_params['batchsz']
+        train_params['test_batchsz'] = train_params.get('test_batchsz', self.config_params.get('test_batchsz', 1))
 
         self.config_params['model']["unif"] = self.config_params["unif"]
         model = self.config_params['model']
@@ -896,7 +895,7 @@ class LanguageModelingTask(Task):
 
         train_params = self.config_params['train']
         train_params['batchsz'] = train_params['batchsz'] if 'batchsz' in train_params else self.config_params['batchsz']
-        train_params['test_batchsz'] = self.config_params.get('test_batchsz', 1)
+        train_params['test_batchsz'] = train_params.get('test_batchsz', self.config_params.get('test_batchsz', 1))
         model = self.config_params['model']
         unif = self.config_params.get('unif', 0.1)
         model['unif'] = model.get('unif', unif)
