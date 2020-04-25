@@ -21,6 +21,7 @@ from baseline.utils import (
     DataDownloader,
     show_examples,
     normalize_backend,
+    str2bool,
 )
 
 from mead.utils import (
@@ -68,9 +69,10 @@ class Backend(object):
     def load(self, task_name=None):
         if self.name == 'tf':
             prefer_eager = self.params.get('prefer_eager', False)
-            from eight_mile.tf.layers import set_tf_eager_mode, set_tf_log_level
+            from eight_mile.tf.layers import set_tf_eager_mode, set_tf_log_level, set_tf_eager_debug
             set_tf_eager_mode(prefer_eager)
             set_tf_log_level(os.getenv("MEAD_TF_LOG_LEVEL", "ERROR"))
+            set_tf_eager_debug(str2bool(os.getenv("MEAD_TF_EAGER_DEBUG", "FALSE")))
 
         base_pkg_name = 'baseline.{}'.format(self.name)
         # Backends may not be downloaded to the cache, they must exist locally
