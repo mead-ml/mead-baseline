@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import numpy as np
-from typing import Dict
+from typing import Dict, List
 from eight_mile.pytorch.layers import Dense, TransformerEncoderStack, TransformerEncoder, EmbeddingsStack
 from eight_mile.pytorch.embeddings import LookupTableEmbeddings, LearnedPositionalLookupTableEmbeddingsWithBias
 
@@ -9,28 +9,28 @@ from eight_mile.pytorch.embeddings import LookupTableEmbeddings, LearnedPosition
 # With a simple name change
 BERT_HF_LAYER_MAP = {
     ## FFN weights
-    'bert.encoder.layer.{}.intermediate.dense.weight': 'transformer.encoders.{}.ffn.0.layer.weight',
-    'bert.encoder.layer.{}.intermediate.dense.bias': 'transformer.encoders.{}.ffn.0.layer.bias',
-    'bert.encoder.layer.{}.output.dense.weight': 'transformer.encoders.{}.ffn.3.layer.weight',
-    'bert.encoder.layer.{}.output.dense.bias': 'transformer.encoders.{}.ffn.3.layer.bias',
+    'bert.encoder.layer.{}.intermediate.dense.weight': 'generator.encoders.{}.ffn.0.layer.weight',
+    'bert.encoder.layer.{}.intermediate.dense.bias': 'generator.encoders.{}.ffn.0.layer.bias',
+    'bert.encoder.layer.{}.output.dense.weight': 'generator.encoders.{}.ffn.3.layer.weight',
+    'bert.encoder.layer.{}.output.dense.bias': 'generator.encoders.{}.ffn.3.layer.bias',
 
     ## MHA weights
-    'bert.encoder.layer.{}.attention.self.key.weight': 'transformer.encoders.{}.self_attn.w_K.layer.weight',
-    'bert.encoder.layer.{}.attention.self.key.bias': 'transformer.encoders.{}.self_attn.w_K.layer.bias',
-    'bert.encoder.layer.{}.attention.self.query.weight': 'transformer.encoders.{}.self_attn.w_Q.layer.weight',
-    'bert.encoder.layer.{}.attention.self.query.bias': 'transformer.encoders.{}.self_attn.w_Q.layer.bias',
-    'bert.encoder.layer.{}.attention.self.value.weight': 'transformer.encoders.{}.self_attn.w_V.layer.weight',
-    'bert.encoder.layer.{}.attention.self.value.bias': 'transformer.encoders.{}.self_attn.w_V.layer.bias',
-    'bert.encoder.layer.{}.attention.output.dense.weight': 'transformer.encoders.{}.self_attn.w_O.layer.weight',
-    'bert.encoder.layer.{}.attention.output.dense.bias': 'transformer.encoders.{}.self_attn.w_O.layer.bias',
+    'bert.encoder.layer.{}.attention.self.key.weight': 'generator.encoders.{}.self_attn.w_K.layer.weight',
+    'bert.encoder.layer.{}.attention.self.key.bias': 'generator.encoders.{}.self_attn.w_K.layer.bias',
+    'bert.encoder.layer.{}.attention.self.query.weight': 'generator.encoders.{}.self_attn.w_Q.layer.weight',
+    'bert.encoder.layer.{}.attention.self.query.bias': 'generator.encoders.{}.self_attn.w_Q.layer.bias',
+    'bert.encoder.layer.{}.attention.self.value.weight': 'generator.encoders.{}.self_attn.w_V.layer.weight',
+    'bert.encoder.layer.{}.attention.self.value.bias': 'generator.encoders.{}.self_attn.w_V.layer.bias',
+    'bert.encoder.layer.{}.attention.output.dense.weight': 'generator.encoders.{}.self_attn.w_O.layer.weight',
+    'bert.encoder.layer.{}.attention.output.dense.bias': 'generator.encoders.{}.self_attn.w_O.layer.bias',
 
     ## LN weights
     # The names in of layer norm our transformers are a bit unspecific
     # think of ln1 as ln_x and ln2 as ln_attn_output
-    'bert.encoder.layer.{}.output.LayerNorm.beta': 'transformer.encoders.{}.ln1.bias',
-    'bert.encoder.layer.{}.output.LayerNorm.gamma': 'transformer.encoders.{}.ln1.weight',
-    'bert.encoder.layer.{}.attention.output.LayerNorm.beta': 'transformer.encoders.{}.ln2.bias',
-    'bert.encoder.layer.{}.attention.output.LayerNorm.gamma': 'transformer.encoders.{}.ln2.weight'
+    'bert.encoder.layer.{}.output.LayerNorm.beta': 'generator.encoders.{}.ln1.bias',
+    'bert.encoder.layer.{}.output.LayerNorm.gamma': 'generator.encoders.{}.ln1.weight',
+    'bert.encoder.layer.{}.attention.output.LayerNorm.beta': 'generator.encoders.{}.ln2.bias',
+    'bert.encoder.layer.{}.attention.output.LayerNorm.gamma': 'generator.encoders.{}.ln2.weight'
 }
 
 BERT_HF_EMBED_MAP = {
@@ -211,31 +211,35 @@ def from_embed_array(pytorch_embed: nn.Module, d: Dict, name: str):
                                                                  requires_grad=True)
 
 
-def to_tlm_array(pytorch_tlm: nn.Module, embeddings_key: str = 'x', name: str = "TLM") -> Dict:
+def to_tlm_array(pytorch_tlm: nn.Module, embeddings_keys: List[str] = None, name: str = "TLM") -> Dict:
     """Convert a Transformer LM-type module to a set of weights in a Dict
 
     :param pytorch_tlm: A Transformer LM-type module
-    :param embeddings_key: A key to get the embeddings from (defaults to `x`)
+    :param embeddings_keys: A key to get the embeddings from, defaults to `None` in which case, gets all keys
     :param name: A name for this TLM
     :return: A Dict containing all the keys to restore from Embeddings and the TransformerEncoderStack
     """
     d = {}
-    d.update(to_encoder_stack_array(pytorch_tlm.transformer, name=f"{name}/TransformerEncoderStack"))
-    d.update(to_embed_array(pytorch_tlm.embeddings[embeddings_key], name=f"{name}/PositionalEmbeddings"))
+    transformer = pytorch_tlm.transformer if hasattr(pytorch_tlm, 'transformer') else pytorch_tlm.generator
+    d.update(to_encoder_stack_array(transformer, name=f"{name}/TransformerEncoderStack"))
+    keys_to_write = embeddings_keys if embeddings_keys else list(pytorch_tlm.embeddings.keys())
+
+    for embeddings_key in keys_to_write:
+        d.update(to_embed_array(pytorch_tlm.embeddings[embeddings_key], name=f"{name}/Embeddings/{embeddings_key}"))
     return d
 
 
-def save_tlm_npz(pytorch_tlm: nn.Module, npz: str, embeddings_key: str = 'x', name: str = "TLM", verbose: bool = False):
+def save_tlm_npz(pytorch_tlm: nn.Module, npz: str, embeddings_keys: List[str] = None, name: str = "TLM", verbose: bool = False):
     """Save a TLM to an NPZ file
 
     :param pytorch_tlm: A Transformer LM-type module
     :param npz: A file to save
-    :param embeddings_key: A key to get embeddings from (defaults to `x`)
+    :param embeddings_keys: A key to get embeddings from.  Defaults to `None`, in which case, all embeddings are written
     :param name: A name for this TLM
     :param verbose: whether output 
     :return: None
     """
-    d = to_tlm_array(pytorch_tlm, embeddings_key, name)
+    d = to_tlm_array(pytorch_tlm, embeddings_keys, name)
     if verbose:
         print(d.keys())
     np.savez(npz, **d)
@@ -272,7 +276,7 @@ def from_encoder_stack_array(
         from_encoder_array(enc_pyt, d, f"{name}/{i}")
 
 
-def from_tlm_array(pytorch_tlm: nn.Module, d: Dict, embeddings_key: str = 'x', name: str = "TLM"):
+def from_tlm_array(pytorch_tlm: nn.Module, d: Dict, embeddings_keys: List[str] = None, name: str = "TLM"):
     """Restore a TLM-like model (possibly a `nn.Module` for fine-tuning)
 
     We just populate the `TransformerEncoderStack` and the embeddings from weights, all other values remain
@@ -280,15 +284,18 @@ def from_tlm_array(pytorch_tlm: nn.Module, d: Dict, embeddings_key: str = 'x', n
 
     :param pytorch_tlm: A TLM-like model
     :param d: A Dict of weights to restore for each layer
-    :param embeddings_key: The name of the embeddings to restore, defaults to `x`
+    :param embeddings_keys: Name of embeddings to restore, defaults to `None`, in which case all embeddings are restored
     :param name: A name for this primitive
     :return:
     """
-    from_encoder_stack_array(pytorch_tlm.transformer, d, name=f"{name}/TransformerEncoderStack")
-    from_embed_array(pytorch_tlm.embeddings[embeddings_key], d, f"{name}/PositionalEmbeddings")
+    transformer = pytorch_tlm.transformer if hasattr(pytorch_tlm, 'transformer') else pytorch_tlm.generator
+    from_encoder_stack_array(transformer, d, name=f"{name}/TransformerEncoderStack")
+    key_to_restore = embeddings_keys if embeddings_keys else list(pytorch_tlm.embeddings.keys())
+    for embeddings_key in key_to_restore:
+        from_embed_array(pytorch_tlm.embeddings[embeddings_key], d, f"{name}/Embeddings/{embeddings_key}")
 
 
-def load_tlm_npz(pytorch_tlm: nn.Module, npz: str, embeddings_key: str = 'x', name: str = "TLM"):
+def load_tlm_npz(pytorch_tlm: nn.Module, npz: str, embeddings_keys: List[str] = None, name: str = "TLM"):
     """Restore a TLM-like model (possibly a `nn.Module` for fine-tuning
 
     We just populate the `TransformerEncoderStack` and the embeddings from weights, all other values remain
@@ -296,17 +303,52 @@ def load_tlm_npz(pytorch_tlm: nn.Module, npz: str, embeddings_key: str = 'x', na
 
     :param pytorch_tlm: A TLM-like model
     :param npz: A file to restore the weights from
-    :param embeddings_key: The name of the embeddings to restore, defaults to `x`
+    :param embeddings_key: Name of embeddings to restore, defaults to `None` in which case we restore all embeddings
     :param name: A name for this primitive
     :return:
     """
     d = np.load(npz)
-    from_tlm_array(pytorch_tlm, d, embeddings_key, name)
+    from_tlm_array(pytorch_tlm, d, embeddings_keys, name)
 
 
 def load_tlm_transformers_bin(pytorch_tlm: nn.Module, bin_file: str, replace_layers=BERT_HF_LAYER_MAP, replace_embeds=BERT_HF_EMBED_MAP):
+    """For BERT transformer from HuggingFace, we need a TLM with EmbeddingsStack with 2 features and LN reduce
+
+    The Transformer architecture used by BERT mirrors T2T (with layer norms coming after each transformer layer and
+    a layer norm immediately following a sum reduce of learned-positional embeddings, the word LUT embeddings and
+    a token-type embedding.  For many cases, the token-type embeddings is uninteresting, and should be simply set
+    to 0.  For some cases, setting the token-type is critical.  In MEAD, to support the token type we need a
+    `LookupTableEmbeddings`, and for the token itself, we need a `LearnedPositionalEmbedding` (which adds the two
+    features of the token LUT and the position LUT together.  MEAD composes multiple features with the
+    `EmbeddingsStack` primitive, and provides a reduction operator.  This is equivalent to BERT if we supply
+    the `EmbeddingsStack` with 2 features and the `sum-layer-norm` reduction.  To do this, 2 vectorizers must be supplied
+    to MEAD, one for the usual wordpiece tokenizers, and another tokenizer which has to produce the exact same number
+    of tokens but with a token type value.  For example, for sentence-based token type delimiting, we would want to
+    have a vectorizer that starts with 0, and every time it sees a `[SEP]` in the token itself, produces an incremented
+    value, e.g. 0.... 1..... 2....
+
+    For applications where the token-type is uninteresting, we can actually make a more efficient representation,
+    which we do by creating a single `LearnedPositionalLookupTableEmbeddingsWithBias` embedding object as the single
+    feature to the `EmbeddingsStack`.  This operation looks like a `LearnedPositionalLookupTableEmbeddings` object
+    but it has a learnable bias parameter which is initialized to LUT index 0 of the BERT pretrained checkpoint.
+    Additionally, because this object's goal is to replace the compositional approach of having 2 features, it also has
+    a LayerNorm operator under the hood.  If you use this object, under normal circumstances, you do not need to bother
+    providing `EmbeddingsStack` with any reduction as there is only 1 embedding.
+
+    We want to support both types of models being passed in here by the user.  The way we do this, is to check the
+    number of features in the `EmbeddingsStack`.  If its just 1, we can just monkey-patch the object as though it was
+    the 2-feature equivalent, and after its loaded, restore the single feature so that when it goes back to the user
+    they have what the put in originally
+
+    :param pytorch_tlm: A Transformer LM
+    :param bin_file: A HuggingFace PyTorch BERT checkpoint
+    :param replace_layers: The mapping from HuggingFace Transformer keys to MEAD Transformer keys
+    :param replace_embeds: The mapping from HuggingFace Embeddings key to MEAD Embeddings Keys
+    :return:
+    """
     d = torch.load(bin_file)
-    num_layers = len(pytorch_tlm.transformer.encoders)
+    transformer = pytorch_tlm.transformer if hasattr(pytorch_tlm, 'transformer') else pytorch_tlm.generator
+    num_layers = len(transformer.encoders)
     mapped_keys = convert_transformers_keys(num_layers, d, replace_layers, replace_embeds)
     old_embeddings_stack = None
     k_0 = pytorch_tlm.embeddings.keys()[0]
@@ -316,11 +358,12 @@ def load_tlm_transformers_bin(pytorch_tlm: nn.Module, bin_file: str, replace_lay
     #   the usual LP embeddings with an added bias term set to weight 0
     # Option 2: the user does care about token types and has provided a token type feature (presumed to be in the
     #   second key of the embeddings stack
+
     if isinstance(pytorch_tlm.embeddings[k_0], LearnedPositionalLookupTableEmbeddingsWithBias):
         old_embeddings_stack = pytorch_tlm.embeddings
         # we need to temporarily monkey patch the embeddings to load them, and then we can reset them to what they were
-        d = {k_0: pytorch_tlm.embeddings[k_0], 'tt':  LookupTableEmbeddings(vsz=2, dsz=pytorch_tlm.transformer.output_dim)}
-        pytorch_tlm.embeddings = EmbeddingsStack(d)
+        d = {k_0: pytorch_tlm.embeddings[k_0], 'tt':  LookupTableEmbeddings(vsz=2, dsz=old_embeddings_stack.output_dim)}
+        pytorch_tlm.embeddings = EmbeddingsStack(d, reduction='sum-layer-norm')
     unknown_keys = pytorch_tlm.load_state_dict(mapped_keys, strict=False)
     if old_embeddings_stack:
         old_embeddings_stack[k_0].bias = nn.Parameter(pytorch_tlm.embeddings['tt'].embeddings.weight[0])

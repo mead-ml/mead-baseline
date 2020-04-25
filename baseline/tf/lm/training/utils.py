@@ -146,8 +146,7 @@ class LanguageModelTrainerTf(Trainer):
         epoch_loss = 0.0
         epoch_toks = 0
 
-        xfer_state = hasattr(self.model, 'initial_state')
-        if xfer_state:
+        if self.model.requires_state:
             state = self.model.sess.run(self.model.initial_state, self.model.make_input(ts[0], True))
 
         fetches = {
@@ -156,7 +155,7 @@ class LanguageModelTrainerTf(Trainer):
             "global_step": self.global_step
         }
 
-        if xfer_state:
+        if self.model.requires_state:
             fetches["final_state"] = self.model.final_state
 
         start = time.time()
@@ -169,7 +168,7 @@ class LanguageModelTrainerTf(Trainer):
                 feed_dict = self.model.make_input(batch_dict, True)
                 _, global_step, lossv = self.sess.run([self.train_op, self.global_step, self.loss], feed_dict=feed_dict)
 
-            if xfer_state:
+            if self.model.requires_state:
                 for i, (c, h) in enumerate(self.model.initial_state):
                     feed_dict[c] = state[i].c
                     feed_dict[h] = state[i].h
@@ -177,7 +176,7 @@ class LanguageModelTrainerTf(Trainer):
             vals = self.model.sess.run(fetches, feed_dict)
             loss = vals["loss"]
 
-            if xfer_state:
+            if self.model.requires_state:
                 state = vals["final_state"]
             global_step = vals["global_step"]
             toks = self._num_toks(batch_dict)
@@ -229,16 +228,15 @@ class LanguageModelTrainerTf(Trainer):
         if phase == 'Valid':
             self.valid_epochs += 1
             epochs = self.valid_epochs
-        xfer_state = hasattr(self.model, 'initial_state')
 
-        if xfer_state:
+        if self.model.requires_state:
             state = self.model.sess.run(self.model.initial_state, self.model.make_input(vs[0], False))
 
         fetches = {
             "loss": self.test_loss,
         }
 
-        if xfer_state:
+        if self.model.requires_state:
             fetches["final_state"] = self.model.final_state
 
         start = time.time()
@@ -247,7 +245,7 @@ class LanguageModelTrainerTf(Trainer):
             feed_dict = {}
             if not dataset:
                 feed_dict = self.model.make_input(batch_dict, False)
-            if xfer_state:
+            if self.model.requires_state:
                 for i, (c, h) in enumerate(self.model.initial_state):
                     feed_dict[c] = state[i].c
                     feed_dict[h] = state[i].h
@@ -255,7 +253,7 @@ class LanguageModelTrainerTf(Trainer):
             vals = self.model.sess.run(fetches, feed_dict)
             loss = vals["loss"]
             toks = self._num_toks(batch_dict)
-            if xfer_state:
+            if self.model.requires_state:
                 state = vals["final_state"]
             total_loss += loss * toks
             total_toks += toks

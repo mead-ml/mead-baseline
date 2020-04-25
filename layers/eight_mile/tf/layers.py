@@ -186,7 +186,6 @@ def get_activation(name: str = "relu"):
     return tf.nn.relu
 
 
-
 class WithoutLength(tf.keras.layers.Layer):
     """Wrapper layer to remove lengths from the input
     """
@@ -1734,6 +1733,14 @@ class SumReduction(Reduction):
         return tf.add_n(inputs)
 
 
+class SumLayerNormReduction(Reduction):
+
+    def __init__(self, output_dims: List[int], layer_norm_eps: float = 1.0e-12):
+        self.ln = tf.keras.layers.LayerNormalization(epsilon=layer_norm_eps)
+
+    def call(self, inputs: List[tf.Tensor]) -> tf.Tensor:
+        outputs = tf.add_n(inputs)
+        return self.ln(outputs)
 
 class EmbeddingsStack(tf.keras.layers.Layer):
     def __init__(
@@ -1761,14 +1768,22 @@ class EmbeddingsStack(tf.keras.layers.Layer):
         if isinstance(reduction, str):
             if reduction == 'sum':
                 self.reduction = SumReduction(output_dims)
+            elif reduction == 'sum-layer-norm':
+                self.reduction = SumLayerNormReduction(output_dims, layer_norm_eps=kwargs.get('layer_norm_eps', 1.0e-12))
             else:
                 self.reduction = ConcatReduction(output_dims)
         else:
             self.reduction = reduction
         self.dsz = self.reduction.output_dim
 
+    def keys(self):
+        return self.embeddings.keys()
+
     def items(self):
         return self.embeddings.items()
+
+    def __getitem__(self, item: str):
+        return self.embeddings[item]
 
     def call(self, inputs):
         """This method performs "embedding" of the inputs.  The base method here then concatenates along depth
@@ -1878,14 +1893,39 @@ class DenseStack(tf.keras.layers.Layer):
 class WithDropout(tf.keras.layers.Layer):
     """This is a utility wrapper that applies dropout after executing the layer it wraps
 
+    For variational dropout, we use `SpatialDropout1D` as described in:
+    https://github.com/keras-team/keras/issues/7290
     """
-    def __init__(self, layer: tf.keras.layers.Layer, pdrop: float = 0.5):
-        super(WithDropout, self).__init__()
+    def __init__(self, layer: tf.keras.layers.Layer, pdrop: float = 0.5, variational: bool = False):
+        super().__init__()
         self.layer = layer
-        self.dropout = tf.keras.layers.Dropout(pdrop)
+        self.dropout = tf.keras.layers.SpatialDropout1D(pdrop) if variational else tf.keras.layers.Dropout(pdrop)
 
     def call(self, inputs):
         return self.dropout(self.layer(inputs), TRAIN_FLAG())
+
+    @property
+    def output_dim(self) -> int:
+        return self.layer.output_dim
+
+
+class WithDropoutOnFirst(tf.keras.layers.Layer):
+    """Wrapper for any layer that surrounds it with dropout
+
+    This exists primarily for the LSTMEncoderWithState to allow dropout on the output while
+    passing back the hidden state
+
+    For variational dropout, we use `SpatialDropout1D` as described in:
+    https://github.com/keras-team/keras/issues/7290
+    """
+    def __init__(self, layer: tf.keras.layers.Layer, pdrop: float = 0.5, variational: bool = False):
+        super().__init__()
+        self.layer = layer
+        self.dropout = tf.keras.layers.SpatialDropout1D(pdrop) if variational else tf.keras.layers.Dropout(pdrop)
+
+    def call(self, inputs):
+        outputs = self.layer(inputs)
+        return self.dropout(outputs[0], TRAIN_FLAG()), outputs[1]
 
     @property
     def output_dim(self) -> int:
@@ -2568,7 +2608,7 @@ class FFN(tf.keras.layers.Layer):
         self.expansion = tf.keras.layers.Dense(d_ff)
         self.squeeze = tf.keras.layers.Dense(d_model)
         self.dropout = tf.keras.layers.Dropout(pdrop)
-        self.act = tf.keras.layers.Activation(activation)
+        self.act = get_activation(activation)
 
     def call(self, inputs):
         return self.squeeze(self.dropout(self.act(self.expansion(inputs))))

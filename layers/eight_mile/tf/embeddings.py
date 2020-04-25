@@ -418,7 +418,6 @@ class LearnedPositionalLookupTableEmbeddingsWithBias(LearnedPositionalMixin, Loo
 
 class PositionalCharConvEmbeddings(SinusoidalPositionalMixin, CharConvEmbeddings):
     def __init__(self, trainable=True, name=None, dtype=tf.float32, **kwargs):
-        trainable = kwargs.get("finetune", trainable)
         super().__init__(name=name, **kwargs)
         self.scale = math.sqrt(self.get_dsz())
         self.dropout = tf.keras.layers.Dropout(kwargs.get("dropout", 0.1))
@@ -432,7 +431,6 @@ class PositionalCharConvEmbeddings(SinusoidalPositionalMixin, CharConvEmbeddings
 
 class LearnedPositionalCharConvEmbeddings(LearnedPositionalMixin, CharConvEmbeddings):
     def __init__(self, trainable=True, name=None, dtype=tf.float32, **kwargs):
-        trainable = kwargs.get("finetune", trainable)
         super().__init__(name=name, **kwargs)
         self.dropout = tf.keras.layers.Dropout(kwargs.get("dropout", 0.1))
 
@@ -460,7 +458,7 @@ class PositionalCharLSTMEmbeddings(SinusoidalPositionalMixin, CharLSTMEmbeddings
 class LearnedPositionalCharLSTMEmbeddings(LearnedPositionalMixin, CharLSTMEmbeddings):
     def __init__(self, trainable=True, name=None, dtype=tf.float32, **kwargs):
         trainable = kwargs.get("finetune", trainable)
-        super().__init__(trainalbe=trainable, name=name, dtype=dtype, **kwargs)
+        super().__init__(trainable=trainable, name=name, dtype=dtype, **kwargs)
         self.dropout = tf.keras.layers.Dropout(kwargs.get("dropout", 0.1))
 
     def encode(self, x):

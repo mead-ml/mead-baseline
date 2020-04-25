@@ -12,8 +12,7 @@ from baseline.tf.lm.training.utils import to_tensors, SHUF_BUF_SZ, NUM_PREFETCH
 
 
 def loss_with_state(model, h, x, y):
-    xx = {**x, **{'h': h}}
-    logits, h_out = model(xx)
+    logits, h_out = model(x, h)
     vsz = model.embeddings[model.tgt_key].get_vsz()
     targets = tf.reshape(y, [-1])
     bt_x_v = tf.nn.log_softmax(tf.reshape(logits, [-1, vsz]), axis=-1)
@@ -33,6 +32,7 @@ def loss_without_state(model, x, y):
     example_loss = -tf.reduce_sum(one_hots * bt_x_v, axis=-1)
     loss = tf.reduce_mean(example_loss)
     return loss
+
 
 class LanguageModelTrainerEagerTf(Trainer):
     """A Trainer to use if not using tf Estimators
@@ -114,8 +114,8 @@ class LanguageModelTrainerEagerTf(Trainer):
 
             features, y = inputs
             loss, hidden = self.optimizer.update_with_hidden(self.model, hidden, features, y)
-            toks = tf.cast(self._num_toks(y), tf.float32)
-            report_loss = loss * toks
+            toks = self._num_toks(y)
+            report_loss = loss * tf.cast(toks, tf.float32)
             return hidden, report_loss, toks
 
         if get_version(tf) >= 2:
@@ -191,9 +191,9 @@ class LanguageModelTrainerEagerTf(Trainer):
             else:
                 loss_value = loss_without_state(self.model, features, y)
             loss_value = loss_value.numpy()
-            toks = tf.cast(self._num_toks(y), tf.float32).numpy()
-            total_loss += loss_value * toks
-            total_toks += toks
+            toks = self._num_toks(y)
+            total_loss += loss_value * tf.cast(toks, tf.float32).numpy()
+            total_toks += toks.numpy()
 
         metrics = self.calc_metrics(total_loss, total_toks)
         self.report(

@@ -14,7 +14,7 @@ logger = logging.getLogger('baseline')
 class LanguageModelTrainerPyTorch(Trainer):
 
     def __init__(self, model, **kwargs):
-        super(LanguageModelTrainerPyTorch, self).__init__()
+        super().__init__()
         if type(model) is dict:
             model = create_model_for('lm', **model)
         self.model = model
@@ -70,7 +70,7 @@ class LanguageModelTrainerPyTorch(Trainer):
         total_loss = 0
         total_toks = 0
         batchsz, nctx = self._get_dims(vs)
-        hidden = self._get_pytorch_model().init_hidden(batchsz)
+        hidden = self._get_pytorch_model().zero_state(batchsz)
 
         for batch_dict in vs:
             inputs = self._get_pytorch_model().make_input(batch_dict)
@@ -95,7 +95,7 @@ class LanguageModelTrainerPyTorch(Trainer):
         epoch_loss = 0
         epoch_toks = 0
         batchsz, nctx = self._get_dims(ts)
-        hidden = self._get_pytorch_model().init_hidden(batchsz)
+        hidden = self._get_pytorch_model().zero_state(batchsz)
 
         for batch_dict in ts:
             if hidden is not None:

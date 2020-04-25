@@ -1549,6 +1549,18 @@ class SumReduction(Reduction):
         return sum(inputs)
 
 
+class SumLayerNormReduction(Reduction):
+
+    def __init__(self, output_dims: List[int], layer_norm_eps: float = 1.0e-12):
+        super().__init__()
+        self.output_dim = output_dims[0]
+        self.ln = nn.LayerNorm(self.output_dim, eps=layer_norm_eps)
+
+    def forward(self, inputs: List[torch.Tensor]) -> torch.Tensor:
+        output = sum(inputs)
+        return self.ln(output)
+
+
 class EmbeddingsStack(nn.Module):
     def __init__(
         self,
@@ -1579,6 +1591,8 @@ class EmbeddingsStack(nn.Module):
         if isinstance(reduction, str):
             if reduction == 'sum':
                 self.reduction = SumReduction(output_dims)
+            elif reduction == 'sum-layer-norm':
+                self.reduction = SumLayerNormReduction(output_dims, layer_norm_eps=kwargs.get('layer_norm_eps', 1.0e-12))
             else:
                 self.reduction = ConcatReduction(output_dims)
         else:
@@ -1873,7 +1887,7 @@ class WithoutLength(nn.Module):
 class WithDropout(nn.Module):
     """Wrapper for any layer that surrounds it with dropout"""
 
-    def __init__(self, layer: nn.Module, pdrop: float = 0.5):
+    def __init__(self, layer: nn.Module, pdrop: float = 0.5, variational=False):
         """Create a dropout wrapper around the given layer
 
         :param layer: Some sort of layer
@@ -1881,7 +1895,7 @@ class WithDropout(nn.Module):
         """
         super().__init__()
         self.layer = layer
-        self.dropout = nn.Dropout(pdrop)
+        self.dropout = VariationalDropout(pdrop) if variational else nn.Dropout(pdrop)
         self.output_dim = self.layer.output_dim if hasattr(self.layer, "output_dim") else 0
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
@@ -1891,6 +1905,34 @@ class WithDropout(nn.Module):
         :return: output transformed by the held layer and subsequent dropout
         """
         return self.dropout(self.layer(inputs))
+
+
+class WithDropoutOnFirst(nn.Module):
+    """Wrapper for any layer that surrounds it with dropout
+
+    This exists primarily for the LSTMEncoderWithState to allow dropout on the output while
+    passing back the hidden state
+    """
+
+    def __init__(self, layer: nn.Module, pdrop: float = 0.5, variational=False):
+        """Create a dropout wrapper around the given layer
+
+        :param layer: Some sort of layer
+        :param pdrop: A dropout value
+        """
+        super().__init__()
+        self.layer = layer
+        self.dropout = VariationalDropout(pdrop) if variational else nn.Dropout(pdrop)
+        self.output_dim = self.layer.output_dim if hasattr(self.layer, "output_dim") else 0
+
+    def forward(self, inputs: Tuple[torch.Tensor]) -> torch.Tensor:
+        """Apply the layer followed by dropout
+
+        :param inputs: input tensor
+        :return: output transformed by the held layer and subsequent dropout
+        """
+        outputs = self.layer(inputs)
+        return self.dropout(outputs[0]), outputs[1]
 
 
 def transition_mask(vocab, span_type, s_idx, e_idx, pad_idx=None):
