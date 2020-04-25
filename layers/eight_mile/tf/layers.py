@@ -1791,6 +1791,9 @@ class EmbeddingsStack(tf.keras.layers.Layer):
     #        total_dsz += embeddings.get_dsz()
     #    return total_dsz
 
+    def keys(self):
+        return self.embeddings.keys()
+
     @property
     def requires_length(self) -> bool:
         return self._requires_length
