@@ -3,7 +3,6 @@ import tensorflow as tf
 if not tf.executing_eagerly():
 
     from baseline.tf.seq2seq.training.datasets import *
-    from baseline.tf.seq2seq.training.estimators import *
     from baseline.tf.seq2seq.training.feed import *
 else:
     from baseline.tf.seq2seq.training.eager import *

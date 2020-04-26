@@ -34,13 +34,9 @@ def loss_without_state(model, x, y):
     loss = tf.reduce_mean(example_loss)
     return loss
 
+
 class LanguageModelTrainerDistributedTf(Trainer):
-    """A Trainer to use if not using tf Estimators
-
-    The trainer can run in 2 modes: `dataset` and `feed_dict`.  When the former, the graph is assumed to
-    be connected by features attached to the input so the `feed_dict` will only be used to pass dropout information.
-
-    When the latter, we will use the baseline DataFeed to read the object into the `feed_dict`
+    """A Trainer for LM distributed eager training
     """
     def __init__(self, model_params, **kwargs):
         super().__init__()

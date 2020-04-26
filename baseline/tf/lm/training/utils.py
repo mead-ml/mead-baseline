@@ -80,7 +80,7 @@ def to_tensors(ts):
 
 @register_trainer(task='lm', name='default')
 class LanguageModelTrainerTf(Trainer):
-    """A Trainer to use if not using tf Estimators
+    """A Trainer to use if not using eager mode
 
     The trainer can run in 2 modes: `dataset` and `feed_dict`.  When the former, the graph is assumed to
     be connected by features attached to the input so the `feed_dict` will only be used to pass dropout information.
