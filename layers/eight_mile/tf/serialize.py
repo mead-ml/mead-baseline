@@ -1,5 +1,5 @@
 import numpy as np
-from typing import Dict
+from typing import Dict, List
 from eight_mile.tf.layers import TransformerEncoderStack, TransformerEncoder, MultiHeadedAttention, FFN
 import tensorflow as tf
 
@@ -90,7 +90,7 @@ def from_encoder_stack_array(tf_encoder_stack: TransformerEncoderStack, d: Dict,
         from_encoder_array(enc_tf, d, f"{name}/{i}")
 
 
-def from_tlm_array(tf_tlm: tf.keras.layers.Layer, d: Dict, embeddings_key: str = 'x', name: str = "TLM"):
+def from_tlm_array(tf_tlm: tf.keras.layers.Layer, d: Dict, embeddings_keys: List[str] = None, name: str = "TLM"):
     """Restore a TLM-like model (possibly a `Model` for fine-tuning)
 
     We just populate the `TransformerEncoderStack` and the embeddings from weights, all other values remain
@@ -98,12 +98,16 @@ def from_tlm_array(tf_tlm: tf.keras.layers.Layer, d: Dict, embeddings_key: str =
 
     :param tf_tlm: A TLM-like model
     :param d: A Dict of weights to restore for each layer
-    :param embeddings_key: The name of the embeddings to restore, defaults to `x`
+    :param embeddings_keys: Name of the embeddings to restore, defaults to `None` in which case restore all embeddings
     :param name: A name for this primitive
     :return:
     """
-    from_encoder_stack_array(tf_tlm.transformer, d, name=f"{name}/TransformerEncoderStack")
-    from_embed_array(tf_tlm.embeddings.embeddings[embeddings_key], d, name=f"{name}/PositionalEmbeddings")
+    transformer = tf_tlm.transformer if hasattr(tf_tlm, 'transformer') else tf_tlm.generator
+    from_encoder_stack_array(transformer, d, name=f"{name}/TransformerEncoderStack")
+
+    keys_to_restore = embeddings_keys if embeddings_keys else list(tf_tlm.embeddings.keys())
+    for embeddings_key in keys_to_restore:
+        from_embed_array(tf_tlm.embeddings[embeddings_key], d, name=f"{name}/Embeddings/{embeddings_key}")
 
 
 def load_tlm_npz(tf_tlm: tf.keras.layers.Layer, npz: str, embeddings_key: str = 'x', name: str = "TLM"):

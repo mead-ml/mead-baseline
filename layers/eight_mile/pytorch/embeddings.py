@@ -42,6 +42,8 @@ class LookupTableEmbeddings(PyTorchEmbeddings):
         self.vsz = kwargs.get("vsz")
         self.dsz = kwargs.get("dsz")
         self.finetune = kwargs.get("finetune", True)
+        self.dropin = kwargs.get("dropin", 0.0)
+
         weights = kwargs.get("weights")
         if weights is None:
             self.embeddings = nn.Embedding(self.vsz, self.dsz, padding_idx=Offsets.PAD)
@@ -57,7 +59,16 @@ class LookupTableEmbeddings(PyTorchEmbeddings):
         return self.dsz
 
     def forward(self, x):
-        return self.embeddings(x)
+        if not self.dropin:
+            return self.embeddings(x)
+
+        mask = self.embeddings.weight.data.new().resize_((self.embeddings.weight.size(0),
+                                                          1)).bernoulli_(1 - self.dropin).expand_as(self.embeddings.weight) / (1 - self.dropin)
+        masked_embed_weight = mask * self.embeddings.weight
+        output = torch.nn.functional.embedding(x, masked_embed_weight,
+                                               self.embeddings.padding_idx, self.embeddings.max_norm, self.embeddings.norm_type,
+                                               self.embeddings.scale_grad_by_freq, self.embeddings.sparse)
+        return output
 
     def extra_repr(self):
         return f"finetune=False" if not self.finetune else ""
@@ -250,16 +261,18 @@ class LearnedPositionalMixin(PositionalMixin):
             torch.arange(length, dtype=torch.long, device=self.pos_embeddings.weight.device)
         ).unsqueeze(0)
 
+
 class BERTLookupTableEmbeddings(LookupTableEmbeddings):
     """
     BERT style embeddings with a 0 token type
 
     TODO: Get rid of this, we dont need it anymore
-    If you want to use BERT with token types, make a LearnedPositionalLookupTableEmbeddings feature
-    and a LookupTableEmbeddings feature (for the token type)
-    and put them in an EmbedStack with an embeddings_reduction='sum' on the model
-    And if you dont want that, use the LearnedPositionalLookupTableEmbeddingsWithBias, which
-    will add the BERT token_type=0 weights into the pos + word_embed and is more efficient
+    If you want to use BERT with token types, make a `LearnedPositionalLookupTableEmbeddings` feature
+    and a `LookupTableEmbeddings` feature (for the token type)
+    and put them in an `EmbeddingsStack` with an embeddings_reduction='sum-layer-norm' on the model
+
+    Otherwise, if you do not plan on setting the token type, use the `LearnedPositionalLookupTableEmbeddingsWithBias`,
+    which will add the BERT token_type=0 weights into the pos + word_embed and is more efficient
     than this class, since it doesnt do any memory allocation on the fly
     """
     def __init__(self, **kwargs):
@@ -289,7 +302,15 @@ class LearnedPositionalLookupTableEmbeddingsWithBias(LookupTableEmbeddings):
 
     This is just a typical learned positional embedding but with a learnable
     bias and a layer norm.  This is equivalent to BERT embeddings when the
-    token_type is not set
+    token_type is not set.
+
+    If you are using BERT but you have no interest in using token type embeddings
+    (IOW if you are setting all the values of that feature zero anyhow), using this
+    object is faster and simpler than having a separate vectorizer for token type.
+
+    If you have a need for token type embeddings, you will want to create 2 sets of embeddings,
+    one that acts on the tokens, of type `LearnedPositionalLookupTableEmbeddings` and one of the type
+    `LookupTableEmbeddings` for the token type feature
 
     """
     def __init__(self, **kwargs):

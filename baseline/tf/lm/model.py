@@ -50,7 +50,7 @@ class LanguageModelBase(tf.keras.Model, LanguageModel):
         for key, embedding in self.embeddings.items():
             embedding.save_md(basename + '-{}-md.json'.format(key))
 
-    def _record_state(self, **kwargs):
+    def _record_state(self, embeddings, **kwargs):
         """
         First, write out the embedding names, so we can recover those.  Then do a deepcopy on the model init params
         so that it can be recreated later.  Anything that is a placeholder directly on this model needs to be removed
@@ -59,10 +59,10 @@ class LanguageModelBase(tf.keras.Model, LanguageModel):
         :return:
         """
         embeddings_info = {}
-        for k, v in self.embeddings.items():
+        for k, v in embeddings.items():
             embeddings_info[k] = v.__class__.__name__
 
-        blacklist = set(chain(self._unserializable, MAGIC_VARS, self.embeddings.keys()))
+        blacklist = set(chain(self._unserializable, MAGIC_VARS, embeddings.keys()))
         self._state = {k: v for k, v in kwargs.items() if k not in blacklist}
         self._state.update({
             'version': __version__,
@@ -78,15 +78,6 @@ class LanguageModelBase(tf.keras.Model, LanguageModel):
         :return: None
         """
         self.saver = saver
-
-    def decode(self, inputs, **kwargs):
-        """Base method for decoding
-
-        :param inputs: The outputs of the embeddings
-        :param kwargs:
-        :return:
-        """
-        pass
 
     def save(self, basename):
         """Save the model
@@ -157,20 +148,9 @@ class LanguageModelBase(tf.keras.Model, LanguageModel):
         if not tf.executing_eagerly():
             step_softmax = self.sess.run(self.probs, batch_dict)
         else:
-            step_softmax = tf.nn.softmax(self.impl(batch_dict))
+            step_softmax = tf.nn.softmax(self(batch_dict))
 
         return step_softmax
-
-    def call(self, *args, **kwargs):
-        return self.impl(*args, **kwargs)
-
-    @property
-    def trainable_variables(self):
-        return self.impl.trainable_variables
-
-    @property
-    def variables(self):
-        return self.impl.variables
 
     @classmethod
     def create(cls, embeddings, **kwargs):
@@ -192,48 +172,54 @@ class LanguageModelBase(tf.keras.Model, LanguageModel):
         :return: The created model
         """
         lm = cls()
-        lm.embeddings = {k: embedding.detached_ref() for k, embedding in embeddings.items()}
-        lm.src_keys = kwargs.get('src_keys', lm.embeddings.keys())
+        #lm.embeddings = {k: embedding.detached_ref() for k, embedding in embeddings.items()}
+        lm.src_keys = kwargs.get('src_keys', embeddings.keys())
         lm.tgt_key = kwargs.get('tgt_key')
         if lm.tgt_key is None:
             raise Exception('Need a `tgt_key` to know which source vocabulary should be used for destination')
 
         lm._unserializable.append(lm.tgt_key)
-        lm._record_state(**kwargs)
+        lm._record_state(embeddings, **kwargs)
         inputs = {}
-        lm.batchsz = 0
+        #lm.batchsz = 0
 
         if not tf.executing_eagerly():
 
             for k, embedding in embeddings.items():
                 x = kwargs.get(k, embedding.create_placeholder(name=k))
-                lm.batchsz = tf.shape(x)[0]
                 inputs[k] = x
 
             lm.y = kwargs.get('y', tf.compat.v1.placeholder(tf.int32, [None, None], name="y"))
             lm.sess = kwargs.get('sess', tf.compat.v1.Session())
-        lm.pdrop_value = kwargs.pop('pdrop', 0.5)
-        lm.hsz = kwargs.pop('hsz', None)
-        embeddings_layer = lm.embed(**kwargs)
-        nc = embeddings[lm.tgt_key].get_vsz()
-        encoder_layer = lm.decode(inputs, **kwargs)
-        lm.impl = LangSequenceModel(nc, embeddings_layer, encoder_layer)
+        lm.create_layers(embeddings, **kwargs)
+        #nc = embeddings[lm.tgt_key].get_vsz()
 
         if not tf.executing_eagerly():
-            lm.logits, lm.final_state = lm(inputs)
+            if lm.requires_state:
+                lm.zero_state(inputs)
+                lm.logits, lm.final_state = lm(inputs, lm.initial_state)
+            else:
+                lm.logits, _ = lm(inputs, None)
             lm.probs = tf.nn.softmax(lm.logits, name="softmax")
 
         return lm
 
-    def embed(self, **kwargs):
-        """This method performs "embedding" of the inputs.  The base method here then concatenates along depth
-        dimension to form word embeddings
+    def call(self, inputs: Dict[str, TensorDef], hidden: TensorDef) -> Tuple[TensorDef, TensorDef]:
+        """Take the input and produce the best path of labels out
 
-        :return: A 3-d vector where the last dimension is the concatenated dimensions of all embeddings
+        :param inputs: The feature indices for the input
+        :return: The most likely path through the output labels
         """
-        src_embeddings = {k: self.embeddings[k] for k in self.src_keys}
-        embed_output = EmbeddingsStack(src_embeddings, self.pdrop_value)
-        return embed_output
+
+    def create_layers(self, embeddings, **kwargs):
+        """This method defines the model itself, and must be overloaded by derived classes
+
+        This function will update `self` with the layers required to execute the `call()` method
+
+        :param embeddings: The input feature indices
+        :param kwargs:
+        :return:
+        """
 
     @classmethod
     def load(cls, basename, **kwargs):
@@ -294,38 +280,70 @@ class LanguageModelBase(tf.keras.Model, LanguageModel):
 
     @property
     def requires_state(self):
-        return hasattr(self.impl, 'requires_state') and self.impl.requires_state
+        pass
 
-    def output(self, hidden, vsz, **kwargs):
-        """Project to the output space
 
-        :param hidden: (`tensor`) upstream layer
-        :param vsz: (`int`) The vocab size
-        :param kwargs: See below
+class AbstractGeneratorModel(LanguageModelBase):
 
-        :Keyword Arguments:
-        * *tie_weights* -- If weight tying is on, we are saying we want to use the (transposed) weights
-                     declared for tgt embeddings.  Note that this nomenclature mostly makes sense if we are using
-                     the tgt embeddings also as source embeddings.
-                     If we are not, then having a `self.embeddings[self.tgt_key]` doesnt even make sense
+    def create_layers(self, embeddings, **kwargs):
+        self.embeddings = self.init_embed(embeddings, **kwargs)
+        self.embeddings_proj = self.init_embeddings_proj(**kwargs)
+        self.generator = self.init_generate(**kwargs)
+        self.output_layer = self.init_output(**kwargs)
 
-        :return: Output
+    def call(self, inputs: Dict[str, TensorDef], hidden: TensorDef) -> Tuple[TensorDef, TensorDef]:
+        emb = self.embed(inputs)
+        output, hidden = self.generate(emb, hidden)
+        return self.output_layer(output), hidden
+
+    def embed(self, input):
+        embedded_dropout = self.embeddings(input)
+        return self.embeddings_proj(embedded_dropout)
+
+    def init_embed(self, embeddings: Dict[str, TensorDef], **kwargs) -> BaseLayer:
+        """This method creates the "embedding" layer of the inputs, with an optional reduction
+
+        :param embeddings: A dictionary of embeddings
+
+        :Keyword Arguments: See below
+        * *embeddings_reduction* (defaults to `concat`) An operator to perform on a stack of embeddings
+        * *embeddings_dropout = float(kwargs.get('embeddings_dropout', 0.0))
+
+        :return: The output of the embedding stack followed by its reduction.  This will typically be an output
+          with an additional dimension which is the hidden representation of the input
         """
-        # Do weight sharing if we can
-        do_weight_tying = bool(kwargs.get('tie_weights', False))
-        vocab_b = tf.get_variable("vocab_b", [vsz],  initializer=tf.zeros_initializer(), dtype=tf.float32)
-        if do_weight_tying and self.hsz == self.embeddings[self.tgt_key].get_dsz():
-            with tf.variable_scope(self.embeddings[self.tgt_key].scope, reuse=True):
-                W = tf.get_variable("W")
-            return tf.matmul(hidden, W, transpose_b=True, name="logits") + vocab_b
+        reduction = kwargs.get('embeddings_reduction', 'concat')
+        embeddings_dropout = float(kwargs.get('embeddings_dropout', 0.0))
+        return EmbeddingsStack(embeddings, embeddings_dropout, reduction=reduction)
+
+    def init_embeddings_proj(self, **kwargs):
+        input_sz = self.embeddings.output_dim
+        hsz = kwargs.get('hsz', kwargs.get('d_model'))
+        if hsz != input_sz:
+            proj = tf.keras.layers.Dense(hsz)
+            print('Applying a transform from {} to {}'.format(input_sz, hsz))
         else:
-            vocab_w = tf.get_variable(
-                "vocab_w", [self.hsz, vsz], dtype=tf.float32)
-            return tf.nn.xw_plus_b(hidden, vocab_w, vocab_b, name="logits")
+            proj = PassThru(hsz)
+        return proj
+
+    def init_generate(self, **kwargs):
+        pass
+
+    def generate(self, emb, hidden):
+        return self.generator((emb, hidden))
+
+    def init_output(self, **kwargs):
+        vsz = self.embeddings[self.tgt_key].get_vsz()
+        do_weight_tying = bool(kwargs.get('tie_weights', False))
+        if do_weight_tying:
+            output = WeightTieDense(self.embeddings[self.tgt_key])
+        else:
+            output = tf.keras.layers.Dense(vsz)
+        return output
 
 
 @register_model(task='lm', name='default')
-class RNNLanguageModel(LanguageModelBase):
+class RNNLanguageModel(AbstractGeneratorModel):
     """RNN-based Language Model built on base class
     """
     def __init__(self):
@@ -335,26 +353,32 @@ class RNNLanguageModel(LanguageModelBase):
         self.rnntype = 'lstm'
         self.initial_state = None
 
-    def decode(self, inputs, batchsz=1, rnntype='lstm', layers=1, **kwargs):
+    @property
+    def requires_state(self):
+        return True
+
+    def zero_state(self, inputs):
+        batchsz = get_shape_as_list(inputs[self.src_keys[0]])[0]
+        self.initial_state = self.generator.layer.zero_state(batchsz)
+
+    def init_generate(self, **kwargs):
         """LSTM-based method for decoding
 
         :param inputs: The outputs of the embeddings
-        :param batchsz: (`int`) The batch size
-        :param rnntype: (`str`) What type of RNN (defaults to `lstm`)
-        :param layers: (`int`) Defaults to 1
-        :param variational: (`bool`) Using variational dropout?
         :param kwargs: See above
 
         :return: The layer
         """
-        lstm_encoder_layer = LSTMEncoderWithState(None, self.hsz, layers, self.pdrop_value, **kwargs)
-        self.initial_state = lstm_encoder_layer.zero_state(self.batchsz)
-        inputs["h"] = self.initial_state
-        return lstm_encoder_layer
+        pdrop = float(kwargs.get('dropout', 0.5))
+        layers = kwargs.get('layers', kwargs.get('num_layers', 1))
+        self.hsz = kwargs.get('hsz', kwargs.get('d_model'))
+        return WithDropoutOnFirst(LSTMEncoderWithState(self.hsz, self.hsz, layers, pdrop, batch_first=True),
+                                  pdrop,
+                                  kwargs.get('variational', False))
 
 
 @register_model(task='lm', name='transformer')
-class TransformerLanguageModel(LanguageModelBase):
+class TransformerLanguageModel(AbstractGeneratorModel):
     """Transformer-based Language Model built on base class
     """
     def __init__(self):
@@ -362,20 +386,38 @@ class TransformerLanguageModel(LanguageModelBase):
         """
         super().__init__()
 
-    def decode(self, inputs, batchsz=1, num_heads=8, layers=1, **kwargs):
-        """LSTM-based method for decoding
+    @property
+    def requires_state(self):
+        return False
 
-        :param inputs: The outputs of the embeddings
-        :param batchsz: (`int`) The batch size
-        :param rnntype: (`str`) What type of RNN (defaults to `lstm`)
-        :param layers: (`int`) Defaults to 1
-        :param variational: (`bool`) Using variational dropout?
-        :param kwargs: See above
+    def init_generate(self, **kwargs):
+        pdrop = float(kwargs.get('dropout', 0.1))
+        layers = kwargs.get('layers', kwargs.get('num_layers', 1))
+        d_model = int(kwargs.get('d_model', kwargs.get('hsz')))
+        num_heads = kwargs.get('num_heads', 4)
+        d_ff = int(kwargs.get('d_ff', 4 * d_model))
+        rpr_k = kwargs.get('rpr_k')
+        d_k = kwargs.get('d_k')
+        scale = bool(kwargs.get('scale', True))
+        activation = kwargs.get('activation', 'gelu')
+        return TransformerEncoderStack(num_heads, d_model=d_model, pdrop=pdrop, scale=scale,
+                                       layers=layers, d_ff=d_ff, rpr_k=rpr_k, d_k=d_k,
+                                       activation=activation)
 
-        :return: The layer
-        """
+    def create_mask(self, bth):
+        max_seqlen = get_shape_as_list(bth)[1]
+        mask = subsequent_mask(max_seqlen)
+        return mask
 
-        encoder_layer = TransformerEncoderStackWithTimeMask(num_heads, self.hsz, self.pdrop_value, layers=layers, **kwargs)
-        return encoder_layer
+    def generate(self, bth, _):
+        mask = self.create_mask(bth)
+        return self.generator((bth, mask)), None
 
+
+@register_model(task='lm', name='transformer-mlm')
+class TransformerMaskedLanguageModel(TransformerLanguageModel):
+
+    def create_mask(self, bth):
+        nctx = get_shape_as_list(bth)[1]
+        return tf.fill([1, 1, nctx, nctx], 1.)
 

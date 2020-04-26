@@ -32,7 +32,7 @@ def _call_model(m, inputs):
     x = m.embeddings(inputs)
     max_seqlen = x.shape[1]
     mask = sequence_mask(lengths, max_seqlen).to(x.device).unsqueeze(1).unsqueeze(1)
-    return m.transformer((x, mask))
+    return m.generator((x, mask))
 
 
 def _round_trip(embed_type, rpr_k=None):

@@ -14,69 +14,6 @@ from baseline.pytorch.torchy import *
 from eight_mile.pytorch.serialize import load_tlm_npz
 import torch.nn as nn
 
-@register_vectorizer(name='tlm-wordpiece')
-class WordPieceVectorizer1D(AbstractVectorizer):
-    """Define a Baseline Vectorizer that can do WordPiece with BERT tokenizer
-
-    If you use tokens=subword, this vectorizer is used, and so then there is
-    a dependency on bert_pretrained_pytorch
-    """
-
-    def __init__(self, **kwargs):
-        """Loads a BertTokenizer using bert_pretrained_pytorch
-
-        :param kwargs:
-        """
-        super().__init__(kwargs.get('transform_fn'))
-        from pytorch_pretrained_bert import BertTokenizer
-        self.max_seen = 128
-        handle = kwargs.get('embed_file')
-        self.tokenizer = BertTokenizer.from_pretrained(handle, do_lower_case=False)
-        self.mxlen = kwargs.get('mxlen', -1)
-
-    def count(self, tokens):
-        seen = 0
-        counter = Counter()
-        for tok in self.iterable(tokens):
-            counter[tok] += 1
-            seen += 1
-        self.max_seen = max(self.max_seen, seen)
-        return counter
-
-    def iterable(self, tokens):
-        for tok in tokens:
-            if tok == '<unk>':
-                yield '[UNK]'
-            elif tok == '<EOS>':
-                yield '[SEP]'
-            else:
-                for subtok in self.tokenizer.tokenize(tok):
-                    yield subtok
-        yield '[CLS]'
-
-    def _next_element(self, tokens, vocab):
-        for atom in self.iterable(tokens):
-            value = vocab.get(atom)
-            if value is None:
-                value = vocab['[UNK]']
-            yield value
-
-    def run(self, tokens, vocab):
-        if self.mxlen < 0:
-            self.mxlen = self.max_seen
-        vec1d = np.zeros(self.mxlen, dtype=np.long)
-        for i, atom in enumerate(self._next_element(tokens, vocab)):
-            if i == self.mxlen:
-                i -= 1
-                vec1d[i] = vocab.get('[CLS]')
-                break
-            vec1d[i] = atom
-        valid_length = i + 1
-        return vec1d, valid_length
-
-    def get_dims(self):
-        return self.mxlen,
-
 
 class TransformerLMEmbeddings(PyTorchEmbeddings):
     """Support embeddings trained with the TransformerLanguageModel class
