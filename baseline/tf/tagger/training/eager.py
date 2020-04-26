@@ -108,12 +108,7 @@ class TaggerEvaluatorEagerTf:
 
 
 class TaggerTrainerEagerTf(EpochReportingTrainer):
-    """A Trainer to use if not using tf Estimators
-
-    The trainer can run in 2 modes: `dataset` and `feed_dict`.  When the former, the graph is assumed to
-    be connected by features attached to the input so the `feed_dict` will only be used to pass dropout information.
-
-    When the latter, we will use the baseline DataFeed to read the object into the `feed_dict`
+    """A Trainer to use for eager mode training
     """
     def __init__(self, model_params, **kwargs):
         """Create a Trainer, and give it the parameters needed to instantiate the model

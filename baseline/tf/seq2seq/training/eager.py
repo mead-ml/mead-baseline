@@ -34,7 +34,7 @@ def loss(model, features, labels):
 
 
 class Seq2SeqTrainerEagerTf(Trainer):
-    """A Trainer to use if not using tf Estimators
+    """Eager mode trainer for seq2sew
 
     The trainer can run in 2 modes: `dataset` and `feed_dict`.  When the former, the graph is assumed to
     be connected by features attached to the input so the `feed_dict` will only be used to pass dropout information.

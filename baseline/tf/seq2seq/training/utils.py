@@ -56,7 +56,7 @@ def to_tensors(ts, src_lengths_key):
 
 @register_trainer(task='seq2seq', name='default')
 class Seq2SeqTrainerTf(Trainer):
-    """A Trainer to use if not using tf Estimators
+    """A non-eager mode Trainer for seq2seq
 
     The trainer can run in 2 modes: `dataset` and `feed_dict`.  When the former, the graph is assumed to
     be connected by features attached to the input so the `feed_dict` will only be used to pass dropout information.

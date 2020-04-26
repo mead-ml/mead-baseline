@@ -3,7 +3,6 @@ import tensorflow as tf
 if not tf.executing_eagerly():
 
     from baseline.tf.classify.training.datasets import *
-    from baseline.tf.classify.training.estimators import *
     from baseline.tf.classify.training.feed import *
 else:
     from baseline.tf.classify.training.eager import *
