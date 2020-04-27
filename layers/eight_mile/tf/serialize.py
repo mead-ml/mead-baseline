@@ -85,7 +85,8 @@ def from_encoder_stack_array(tf_encoder_stack: TransformerEncoderStack, d: Dict,
     :param name: A name for this primitive
     :return: None
     """
-    from_weight_array(tf_encoder_stack.ln, d, f"{name}/ln")
+    if isinstance(tf_encoder_stack.ln, tf.keras.layers.LayerNormalization):
+        from_weight_array(tf_encoder_stack.ln, d, f"{name}/ln")
     for i, enc_tf in enumerate(tf_encoder_stack.encoders):
         from_encoder_array(enc_tf, d, f"{name}/{i}")
 
