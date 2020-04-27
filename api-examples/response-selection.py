@@ -76,8 +76,7 @@ parser.add_argument("--num_layers", type=int, default=6, help="Number of layers"
 parser.add_argument("--nctx", type=int, default=64, help="Max context length (for both encoder and decoder)")
 parser.add_argument("--embed_type", type=str, default='positional',
                     help="register label of the embeddings, so far support positional or learned-positional")
-parser.add_argument("--stacking_layers", type=int, nargs='+', default=[512, 512, 512])
-parser.add_argument("--att_layer", type=str2bool, default=True, help="whether use 2-head attention")
+parser.add_argument("--stacking_layers", type=int, nargs='+', default=[1024, 1024, 1024])
 parser.add_argument('--rpr_k', help='Relative attention positional sizes pass 0 if you dont want relative attention',
                     type=int, default=[3, 5, 48, 48, 48, 48], nargs='+')
 parser.add_argument("--ckpt", type=str, help="path to the model checkpoint")
@@ -115,8 +114,7 @@ model = create_model(args.model_type,
                      num_layers=args.num_layers,
                      stacking_layers=args.stacking_layers,
                      rpr_k=args.rpr_k,
-                     d_k=args.d_k,
-                     att_layer=args.att_layer)
+                     d_k=args.d_k)
 
 if os.path.isdir(args.ckpt):
     checkpoint = find_latest_checkpoint(args.ckpt)
@@ -170,5 +168,6 @@ for batch in test_loader:
 pg.done()
 acc = float(numerator)/denominator
 
+print(f"{args.recall_top}@{args.recall_k} acc: {acc}")
 with open('./results.txt', 'a') as wf:
     wf.write(f"Checkpoint: {checkpoint}; {args.recall_top}@{args.recall_k} accuracy: {acc}\n")

@@ -140,9 +140,10 @@ class DenseLNStack(nn.Module):
             self,
             insz: int,
             hsz: Union[int, List[int]],
-            activation: str = "relu",
+            activation: str = "gelu",
             pdrop_value: float = 0.5,
             init=None,
+            skip_connect=True,
             **kwargs,
     ):
         """Stack 1 or more hidden layers, optionally (forming an MLP)
@@ -152,17 +153,23 @@ class DenseLNStack(nn.Module):
         :param activation: The name of the activation function to use
         :param pdrop_value: The dropout probability
         :param init: The initializer
-
+        :param skip_connect: whether use an overall skip connection
         """
         super().__init__()
         hszs = listify(hsz)
         self.output_dim = hsz[-1]
         current = insz
         layer_stack = []
-        for hsz in hszs:
+        for hsz in hszs[:-1]:
             layer_stack.append(WithDropout(DenseLN(current, hsz, activation=activation), pdrop_value))
             current = hsz
         self.layer_stack = nn.Sequential(*layer_stack)
+        self.final = Dense(current, self.output_dim)
+        self.ln1 = nn.LayerNorm(insz, eps=1e-6)
+        self.ln2 = nn.LayerNorm(self.output_dim, eps=1e-6)
+        self.skip_connect = skip_connect
+        if self.skip_connect:
+            self.proj = Dense(insz, self.output_dim) if insz != self.output_dim else nn.Identity()
         self.requires_length = False
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
@@ -175,9 +182,72 @@ class DenseLNStack(nn.Module):
 
         :return: The final layer
         """
-        x = inputs
+        x = self.ln1(inputs)
         for layer in self.layer_stack:
             x = layer(x)
+        x = self.final(x)
+        if self.skip_connect:
+            x = x + self.proj(inputs)
+        return self.ln2(x)
+
+
+class SingleHeadReduction(nn.Module):
+    """
+    Implementation of the "self_attention_head" layer from the conveRT paper
+    """
+    def __init__(
+            self, d_model: int, dropout: float = 0.0, scale: bool = True, d_k: Optional[int] = None
+    ):
+        """
+        :param d_model: The model hidden size
+        :param dropout (``float``): The amount of dropout to use
+        :param scale: should we scale the dot product attention
+        :param d_k: The low-order project per head.  This is normally `d_model // num_heads` unless set explicitly
+        """
+        super().__init__()
+        self.d_model = d_model
+        if d_k is None:
+            self.d_k = d_model
+        else:
+            self.d_k = d_k
+        self.w_Q = Dense(d_model, self.d_k)
+        self.w_K = Dense(d_model, self.d_k)
+        if scale:
+            self.attn_fn = SeqScaledDotProductAttention(dropout)
+        else:
+            self.attn_fn = SeqDotProductAttention(dropout)
+        self.attn = None
+
+    def forward(self, qkvm: Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]) -> torch.Tensor:
+        """According to conveRT model's graph, they project token encodings to lower-dimensional query and key in single
+        head, use them to calculate the attention score matrix that has dim [B, T, T], then sum over the query dim to
+        get a tensor with [B, 1, T] (meaning the amount of attentions each token gets from all other tokens), scale it
+        by sqrt of sequence lengths, then use it as the weight to weighted sum the token encoding to get the sentence
+        encoding. we implement it in an equivalent way that can best make use of the eight_mile codes: do the matrix
+        multiply with value first, then sum over the query dimension.
+
+        :param query: a query for alignment. Can come from self in case of self-attn or decoder in case of E/D
+        :param key: a set of keys from encoder or self
+        :param value: a set of values from encoder or self
+        :param mask: masking (for destination) to prevent seeing what we shouldnt
+        :return: sentence-level encoding with dim [B, d_model]
+        """
+        query, key, value, mask = qkvm
+        batchsz = query.size(0)
+        seq_mask = mask.squeeze()  # [B, T]
+        seq_lengths = seq_mask.sum(dim=1)
+
+        # (B, H, T, D), still have num_heads = 1 to use the attention function defined in eight_miles
+        query = self.w_Q(query).view(batchsz, -1, 1, self.d_k).transpose(1, 2)
+        key = self.w_K(key).view(batchsz, -1, 1, self.d_k).transpose(1, 2)
+        value = value.view(batchsz, -1, 1, self.d_model).transpose(1, 2)
+        x = self.attn_fn((query, key, value, mask))  # [B, 1, T, D]
+        self.attn = self.attn_fn.attn
+
+        x = x.squeeze(1)  # [B, T, D]
+        x = x * seq_mask.unsqueeze(-1)
+        x = x.sum(dim=1)  # [B, D]
+        x = x * seq_lengths.float().sqrt().unsqueeze(-1)
         return x
 
 
@@ -195,17 +265,15 @@ class TwoHeadConcat(nn.Module):
         :return: concatenation of the two 1-head attention
         """
         super().__init__()
-        self.attention1 = MultiHeadedAttention(1, d_model, dropout, scale=scale, d_k=d_k)
-        self.attention2 = MultiHeadedAttention(1, d_model, dropout, scale=scale, d_k=d_k)
-        self.ln = nn.LayerNorm(2*d_model, eps=1.e-6)
+        self.reduction1 = SingleHeadReduction(d_model, dropout, scale=scale, d_k=d_k)
+        self.reduction2 = SingleHeadReduction(d_model, dropout, scale=scale, d_k=d_k)
 
     def forward(self, inputs: torch.Tensor):
         x = inputs
-        att1 = self.attention1(x)
-        # print(att1[0])
-        att2 = self.attention2(x)
-        x = torch.cat([att1, att2], dim=-1)
-        return self.ln(x)
+        encoding1 = self.reduction1(x)
+        encoding2 = self.reduction2(x)
+        x = torch.cat([encoding1, encoding2], dim=-1)
+        return x
 
 
 class PairedModel(nn.Module):
@@ -221,8 +289,7 @@ class PairedModel(nn.Module):
                  d_k=64,
                  weight_std=0.02,
                  rpr_k=None,
-                 ff_pdrop=0.2,
-                 att_layer=True):
+                 ff_pdrop=0.2):
         super().__init__()
         if stacking_layers is None:
             stacking_layers = [d_model] * 3
@@ -232,18 +299,11 @@ class PairedModel(nn.Module):
         transformer = TransformerEncoderStack(num_heads=num_heads, d_model=d_model,
                                               pdrop=dropout, layers=num_layers, activation='gelu', d_ff=d_ff,
                                               d_k=d_k, rpr_k=rpr_k)
-        if att_layer:
-            self.attention_layer = TwoHeadConcat(d_model, dropout, scale=False, d_k=d_k)
-            ff_input_size = 2*d_model
-        else:
-            self.attention_layer = None
-            ff_input_size = d_model
+        self.attention_layer = TwoHeadConcat(d_model, dropout, scale=True, d_k=d_k)
         self.transformer_layers = transformer
         self.embedding_layers = embeddings
-        self.ff1 = DenseLNStack(ff_input_size, stacking_layers, activation='gelu', pdrop_value=ff_pdrop)
-        self.ff2 = DenseLNStack(ff_input_size, stacking_layers, activation='gelu', pdrop_value=ff_pdrop)
-        self.output_layer1 = pytorch_linear(stacking_layers[-1], d_out)
-        self.output_layer2 = pytorch_linear(stacking_layers[-1], d_out)
+        self.ff1 = DenseLNStack(2*d_model, stacking_layers + [d_out], activation='gelu', pdrop_value=ff_pdrop)
+        self.ff2 = DenseLNStack(2*d_model, stacking_layers + [d_out], activation='gelu', pdrop_value=ff_pdrop)
         self.apply(self.init_layer_weights)
 
     def init_layer_weights(self, module):
@@ -254,30 +314,20 @@ class PairedModel(nn.Module):
 
     def encode_query(self, query):
         query_mask = (query != Offsets.PAD)
-        query_length = query_mask.sum(-1)
         att_mask = query_mask.unsqueeze(1).unsqueeze(1)
         embedded = self.embedding_layers(query)
         encoded_query = self.transformer_layers((embedded, att_mask))
-        if self.attention_layer:
-            encoded_query = self.attention_layer((encoded_query, encoded_query, encoded_query, att_mask))
-        encoded_query = encoded_query*query_mask.unsqueeze(-1)
-        encoded_query = encoded_query.sum(1) / query_length.float().sqrt().unsqueeze(1)
+        encoded_query = self.attention_layer((encoded_query, encoded_query, encoded_query, att_mask))
         encoded_query = self.ff1(encoded_query)
-        encoded_query = self.output_layer1(encoded_query)
         return encoded_query
 
     def encode_response(self, response):
         response_mask = (response != Offsets.PAD)
-        response_length = response_mask.sum(-1)
         att_mask = response_mask.unsqueeze(1).unsqueeze(1)
         embedded = self.embedding_layers(response)
         encoded_response = self.transformer_layers((embedded, att_mask))
-        if self.attention_layer:
-            encoded_response = self.attention_layer((encoded_response, encoded_response, encoded_response, att_mask))
-        encoded_response = encoded_response*response_mask.unsqueeze(-1)
-        encoded_response = encoded_response.sum(1) / response_length.float().sqrt().unsqueeze(1)
+        encoded_response = self.attention_layer((encoded_response, encoded_response, encoded_response, att_mask))
         encoded_response = self.ff2(encoded_response)
-        encoded_response = self.output_layer1(encoded_response)
         return encoded_response
 
     def forward(self, query, response):
