@@ -38,12 +38,12 @@ BERT_HF_EMBED_MAP = {
     'bert.embeddings.word_embeddings.weight': 'embeddings.embeddings.0.embeddings.weight',
     'bert.embeddings.position_embeddings.weight': 'embeddings.embeddings.0.pos_embeddings.weight',
     'bert.embeddings.token_type_embeddings.weight': 'embeddings.embeddings.1.embeddings.weight',
-    'bert.embeddings.LayerNorm.beta': 'embeddings.embeddings.0.ln.bias',
-    'bert.embeddings.LayerNorm.gamma': 'embeddings.embeddings.0.ln.weight',
+    'bert.embeddings.LayerNorm.beta': 'embeddings.reduction.ln.bias',
+    'bert.embeddings.LayerNorm.gamma': 'embeddings.reduction.ln.weight',
 }
 
 
-def convert_transformers_keys(num_layers: int, d: Dict, replace_layer_map: Dict, replace_embed_map: Dict) -> Dict:
+def convert_transformers_keys(num_layers: int, d: Dict, replace_layer_map: Dict = BERT_HF_LAYER_MAP, replace_embed_map: Dict = BERT_HF_EMBED_MAP) -> Dict:
     m = {}
     for i in range(num_layers):
         for k, v in replace_layer_map.items():
@@ -255,7 +255,8 @@ def to_encoder_stack_array(
     :return: A Dict containing a set of weights
     """
     d = {}
-    d.update(to_weight_array(pytorch_encoder_stack.ln, f"{name}/ln"))
+    if isinstance(pytorch_encoder_stack.ln, nn.LayerNorm):
+        d.update(to_weight_array(pytorch_encoder_stack.ln, f"{name}/ln"))
     for i, enc_pyt in enumerate(pytorch_encoder_stack.encoders):
         d.update(to_encoder_array(enc_pyt, f"{name}/{i}"))
     return d
@@ -271,7 +272,8 @@ def from_encoder_stack_array(
     :param name: A name for this primitive
     :return: None
     """
-    from_weight_array(pytorch_encoder_stack.ln, d, f"{name}/ln")
+    if isinstance(pytorch_encoder_stack.ln, nn.LayerNorm):
+        from_weight_array(pytorch_encoder_stack.ln, d, f"{name}/ln")
     for i, enc_pyt in enumerate(pytorch_encoder_stack.encoders):
         from_encoder_array(enc_pyt, d, f"{name}/{i}")
 
