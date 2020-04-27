@@ -14,47 +14,47 @@ from baseline.tf.embeddings import TensorFlowEmbeddingsModel
 class TransformerLMEmbeddings(TensorFlowEmbeddings):
     def __init__(self, name=None, **kwargs):
         super().__init__(name=name)
+
         self.vocab = read_json(kwargs.get('vocab_file'))
         self.cls_index = self.vocab['[CLS]']
-        self.vsz = len(self.vocab)
-        layers = int(kwargs.get('layers', 18))
-        num_heads = int(kwargs.get('num_heads', 10))
-        pdrop = kwargs.get('dropout', 0.1)
+        self.vsz = max(self.vocab.values()) + 1
         self.d_model = int(kwargs.get('dsz', kwargs.get('d_model', 410)))
-        d_ff = int(kwargs.get('d_ff', 2100))
-        d_k = kwargs.get('d_k')
-        embed_type = kwargs.get('word_embed_type', 'positional')
-        rpr_k = kwargs.get('rpr_k')
-        x_embedding = create_embeddings(vsz=self.vsz, dsz=self.d_model, embed_type=embed_type, name='word_embed')
-        self.dsz = self.init_embed({'x': x_embedding})
-        self.proj_to_dsz = tf.keras.layers.Dense(self.d_model) if self.dsz != self.d_model else _identity
-        self.transformer = TransformerEncoderStack(layers=layers, d_model=self.d_model, pdrop=pdrop,
-                                                   num_heads=num_heads, d_ff=d_ff, d_k=d_k, rpr_k=rpr_k)
-        self.mlm = kwargs.get('mlm', False)
+        self.init_embed(**kwargs)
+        self.proj_to_dsz = tf.keras.layers.Dense(self.dsz, self.d_model) if self.dsz != self.d_model else _identity
+
 
     def embed(self, input):
-        embedded = self.embeddings({'x': input})
-        embedded_dropout = self.embed_dropout(embedded)
-        if self.embeddings_proj:
-            embedded_dropout = self.embeddings_proj(embedded_dropout)
-        return embedded_dropout
+        return self.embeddings(input)
 
-    def init_embed(self, embeddings, **kwargs):
-        pdrop = float(kwargs.get('dropout', 0.1))
-        self.embed_dropout = tf.keras.layers.Dropout(pdrop)
-        self.embeddings = EmbeddingsStack(embeddings)
-        input_sz = 0
-        for k, embedding in embeddings.items():
-            input_sz += embedding.get_dsz()
+    def init_embed(self, **kwargs):
+        embed_type = kwargs.get('word_embed_type', 'positional')
+        x_embedding = create_embeddings(vsz=self.vsz, dsz=self.d_model, embed_type=embed_type)
 
-        projsz = kwargs.get('projsz')
-        if projsz:
-            self.embeddings_proj = tf.keras.layers.Dense(projsz)
-            print('Applying a transform from {} to {}'.format(input_sz, projsz))
-            return projsz
-        else:
-            self.embeddings_proj = None
-        return input_sz
+        embeddings = {'x': x_embedding}
+        # This is for BERT support when we are using 2 features
+        token_type_vsz = kwargs.get('token_type_vsz')
+        if token_type_vsz:
+            tt_embedding = LookupTableEmbeddings(vsz=token_type_vsz, dsz=self.dsz)
+            embeddings['tt'] = tt_embedding
+        # For bert, make sure this is `sum-layer-norm`
+        reduction = kwargs.get('reduction')
+        self.embeddings = EmbeddingsStack(embeddings, reduction=reduction)
+        return self.embeddings.output_dim
+
+    def init_transformer(self, **kwargs):
+        num_layers = int(kwargs.get('layers', 18))
+        num_heads = int(kwargs.get('num_heads', 10))
+        pdrop = kwargs.get('dropout', 0.1)
+        d_ff = int(kwargs.get('d_ff', 2100))
+        d_k = kwargs.get('d_k')
+        rpr_k = kwargs.get('rpr_k')
+        layer_norms_after = kwargs.get('layer_norms_after', False)
+        layer_norm_eps = kwargs.get('layer_norm_eps', 1e-12)
+        self.transformer = TransformerEncoderStack(num_heads, d_model=self.d_model, pdrop=pdrop, scale=True,
+                                                   layers=num_layers, d_ff=d_ff, rpr_k=rpr_k, d_k=d_k,
+                                                   layer_norms_after=layer_norms_after, layer_norm_eps=layer_norm_eps)
+        self.mlm = kwargs.get('mlm', False)
+        self.finetune = kwargs.get('finetune', True)
 
     def _model_mask(self, nctx):
         """This function creates the mask that controls which token to be attended to depending on the model. A causal

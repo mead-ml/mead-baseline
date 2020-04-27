@@ -180,6 +180,17 @@ class LearnedPositionalLookupTableEmbeddingsModel(TensorFlowEmbeddingsModel):
         return tf.compat.v1.placeholder(tf.int32, [None, None], name=name)
 
 
+@register_embeddings(name='learned-positional-w-bias')
+class LearnedPositionalLookupTableEmbeddingsWithBiasModel(TensorFlowEmbeddingsModel):
+    def __init__(self, name=None, **kwargs):
+        super().__init__(name, **kwargs)
+        self.embedding_layer = LearnedPositionalLookupTableEmbeddingsWithBias(name=self._name, **kwargs)
+
+    @classmethod
+    def create_placeholder(cls, name):
+        return tf.compat.v1.placeholder(tf.int32, [None, None], name=name)
+
+
 @register_embeddings(name='positional-char-conv')
 class PositionalCharConvEmbeddingsModel(TensorFlowEmbeddingsModel):
     def __init__(self, name=None, **kwargs):

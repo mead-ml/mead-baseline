@@ -37,6 +37,7 @@ class CharLSTMEmbeddingsModel(PyTorchEmbeddingsModel, CharLSTMEmbeddings):
 class CharTransformerEmbeddingsModel(PyTorchEmbeddingsModel, CharTransformerEmbeddings):
     pass
 
+
 @register_embeddings(name='positional')
 class PositionalLookupTableEmbeddingsModel(PyTorchEmbeddingsModel, PositionalLookupTableEmbeddings):
     pass
@@ -47,9 +48,15 @@ class LearnedPositionalLookupTableEmbeddingsModel(PyTorchEmbeddingsModel, Learne
     pass
 
 
+@register_embeddings(name='learned-positional-w-bias')
+class LearnedPositionalLookupTableEmbeddingsWithBiasModel(PyTorchEmbeddingsModel, LearnedPositionalLookupTableEmbeddingsWithBias):
+    pass
+
+
 @register_embeddings(name='bert-lookup-table-embeddings')
 class BERTLookupTableEmbeddingsModel(PyTorchEmbeddingsModel, BERTLookupTableEmbeddings):
     pass
+
 
 @register_embeddings(name='positional-char-conv')
 class PositionalCharConvEmbeddingsModel(PyTorchEmbeddingsModel, PositionalCharConvEmbeddings):
