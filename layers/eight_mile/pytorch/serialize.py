@@ -226,6 +226,9 @@ def to_tlm_array(pytorch_tlm: nn.Module, embeddings_keys: List[str] = None, name
 
     for embeddings_key in keys_to_write:
         d.update(to_embed_array(pytorch_tlm.embeddings[embeddings_key], name=f"{name}/Embeddings/{embeddings_key}"))
+
+    if hasattr(pytorch_tlm.embeddings.reduction, 'ln'):
+        d.update(to_weight_array(pytorch_tlm.embeddings.reduction.ln, name=f"{name}/Embeddings/reduction/ln"))
     return d
 
 
@@ -295,6 +298,15 @@ def from_tlm_array(pytorch_tlm: nn.Module, d: Dict, embeddings_keys: List[str] =
     key_to_restore = embeddings_keys if embeddings_keys else list(pytorch_tlm.embeddings.keys())
     for embeddings_key in key_to_restore:
         from_embed_array(pytorch_tlm.embeddings[embeddings_key], d, f"{name}/Embeddings/{embeddings_key}")
+        if isinstance(pytorch_tlm.embeddings[embeddings_key], LearnedPositionalLookupTableEmbeddingsWithBias):
+            tt = LookupTableEmbeddings(vsz=2, dsz=pytorch_tlm.embeddings.output_dim)
+            from_embed_array(tt, d, f"{name}/Embeddings/tt")
+            pytorch_tlm.embeddings[embeddings_key].bias = nn.Parameter(tt.embeddings.weight[0])
+        else:
+            from_embed_array(pytorch_tlm.embeddings[embeddings_key], d, f"{name}/Embeddings/{embeddings_key}")
+    if hasattr(pytorch_tlm.embeddings.reduction, 'ln'):
+        from_weight_array(pytorch_tlm.embeddings.reduction.ln, d, f"{name}/Embeddings/reduction/ln")
+
 
 
 def load_tlm_npz(pytorch_tlm: nn.Module, npz: str, embeddings_keys: List[str] = None, name: str = "TLM"):
@@ -370,4 +382,5 @@ def load_tlm_transformers_bin(pytorch_tlm: nn.Module, bin_file: str, replace_lay
     if old_embeddings_stack:
         old_embeddings_stack[k_0].bias = nn.Parameter(pytorch_tlm.embeddings['tt'].embeddings.weight[0])
         pytorch_tlm.embeddings = old_embeddings_stack
+
     return unknown_keys
