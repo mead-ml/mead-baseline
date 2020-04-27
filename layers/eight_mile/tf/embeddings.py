@@ -396,8 +396,6 @@ class LearnedPositionalLookupTableEmbeddingsWithBias(LearnedPositionalMixin, Loo
     """
     def __init__(self, trainable=True, name=None, dtype=tf.float32, **kwargs):
         super().__init__(name=name, **kwargs)
-        self.dropout = tf.keras.layers.Dropout(kwargs.get("dropout", 0.1))
-        self.ln = tf.keras.layers.LayerNormalization(epsilon=1e-12)
 
     def build(self, input_shape):
         super().build(input_shape)
@@ -413,7 +411,7 @@ class LearnedPositionalLookupTableEmbeddingsWithBias(LearnedPositionalMixin, Loo
         T = tf.shape(x)[1]
         pos = self.positional(T)
         x = x + pos + self.bias
-        return self.dropout(x, training=TRAIN_FLAG())
+        return x
 
 
 class PositionalCharConvEmbeddings(SinusoidalPositionalMixin, CharConvEmbeddings):

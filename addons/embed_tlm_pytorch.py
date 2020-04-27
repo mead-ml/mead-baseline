@@ -16,6 +16,7 @@ from baseline.embeddings import register_embeddings, create_embeddings
 from baseline.pytorch.embeddings import PyTorchEmbeddingsModel
 from baseline.pytorch.torchy import *
 from eight_mile.pytorch.serialize import load_tlm_npz
+from baseline.vectorizers import load_bert_vocab
 
 
 class TransformerLMEmbeddings(PyTorchEmbeddings):
@@ -26,18 +27,35 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
     """
     def __init__(self, **kwargs):
         super().__init__()
-        self.vocab = read_json(kwargs.get('vocab_file'))
+        # You dont actually have to pass this if you are using the `load_bert_vocab` call from your
+        # tokenizer.  In this case, a singleton variable will contain the vocab and it will be returned
+        # by `load_bert_vocab`
+        # If you trained your model with MEAD/Baseline, you will have a `*.json` file which would want to
+        # reference here
+        vocab_file = kwargs.get('vocab_file')
+        if vocab_file and vocab_file.endswith('.json'):
+            self.vocab = read_json(kwargs.get('vocab_file'))
+        else:
+            self.vocab = load_bert_vocab(kwargs.get('vocab_file'))
         self.cls_index = self.vocab['[CLS]']
         self.vsz = max(self.vocab.values()) + 1
-        self.d_model = int(kwargs.get('dsz', kwargs.get('d_model', 410)))
+        self.d_model = int(kwargs.get('dsz', kwargs.get('d_model', 768)))
         self.init_embed(**kwargs)
         self.proj_to_dsz = pytorch_linear(self.dsz, self.d_model) if self.dsz != self.d_model else _identity
+        self.init_transformer(**kwargs)
+
+    @property
+    def dsz(self):
+        return self.embeddings.output_dim
 
     def embed(self, input):
         return self.embeddings(input)
 
     def init_embed(self, **kwargs):
-        embed_type = kwargs.get('word_embed_type', 'positional')
+        # If you are using BERT, you probably want to use either
+        # `learned-positional` with a token type feature
+        # or `learned-positional-w-bias` if you dont care about the token type
+        embed_type = kwargs.get('word_embed_type', 'learned-positional')
         x_embedding = create_embeddings(vsz=self.vsz, dsz=self.d_model, embed_type=embed_type)
 
         embeddings = {'x': x_embedding}
@@ -47,15 +65,16 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
             tt_embedding = LookupTableEmbeddings(vsz=token_type_vsz, dsz=self.dsz)
             embeddings['tt'] = tt_embedding
         # For bert, make sure this is `sum-layer-norm`
-        reduction = kwargs.get('reduction')
-        self.embeddings = EmbeddingsStack(embeddings, reduction=reduction)
+        reduction = kwargs.get('embeddings_reduction', kwargs.get('reduction'))
+        embeddings_dropout = kwargs.get('embeddings_dropout', 0.1)
+        self.embeddings = EmbeddingsStack(embeddings, dropout_rate=embeddings_dropout, reduction=reduction)
         return self.embeddings.output_dim
 
     def init_transformer(self, **kwargs):
-        num_layers = int(kwargs.get('layers', 18))
-        num_heads = int(kwargs.get('num_heads', 10))
+        num_layers = int(kwargs.get('layers', 8))
+        num_heads = int(kwargs.get('num_heads', 8))
         pdrop = kwargs.get('dropout', 0.1)
-        d_ff = int(kwargs.get('d_ff', 2100))
+        d_ff = int(kwargs.get('d_ff', 3072))
         d_k = kwargs.get('d_k')
         rpr_k = kwargs.get('rpr_k')
         layer_norms_after = kwargs.get('layer_norms_after', False)
