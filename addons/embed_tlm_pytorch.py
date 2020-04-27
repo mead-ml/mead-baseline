@@ -49,7 +49,7 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
         return self.embeddings.output_dim
 
     def embed(self, input):
-        return self.embeddings(input)
+        return self.embeddings({'x': input})
 
     def init_embed(self, **kwargs):
         # If you are using BERT, you probably want to use either
@@ -60,15 +60,14 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
 
         embeddings = {'x': x_embedding}
         # This is for BERT support when we are using 2 features
-        token_type_vsz = kwargs.get('token_type_vsz')
-        if token_type_vsz:
-            tt_embedding = LookupTableEmbeddings(vsz=token_type_vsz, dsz=self.dsz)
-            embeddings['tt'] = tt_embedding
+        #token_type_vsz = kwargs.get('token_type_vsz')
+        #if token_type_vsz:
+        #    tt_embedding = LookupTableEmbeddings(vsz=token_type_vsz, dsz=self.dsz)
+        #    embeddings['tt'] = tt_embedding
         # For bert, make sure this is `sum-layer-norm`
         reduction = kwargs.get('embeddings_reduction', kwargs.get('reduction'))
         embeddings_dropout = kwargs.get('embeddings_dropout', 0.1)
         self.embeddings = EmbeddingsStack(embeddings, dropout_rate=embeddings_dropout, reduction=reduction)
-        return self.embeddings.output_dim
 
     def init_transformer(self, **kwargs):
         num_layers = int(kwargs.get('layers', 8))

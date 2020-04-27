@@ -26,7 +26,7 @@ class TransformerLMEmbeddings(TensorFlowEmbeddings):
 
         self.cls_index = self.vocab['[CLS]']
         self.vsz = max(self.vocab.values()) + 1
-        self.d_model = int(kwargs.get('dsz', kwargs.get('d_model', 410)))
+        self.d_model = int(kwargs.get('dsz', kwargs.get('d_model', 768)))
         self.init_embed(**kwargs)
         self.proj_to_dsz = tf.keras.layers.Dense(self.dsz, self.d_model) if self.dsz != self.d_model else _identity
         self.init_transformer(**kwargs)
@@ -36,32 +36,31 @@ class TransformerLMEmbeddings(TensorFlowEmbeddings):
         return self.embeddings.output_dim
 
     def embed(self, input):
-        return self.embeddings(input)
+        return self.embeddings({'x': input})
 
     def init_embed(self, **kwargs):
         # If you are using BERT, you probably want to use either
         # `learned-positional` with a token type feature
         # or `learned-positional-w-bias` if you dont care about the token type
         embed_type = kwargs.get('word_embed_type', 'learned-positional')
-        x_embedding = create_embeddings(vsz=self.vsz, dsz=self.d_model, embed_type=embed_type)
+        x_embedding = create_embeddings(vsz=self.vsz, dsz=self.d_model, embed_type=embed_type, name='x')
 
         embeddings = {'x': x_embedding}
         # This is for BERT support when we are using 2 features
-        token_type_vsz = kwargs.get('token_type_vsz')
-        if token_type_vsz:
-            tt_embedding = LookupTableEmbeddings(vsz=token_type_vsz, dsz=self.dsz)
-            embeddings['tt'] = tt_embedding
+        #token_type_vsz = kwargs.get('token_type_vsz')
+        #if token_type_vsz:
+        #    tt_embedding = LookupTableEmbeddings(vsz=token_type_vsz, dsz=self.dsz, name='tt')
+        #    embeddings['tt'] = tt_embedding
         # For bert, make sure this is `sum-layer-norm`
         reduction = kwargs.get('embeddings_reduction', kwargs.get('reduction'))
         embeddings_dropout = kwargs.get('embeddings_dropout', 0.1)
         self.embeddings = EmbeddingsStack(embeddings, dropout_rate=embeddings_dropout, reduction=reduction)
-        return self.embeddings.output_dim
 
     def init_transformer(self, **kwargs):
-        num_layers = int(kwargs.get('layers', 18))
-        num_heads = int(kwargs.get('num_heads', 10))
+        num_layers = int(kwargs.get('layers', 8))
+        num_heads = int(kwargs.get('num_heads', 8))
         pdrop = kwargs.get('dropout', 0.1)
-        d_ff = int(kwargs.get('d_ff', 2100))
+        d_ff = int(kwargs.get('d_ff', 3072))
         d_k = kwargs.get('d_k')
         rpr_k = kwargs.get('rpr_k')
         layer_norms_after = kwargs.get('layer_norms_after', False)
@@ -142,6 +141,7 @@ class TransformerLMEmbeddingsModel(TensorFlowEmbeddingsModel):
         B = 1
         T = 8
         data_sample = tf.ones([B, T], dtype=tf.int32)
+        #data_sample_tt = tf.zeros([B, T], dtype=tf.int32)
         _ = c(data_sample)
         if embeddings.endswith('.npz'):
             load_tlm_npz(c.embedding_layer, embeddings)
@@ -160,7 +160,7 @@ class TransformerLMEmbeddingsModel(TensorFlowEmbeddingsModel):
 class TransformerLMPooledEmbeddingsModel(TransformerLMEmbeddingsModel):
     def __init__(self, name=None, **kwargs):
         super().__init__(name, **kwargs)
-        self.embedding_layer = TransformerLMPooledEmbeddings(name=self._name, **kwargs)
+        self.embedding_layer = TransformerLMPooledEmbeddings(name=self.name, **kwargs)
 
 
 def _identity(x):

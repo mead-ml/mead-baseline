@@ -1743,7 +1743,9 @@ class SumReduction(Reduction):
 class SumLayerNormReduction(Reduction):
 
     def __init__(self, output_dims: List[int], layer_norm_eps: float = 1.0e-12):
+        super().__init__()
         self.ln = tf.keras.layers.LayerNormalization(epsilon=layer_norm_eps)
+        self.output_dim = output_dims[0]
 
     def call(self, inputs: List[tf.Tensor]) -> tf.Tensor:
         outputs = tf.add_n(inputs)
