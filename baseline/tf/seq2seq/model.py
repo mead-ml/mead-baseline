@@ -151,8 +151,8 @@ if not tf.executing_eagerly():
             model = cls()
             model.src_embeddings = {}
             for k, src_embedding in src_embeddings.items():
-                model.src_embeddings[k] = src_embedding.detached_ref()
-            model.tgt_embedding = tgt_embedding.detached_ref()
+                model.src_embeddings[k] = src_embedding  #.detached_ref()
+            model.tgt_embedding = tgt_embedding  #.detached_ref()
             model._record_state(**kwargs)
             model.src_len = kwargs.pop('src_len', tf.compat.v1.placeholder(tf.int32, [None], name="src_len"))
             model.tgt_len = kwargs.pop('tgt_len', tf.compat.v1.placeholder(tf.int32, [None], name="tgt_len"))

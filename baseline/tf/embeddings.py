@@ -7,17 +7,15 @@ import tensorflow as tf
 logger = logging.getLogger('baseline')
 
 
-class TensorFlowEmbeddingsModel(tf.keras.Model):
+class TensorFlowEmbeddingsMixin(tf.keras.layers.Layer):
     """This provides a base for TensorFlow embeddings sub-graphs that includes the placeholders
 
     """
-    def __init__(self, name=None, **kwargs):
+    def __init__(self, trainable=True, name=None, dtype=tf.float32, **kwargs):
         """Constructor
         """
-        super().__init__()
+        super().__init__(trainable=trainable, name=name, dtype=dtype)
         self._record_state(**kwargs)
-        self._name = name
-        self.embedding_layer = None
 
     def detached_ref(self):
         """This will detach any attached input and reference the same sub-graph otherwise
@@ -26,49 +24,18 @@ class TensorFlowEmbeddingsModel(tf.keras.Model):
 
         :return:
         """
-        if getattr(self.embedding_layer, '_weights', None) is not None:
-            return type(self)(self._name, weights=self.embedding_layer._weights, **self._state)
-        if hasattr(self.embedding_layer, 'embed') and getattr(self.embedding_layer.init_embed, '_weights') is not None:
-            return type(self)(self._name, weights=self.embedding_layer.init_embed._weights, **self._state)
+        if getattr(self, '_weights', None) is not None:
+            return type(self)(name=self.name, weights=self._weights, **self._state)
+        if hasattr(self, 'embed') and getattr(self.init_embed, '_weights') is not None:
+            return type(self)(name=self.name, weights=self.init_embed._weights, **self._state)
         raise Exception('You must initialize `weights` in order to use this method')
 
-    def get_dsz(self):
-        """Get the number of output dimension of this operation
-
-        :return:
-        """
-        return self.embedding_layer.get_dsz()
-
-    def get_weights(self):
-        return self.embedding_layer.get_weights()
-
-    @property
-    def output_dim(self):
-        return self.embedding_layer.output_dim
-
-    def get_vsz(self):
-        """Get the number of words (including <PAD>) in the vocabulary
-
-        :return:
-        """
-        return self.embedding_layer.get_vsz()
-
-    def encode(self, x):
-        """This instantiates the sub-graph for this object and returns the output node
-
-        :return:
-        """
-        if x is None:
-            x = self.create_placeholder(self._name)
-        self.x = x
-        return self.embedding_layer(x)
-
     def call(self, x):
-        return self.encode(x)
+        if x is None:
+            x = self.create_placeholder(self.name)
+        self.x = x
 
-    def get_feed_dict(self):
-        """Return a feed dict that is needed to initialize this embeddings."""
-        return self.embedding_layer.get_feed_dict()
+        return super().encode(x)
 
     @classmethod
     def create_placeholder(cls, name):
@@ -88,13 +55,8 @@ class TensorFlowEmbeddingsModel(tf.keras.Model):
         :param kwargs:
         :return:
         """
-        # If we think we are going to hit the 2GB limit swap out the LUT
-        # embeddings to use the placeholder trick to get around it.
-        # if cls is LookupTableEmbeddingsModel and model.vsz * model.dsz * FLOAT32 > GB2:
-        #     cls = LargeLookupTableEmbeddingsModel
-        #     logger.warning("Embedding %s seems to be larger than 2GB", name)
         kwargs.pop('dsz', None)
-        return cls(name, vsz=model.vsz, dsz=model.dsz, weights=model.weights, **kwargs)
+        return cls(name=name, vsz=model.vsz, dsz=model.dsz, weights=model.weights, **kwargs)
 
     def _record_state(self, **kwargs):
         w = kwargs.pop('weights', None)
@@ -120,10 +82,7 @@ class TensorFlowEmbeddingsModel(tf.keras.Model):
 
 
 @register_embeddings(name='default')
-class LookupTableEmbeddingsModel(TensorFlowEmbeddingsModel):
-    def __init__(self, name=None, **kwargs):
-        super().__init__(name, **kwargs)
-        self.embedding_layer = LookupTableEmbeddings(name=self._name, **kwargs)
+class LookupTableEmbeddingsModel(LookupTableEmbeddings, TensorFlowEmbeddingsMixin):
 
     @classmethod
     def create_placeholder(cls, name):
@@ -131,10 +90,7 @@ class LookupTableEmbeddingsModel(TensorFlowEmbeddingsModel):
 
 
 @register_embeddings(name='char-conv')
-class CharConvEmbeddingsModel(TensorFlowEmbeddingsModel):
-    def __init__(self, name=None, **kwargs):
-        super().__init__(name, **kwargs)
-        self.embedding_layer = CharConvEmbeddings(name=self._name, **kwargs)
+class CharConvEmbeddingsModel(CharConvEmbeddings, TensorFlowEmbeddingsMixin):
 
     @classmethod
     def create_placeholder(cls, name):
@@ -142,16 +98,12 @@ class CharConvEmbeddingsModel(TensorFlowEmbeddingsModel):
 
 
 @register_embeddings(name='char-transformer')
-class CharTransformerModel(TensorFlowEmbeddingsModel):
-    def __init__(self, name=None, **kwargs):
-        super().__init__(name, **kwargs)
-        self.embedding_layer = CharTransformerEmbeddings(name=self._name, **kwargs)
+class CharTransformerModel(CharTransformerEmbeddings, TensorFlowEmbeddingsMixin):
+    pass
+
 
 @register_embeddings(name='char-lstm')
-class CharLSTMEmbeddingsModel(TensorFlowEmbeddingsModel):
-    def __init__(self, name=None, **kwargs):
-        super().__init__(name, **kwargs)
-        self.embedding_layer = CharLSTMEmbeddings(name=self._name, **kwargs)
+class CharLSTMEmbeddingsModel(CharLSTMEmbeddings, TensorFlowEmbeddingsMixin):
 
     @classmethod
     def create_placeholder(cls, name):
@@ -159,10 +111,7 @@ class CharLSTMEmbeddingsModel(TensorFlowEmbeddingsModel):
 
 
 @register_embeddings(name='positional')
-class PositionalLookupTableEmbeddingsModel(TensorFlowEmbeddingsModel):
-    def __init__(self, name=None, **kwargs):
-        super().__init__(name, **kwargs)
-        self.embedding_layer = PositionalLookupTableEmbeddings(name=self._name, **kwargs)
+class PositionalLookupTableEmbeddingsModel(PositionalLookupTableEmbeddings, TensorFlowEmbeddingsMixin):
 
     @classmethod
     def create_placeholder(cls, name):
@@ -170,10 +119,7 @@ class PositionalLookupTableEmbeddingsModel(TensorFlowEmbeddingsModel):
 
 
 @register_embeddings(name='learned-positional')
-class LearnedPositionalLookupTableEmbeddingsModel(TensorFlowEmbeddingsModel):
-    def __init__(self, name=None, **kwargs):
-        super().__init__(name, **kwargs)
-        self.embedding_layer = LearnedPositionalLookupTableEmbeddings(name=self._name, **kwargs)
+class LearnedPositionalLookupTableEmbeddingsModel(LearnedPositionalLookupTableEmbeddings, TensorFlowEmbeddingsMixin):
 
     @classmethod
     def create_placeholder(cls, name):
@@ -181,10 +127,7 @@ class LearnedPositionalLookupTableEmbeddingsModel(TensorFlowEmbeddingsModel):
 
 
 @register_embeddings(name='learned-positional-w-bias')
-class LearnedPositionalLookupTableEmbeddingsWithBiasModel(TensorFlowEmbeddingsModel):
-    def __init__(self, name=None, **kwargs):
-        super().__init__(name, **kwargs)
-        self.embedding_layer = LearnedPositionalLookupTableEmbeddingsWithBias(name=self._name, **kwargs)
+class LearnedPositionalLookupTableEmbeddingsWithBiasModel(LearnedPositionalLookupTableEmbeddingsWithBias, TensorFlowEmbeddingsMixin):
 
     @classmethod
     def create_placeholder(cls, name):
@@ -192,10 +135,7 @@ class LearnedPositionalLookupTableEmbeddingsWithBiasModel(TensorFlowEmbeddingsMo
 
 
 @register_embeddings(name='positional-char-conv')
-class PositionalCharConvEmbeddingsModel(TensorFlowEmbeddingsModel):
-    def __init__(self, name=None, **kwargs):
-        super().__init__(name, **kwargs)
-        self.embedding_layer = PositionalCharConvEmbeddings(name=self._name, **kwargs)
+class PositionalCharConvEmbeddingsModel(PositionalCharConvEmbeddings, TensorFlowEmbeddingsMixin):
 
     @classmethod
     def create_placeholder(cls, name):
@@ -203,10 +143,7 @@ class PositionalCharConvEmbeddingsModel(TensorFlowEmbeddingsModel):
 
 
 @register_embeddings(name='learned-positional-char-conv')
-class PositionalCharConvEmbeddingsModel(TensorFlowEmbeddingsModel):
-    def __init__(self, name=None, **kwargs):
-        super().__init__(name, **kwargs)
-        self.embedding_layer = LearnedPositionalCharConvEmbeddings(name=self._name, **kwargs)
+class PositionalCharConvEmbeddingsModel(LearnedPositionalCharConvEmbeddings, TensorFlowEmbeddingsMixin):
 
     @classmethod
     def create_placeholder(cls, name):
@@ -214,10 +151,7 @@ class PositionalCharConvEmbeddingsModel(TensorFlowEmbeddingsModel):
 
 
 @register_embeddings(name='positional-char-lstm')
-class PositionalCharLSTMEmbeddingsModel(TensorFlowEmbeddingsModel):
-    def __init__(self, name=None, **kwargs):
-        super().__init__(name, **kwargs)
-        self.embedding_layer = PositionalCharLSTMEmbeddings(name=self._name, **kwargs)
+class PositionalCharLSTMEmbeddingsModel(PositionalCharLSTMEmbeddings, TensorFlowEmbeddingsMixin):
 
     @classmethod
     def create_placeholder(cls, name):
@@ -225,22 +159,9 @@ class PositionalCharLSTMEmbeddingsModel(TensorFlowEmbeddingsModel):
 
 
 @register_embeddings(name='learned-positional-char-lstm')
-class LearnedPositionalCharLSTMEmbeddingsModel(TensorFlowEmbeddingsModel):
-    def __init__(self, name=None, **kwargs):
-        super().__init__(name, **kwargs)
-        self.embedding_layer = LearnedPositionalCharLSTMEmbeddings(name=self._name, **kwargs)
+class LearnedPositionalCharLSTMEmbeddingsModel(LearnedPositionalCharLSTMEmbeddings, TensorFlowEmbeddingsMixin):
 
     @classmethod
     def create_placeholder(cls, name):
         return tf.compat.v1.placeholder(tf.int32, [None, None, None], name=name)
 
-
-# @register_embeddings(name="large-lut")
-# class LargeLookupTableEmbeddingsModel(TensorFlowEmbeddingsModel):
-#     def __init__(self, name=None, **kwargs):
-#         super().__init__(name, **kwargs)
-#         self.embedding_layer = LargeLookupTableEmbeddings(name=self._name, **kwargs)
-
-#     @classmethod
-#     def create_placeholder(cls, name):
-#         return tf.placeholder(tf.int32, [None, None], name=name)

@@ -295,8 +295,8 @@ def from_tlm_array(pytorch_tlm: nn.Module, d: Dict, embeddings_keys: List[str] =
     """
     transformer = pytorch_tlm.transformer if hasattr(pytorch_tlm, 'transformer') else pytorch_tlm.generator
     from_encoder_stack_array(transformer, d, name=f"{name}/TransformerEncoderStack")
-    key_to_restore = embeddings_keys if embeddings_keys else list(pytorch_tlm.embeddings.keys())
-    for embeddings_key in key_to_restore:
+    keys_to_restore = embeddings_keys if embeddings_keys else list(pytorch_tlm.embeddings.keys())
+    for embeddings_key in keys_to_restore:
         from_embed_array(pytorch_tlm.embeddings[embeddings_key], d, f"{name}/Embeddings/{embeddings_key}")
         if isinstance(pytorch_tlm.embeddings[embeddings_key], LearnedPositionalLookupTableEmbeddingsWithBias):
             tt = LookupTableEmbeddings(vsz=2, dsz=pytorch_tlm.embeddings.output_dim)

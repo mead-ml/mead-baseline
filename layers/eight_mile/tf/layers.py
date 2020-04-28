@@ -1794,7 +1794,7 @@ class EmbeddingsStack(tf.keras.layers.Layer):
     def __getitem__(self, item: str):
         return self.embeddings[item]
 
-    def call(self, inputs):
+    def call(self, inputs: Dict[str, tf.Tensor]) -> tf.Tensor:
         """This method performs "embedding" of the inputs.  The base method here then concatenates along depth
         dimension to form word embeddings
 

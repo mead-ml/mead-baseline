@@ -7,7 +7,7 @@ from baseline.embeddings import register_embeddings, create_embeddings
 from eight_mile.utils import Offsets, read_json
 from baseline.vectorizers import load_bert_vocab
 from eight_mile.tf.embeddings import TensorFlowEmbeddings, LookupTableEmbeddings, PositionalLookupTableEmbeddings, LearnedPositionalLookupTableEmbeddings
-from baseline.tf.embeddings import TensorFlowEmbeddingsModel
+from baseline.tf.embeddings import TensorFlowEmbeddingsMixin
 
 
 class TransformerLMEmbeddings(TensorFlowEmbeddings):
@@ -102,6 +102,24 @@ class TransformerLMEmbeddings(TensorFlowEmbeddings):
     def get_dsz(self):
         return self.d_model
 
+    @classmethod
+    def load(cls, embeddings, **kwargs):
+        c = cls("tlm-words-embed", **kwargs)
+        # pass random data through to initialize the graph
+        B = 1
+        T = 8
+        data_sample = tf.ones([B, T], dtype=tf.int32)
+        #data_sample_tt = tf.zeros([B, T], dtype=tf.int32)
+        _ = c(data_sample)
+        if embeddings.endswith('.npz'):
+            load_tlm_npz(c, embeddings)
+        else:
+            raise Exception("Can only load npz checkpoint to TF for now.")
+        return c
+
+    #def detached_ref(self):
+    #    return self
+
 
 class TransformerLMPooledEmbeddings(TransformerLMEmbeddings):
 
@@ -125,43 +143,17 @@ class TransformerLMPooledEmbeddings(TransformerLMEmbeddings):
 
 
 @register_embeddings(name='tlm-words-embed')
-class TransformerLMEmbeddingsModel(TensorFlowEmbeddingsModel):
-    def __init__(self, name=None, **kwargs):
-        super().__init__(name, **kwargs)
-        self.embedding_layer = TransformerLMEmbeddings(name=self._name, **kwargs)
+class TransformerLMEmbeddingsModel(TransformerLMEmbeddings, TensorFlowEmbeddingsMixin):
 
     @classmethod
     def create_placeholder(cls, name):
         return tf.compat.v1.placeholder(tf.int32, [None, None], name=name)
 
-    @classmethod
-    def load(cls, embeddings, **kwargs):
-        c = cls("tlm-words-embed", **kwargs)
-        # pass random data through to initialize the graph
-        B = 1
-        T = 8
-        data_sample = tf.ones([B, T], dtype=tf.int32)
-        #data_sample_tt = tf.zeros([B, T], dtype=tf.int32)
-        _ = c(data_sample)
-        if embeddings.endswith('.npz'):
-            load_tlm_npz(c.embedding_layer, embeddings)
-        else:
-            raise Exception("Can only load npz checkpoint to TF for now.")
-        return c
-
-    def get_vocab(self):
-        return self.embedding_layer.get_vocab()
-
-    def detached_ref(self):
-        return self
 
 
 @register_embeddings(name='tlm-words-embed-pooled')
-class TransformerLMPooledEmbeddingsModel(TransformerLMEmbeddingsModel):
-    def __init__(self, name=None, **kwargs):
-        super().__init__(name, **kwargs)
-        self.embedding_layer = TransformerLMPooledEmbeddings(name=self.name, **kwargs)
-
+class TransformerLMPooledEmbeddingsModel(TransformerLMPooledEmbeddings, TensorFlowEmbeddingsMixin):
+    pass
 
 def _identity(x):
     return x

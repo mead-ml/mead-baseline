@@ -297,9 +297,9 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
         :return: A fully-initialized tensorflow classifier
         """
         model = cls(name=kwargs.get('name'))
-        embeddings_ = {}
-        for k, embedding in embeddings.items():
-            embeddings_[k] = embedding.detached_ref()
+        #embeddings_ = {}
+        #for k, embedding in embeddings.items():
+        #    embeddings_[k] = embedding #.detached_ref()
 
         model.lengths_key = kwargs.get('lengths_key')
 
@@ -313,12 +313,12 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
             else:
                 model.lengths = None
 
-        model._record_state(embeddings_, **kwargs)
+        model._record_state(embeddings, **kwargs)
 
         nc = len(labels)
         if not tf.executing_eagerly():
             model.y = kwargs.get('y', tf.compat.v1.placeholder(tf.int32, [None, nc], name="y"))
-            for k, embedding in embeddings_.items():
+            for k, embedding in embeddings.items():
                 x = kwargs.get(k, embedding.create_placeholder(name=k))
                 inputs[k] = x
 
@@ -326,7 +326,7 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
 
         model.pdrop_value = kwargs.get('dropout', 0.5)
         model.labels = labels
-        model.create_layers(embeddings_, **kwargs)
+        model.create_layers(embeddings, **kwargs)
 
         if not tf.executing_eagerly():
             model.logits = tf.identity(model(inputs), name="logits")
