@@ -3,20 +3,22 @@
   "basedir": "./trec-bert",
   "batchsz": 10,
   "modules": [
-    "embed_bert_pytorch"
+    "embed_tlm_pytorch"
   ],
   "features": [
     {
       "name": "bert",
       "vectorizer": {
-        "type": "wordpiece1d",
-        "embed_file": "bert-base-uncased"
+        "label": "bert-base-uncased"
       },
       "embeddings": {
-        "type": "bert-pooled",
-        "embed_file": "bert-base-uncased",
-        "dsz": 768,
-        "trainable": true
+        "finetune": true,
+        "word_embed_type": "learned-positional-w-bias",
+        "label": "bert-base-uncased-bin",
+        "type": "tlm-words-embed-pooled",
+        "reduction": "sum-layer-norm",
+        "layer_norms_after": true,
+        "dropout": 0.1
       }
     }
   ],

@@ -33,6 +33,32 @@ BERT_HF_LAYER_MAP = {
     'bert.encoder.layer.{}.attention.output.LayerNorm.gamma': 'generator.encoders.{}.ln2.weight'
 }
 
+BERT_HF_FT_LAYER_MAP = {
+    ## FFN weights
+    'bert.encoder.layer.{}.intermediate.dense.weight': 'transformer.encoders.{}.ffn.0.layer.weight',
+    'bert.encoder.layer.{}.intermediate.dense.bias': 'transformer.encoders.{}.ffn.0.layer.bias',
+    'bert.encoder.layer.{}.output.dense.weight': 'transformer.encoders.{}.ffn.3.layer.weight',
+    'bert.encoder.layer.{}.output.dense.bias': 'transformer.encoders.{}.ffn.3.layer.bias',
+
+    ## MHA weights
+    'bert.encoder.layer.{}.attention.self.key.weight': 'transformer.encoders.{}.self_attn.w_K.layer.weight',
+    'bert.encoder.layer.{}.attention.self.key.bias': 'transformer.encoders.{}.self_attn.w_K.layer.bias',
+    'bert.encoder.layer.{}.attention.self.query.weight': 'transformer.encoders.{}.self_attn.w_Q.layer.weight',
+    'bert.encoder.layer.{}.attention.self.query.bias': 'transformer.encoders.{}.self_attn.w_Q.layer.bias',
+    'bert.encoder.layer.{}.attention.self.value.weight': 'transformer.encoders.{}.self_attn.w_V.layer.weight',
+    'bert.encoder.layer.{}.attention.self.value.bias': 'transformer.encoders.{}.self_attn.w_V.layer.bias',
+    'bert.encoder.layer.{}.attention.output.dense.weight': 'transformer.encoders.{}.self_attn.w_O.layer.weight',
+    'bert.encoder.layer.{}.attention.output.dense.bias': 'transformer.encoders.{}.self_attn.w_O.layer.bias',
+
+    ## LN weights
+    # The names in of layer norm our transformers are a bit unspecific
+    # think of ln1 as ln_x and ln2 as ln_attn_output
+    'bert.encoder.layer.{}.output.LayerNorm.beta': 'transformer.encoders.{}.ln1.bias',
+    'bert.encoder.layer.{}.output.LayerNorm.gamma': 'transformer.encoders.{}.ln1.weight',
+    'bert.encoder.layer.{}.attention.output.LayerNorm.beta': 'transformer.encoders.{}.ln2.bias',
+    'bert.encoder.layer.{}.attention.output.LayerNorm.gamma': 'transformer.encoders.{}.ln2.weight'
+}
+
 BERT_HF_EMBED_MAP = {
     ## Embedding weights
     'bert.embeddings.word_embeddings.weight': 'embeddings.embeddings.0.embeddings.weight',
@@ -379,8 +405,11 @@ def load_tlm_transformers_bin(pytorch_tlm: nn.Module, bin_file: str, replace_lay
         d = {k_0: pytorch_tlm.embeddings[k_0], 'tt':  LookupTableEmbeddings(vsz=2, dsz=old_embeddings_stack.output_dim)}
         pytorch_tlm.embeddings = EmbeddingsStack(d, reduction='sum-layer-norm')
     unknown_keys = pytorch_tlm.load_state_dict(mapped_keys, strict=False)
+    missing_keys = [key for key in unknown_keys.missing_keys if key != 'embeddings.embeddings.0.bias']
+
     if old_embeddings_stack:
         old_embeddings_stack[k_0].bias = nn.Parameter(pytorch_tlm.embeddings['tt'].embeddings.weight[0])
+        old_embeddings_stack.reduction.ln = pytorch_tlm.embeddings.reduction.ln
         pytorch_tlm.embeddings = old_embeddings_stack
 
-    return unknown_keys
+    return {'missing': missing_keys, 'unexpected': unknown_keys.unexpected_keys}

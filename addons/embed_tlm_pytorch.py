@@ -70,8 +70,8 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
         self.embeddings = EmbeddingsStack(embeddings, dropout_rate=embeddings_dropout, reduction=reduction)
 
     def init_transformer(self, **kwargs):
-        num_layers = int(kwargs.get('layers', 8))
-        num_heads = int(kwargs.get('num_heads', 8))
+        num_layers = int(kwargs.get('layers', 12))
+        num_heads = int(kwargs.get('num_heads', 12))
         pdrop = kwargs.get('dropout', 0.1)
         d_ff = int(kwargs.get('d_ff', 3072))
         d_k = kwargs.get('d_k')
@@ -121,6 +121,10 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
 
         if embeddings.endswith('.npz'):
             load_tlm_npz(c, embeddings)
+        elif embeddings.endswith('.bin'):
+            # HuggingFace checkpoint, convert on the fly
+            from eight_mile.pytorch.serialize import load_tlm_transformers_bin, BERT_HF_FT_LAYER_MAP
+            load_tlm_transformers_bin(c, embeddings, replace_layers=BERT_HF_FT_LAYER_MAP)
         else:
             unmatch = c.load_state_dict(torch.load(embeddings), strict=False)
             if unmatch.missing_keys or len(unmatch.unexpected_keys) > 2:

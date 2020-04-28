@@ -57,8 +57,8 @@ class TransformerLMEmbeddings(TensorFlowEmbeddings):
         self.embeddings = EmbeddingsStack(embeddings, dropout_rate=embeddings_dropout, reduction=reduction)
 
     def init_transformer(self, **kwargs):
-        num_layers = int(kwargs.get('layers', 8))
-        num_heads = int(kwargs.get('num_heads', 8))
+        num_layers = int(kwargs.get('layers', 12))
+        num_heads = int(kwargs.get('num_heads', 12))
         pdrop = kwargs.get('dropout', 0.1)
         d_ff = int(kwargs.get('d_ff', 3072))
         d_k = kwargs.get('d_k')
