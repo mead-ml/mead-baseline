@@ -14,7 +14,7 @@
       "embeddings": {
         "finetune": true,
         "word_embed_type": "learned-positional-w-bias",
-        "label": "bert-base-uncased-bin",
+        "label": "bert-base-uncased-npz",
         "type": "tlm-words-embed-pooled",
         "reduction": "sum-layer-norm",
         "layer_norms_after": true,
