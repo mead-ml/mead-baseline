@@ -124,7 +124,9 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
         elif embeddings.endswith('.bin'):
             # HuggingFace checkpoint, convert on the fly
             from eight_mile.pytorch.serialize import load_tlm_transformers_bin, BERT_HF_FT_LAYER_MAP
-            load_tlm_transformers_bin(c, embeddings, replace_layers=BERT_HF_FT_LAYER_MAP)
+            unmatch = load_tlm_transformers_bin(c, embeddings, replace_layers=BERT_HF_FT_LAYER_MAP)
+            if unmatch['missing'] or unmatch['unexpected']:
+                raise Exception("Unable to load the HuggingFace checkpoint")
         else:
             unmatch = c.load_state_dict(torch.load(embeddings), strict=False)
             if unmatch.missing_keys or len(unmatch.unexpected_keys) > 2:
