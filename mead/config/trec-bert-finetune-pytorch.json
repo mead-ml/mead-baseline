@@ -18,7 +18,8 @@
         "type": "tlm-words-embed-pooled",
         "reduction": "sum-layer-norm",
         "layer_norms_after": true,
-        "dropout": 0.1
+        "dropout": 0.1,
+        "mlm": true
       }
     }
   ],
