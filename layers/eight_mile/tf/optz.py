@@ -102,14 +102,14 @@ if not tf.executing_eagerly():
             return "LRScheduler({}, {})".format(self.warm, self.rest)
 
     @register_lr_scheduler("piecewise")
-    class PiecewiseDecaySchedulerTensorFlow(object):
+    class PiecewiseDecaySchedulerTensorFlow:
         def __init__(self, boundaries=None, values=None, **kwargs):
-            super(PiecewiseDecaySchedulerTensorFlow, self).__init__()
+            super().__init__()
             self.boundaries = boundaries
             self.values = values
 
         def __call__(self, lr, global_step):
-            return tf.identity(tf.train.piecewise_constant(global_step, self.boundaries, self.values), name="lr")
+            return tf.identity(tf.compat.v1.train.piecewise_constant(global_step, self.boundaries, self.values), name="lr")
 
         def __str__(self):
             return type(self).__name__ + "()"

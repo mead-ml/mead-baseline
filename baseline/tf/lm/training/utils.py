@@ -168,10 +168,12 @@ class LanguageModelTrainerTf(Trainer):
                 feed_dict = self.model.make_input(batch_dict, True)
                 _, global_step, lossv = self.sess.run([self.train_op, self.global_step, self.loss], feed_dict=feed_dict)
 
+            # In Keras LSTM, the order is h first, c second, its the opposite in TF 1, however I dont think it
+            # ends up mattering here
             if self.model.requires_state:
-                for i, (c, h) in enumerate(self.model.initial_state):
-                    feed_dict[c] = state[i].c
-                    feed_dict[h] = state[i].h
+                for i, (s1, s2) in enumerate(self.model.initial_state):
+                    feed_dict[s1] = state[i][0]  #.c  # 0
+                    feed_dict[s2] = state[i][1]  #.h  # 1
 
             vals = self.model.sess.run(fetches, feed_dict)
             loss = vals["loss"]
@@ -245,10 +247,13 @@ class LanguageModelTrainerTf(Trainer):
             feed_dict = {}
             if not dataset:
                 feed_dict = self.model.make_input(batch_dict, False)
+            # In Keras LSTM, the order is h first, c second, its the opposite in TF 1, however I dont think it
+            # ends up mattering here
             if self.model.requires_state:
-                for i, (c, h) in enumerate(self.model.initial_state):
-                    feed_dict[c] = state[i].c
-                    feed_dict[h] = state[i].h
+
+                for i, (s1, s2) in enumerate(self.model.initial_state):
+                    feed_dict[s1] = state[i][0]  # .c  # 0
+                    feed_dict[s2] = state[i][1]  # .h  # 1
 
             vals = self.model.sess.run(fetches, feed_dict)
             loss = vals["loss"]

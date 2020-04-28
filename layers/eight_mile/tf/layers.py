@@ -513,9 +513,10 @@ class LSTMEncoderWithState2(tf.keras.layers.Layer):
         """
         num_rnns = len(self.rnns)
         zstate = []
-        for i, _ in enumerate(self.rnns):
+        for rnn in self.rnns:
             zstate.append(
-                (np.zeros((batchsz, num_rnns), dtype=np.float32), np.zeros((batchsz, num_rnns), dtype=np.float32))
+                #rnn.get_initial_state(tf.zeros(()))
+                (tf.zeros((batchsz, self.hsz), dtype=np.float32), tf.zeros((batchsz, self.hsz), dtype=tf.float32))
             )
 
         return zstate
@@ -1840,7 +1841,7 @@ class WeightTieDense(tf.keras.layers.Layer):
             return
         W = getattr(self.tied, "W", None)
         if W is not None:
-            self.W = w
+            self.W = W
             super().build(input_shape)
             return
         self.W = getattr(self.tied, "kernel")

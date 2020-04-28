@@ -237,29 +237,29 @@ class LanguageModelBase(tf.keras.Model, LanguageModel):
 
         :return: A restored model
         """
+        _state = read_json(basename + '.state')
+
         if not tf.executing_eagerly():
-            _state = read_json(basename + '.state')
-            _state['sess'] = kwargs.pop('sess', tf.compat.v1.Session())
-            _state['model_type'] = kwargs.get('model_type', 'default')
-            embeddings = {}
-            embeddings_dict = _state.pop("embeddings")
+            _state['sess'] = kwargs.pop('sess', create_session())
+            embeddings_info = _state.pop("embeddings")
 
-            for key, class_name in embeddings_dict.items():
-                md = read_json('{}-{}-md.json'.format(basename, key))
-                embed_args = dict({'vsz': md['vsz'], 'dsz': md['dsz']})
-                Constructor = eval(class_name)
-                embeddings[key] = Constructor(key, **embed_args)
+            with _state['sess'].graph.as_default():
+                embeddings = reload_embeddings(embeddings_info, basename)
+                for k in embeddings_info:
+                    if k in kwargs:
+                        _state[k] = kwargs[k]
 
-            model = cls.create(embeddings, **_state)
-            model._state = _state
+                _state['model_type'] = kwargs.get('model_type', 'default')
+                model = cls.create(embeddings, **_state)
+                model._state = _state
 
-            do_init = kwargs.get('init', True)
-            if do_init:
-                init = tf.compat.v1.global_variables_initializer()
-                model.sess.run(init)
+                do_init = kwargs.get('init', True)
+                if do_init:
+                    init = tf.compat.v1.global_variables_initializer()
+                    model.sess.run(init)
 
-            model.saver = tf.compat.v1.train.Saver()
-            model.saver.restore(model.sess, basename)
+                model.saver = tf.compat.v1.train.Saver()
+                model.saver.restore(model.sess, basename)
         else:
             _state = read_json(basename + '.state')
             _state['model_type'] = kwargs.get('model_type', 'default')

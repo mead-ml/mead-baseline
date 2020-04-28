@@ -6,6 +6,7 @@ parser = argparse.ArgumentParser(description='Classify text with a model')
 parser.add_argument('--model', help='A classifier model', required=True, type=str)
 parser.add_argument('--text', help='raw value', type=str)
 parser.add_argument('--device', help='device')
+parser.add_argument('--backend', help='backend', choices={'tf', 'pytorch'}, default='tf')
 parser.add_argument('--prefer_eager', help="If running in TensorFlow, should we prefer eager model", type=str2bool)
 
 
