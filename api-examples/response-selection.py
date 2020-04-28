@@ -10,7 +10,7 @@ logger = logging.getLogger("baseline")
 
 
 def create_model(model_type, embeddings, d_model=512, d_ff=2048, dropout=0., num_heads=8, num_layers=6,
-                 stacking_layers=None, rpr_k=[], d_k=None, att_layer=True):
+                 stacking_layers=None, rpr_k=[], d_k=None):
     if len(rpr_k) == 0 or rpr_k[0] < 1:
         rpr_k = None
     if model_type == "encoder-decoder":
@@ -29,7 +29,7 @@ def create_model(model_type, embeddings, d_model=512, d_ff=2048, dropout=0., num
         model = TiedEmbeddingsSeq2SeqModel(embeddings, **hps)
     elif model_type == 'dual-encoder':
         model = PairedModel(embeddings, d_model, d_ff, dropout, num_heads, num_layers, stacking_layers=stacking_layers,
-                            rpr_k=rpr_k, d_k=d_k, att_layer=att_layer)
+                            rpr_k=rpr_k, d_k=d_k)
     else:
         model = TransformerLanguageModel.create({'x': embeddings},
                                                 hsz=d_model,
