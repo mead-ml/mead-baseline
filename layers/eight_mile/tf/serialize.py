@@ -1,6 +1,8 @@
 import numpy as np
 from typing import Dict, List
 from eight_mile.tf.layers import TransformerEncoderStack, TransformerEncoder, MultiHeadedAttention, FFN
+from eight_mile.tf.embeddings import LookupTableEmbeddings, LearnedPositionalLookupTableEmbeddingsWithBias, LearnedPositionalLookupTableEmbeddings
+
 import tensorflow as tf
 
 
@@ -61,7 +63,7 @@ def from_encoder_array(tf_encoder: TransformerEncoder, d: Dict, name: str):
     from_ffn_array(tf_encoder.ffn, d, f"{name}/ffn")
 
 
-def from_embed_array(tf_embed: tf.keras.layers.Layer, d: Dict, name: str):
+def from_embed_array(tf_embed: tf.keras.layers.Layer, d: Dict, name: str, bias=None):
     """Restore a simple lookup table embedding from a `weights` array
 
     :param tf_embed: An embedding module
@@ -69,12 +71,14 @@ def from_embed_array(tf_embed: tf.keras.layers.Layer, d: Dict, name: str):
     :param name: name of the layer
     :return: None
     """
-    weights = d[f"{name}/weights"]
+    weights = [d[f"{name}/weights"]]
     if hasattr(tf_embed, 'pos'):
         pos_weights = d[f"{name}/pos_weights"]
-        tf_embed.set_weights([pos_weights, weights])
-    else:
-        tf_embed.set_weights([weights])
+        weights = [pos_weights] + weights
+        if hasattr(tf_embed, 'bias') and bias is not None:
+            weights = weights + [bias.reshape(1, -1)]
+
+    tf_embed.set_weights(weights)
 
 
 def from_encoder_stack_array(tf_encoder_stack: TransformerEncoderStack, d: Dict, name: str = "TransformerEncoderStack"):
@@ -85,7 +89,8 @@ def from_encoder_stack_array(tf_encoder_stack: TransformerEncoderStack, d: Dict,
     :param name: A name for this primitive
     :return: None
     """
-    from_weight_array(tf_encoder_stack.ln, d, f"{name}/ln")
+    if isinstance(tf_encoder_stack.ln, tf.keras.layers.LayerNormalization):
+        from_weight_array(tf_encoder_stack.ln, d, f"{name}/ln")
     for i, enc_tf in enumerate(tf_encoder_stack.encoders):
         from_encoder_array(enc_tf, d, f"{name}/{i}")
 
@@ -107,7 +112,14 @@ def from_tlm_array(tf_tlm: tf.keras.layers.Layer, d: Dict, embeddings_keys: List
 
     keys_to_restore = embeddings_keys if embeddings_keys else list(tf_tlm.embeddings.keys())
     for embeddings_key in keys_to_restore:
-        from_embed_array(tf_tlm.embeddings[embeddings_key], d, name=f"{name}/Embeddings/{embeddings_key}")
+        # If we get this class in we have to monkey patch the embeddings so we can add the bias
+        if isinstance(tf_tlm.embeddings[embeddings_key], LearnedPositionalLookupTableEmbeddingsWithBias):
+            bias = d[f"{name}/Embeddings/tt/weights"][0]
+            from_embed_array(tf_tlm.embeddings[embeddings_key], d, f"{name}/Embeddings/{embeddings_key}", bias)
+        else:
+            from_embed_array(tf_tlm.embeddings[embeddings_key], d, f"{name}/Embeddings/{embeddings_key}")
+    if hasattr(tf_tlm.embeddings.reduction, 'ln'):
+        from_weight_array(tf_tlm.embeddings.reduction.ln, d, f"{name}/Embeddings/reduction/ln")
 
 
 def load_tlm_npz(tf_tlm: tf.keras.layers.Layer, npz: str, embeddings_key: str = 'x', name: str = "TLM"):

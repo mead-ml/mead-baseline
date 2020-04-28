@@ -2,7 +2,6 @@ import argparse
 import baseline
 import sys
 sys.path.append('../python/addons')
-import embed_bert
 from baseline.tf.embeddings import *
 from baseline.embeddings import *
 from baseline.vectorizers import *

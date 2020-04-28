@@ -575,6 +575,7 @@ def whitespace_tokenize(text):
 BERT_VOCAB = None
 
 
+@export
 def load_bert_vocab(vocab_file):
     global BERT_VOCAB
     if BERT_VOCAB is not None:

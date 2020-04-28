@@ -33,17 +33,43 @@ BERT_HF_LAYER_MAP = {
     'bert.encoder.layer.{}.attention.output.LayerNorm.gamma': 'generator.encoders.{}.ln2.weight'
 }
 
+BERT_HF_FT_LAYER_MAP = {
+    ## FFN weights
+    'bert.encoder.layer.{}.intermediate.dense.weight': 'transformer.encoders.{}.ffn.0.layer.weight',
+    'bert.encoder.layer.{}.intermediate.dense.bias': 'transformer.encoders.{}.ffn.0.layer.bias',
+    'bert.encoder.layer.{}.output.dense.weight': 'transformer.encoders.{}.ffn.3.layer.weight',
+    'bert.encoder.layer.{}.output.dense.bias': 'transformer.encoders.{}.ffn.3.layer.bias',
+
+    ## MHA weights
+    'bert.encoder.layer.{}.attention.self.key.weight': 'transformer.encoders.{}.self_attn.w_K.layer.weight',
+    'bert.encoder.layer.{}.attention.self.key.bias': 'transformer.encoders.{}.self_attn.w_K.layer.bias',
+    'bert.encoder.layer.{}.attention.self.query.weight': 'transformer.encoders.{}.self_attn.w_Q.layer.weight',
+    'bert.encoder.layer.{}.attention.self.query.bias': 'transformer.encoders.{}.self_attn.w_Q.layer.bias',
+    'bert.encoder.layer.{}.attention.self.value.weight': 'transformer.encoders.{}.self_attn.w_V.layer.weight',
+    'bert.encoder.layer.{}.attention.self.value.bias': 'transformer.encoders.{}.self_attn.w_V.layer.bias',
+    'bert.encoder.layer.{}.attention.output.dense.weight': 'transformer.encoders.{}.self_attn.w_O.layer.weight',
+    'bert.encoder.layer.{}.attention.output.dense.bias': 'transformer.encoders.{}.self_attn.w_O.layer.bias',
+
+    ## LN weights
+    # The names in of layer norm our transformers are a bit unspecific
+    # think of ln1 as ln_x and ln2 as ln_attn_output
+    'bert.encoder.layer.{}.output.LayerNorm.beta': 'transformer.encoders.{}.ln1.bias',
+    'bert.encoder.layer.{}.output.LayerNorm.gamma': 'transformer.encoders.{}.ln1.weight',
+    'bert.encoder.layer.{}.attention.output.LayerNorm.beta': 'transformer.encoders.{}.ln2.bias',
+    'bert.encoder.layer.{}.attention.output.LayerNorm.gamma': 'transformer.encoders.{}.ln2.weight'
+}
+
 BERT_HF_EMBED_MAP = {
     ## Embedding weights
     'bert.embeddings.word_embeddings.weight': 'embeddings.embeddings.0.embeddings.weight',
     'bert.embeddings.position_embeddings.weight': 'embeddings.embeddings.0.pos_embeddings.weight',
     'bert.embeddings.token_type_embeddings.weight': 'embeddings.embeddings.1.embeddings.weight',
-    'bert.embeddings.LayerNorm.beta': 'embeddings.embeddings.0.ln.bias',
-    'bert.embeddings.LayerNorm.gamma': 'embeddings.embeddings.0.ln.weight',
+    'bert.embeddings.LayerNorm.beta': 'embeddings.reduction.ln.bias',
+    'bert.embeddings.LayerNorm.gamma': 'embeddings.reduction.ln.weight',
 }
 
 
-def convert_transformers_keys(num_layers: int, d: Dict, replace_layer_map: Dict, replace_embed_map: Dict) -> Dict:
+def convert_transformers_keys(num_layers: int, d: Dict, replace_layer_map: Dict = BERT_HF_LAYER_MAP, replace_embed_map: Dict = BERT_HF_EMBED_MAP) -> Dict:
     m = {}
     for i in range(num_layers):
         for k, v in replace_layer_map.items():
@@ -226,6 +252,9 @@ def to_tlm_array(pytorch_tlm: nn.Module, embeddings_keys: List[str] = None, name
 
     for embeddings_key in keys_to_write:
         d.update(to_embed_array(pytorch_tlm.embeddings[embeddings_key], name=f"{name}/Embeddings/{embeddings_key}"))
+
+    if hasattr(pytorch_tlm.embeddings.reduction, 'ln'):
+        d.update(to_weight_array(pytorch_tlm.embeddings.reduction.ln, name=f"{name}/Embeddings/reduction/ln"))
     return d
 
 
@@ -255,7 +284,8 @@ def to_encoder_stack_array(
     :return: A Dict containing a set of weights
     """
     d = {}
-    d.update(to_weight_array(pytorch_encoder_stack.ln, f"{name}/ln"))
+    if isinstance(pytorch_encoder_stack.ln, nn.LayerNorm):
+        d.update(to_weight_array(pytorch_encoder_stack.ln, f"{name}/ln"))
     for i, enc_pyt in enumerate(pytorch_encoder_stack.encoders):
         d.update(to_encoder_array(enc_pyt, f"{name}/{i}"))
     return d
@@ -271,7 +301,8 @@ def from_encoder_stack_array(
     :param name: A name for this primitive
     :return: None
     """
-    from_weight_array(pytorch_encoder_stack.ln, d, f"{name}/ln")
+    if isinstance(pytorch_encoder_stack.ln, nn.LayerNorm):
+        from_weight_array(pytorch_encoder_stack.ln, d, f"{name}/ln")
     for i, enc_pyt in enumerate(pytorch_encoder_stack.encoders):
         from_encoder_array(enc_pyt, d, f"{name}/{i}")
 
@@ -290,9 +321,18 @@ def from_tlm_array(pytorch_tlm: nn.Module, d: Dict, embeddings_keys: List[str] =
     """
     transformer = pytorch_tlm.transformer if hasattr(pytorch_tlm, 'transformer') else pytorch_tlm.generator
     from_encoder_stack_array(transformer, d, name=f"{name}/TransformerEncoderStack")
-    key_to_restore = embeddings_keys if embeddings_keys else list(pytorch_tlm.embeddings.keys())
-    for embeddings_key in key_to_restore:
+    keys_to_restore = embeddings_keys if embeddings_keys else list(pytorch_tlm.embeddings.keys())
+    for embeddings_key in keys_to_restore:
         from_embed_array(pytorch_tlm.embeddings[embeddings_key], d, f"{name}/Embeddings/{embeddings_key}")
+        if isinstance(pytorch_tlm.embeddings[embeddings_key], LearnedPositionalLookupTableEmbeddingsWithBias):
+            tt = LookupTableEmbeddings(vsz=2, dsz=pytorch_tlm.embeddings.output_dim)
+            from_embed_array(tt, d, f"{name}/Embeddings/tt")
+            pytorch_tlm.embeddings[embeddings_key].bias = nn.Parameter(tt.embeddings.weight[0])
+        else:
+            from_embed_array(pytorch_tlm.embeddings[embeddings_key], d, f"{name}/Embeddings/{embeddings_key}")
+    if hasattr(pytorch_tlm.embeddings.reduction, 'ln'):
+        from_weight_array(pytorch_tlm.embeddings.reduction.ln, d, f"{name}/Embeddings/reduction/ln")
+
 
 
 def load_tlm_npz(pytorch_tlm: nn.Module, npz: str, embeddings_keys: List[str] = None, name: str = "TLM"):
@@ -365,7 +405,11 @@ def load_tlm_transformers_bin(pytorch_tlm: nn.Module, bin_file: str, replace_lay
         d = {k_0: pytorch_tlm.embeddings[k_0], 'tt':  LookupTableEmbeddings(vsz=2, dsz=old_embeddings_stack.output_dim)}
         pytorch_tlm.embeddings = EmbeddingsStack(d, reduction='sum-layer-norm')
     unknown_keys = pytorch_tlm.load_state_dict(mapped_keys, strict=False)
+    missing_keys = [key for key in unknown_keys.missing_keys if key != 'embeddings.embeddings.0.bias']
+
     if old_embeddings_stack:
         old_embeddings_stack[k_0].bias = nn.Parameter(pytorch_tlm.embeddings['tt'].embeddings.weight[0])
+        old_embeddings_stack.reduction.ln = pytorch_tlm.embeddings.reduction.ln
         pytorch_tlm.embeddings = old_embeddings_stack
-    return unknown_keys
+
+    return {'missing': missing_keys, 'unexpected': unknown_keys.unexpected_keys}

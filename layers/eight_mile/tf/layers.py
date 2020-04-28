@@ -513,9 +513,10 @@ class LSTMEncoderWithState2(tf.keras.layers.Layer):
         """
         num_rnns = len(self.rnns)
         zstate = []
-        for i, _ in enumerate(self.rnns):
+        for rnn in self.rnns:
             zstate.append(
-                (np.zeros((batchsz, num_rnns), dtype=np.float32), np.zeros((batchsz, num_rnns), dtype=np.float32))
+                #rnn.get_initial_state(tf.zeros(()))
+                (tf.zeros((batchsz, self.hsz), dtype=np.float32), tf.zeros((batchsz, self.hsz), dtype=tf.float32))
             )
 
         return zstate
@@ -1743,7 +1744,9 @@ class SumReduction(Reduction):
 class SumLayerNormReduction(Reduction):
 
     def __init__(self, output_dims: List[int], layer_norm_eps: float = 1.0e-12):
+        super().__init__()
         self.ln = tf.keras.layers.LayerNormalization(epsilon=layer_norm_eps)
+        self.output_dim = output_dims[0]
 
     def call(self, inputs: List[tf.Tensor]) -> tf.Tensor:
         outputs = tf.add_n(inputs)
@@ -1792,7 +1795,7 @@ class EmbeddingsStack(tf.keras.layers.Layer):
     def __getitem__(self, item: str):
         return self.embeddings[item]
 
-    def call(self, inputs):
+    def call(self, inputs: Dict[str, tf.Tensor]) -> tf.Tensor:
         """This method performs "embedding" of the inputs.  The base method here then concatenates along depth
         dimension to form word embeddings
 
@@ -1838,7 +1841,7 @@ class WeightTieDense(tf.keras.layers.Layer):
             return
         W = getattr(self.tied, "W", None)
         if W is not None:
-            self.W = w
+            self.W = W
             super().build(input_shape)
             return
         self.W = getattr(self.tied, "kernel")

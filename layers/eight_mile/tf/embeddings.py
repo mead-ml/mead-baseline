@@ -21,8 +21,7 @@ class TensorFlowEmbeddings(tf.keras.layers.Layer):
         # tf.kers.layers.Layer has a validation step that only allows certain kwargs
         # to be passed into it. These are not documented and you need to look into the
         # code to find this. For now just don't pass in out kwargs
-        super().__init__(trainable, name, dtype)
-        self._name = name
+        super().__init__(trainable=trainable, name=name, dtype=dtype)
         self.W = None
 
     def get_dsz(self):
@@ -78,8 +77,7 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
         trainable = kwargs.get("finetune", trainable)
         # The layers have a filter of allowed keywords and the docs don't list what they are
         # you need to look in code. We are just not passing kwargs for now.
-        super().__init__(trainable=trainable, name=name, dtype=dtype)
-
+        super().__init__(trainable=trainable, name=name, dtype=dtype, **kwargs)
         self.vsz = kwargs.get("vsz")
         self.dsz = kwargs.get("dsz")
         self.finetune = kwargs.get("finetune", trainable)
@@ -147,8 +145,7 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
 
     def __init__(self, trainable=True, name=None, dtype=tf.float32, **kwargs):
         trainable = kwargs.get("finetune", trainable)
-        super().__init__(trainable=trainable, name=name, dtype=dtype)
-        self._name = name
+        super().__init__(trainable=trainable, name=name, dtype=dtype, **kwargs)
         self.cpu_placement = bool(kwargs.get('cpu_placement', False))
         self.scope = kwargs.get("scope", "CharConv")
         self.finetune = kwargs.get("finetune", trainable)
@@ -203,7 +200,7 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
 class CharLSTMEmbeddings(TensorFlowEmbeddings):
     def __init__(self, trainable=True, name=None, dtype=tf.float32, **kwargs):
         trainable = kwargs.get("finetune", trainable)
-        super().__init__(trainable=trainable, name=name, dtype=dtype)
+        super().__init__(trainable=trainable, name=name, dtype=dtype, **kwargs)
         self.scope = kwargs.get("scope", "CharLUT")
         self.finetune = kwargs.get("finetune", trainable)
         self.lstmsz = kwargs.get("lstmsz", 50)
@@ -260,7 +257,7 @@ class CharLSTMEmbeddings(TensorFlowEmbeddings):
 class CharTransformerEmbeddings(TensorFlowEmbeddings):
     def __init__(self, trainable=True, name=None, dtype=tf.float32, **kwargs):
         trainable = kwargs.get("finetune", trainable)
-        super().__init__(trainable=trainable, name=name, dtype=dtype)
+        super().__init__(trainable=trainable, name=name, dtype=dtype, **kwargs)
         self.scope = kwargs.get("scope", "CharLUT")
         self.finetune = kwargs.get("finetune", trainable)
         self.embed = LookupTableEmbeddings(name=f"{self.name}/CharLUT", finetune=self.finetune, **kwargs)
@@ -396,8 +393,6 @@ class LearnedPositionalLookupTableEmbeddingsWithBias(LearnedPositionalMixin, Loo
     """
     def __init__(self, trainable=True, name=None, dtype=tf.float32, **kwargs):
         super().__init__(name=name, **kwargs)
-        self.dropout = tf.keras.layers.Dropout(kwargs.get("dropout", 0.1))
-        self.ln = tf.keras.layers.LayerNormalization(epsilon=1e-12)
 
     def build(self, input_shape):
         super().build(input_shape)
@@ -413,7 +408,7 @@ class LearnedPositionalLookupTableEmbeddingsWithBias(LearnedPositionalMixin, Loo
         T = tf.shape(x)[1]
         pos = self.positional(T)
         x = x + pos + self.bias
-        return self.dropout(x, training=TRAIN_FLAG())
+        return x
 
 
 class PositionalCharConvEmbeddings(SinusoidalPositionalMixin, CharConvEmbeddings):

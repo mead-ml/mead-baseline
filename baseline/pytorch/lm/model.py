@@ -196,9 +196,11 @@ class TransformerLanguageModel(AbstractGeneratorLanguageModel):
         d_k = kwargs.get('d_k')
         scale = bool(kwargs.get('scale', True))
         activation = kwargs.get('activation', 'gelu')
+        layer_norm_eps = kwargs.get('layer_norm_eps', 1e-12)
+        layer_norms_after = kwargs.get('layer_norms_after', False)
         return TransformerEncoderStack(num_heads, d_model=d_model, pdrop=pdrop, scale=scale,
                                        layers=layers, d_ff=d_ff, rpr_k=rpr_k, d_k=d_k,
-                                       activation=activation)
+                                       activation=activation, layer_norm_eps=layer_norm_eps, layer_norms_after=layer_norms_after)
 
     def create_layers(self, embeddings, **kwargs):
         super().create_layers(embeddings, **kwargs)
