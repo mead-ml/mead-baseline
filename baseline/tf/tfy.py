@@ -15,6 +15,7 @@ def reload_embeddings(embeddings_dict, basename):
         name = embed_args.pop('name', None)
         assert name is None or name == key
         mod = import_user_module(module)
+        embed_args['name'] = key
         Constructor = getattr(mod, cls)
         embeddings[key] = Constructor(key, **embed_args)
     return embeddings

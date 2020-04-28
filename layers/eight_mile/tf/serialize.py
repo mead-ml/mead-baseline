@@ -122,7 +122,6 @@ def from_tlm_array(tf_tlm: tf.keras.layers.Layer, d: Dict, embeddings_keys: List
         from_weight_array(tf_tlm.embeddings.reduction.ln, d, f"{name}/Embeddings/reduction/ln")
 
 
-
 def load_tlm_npz(tf_tlm: tf.keras.layers.Layer, npz: str, embeddings_key: str = 'x', name: str = "TLM"):
     """Restore a TLM-like model (possibly a `Model` for fine-tuning
 

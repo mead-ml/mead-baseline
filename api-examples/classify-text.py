@@ -17,7 +17,7 @@ parser.add_argument('--preproc', help='(optional) where to perform preprocessing
 parser.add_argument('--batchsz', help='batch size when --text is a file', default=100, type=int)
 parser.add_argument('--model_type', type=str, default='default')
 parser.add_argument('--modules', default=[])
-parser.add_argument('--prefer_eager', help="If running in TensorFlow, should we prefer eager model", type=str2bool)
+parser.add_argument('--prefer_eager', help="If running in TensorFlow, should we prefer eager model", type=str2bool, default=False)
 
 args = parser.parse_args()
 
