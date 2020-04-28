@@ -148,7 +148,9 @@ class LanguageModelBase(tf.keras.Model, LanguageModel):
         if not tf.executing_eagerly():
             step_softmax = self.sess.run(self.probs, batch_dict)
         else:
-            step_softmax = tf.nn.softmax(self(batch_dict))
+            # FIXME: This is not really the proper handling for eager mode
+            # We want to be able to pass in the last hidden state and emit the current one right?
+            step_softmax = tf.nn.softmax(self(batch_dict, None)[0])
 
         return step_softmax
 
@@ -208,7 +210,7 @@ class LanguageModelBase(tf.keras.Model, LanguageModel):
         """Take the input and produce the best path of labels out
 
         :param inputs: The feature indices for the input
-        :return: The most likely path through the output labels
+        :return: The output and hidden units
         """
 
     def create_layers(self, embeddings, **kwargs):
