@@ -4,10 +4,16 @@ import argparse
 import copy
 from itertools import chain
 from eight_mile.utils import read_config_stream, str2bool
-from baseline.utils import import_user_module
-from baseline.utils import normalize_backend
+from baseline.utils import import_user_module, normalize_backend
 import mead
 from mead.utils import convert_path, parse_extra_args, configure_logger, parse_and_merge_overrides
+
+
+DEFAULT_SETTINGS_LOC = 'config/mead-settings.json'
+DEFAULT_DATASETS_LOC = 'config/datasets.json'
+DEFAULT_LOGGING_LOC = 'config/logging.json'
+DEFAULT_EMBEDDINGS_LOC = 'config/embeddings.json'
+DEFAULT_VECTORIZERS_LOC = 'config/vecs.json'
 logger = logging.getLogger('mead')
 
 
@@ -71,17 +77,17 @@ def update_datasets(datasets_config, config_params, train, valid, test):
 def main():
     parser = argparse.ArgumentParser(description='Train a text classifier')
     parser.add_argument('--config', help='JSON/YML Configuration for an experiment: local file or remote URL', type=convert_path, default="$MEAD_CONFIG")
-    parser.add_argument('--settings', help='JSON/YML Configuration for mead', default='config/mead-settings.json', type=convert_path)
+    parser.add_argument('--settings', help='JSON/YML Configuration for mead', default=DEFAULT_SETTINGS_LOC, type=convert_path)
     parser.add_argument('--task_modules', help='tasks to load, must be local', default=[], nargs='+', required=False)
-    parser.add_argument('--datasets', help='index of dataset labels: local file, remote URL or mead-ml/hub ref', default='config/datasets.json', type=convert_path)
+    parser.add_argument('--datasets', help='index of dataset labels: local file, remote URL or mead-ml/hub ref', type=convert_path)
     parser.add_argument('--modules', help='modules to load: local files, remote URLs or mead-ml/hub refs', default=[], nargs='+', required=False)
     parser.add_argument('--mod_train_file', help='override the training set')
     parser.add_argument('--mod_valid_file', help='override the validation set')
     parser.add_argument('--mod_test_file', help='override the test set')
     parser.add_argument('--fit_func', help='override the fit function')
-    parser.add_argument('--embeddings', help='index of embeddings: local file, remote URL or mead-ml/hub ref', default='config/embeddings.json', type=convert_path)
-    parser.add_argument('--vecs', help='index of vectorizers: local file, remote URL or hub mead-ml/ref', default='config/vecs.json', type=convert_path)
-    parser.add_argument('--logging', help='json file for logging', default='config/logging.json', type=convert_path)
+    parser.add_argument('--embeddings', help='index of embeddings: local file, remote URL or mead-ml/hub ref', type=convert_path)
+    parser.add_argument('--vecs', help='index of vectorizers: local file, remote URL or hub mead-ml/ref', type=convert_path)
+    parser.add_argument('--logging', help='json file for logging', default=DEFAULT_LOGGING_LOC, type=convert_path)
     parser.add_argument('--task', help='task to run', choices=['classify', 'tagger', 'seq2seq', 'lm'])
     parser.add_argument('--gpus', help='Number of GPUs (defaults to number available)', type=int, default=-1)
     parser.add_argument('--basedir', help='Override the base directory where models are stored', type=str)
@@ -109,14 +115,19 @@ def main():
         logger.warning('Warning: no mead-settings file was found at [{}]'.format(args.settings))
         args.settings = {}
 
+    args.datasets = args.settings.get('datasets', convert_path(DEFAULT_DATASETS_LOC)) if args.datasets is None else args.datasets
     args.datasets = read_config_stream(args.datasets)
     if args.mod_train_file or args.mod_valid_file or args.mod_test_file:
         logging.warning('Warning: overriding the training/valid/test data with user-specified files'
                         ' different from what was specified in the dataset index.  Creating a new key for this entry')
         update_datasets(args.datasets, config_params, args.mod_train_file, args.mod_valid_file, args.mod_test_file)
 
+    args.embeddings = args.settings.get('embeddings', convert_path(DEFAULT_EMBEDDINGS_LOC)) if args.embeddings is None else args.embeddings
     args.embeddings = read_config_stream(args.embeddings)
+
+    args.vecs = args.settings.get('vecs', convert_path(DEFAULT_VECTORIZERS_LOC)) if args.vecs is None else args.vecs
     args.vecs = read_config_stream(args.vecs)
+
     if args.gpus:
         # why does it go to model and not to train?
         config_params['train']['gpus'] = args.gpus
