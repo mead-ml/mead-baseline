@@ -309,6 +309,7 @@ def load_embed_and_vocab(token_type, reader, dataset, dataset_key, embed_type, d
         vectorizers_mxlen = preproc_data['vectorizers_mxlen']
         for k, vectorizer in reader.vectorizers.items():
             vectorizer.max_seen = vectorizers_mxlen[k]
+
     else:
         vocab_sources = [dataset['train_file'], dataset['valid_file']]
         vocabs = reader.build_vocab(vocab_sources)

@@ -99,6 +99,14 @@ def test_iob_bio():
     for _ in range(100):
         test()
 
+def test_bio_iob():
+    def test():
+        spans = generate_spans()
+        bio = generate_bio(spans)
+        gold_iob = generate_iob()
+        iob = convert_bio_to_iob(bio)
+        assert iob == gold_iob
+
 
 def test_bio_iob():
     def test():

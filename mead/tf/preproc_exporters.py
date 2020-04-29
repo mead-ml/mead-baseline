@@ -29,6 +29,11 @@ def get_mxlen(tensors):
     )
     return tf.reduce_max(sizes)
 
+def get_lengths(tensors):
+    return tf.map_fn(
+        get_string_size, tensors, dtype=tf.int32, back_prop=False
+    )
+
 
 def get_lengths(tensors):
     return tf.map_fn(
@@ -160,8 +165,6 @@ class ClassifyTensorFlowPreProcExporter(ClassifyTensorFlowExporter):
             embedding_inputs[feature] = preprocessed[feature]
         model, classes, values = self._create_model(sess, model_file, lengths=lengths, **embedding_inputs)
         sig_input = {x: tf.saved_model.utils.build_tensor_info(tf_example[x]) for x in pc.FIELD_NAMES}
-        if model.lengths is not None:
-            sig_input.update({model.lengths_key: tf.saved_model.utils.build_tensor_info(model.lengths)})
         sig_output = SignatureOutput(classes, values)
         sig_name = 'predict_text'
         assets = create_assets(
@@ -200,7 +203,6 @@ class TaggerTensorFlowPreProcExporter(TaggerTensorFlowExporter):
             embedding_inputs[feature] = preprocessed[feature]
         model, classes, values = self._create_model(sess, model_file, lengths=lengths, **embedding_inputs)
         sig_input = {x: tf.saved_model.utils.build_tensor_info(tf_example[x]) for x in pc.FIELD_NAMES}
-        sig_input.update({model.lengths_key: tf.saved_model.utils.build_tensor_info(model.lengths)})
         sig_output = SignatureOutput(classes, values)
         sig_name = 'tag_text'
         assets = create_assets(

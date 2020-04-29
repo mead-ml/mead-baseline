@@ -232,9 +232,7 @@ def index_by_label(object_list):
 @export
 def convert_path(path, loc=None):
     """If the provided path doesn't exist search for it relative to loc (or this file)."""
-    if os.path.isfile(path):
-        return path
-    if path.startswith("$"):
+    if os.path.isfile(path) or path.startswith("$") or validate_url(path):
         return path
     if path.startswith("http"):
         return path

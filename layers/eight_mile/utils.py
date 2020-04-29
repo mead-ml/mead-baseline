@@ -458,7 +458,6 @@ def read_config_stream(config_stream) -> Dict:
     
     else:
         if validate_url(config_stream):
-            print(config_stream)
             path_to_save, _ = urlretrieve(config_stream)
             return read_config_stream(path_to_save)
         else:
@@ -517,7 +516,6 @@ def parse_module_as_path(module_name):
     module_dir = os.path.realpath(os.path.expanduser(module_dir)) if module_dir else module_dir
     module_name, _ = os.path.splitext(module_name)
     return module_name, module_dir
-
 
 @export
 def fill_y(nc, yidx):
@@ -815,7 +813,6 @@ def remove_extensions(path: str, exts: Set[str]) -> str:
 def remove_conll_extensions(path: str, exts: Set[str] = CONLL_EXTS) -> str:
     return remove_extensions(path, exts)
 
-
 @export
 def split_conll_extensions(path: str, exts: Set[str] = CONLL_EXTS) -> Tuple[str, str]:
     return split_extensions(path, exts)
@@ -886,6 +883,7 @@ def read_conll_sentences(f, delim=None, allow_comments=True, comment_pattern="#"
         # not skip it
         if allow_comments and not sentence and line.startswith(comment_pattern):
             continue
+
         # Blank lines signal the end of a sentence
         if len(line) == 0:
             # If we built a sentence yield it, this check allows multiple blank lines in a row
@@ -1126,7 +1124,6 @@ def to_spans(
     """
     sequence = [lut[y] for y in sequence]
     return to_chunks(sequence, span_type, verbose, delim)
-
 
 @export
 def to_chunks(sequence: List[str], span_type: str, verbose: bool = False, delim: str = "@") -> List[str]:
@@ -1624,3 +1621,4 @@ def print_table(rows: collections.namedtuple, columns: Optional[Set[str]] = None
         hwidth = len(max(fields, key=lambda x: len(x)))
         for field in fields:
             print("%*s = %s" % (hwidth, field, getattr(row, field)))
+

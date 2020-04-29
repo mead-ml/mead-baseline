@@ -8,12 +8,12 @@ from baseline.utils import import_user_module, normalize_backend
 import mead
 from mead.utils import convert_path, parse_extra_args, configure_logger, parse_and_merge_overrides
 
-
 DEFAULT_SETTINGS_LOC = 'config/mead-settings.json'
 DEFAULT_DATASETS_LOC = 'config/datasets.json'
 DEFAULT_LOGGING_LOC = 'config/logging.json'
 DEFAULT_EMBEDDINGS_LOC = 'config/embeddings.json'
 DEFAULT_VECTORIZERS_LOC = 'config/vecs.json'
+
 logger = logging.getLogger('mead')
 
 
@@ -73,6 +73,7 @@ def update_datasets(datasets_config, config_params, train, valid, test):
     config_params['dataset'] = new_dataset_label
     logger.info("The dataset key for this override is {}".format(new_dataset_label))
     datasets_config.append(updated_record)
+
 
 def main():
     parser = argparse.ArgumentParser(description='Train a text classifier')
