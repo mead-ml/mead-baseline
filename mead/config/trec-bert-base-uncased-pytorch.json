@@ -1,6 +1,8 @@
 {
   "task": "classify",
   "basedir": "./trec-bert",
+  "backend": "pytorch",
+  "dataset": "trec",
   "batchsz": 10,
   "modules": [
     "embed_tlm_pytorch"
@@ -26,8 +28,6 @@
   "preproc": {
     "mxlen": 100
   },
-  "backend": "pytorch",
-  "dataset": "trec",
   "loader": {
     "reader_type": "default"
   },

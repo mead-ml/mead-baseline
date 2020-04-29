@@ -7,13 +7,13 @@ modules:
 features:
 - embeddings:
     word_embed_type: learned-positional-w-bias
-    label: bert-base-uncased-bin
+    label: bert-base-uncased-npz
     type: tlm-words-embed-pooled
     reduction: sum-layer-norm
-    layer_norms_after: True
+    layer_norms_after: true
     finetune: true
     dropout: 0.1
-
+    mlm: true
   name: bert
   vectorizer:
     label: bert-base-uncased
