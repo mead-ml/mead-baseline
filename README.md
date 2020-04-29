@@ -1,6 +1,6 @@
 # Baseline
 
-*Version* [1.x](docs/v1.md)
+*Version 2.x*
 
 Baseline is a library for reproducible deep learning research and fast model
 development for NLP. The library provides easily extensible abstractions and
@@ -64,24 +64,27 @@ public contributions.
 
 ## Installation
 
-Baseline can be installed as a Python package:
+Baseline can be installed as a Python package.  When the repository is cloned,
+a git-submodule imports mead-layers from https://github.com/mead-ml/mead-layers
 
-    pip install mead-baseline
+To install a developer version of the library do:
 
-Or you can checkout the source code and do:
-
-    pip install -e .
-
-from the baseline/python directory.
+```
+cd layers
+pip install -e .
+cd ../
+pip install -e .
+```
+This first installs `mead-layers` and then `mead-baseline`
 
 ## A Note About Versions
 
 Deep Learning Frameworks are evolving quickly, and changes are not always
 backwards compatible. We recommend recent versions of each framework. Baseline
 is known to work on most versions of TensorFlow, and is currently being run on
-versions between 1.5 and 1.15. The PyTorch backend requires at least version 1.0.
+versions between 1.13 and and 2.1 .
 
-Version 2.0 of MEAD is currently tested primarily on PyTorch 1.3+ and TF 1.14 - 1.15 as well as TF 2.1
+The PyTorch backend requires at least version 1.3.0.
 
 ## Citing
 
