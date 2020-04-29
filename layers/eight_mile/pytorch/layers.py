@@ -2757,6 +2757,7 @@ class MultiHeadedRelativeAttention(nn.Module):
         dropout: float = 0.1,
         scale: bool = False,
         d_k: Optional[int] = None,
+        ra_masking: bool = False,
     ):
         """Constructor for multi-headed attention
 
@@ -2765,6 +2766,7 @@ class MultiHeadedRelativeAttention(nn.Module):
         :param dropout (``float``): The amount of dropout to use
         :param scale: Should we scale the dot product attention
         :param d_k: The low-order project per head.  This is normally `d_model // num_heads` unless set explicitly
+        :param masking: whether prevent attention beyond rpr_k
         """
         super().__init__()
 
@@ -2789,6 +2791,7 @@ class MultiHeadedRelativeAttention(nn.Module):
         else:
             self.attn_fn = SeqDotProductRelativeAttention(dropout)
         self.attn = None
+        self.ra_masking = ra_masking
 
     def make_rpr(self, seq_len, device) -> Tuple[torch.Tensor, torch.Tensor]:
         """Create a matrix shifted by self.rpr_k and bounded between 0 and 2*self.rpr_k to provide 0-based indexing for embedding
@@ -2811,6 +2814,11 @@ class MultiHeadedRelativeAttention(nn.Module):
         query, key, value, mask = qkvm
         batchsz = query.size(0)
         seq_len = query.size(1)
+        if self.ra_masking and self.rpr_k < seq_len - 1:
+            ones = torch.ones(seq_len, seq_len)
+            ra_mask = torch.triu(ones, diagonal=-self.rpr_k) - torch.triu(ones, diagonal=self.rpr_k+1)
+            ra_mask = ra_mask.to(mask.device)
+            mask = mask * ra_mask.unsqueeze(0).unsqueeze(0)
 
         # (B, H, T, D)
         query = self.w_Q(query).view(batchsz, -1, self.h, self.d_k).transpose(1, 2)
@@ -2836,6 +2844,7 @@ class TransformerEncoder(nn.Module):
         d_ff: Optional[int] = None,
         d_k: Optional[int] = None,
         rpr_k: Optional[int] = None,
+        ra_masking: bool = False,
         ffn_pdrop: Optional[float] = 0.0,
         layer_norms_after: bool = False,
         layer_norm_eps: float = 1.0e-6
@@ -2846,7 +2855,8 @@ class TransformerEncoder(nn.Module):
         self.d_model = d_model
         self.d_ff = d_ff if d_ff is not None else 4 * d_model
         if rpr_k is not None:
-            self.self_attn = MultiHeadedRelativeAttention(num_heads, d_model, rpr_k, pdrop, scale, d_k=d_k)
+            self.self_attn = MultiHeadedRelativeAttention(num_heads, d_model, rpr_k, pdrop, scale, d_k=d_k,
+                                                          ra_masking=ra_masking)
         else:
             self.self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale=scale, d_k=d_k)
         self.ffn = nn.Sequential(
@@ -2948,6 +2958,7 @@ class TransformerEncoderStack(nn.Module):
         d_ff: Optional[int] = None,
         d_k: Optional[int] = None,
         rpr_k: Optional[Union[int, List[int]]] = None,
+        ra_masking: bool = False,
         ffn_pdrop: Optional[float] = 0.0,
         layer_norms_after: bool = False,
         layer_norm_eps: float = 1.0e-6,
@@ -2966,7 +2977,7 @@ class TransformerEncoderStack(nn.Module):
                 TransformerEncoder(
                     num_heads, d_model, pdrop, scale, activation, d_ff, d_k,
                     rpr_k=rpr_k[i], ffn_pdrop=ffn_pdrop,
-                    layer_norms_after=layer_norms_after, layer_norm_eps=layer_norm_eps
+                    layer_norms_after=layer_norms_after, layer_norm_eps=layer_norm_eps, ra_masking=ra_masking
                 )
             )
 
