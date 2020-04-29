@@ -4,6 +4,7 @@ import shutil
 import logging
 import logging.config
 import hashlib
+from typing import List
 from datetime import datetime
 import argparse
 from copy import deepcopy
@@ -14,6 +15,9 @@ from baseline.utils import exporter, str2bool, read_config_file, write_json, get
 __all__ = []
 export = exporter(__all__)
 logger = logging.getLogger('mead')
+
+
+KNOWN_FMTS = ['%Y%m%d', '%Y-%m-%d', '%Y/%m/%d', '%Y', '%Y%m', '%Y-%m', '%Y/%m', '%Y%m%d_%H%M', '%Y-%m-%d_%H-%M', '%Y/%m/%d_%M/%H']
 
 
 @export
@@ -75,8 +79,7 @@ def read_config_file_or_json(config, name=''):
     raise Exception('Expected {} config file or a JSON object.'.format(name))
 
 
-def parse_date(s):
-    KNOWN_FMTS = ['%Y%m%d', '%Y-%m-%d', '%Y/%m/%d', '%Y', '%Y%m', '%Y-%m', '%Y/%m']
+def parse_date(s, known_fmts: List[str] = KNOWN_FMTS):
     for fmt in KNOWN_FMTS:
         try:
             dt = datetime.strptime(s, fmt)
