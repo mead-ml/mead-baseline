@@ -17,7 +17,18 @@ export = exporter(__all__)
 logger = logging.getLogger('mead')
 
 
-KNOWN_FMTS = ['%Y%m%d', '%Y-%m-%d', '%Y/%m/%d', '%Y', '%Y%m', '%Y-%m', '%Y/%m', '%Y%m%d_%H%M', '%Y-%m-%d_%H-%M', '%Y/%m/%d_%M/%H']
+KNOWN_DATE_FMTS = [
+    '%Y%m%d',
+    '%Y-%m-%d',
+    '%Y/%m/%d',
+    '%Y',
+    '%Y%m',
+    '%Y-%m',
+    '%Y/%m',
+    '%Y%m%d_%H%M',
+    '%Y-%m-%d_%H-%M',
+    '%Y/%m/%d_%M/%H'
+]
 
 
 @export
@@ -79,8 +90,8 @@ def read_config_file_or_json(config, name=''):
     raise Exception('Expected {} config file or a JSON object.'.format(name))
 
 
-def parse_date(s, known_fmts: List[str] = KNOWN_FMTS):
-    for fmt in KNOWN_FMTS:
+def parse_date(s, known_fmts: List[str] = KNOWN_DATE_FMTS):
+    for fmt in known_fmts:
         try:
             dt = datetime.strptime(s, fmt)
             return dt
