@@ -57,7 +57,11 @@ class TensorFlowPreprocessor(Preprocessor):
 class Token1DPreprocessor(TensorFlowPreprocessor):
 
     def __init__(self, feature, vectorizer, index, vocab, **kwargs):
-        super(Token1DPreprocessor, self).__init__(feature, vectorizer, index, vocab, **kwargs)
+        super().__init__(feature, vectorizer, index, vocab, **kwargs)
+        self.hard_mxlen = self.vectorizer.mxlen
+        # 10000 is just a large max, six.MAXSIZE was causing issues
+        self.hard_mxlen = self.hard_mxlen if self.hard_mxlen != -1 else 10000
+
         transform_fn = self.vectorizer.transform_fn.__name__
         if transform_fn not in ["identity_trans_fn", "lowercase"]:
             raise NotImplementedError("can not export arbitrary transform functions")
@@ -77,6 +81,7 @@ class Token1DPreprocessor(TensorFlowPreprocessor):
     def preproc(self, post_mappings, mxlen):
         # Split the input string, assuming that whitespace is splitter
         # The client should perform any required tokenization for us and join on ' '
+        mxlen = tf.minimum(mxlen, self.hard_mxlen)
         raw_post = post_mappings[self.FIELD_NAME]
         raw_post = self.resize_sen(raw_post, mxlen)
         return self.create_word_vectors_from_post(raw_post, mxlen)
@@ -86,7 +91,10 @@ class Token1DPreprocessor(TensorFlowPreprocessor):
 @register_preprocessor(name='char2d')
 class Char2DPreprocessor(TensorFlowPreprocessor):
     def __init__(self, feature, vectorizer, index, vocab, **kwargs):
-        super(Char2DPreprocessor, self).__init__(feature, vectorizer, index, vocab, **kwargs)
+        super().__init__(feature, vectorizer, index, vocab, **kwargs)
+        self.hard_mxlen = self.vectorizer.mxlen
+        # 10000 is just a large max, six.MAXSIZE was causing issues
+        self.hard_mxlen = self.hard_mxlen if self.hard_mxlen != -1 else 10000
         self.mxwlen = self.vectorizer.mxwlen
         transform_fn = self.vectorizer.transform_fn.__name__
         if transform_fn not in ["identity_trans_fn", "lowercase"]:
@@ -104,6 +112,7 @@ class Char2DPreprocessor(TensorFlowPreprocessor):
         return self.reshape_indices(char_indices, [mxlen, self.mxwlen])
 
     def preproc(self, post_mappings, mxlen):
+        mxlen = tf.minimum(mxlen, self.hard_mxlen)
         raw_post = post_mappings[self.FIELD_NAME]
         raw_post = self.resize_sen(raw_post, mxlen)
         return self.create_char_vectors_from_post(raw_post, mxlen)

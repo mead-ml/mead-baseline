@@ -10,7 +10,7 @@ import argparse
 from copy import deepcopy
 from itertools import chain
 from collections import OrderedDict, MutableMapping
-from baseline.utils import exporter, str2bool, read_config_file, write_json, get_logging_level
+from baseline.utils import exporter, str2bool, read_config_file, write_json, get_logging_level, validate_url
 
 __all__ = []
 export = exporter(__all__)
