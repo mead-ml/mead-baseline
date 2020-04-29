@@ -1,0 +1,40 @@
+{
+
+    "basedir": "dbpedia",
+    "task": "classify",
+    "batchsz": 1024,
+    "features": [{
+	      "name": "word",
+	      "vectorizer": {
+		        "type": "token1d",
+		        "transform": "baseline.lowercase"
+	      },
+	      "embeddings": {
+		        "label": "w2v-gn"
+	      }
+	  }],
+    "preproc": {
+	      "mxlen": 100,
+	      "clean": true
+    },
+    "backend": "tensorflow",
+    "dataset": "dbpedia",
+    "loader": {
+	      "reader_type": "default"
+    },
+    "unif": 0.25,
+    "model": {
+	      "model_type": "default",
+	      "filtsz": [1,2,3,4,5,7],
+	      "cmotsz": 400,
+	      "dropout": 0.5,
+	      "finetune": true
+    },
+    "train": {
+	"epochs": 80,
+	"optim": "sgd",
+	"eta": 0.02,
+	"early_stopping_metric": "acc",
+        "verbose": true
+    }
+}

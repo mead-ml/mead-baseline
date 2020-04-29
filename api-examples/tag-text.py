@@ -21,8 +21,14 @@ parser.add_argument('--export_mapping', help='mapping between features and the f
                                                          'request, eg: token:word ner:ner. This should match with the '
                                                          '`exporter_field` definition in the mead config',
                     default=[], nargs='+')
-parser.add_argument("--batchsz", default=64)
+parser.add_argument('--prefer_eager', help="If running in TensorFlow, should we prefer eager model", type=str2bool)
+parser.add_argument('--batchsz', default=64, help="How many examples to run through the model at once", type=int)
+
 args = parser.parse_args()
+
+if args.backend == 'tf':
+    from eight_mile.tf.layers import set_tf_eager_mode
+    set_tf_eager_mode(args.prefer_eager)
 
 
 def create_export_mapping(feature_map_strings):
@@ -61,7 +67,9 @@ else:
 
 m = bl.TaggerService.load(args.model, backend=args.backend, remote=args.remote,
                           name=args.name, preproc=args.preproc, device=args.device)
+
 batched = [texts[i:i+args.batchsz] for i in range(0, len(texts), args.batchsz)]
+
 for texts in batched:
     for sen in m.predict(texts, export_mapping=create_export_mapping(args.export_mapping)):
         for word_tag in sen:

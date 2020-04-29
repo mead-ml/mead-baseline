@@ -1,0 +1,44 @@
+# To pass in a slack reporting hook, pass in
+# --reporting slack --slack:webhook <hook>
+batchsz: 50
+modules:
+  - hub:v1:addons:demolib
+preproc:
+    mxlen: -1
+
+backend: tensorflow
+dataset: trec
+basedir: trec-demolib
+loader:
+    reader_type: default
+
+unif: 0.25
+model:
+    model_type: default
+    filtsz: [3]
+    dropout: 0.5
+    cmotsz: 100
+
+features:
+  - name: word
+    vectorizer:
+      type: token1d
+    embeddings:
+      label: w2v-gn
+
+  - name: word2
+    vectorizer:
+      type: token1d
+    embeddings:
+      label: glove-42B
+      transform: baseline.lowercase
+
+
+train:
+  fit_func: test_every_n_epochs
+  epochs: 30
+  optim: adadelta
+  eta: 1.0
+  model_base: ./models/trec
+  early_stopping_metric: acc
+  patience: 25

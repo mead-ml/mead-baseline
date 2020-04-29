@@ -1,0 +1,40 @@
+{
+  "task": "classify",
+  "basedir": "./trec-bert",
+  "batchsz": 10,
+  "features": [
+    {
+      "name": "bert",
+      "vectorizer": {
+	  "label": "bert-base-uncased",
+        "dtype": "int32"
+      },
+      "embeddings": {
+	  "label": "bert-base-uncased-pooled-tf"
+      }
+    }
+  ],
+  "preproc": {
+    "mxlen": 100
+  },
+  "backend": "tf",
+  "dataset": "trec",
+  "loader": {
+    "reader_type": "default"
+  },
+  "unif": 0.25,
+  "model": {
+    "model_type": "fine-tune"
+  },
+  "train": {
+    "epochs": 5,
+    "optim": "adam",
+    "eta":  0.00001,
+    "weight_decay": 1.0e-8,
+    "early_stopping_metric": "acc",
+    "verbose": {
+      "console": true,
+      "file": "trec-cm.csv"
+    }
+  }
+}

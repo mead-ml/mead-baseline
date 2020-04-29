@@ -1,0 +1,45 @@
+{
+    "task": "seq2seq",
+    "num_valid_to_show": 1,
+    "batchsz": 128,
+    "basedir": "s2s_reverse",
+    "test_batchsz": 16,
+    "unif": 0.25,
+    "features": [
+	{
+	    "name": "src",
+	    "vectorizer": { "type": "token1d"},
+	    "embeddings": { "dsz": 128, "type": "positional" }
+	},
+	{
+	    "name": "tgt",
+	    "vectorizer": { "type": "token1d"},
+	    "embeddings": { "dsz": 128, "type": "positional" }
+	}
+    ],
+    "preproc": {
+        "mxlen": 10
+    },
+    "backend": "tensorflow",
+    "dataset": "reverse",
+    "loader": {
+        "reader_type": "default",
+    	"pair_suffix": ["fwd", "bwd"]
+    },
+    "model": {
+        "encoder_type": "transformer",
+        "decoder_type": "transformer",
+        "hsz": 128,
+        "dropout": 0.1,
+        "layers": 4
+    },
+    "train": {
+        "epochs": 64,
+        "optim": "adam",
+        "eta": 0.001,
+        "patience": 40,
+        "nsteps": 200,
+    	"do_early_stopping": true,
+        "clip": 1.0
+    }
+}

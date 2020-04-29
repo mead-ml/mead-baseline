@@ -1,0 +1,47 @@
+{
+  "task": "tagger",
+  "modules": ["da"],
+  "unif": 0.1,
+  "features": [
+    {
+      "name": "word",
+      "vectorizer": {
+        "type": "turn-dict2d",
+        "fields": "text"
+      },
+      "embeddings": {
+        "label": "glove-840B",
+        "type": "char-lstm",
+        "lstmsz": 300
+      }
+    }
+  ],
+  "backend": "pytorch",
+  "dataset": "mrda",
+  "reader": {
+    "type": "da",
+    "named_fields": {
+      "0": "text",
+      "-1": "y"
+    }
+  },
+  "model": {
+    "type": "default",
+    "hsz": 300,
+    "dropout": 0.5,
+    "rnntype": "blstm",
+    "layers": 1,
+    "crf": 1
+  },
+  "train": {
+    "batchsz": 1,
+    "epochs": 40,
+    "optim": "adadelta",
+    "eta": 1.0,
+    "grad_accum": 10,
+    "patience": 20,
+    "early_stopping_metric": "f1",
+    "clip": 5.0
+  }
+}
+

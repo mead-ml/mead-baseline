@@ -1,0 +1,43 @@
+# To pass in a slack reporting hook, pass in
+# --reporting slack --slack:webhook <hook>
+modules:
+  - hub:v1:addons:demolib
+batchsz: 50
+basedir: demolib
+dataset: SST2
+preproc:
+  clean: true
+loader:
+  reader_type: default
+unif: 0.25
+model: 
+  model_type: default
+  filtsz: [3,4,5]
+  cmotsz: 100
+  dropout: 0.5
+features:
+  - name: word
+    vectorizer:
+      type: token1d
+      transform: baseline.lowercase
+    embeddings:
+      label: w2v-gn
+  - name: char
+    vectorizer:
+      type: char2d
+    embeddings:
+      type: cbow
+      dsz: 50
+
+
+train:
+  fit_func: test_every_n_epochs
+  nsteps: 100
+  epochs: 2
+  optim: adadelta
+  eta: 1.0
+  early_stopping_metric: acc
+  verbose:
+    console: True
+    file: sst2-cm.csv 
+

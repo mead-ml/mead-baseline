@@ -1,0 +1,80 @@
+[
+  {
+    "label": "bert-base-uncased-npz",
+    "file": "https://www.dropbox.com/s/3ivk6npc6e0bgyk/bert-base-uncased.npz?dl=1",
+    "sha1": "54bef0c84ce29a7729c5e1fc3509a01f8c579891",
+    "unzip": false,
+    "dsz": 768
+  },
+  {
+    "label": "bert-base-cased-npz",
+    "file": "https://www.dropbox.com/s/k9oxf6ploo2yg5k/bert-base-cased.npz?dl=1",
+    "sha1": "b28358911296329a1623a8d8d00517bbf7177fe0",
+    "unzip": false,
+    "dsz": 768
+  },
+  {
+    "label": "w2v-twitter-30M",
+    "file": "https://www.dropbox.com/s/ihs4or6z5bq33tb/oct-s140clean-uber.cbow-bin?dl=1",
+    "sha1": "2f9e2d27dbb4544f7c77bb7e4da65c2afe01a2a2",
+    "dsz": 150
+  },
+  {
+    "label": "glove-42B",
+    "file": "http://nlp.stanford.edu/data/glove.42B.300d.zip",
+    "sha1": "f8e722b39578f776927465b71b231bae2ae8776a",
+    "dsz": 300
+  },
+  {
+    "label": "glove-840B",
+    "file": "https://www.dropbox.com/s/hurm3px97mhknbi/glove.840B.300d.zip?dl=1",
+    "dsz": 300
+  },
+  {
+    "label": "glove-6B-50",
+    "file": "https://www.dropbox.com/s/339mhx40t3q9bp5/glove.6B.50d.txt.gz?dl=1",
+    "sha1": "7395ee1f8f42f34869eb5feff690bf9ae79ffaa9",
+    "dsz": 50
+  },
+  {
+    "label": "glove-6B-100",
+    "file": "https://www.dropbox.com/s/cjg716n67rpp9s5/glove.6B.100d.txt.gz?dl=1",
+    "sha1": "a483a44d4414a18c7b10b36dd6daa59195eb292b",
+    "dsz": 100
+  },
+  {
+    "label": "glove-6B-200",
+    "file": "https://www.dropbox.com/s/o80aqj1ky9ddm7c/glove.6B.200d.txt.gz?dl=1",
+    "sha1": "960b496ffb2010491d7f492e689a1425e4b8e4ed",
+    "dsz": 200
+  },
+  {
+    "label": "glove-6B-300",
+    "file": "https://www.dropbox.com/s/x4uyw8ichye0gc3/glove.6B.300d.txt.gz?dl=1",
+    "sha1": "f555b413b54943ba93e630d1d9f27b2f38440419",
+    "dsz": 300
+  },
+  {
+    "label": "w2v-gn",
+    "file": "https://www.dropbox.com/s/699kgut7hdb5tg9/GoogleNews-vectors-negative300.bin.gz?dl=1",
+    "dsz": 300
+  },
+  {
+    "label": "numberbatch",
+    "file": "https://conceptnet.s3.amazonaws.com/downloads/2017/numberbatch/numberbatch-en-17.06.txt.gz",
+    "sha1": "7a1b9c098d55e41569892af44b1f07b05243fa32",
+    "dsz": 300
+  },
+  {
+    "label": "senna",
+    "file": "https://www.dropbox.com/s/s8q2feew1fmwl3p/senna-50.txt.gz?dl=1",
+    "sha1": "5258af089f40f9071bbb8f4f5ac2b2f35b18fea2",
+    "dsz": 50
+  },
+  { 
+    "label": "wnut-gaz",
+    "file": "https://www.dropbox.com/s/3p76mbx50uk22m7/wnut-gaz.txt?dl=1",
+    "sha1": "83f6ebdd1c8351ff37e0b8bf00d27faca6f5e685",
+    "dsz": "7"
+  }
+]

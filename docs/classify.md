@@ -1,11 +1,11 @@
 # Sentence Classification
 
-There are several models built in to the `baseline` codebase.  These are summarized individually in the sections below, and an overall performance summary is given at the bottom
+There are several models built in to the `baseline` codebase.  These are summarized individually in the sections below, and an overall performance summary is given at the bottom.
+The final section provides information on the API design, and how to make your own models
 
 ## A Note About Fine-Tuning and Embeddings
 
 For the lookup-table embeddings, you can control whether or not the embeddings should be fine-tuned by passing a boolean `finetune` in for the `embeddings` section of the mead config.  If you are using random weights, you definitely should fine tune.  If you are using pre-trained embeddings, it may be worth experimenting with this option.  The default behavior is to fine-tune embeddings.  We randomly initialize unattested words and add them to the weight matrix for the Lookup Table.  This can be controlled with the 'unif' parameter in the driver program.
-
 
 ## Convolution Model
 
@@ -23,7 +23,7 @@ Early stopping with patience is supported.  There are many hyper-parameters that
 To run, use this command:
 
 ```
-python trainer.py --config config/sst2.json
+mead-train --config config/sst2.json
 ```
 
 ## LSTM Model
@@ -35,7 +35,7 @@ The LSTM's final hidden state is passed to the final layer.  The use of an LSTM 
 The command below executes an LSTM classifier with 2 sets of pre-trained word embeddings
 
 ```
-python trainer.py --config config/sst2-lstm.json
+mead-train --config config/sst2-lstm.json
 ```
 
 ## Neural Bag of Words (NBoW) Model (Max and Average Pooling)
@@ -69,3 +69,49 @@ When reporting the loss reported every nsteps is the total loss averaged over th
 When reporting the loss at the end of an epoch it is the total loss averaged over the number of examples seen in the whole epoch.
 
 Metrics like accuracy and f1 are computed at the example level.
+
+## API Design & Architecture
+
+There is a base interface `ClassifierModel` defined for classifiers inside of baseline/model.py
+
+This defines the base API for usage, but doesnt provide any implementation.  Each framework sub-module defines a sub-class of this callled `ClassifierModelBase` that all sub-models are built from.  Both Keras and Torch have a base model concept that needs to be extended in this base class.  In Keras, this is the `tf.keras.Model` and in PyTorch, it is the `nn.Module`.  Ultimately, for both Keras and PyTorch, we will need to define a function to create the layers (`create_layers`) and to perform the forward step for these layers (In PyTorch, this is `forward` and in Keras this is `call`.
+
+Most deep learning NLP classifiers tend to reduce to a few simple idioms.  For fine-tuning a language model like BERT, for example, the typical approach is to remove the head from the model (AKA the final linear projection out to the vocab and the normalizing softmax), and to put a final linear projection to the output number of classes in its place.  In MEAD-Baseline, the headless LM would be lodaded as an embedding object and passed into an `EmbeddingsStack` so the model finally just needs an output layer (and optionally, some MLP intermediate layers).
+
+The `FineTuneModelClassifier(ClassifierModelBase)` model provides this interface by overloading `create_layers()` to produce the penultimate stacking layers (if needed) and the output layer.
+
+For cases where we build an actual model from scratch on top of e.g. word embeddings, MEAD-Baseline the typical pattern can be reduced to:
+
+1. embedding
+2. pooling to a fixed representation
+3. optional MLP stacking
+4. output layer
+
+We provide a sub-class `EmbedPoolStackClassifier(ClassifierModelBase)` that fulfills this interface by extending `create_layers()` and providing `init_*` functions to create sub-layers for each of these steps, and providing a reasonable implementation of all but the pooling layer.
+
+We extend this model with our previously described Baseline models by simply overriding the pooling layer.
+
+By effectively separating out the concerns of layer creation, the formation of membeddings, saving and loading of features, our derived sub-classes are nearly identical between PyTorch and TensorFlow.
+
+### Writing your own classifier
+
+The only real requirement to provide mead with your own classifier is to extend the ClassifierModelBase from the framework you are using, and to register your model with the `@register_model` annotation to identify a key that uniquely identifies your model.  However, there are some things that make it very easy or succinct to define custom models that we recommend.
+
+#### Some best practices for writing your own classifier
+
+- Use the mead layers (8 mile) API to define your layers
+  - This will minimize any incompatibility and make it easy to switch frameworks later
+  - Determine if your model can sub-class the `EmbedPoolStackClassifer`.  If it follows this idiom, it may be very succinct to define a new classifer by overriding a single function (typically the `init_pool()` function).
+- If you are overriding the `EmbedPoolStackClassifier`, remember that the pooling layer is expecting 2 arguments -- the input tensor itself and a tensor containing the length.  If you want to adapt an existing Layer from Keras/PyTorch or elsewhere that requires a single input Tensor, use the `WithoutLengths(YourLayer)` adapter which strips the length tensor and provides a single input tensor to `YourLayer`
+
+### Some Notes on the TensorFlow implementation
+
+### Eager vs Declarative
+
+In TensorFlow, we are supporting eager and declarative mode models.  This fundamentally changes how our objects must look, as in declarative mode, we must do a `session.run` identifying the graph outputs, vs eager mode, which can look nearly identical to PyTorch.
+
+If you wanted to write code to only support graph mode, especially prior to Keras integration, it was common to simply define the graph procedurally and expose its graph endpoints to the class for future use in `session.run`.  This is what previous versions of MEAD-Baseline did.  With Keras now becoming the primary and recommended interface to building neural networks in TensorFlow execution occurs in essentially 2 phases (initialization and execution) corresponding to creation of the layer by calling its constructor vs execution of the `call()` operator `layer(x)`.  In declarative mode, however, ultimately we do need something to call `session.run` on, so we typically will save the output as a property on the class that can be handed to that call.  In eager mode, storing an output property graph node makes no sense at all, so we just dont do it.  Also in eager mode with 2.x, we save and load models somewhat differently than in TF 1.x.
+
+Eager mode massively simplifies the experience of TensorFlow users, however it is not completely trivial to support a training loop for both side-by-side.  In an ideal world where everyone uses eager, we could just use a normal for loop over the input dataset to train the model with gradient tape.  Of course, this doesnt work with declarative mode.  We decided that the cleanest way to support both methods was to have a single classifier model, but to have multiple custom training loops that are defined as `fit_func`s.  The default `fit_func` for eager mode is the previously mentioned simple for loop with gradient tape whereas, for declarative model it a dataset based method relying on iterators.  In V1.x of MEAD-Baseline, the default `fit_func` was a `feed_dict` method.  We still support this method of training by providing a built-in `fit_func` with key `feed_dict`.
+
+When `mead-train` runs in declarative mode (which is controlled by the `--prefer_eager <bool>` argument), the training block of the MEAD config can contain a key `fit_func: feed_dict` to switch the training loop implementation to the previous default method (this can also be done at run-time by passing `--fit_func feed_dict` as a command-line argument to `mead-train`.

@@ -1,0 +1,73 @@
+{
+    "task": "tagger",
+    "modules": ["pytorch_blstm_lan"],
+    "basedir": "./twpos",
+    "conll_output": "twposresults.conll",
+    "charsz": 16,
+    "unif": 0.1,
+    "preproc": {
+    },
+    "backend": "pytorch",
+    "dataset": "twpos",
+    "loader": {
+        "reader_type": "default",
+	    "named_fields": {
+	        "0": "text",
+    	    "-1": "y"
+	    }
+    },
+    "features": [
+	    {
+	        "name": "word",
+            "vectorizer": {
+		        "type": "dict1d",
+		        "fields": "text",
+                "transform": "baseline.lowercase"
+	        },
+	        "embeddings": { "label": "glove-twitter-27B"}
+	    },
+        {
+	        "name": "word2",
+	        "vectorizer": {
+		    "type": "dict1d",
+		    "fields": "text",
+                "transform": "baseline.lowercase"
+	        },
+	        "embeddings": { "label": "glove-42B"}
+	    },
+        {
+            "name": "word3",
+            "vectorizer": {
+                "type": "dict1d",
+                "fields": "text",
+                "transform": "baseline.web_cleanup"
+            },
+            "embeddings": { "label": "w2v-twitter-30M" }
+        },
+	    {
+	        "name": "char",
+	        "vectorizer": { "type": "dict2d" },
+	        "embeddings": { "dsz": 30, "wsz": 30, "type": "char-conv" }
+	    }
+    ],
+    "model": {
+        "model_type": "blstm-lan",
+        "hsz": 200,
+        "blstm_dropout": 0.5,
+        "mha_dropout": 0.1,
+        "rnntype": "blstm",
+        "layers": 3,
+        "crf": false
+    },
+    "train": {
+        "batchsz": 20,
+        "epochs": 300,
+        "optim": "sgd",
+        "eta": 0.01,
+        "mom": 0.9,
+        "patience": 100,
+        "early_stopping_metric": "acc",
+        "span_type": "token",
+        "clip": 5.0
+    }
+}

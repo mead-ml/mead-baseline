@@ -1,0 +1,46 @@
+{
+  "task": "classify",
+  "basedir": "./trec-bert",
+  "backend": "pytorch",
+  "dataset": "trec",
+  "batchsz": 10,
+  "features": [
+    {
+      "name": "bert",
+      "vectorizer": {
+        "label": "bert-base-uncased"
+      },
+      "embeddings": {
+        "finetune": true,
+        "word_embed_type": "learned-positional-w-bias",
+        "label": "bert-base-uncased-npz",
+        "type": "tlm-words-embed-pooled",
+        "reduction": "sum-layer-norm",
+        "layer_norms_after": true,
+        "dropout": 0.1,
+        "mlm": true
+      }
+    }
+  ],
+  "preproc": {
+    "mxlen": 100
+  },
+  "loader": {
+    "reader_type": "default"
+  },
+  "unif": 0.25,
+  "model": {
+    "model_type": "fine-tune"
+  },
+  "train": {
+    "epochs": 5,
+    "optim": "adamw",
+    "eta":  0.00001,
+    "weight_decay": 1.0e-8,
+    "early_stopping_metric": "acc",
+    "verbose": {
+      "console": true,
+      "file": "trec-cm.csv"
+    }
+  }
+}

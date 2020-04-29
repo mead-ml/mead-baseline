@@ -112,6 +112,12 @@ baseline.iml
 tags
 *.zip
 
+*.pkl
+*.conll
+*.onnx
+*.script
+*.pth
+
 api-examples/pytorch_cpp/json.hpp
 api-examples/pytorch_cpp/libtorch*
 api-examples/pytorch_cpp/tag-text

@@ -1,0 +1,46 @@
+{
+    "basedir":"ptb-med",
+    "task": "lm",
+    "batchsz": 20,
+    "unif": 0.05,
+    "nbptt": 35,
+    "preproc": {
+    },
+    "features": [
+        {
+            "name": "word",
+            "vectorizer": {
+                "type":"token1d",
+                "fields":"text"
+            },
+            "embeddings": {"dsz": 650, "dropin": 0.0}
+        }
+    ],
+    "backend": "tensorflow",
+    "dataset": "ptb",
+    "loader": {
+        "reader_type": "default",
+        "tgt_key": "word"
+    },
+    "model": {
+        "model_type": "default",
+        "hsz": 650,
+        "layers": 2,
+        "variational": false,
+        "tie_weights": true,
+        "pdrop": 0.5
+    },
+    "train": {
+        "epochs": 39,
+        "decay_rate": 1.2,
+        "patience": 20,
+        "optim": "sgd",
+        "start_decay_epoch": 15,
+        "lr_scheduler_type": "zaremba",
+        "eta": 35.0,
+        "mom": 0.0,
+        "nsteps": 500,
+        "do_early_stopping": true,
+        "clip": 0.25
+    }
+}

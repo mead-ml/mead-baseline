@@ -1,0 +1,41 @@
+{
+    "basedir": "ptb-small",
+    "task": "lm",
+    "batchsz": 20,
+    "unif": 0.1,
+    "nbptt": 20,
+    "charsz": 16,
+    "preproc": {
+        "mxwlen": 40,
+        "lower": true
+    },
+    "backend": "tensorflow",
+    "dataset": "ptb",
+    "loader": {
+	      "reader_type": "default",
+	      "tgt_key": "word"
+    },
+    "features": [{
+	      "name": "word",
+	      "vectorizer": {
+	          "type": "token1d",
+	          "fields": "text"
+	      },
+	      "embeddings": { "label": "w2v-gn" }
+    }],
+    "model": {
+        "model_type": "default",
+        "tie_weights": "true",
+        "hsz": 300,
+        "dropout": 0.5,
+        "layers": 2
+    },
+    "train": {
+        "epochs": 13,
+        "optim": "sgd",
+        "eta": 20.0,
+        "mom": 0.0,
+	      "do_early_stopping": true,
+        "clip": 0.25
+    }
+}

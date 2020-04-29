@@ -1,0 +1,30 @@
+backend: pytorch
+basedir: ./reddit-tlm
+batchsz: 12
+dataset: SST2
+features:
+- embeddings:
+    word_embed_type: learned-positional-w-bias
+    label: bert-base-uncased-npz
+    type: tlm-words-embed-pooled
+    reduction: sum-layer-norm
+    layer_norms_after: true
+    finetune: true
+    dropout: 0.1
+    mlm: true
+  name: bert
+  vectorizer:
+    label: bert-base-uncased
+loader:
+  reader_type: default
+model:
+  model_type: fine-tune
+task: classify
+train:
+  early_stopping_metric: acc
+  epochs: 5
+  eta: 4.0e-5
+  optim: adamw
+  weight_decay: 1.0e-3
+
+unif: 0.1

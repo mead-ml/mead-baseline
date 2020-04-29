@@ -57,7 +57,7 @@ parser.add_argument('--valid',
                     help='Validation file',
                     default='./heldout-monolingual.tokenized.shuffled/news.en.heldout*')
 parser.add_argument('--ll', help='Log level', type=str, default='info')
-parser.add_argument('--tf_ll', help='TensorFlow Log level', type=str, default='info')
+parser.add_argument('--tf_ll', help='TensorFlow Log level', type=str, default='warn')
 parser.add_argument('--lr', help='Learning rate', type=float, default=0.001)
 parser.add_argument('--optim', help='Optimizer (sgd, adam) (default is adam)', type=str, default='adam')
 parser.add_argument('--gpus', help='Number of GPUs to use', default=1, type=int)
@@ -66,7 +66,7 @@ args = parser.parse_known_args()[0]
 train_batchsz = args.batchsz // args.gpus
 
 logging.basicConfig(level=get_logging_level(args.ll))
-tf.logging.set_verbosity(get_tf_logging_level(args.tf_ll))
+tf.compat.v1.logging.set_verbosity(get_tf_logging_level(args.tf_ll))
 
 
 @bl.str_file

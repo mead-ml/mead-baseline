@@ -1,0 +1,49 @@
+{
+    "task": "seq2seq",
+    "num_valid_to_show": 1,
+    "batchsz": 32,
+    "basedir": "s2s_reverse",
+    "test_batchsz": 16,
+    "unif": 0.25,
+    "features": [
+	{
+	    "name": "src",
+	    "vectorizer": { "type": "token1d"},
+	    "embeddings": { "dsz": 32 }
+	},
+	{
+	    "name": "tgt",
+	    "vectorizer": { "type": "token1d"},
+	    "embeddings": { "dsz": 32 }
+	}
+    ],
+    "preproc": {
+        "mxlen": 10
+    },
+    "backend": "pytorch",
+    "dataset": "reverse",
+    "loader": {
+        "reader_type": "default",
+    	"pair_suffix": ["fwd", "bwd"]
+    },
+    "model": {
+        "model_type": "attn",
+        "rnntype": "blstm",
+        "hsz": 64,
+        "dropout": 0.5,
+        "attn_type": "concat",
+        "tie_weights": false,
+        "layers": 2
+    },
+    "train": {
+        "epochs": 30,
+        "optim": "adam",
+        "eta": 0.001,
+        "mom": 0.9,
+        "patience": 10,
+        "nsteps": 200,
+    	"do_early_stopping": true,
+        "early_stopping_metric": "bleu",
+        "clip": 1.0
+    }
+}

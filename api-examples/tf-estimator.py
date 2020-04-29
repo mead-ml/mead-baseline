@@ -64,7 +64,7 @@ parser.add_argument('--gpus', help='Number of GPUs to use', default=1, type=int)
 args = parser.parse_known_args()[0]
 
 logging.basicConfig(level=get_logging_level(args.ll))
-tf.logging.set_verbosity(get_tf_logging_level(args.tf_ll))
+tf.compat.v1.logging.set_verbosity(get_tf_logging_level(args.tf_ll))
 
 
 pool_field = 'cmotsz' if args.model_type == 'default' else 'rnnsz'
@@ -154,7 +154,7 @@ def predict_input_fn():
 
 def server_input_fn():
     tensors = {
-        'word': tf.placeholder(tf.int64, [None, None])
+        'word': tf.compat.v1.placeholder(tf.int64, [None, None])
     }
     features = {
         'word': tensors['word']
@@ -198,7 +198,7 @@ def model_fn(features, labels, mode, params):
 
     if mode == tf.estimator.ModeKeys.PREDICT:
         bl.tf.SET_TRAIN_FLAG(False)
-        model = bl.model.create_model(embeddings, labels=params['labels'], word=features['word'], y=None, sess=None, **model_params)
+        model = bl.model.create_model_for('classify', features=embeddings, labels=params['labels'], word=features['word'], y=None, sess=None, **model_params)
         predictions = {
             'classes': model.best,
             'probabilities': model.probs,
@@ -209,20 +209,15 @@ def model_fn(features, labels, mode, params):
 
     elif mode == tf.estimator.ModeKeys.EVAL:
         bl.tf.SET_TRAIN_FLAG(False)
-        model = bl.model.create_model(embeddings, labels=params['labels'], word=features['word'], y=y, sess=None, **model_params)
+        model = bl.model.create_model_for('classify', features=embeddings, labels=params['labels'], word=features['word'], y=y, sess=None, **model_params)
         loss = model.create_loss()
-        predictions = {
-            'classes': model.best,
-            'probabilities': model.probs,
-            'logits': model.logits,
-        }
         eval_metric_ops = {
             'accuracy': tf.metrics.accuracy(
-                labels=labels, predictions=predictions['classes'])}
+                labels=labels, predictions=model.best)}
         return tf.estimator.EstimatorSpec(mode=mode, predictions=model.logits, loss=loss, eval_metric_ops=eval_metric_ops)
 
     bl.tf.SET_TRAIN_FLAG(True)
-    model = bl.model.create_model(embeddings, labels=params['labels'], word=features['word'], y=y, sess=None, **model_params)
+    model = bl.model.create_model_for('classify', features=embeddings, labels=params['labels'], word=features['word'], y=y, sess=None, **model_params)
     loss = model.create_loss()
     #Optimizer = tf.train.GradientDescentOptimizer if args.optim == 'sgd' else tf.train.AdamOptimizer
     #print(Optimizer)

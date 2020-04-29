@@ -1,0 +1,34 @@
+modules:
+  - hub:v1:addons:rnf_pytorch
+batchsz: 32
+preproc: 
+  mxlen: 100
+  rev: true
+  clean: true
+backend: pytorch
+dataset: SST2
+loader: 
+  reader_type: default
+unif: 0.25
+model: 
+  model_type: rnf
+  filtsz: 5
+  rnnsz: 300
+  dropout: 0.4
+  finetune: true
+features:
+  - name: word
+    vectorizer:
+      type: token1d
+      transform: baseline.lowercase
+    embeddings:
+      label: glove-840B
+
+train: 
+  epochs: 2
+  optim: adam
+  eta: 0.001
+  early_stopping_metric: acc
+
+
+
