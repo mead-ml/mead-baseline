@@ -11,12 +11,6 @@ can be compared. Deep learning experiments are hard to reproduce, Baseline
 provides functionalities to track them. The goal is to allow a researcher to
 focus on model development, delegating the repetitive tasks to the library.
 
-*Development*
-
-We are working on a new (2.x) version of baseline with support for TF 2.0 and more uniform APIs for PyTorch and TF, along with many other changes.  At this time most of the development is still in flux so we strongly suggest using the 1.x version in master.  You can follow 2.x development here:
-
-https://github.com/dpressel/baseline/tree/feature/v2
-
 ## Components
 
 - [**baseline**](docs/baseline.md): An object-oriented Python library for
@@ -73,7 +67,6 @@ public contributions.
 Baseline can be installed as a Python package.  When the repository is cloned,
 a git-submodule imports mead-layers from https://github.com/mead-ml/mead-layers
 
-<<<<<<< HEAD
 To install a developer version of the library do:
 
 ```
@@ -83,15 +76,6 @@ cd ../
 pip install -e .
 ```
 This first installs `mead-layers` and then `mead-baseline`
-=======
-    pip install mead-baseline
-
-Or you can checkout the source code and do:
-
-    pip install -e .
-
-from the baseline/python directory.
->>>>>>> master
 
 ## A Note About Versions
 
