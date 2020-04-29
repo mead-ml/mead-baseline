@@ -4,9 +4,6 @@
   "backend": "pytorch",
   "dataset": "trec",
   "batchsz": 10,
-  "modules": [
-    "embed_tlm_pytorch"
-  ],
   "features": [
     {
       "name": "bert",

@@ -4,18 +4,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from eight_mile.utils import Offsets, is_sequence, calc_nfeats
-from eight_mile.pytorch.layers import (
-    pytorch_embedding,
-    ParallelConv,
-    Dense,
-    SkipConnection,
-    Highway,
-    BiLSTMEncoderHidden,
-    WithDropout,
-    unsort_batch,
-    pytorch_linear,
-    TransformerEncoderStackWithLengths,
-)
+from eight_mile.pytorch.layers import *
 
 
 class PyTorchEmbeddings(nn.Module):

@@ -813,11 +813,12 @@ class DataDownloader(Downloader):
 
 @export
 class EmbeddingDownloader(Downloader):
-    def __init__(self, embedding_file, embedding_dsz, embedding_sha1, data_download_cache, cache_ignore=False):
+    def __init__(self, embedding_file, embedding_dsz, embedding_sha1, data_download_cache, cache_ignore=False, unzip_file=True):
         super().__init__(data_download_cache, cache_ignore)
         self.embedding_file = embedding_file
         self.embedding_key = embedding_dsz
         self.data_download_cache = data_download_cache
+        self.unzip_file = unzip_file
         self.sha1 = embedding_sha1
 
     @staticmethod
@@ -851,8 +852,9 @@ class EmbeddingDownloader(Downloader):
             else:
                 cache_dir = self.data_download_cache
                 temp_file = web_downloader(url)
+                unzip_fn = Downloader.ZIPD.get(mime_type(temp_file)) if self.unzip_file else None
                 download_loc = extractor(filepath=temp_file, cache_dir=cache_dir,
-                                         extractor_func=Downloader.ZIPD.get(mime_type(temp_file), None))
+                                         extractor_func=unzip_fn)
                 if self.sha1 is not None:
                     if os.path.split(download_loc)[-1] != self.sha1:
                         raise RuntimeError("The sha1 of the downloaded file does not match with the provided one")
