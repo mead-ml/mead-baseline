@@ -399,6 +399,20 @@ def test_dataset_formats():
         pass
 
 
+def test_dataset_formats_with_hours():
+    keys = {
+        '1:20200312': 2,
+        '1:20200312_0545': 3,
+    }
+    assert get_dataset_from_key('1', keys) == 3
+    keys['1:20200312_0435'] = 4
+    assert get_dataset_from_key('1', keys) == 3
+    keys['1:20200313'] = 5
+    assert get_dataset_from_key('1', keys) == 5
+    keys['1:2020-03-13_23-12'] = 6
+    assert get_dataset_from_key('1', keys) == 6
+
+
 def test_dataset_hard_match():
     """Test that we only match datasets that are exact match % date, ignore ones that have extra before or after."""
     keys = {
