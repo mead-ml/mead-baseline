@@ -2,8 +2,6 @@ backend: pytorch
 basedir: ./reddit-tlm
 batchsz: 12
 dataset: SST2
-modules:
-- embed_tlm_pytorch
 features:
 - embeddings:
     word_embed_type: learned-positional-w-bias

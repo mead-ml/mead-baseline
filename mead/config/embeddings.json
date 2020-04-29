@@ -1,9 +1,17 @@
 [
   {
-    "label": "glove-twitter-27B",
-    "file": "http://nlp.stanford.edu/data/glove.twitter.27B.zip",
-    "sha1": "dce69c404025a8312c323197347695e81fd529fc",
-    "dsz": 200
+    "label": "bert-base-uncased-npz",
+    "file": "https://www.dropbox.com/s/3ivk6npc6e0bgyk/bert-base-uncased.npz?dl=1",
+    "sha1": "54bef0c84ce29a7729c5e1fc3509a01f8c579891",
+    "unzip": false,
+    "dsz": 768
+  },
+  {
+    "label": "bert-base-cased-npz",
+    "file": "https://www.dropbox.com/s/k9oxf6ploo2yg5k/bert-base-cased.npz?dl=1",
+    "sha1": "b28358911296329a1623a8d8d00517bbf7177fe0",
+    "unzip": false,
+    "dsz": 768
   },
   {
     "label": "w2v-twitter-30M",

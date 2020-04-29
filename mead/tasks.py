@@ -409,6 +409,7 @@ class Task(object):
                             raise Exception("Stacking embeddings only works for 'default' pretrained word embeddings")
 
                     embed_file = embeddings_global_config_i.get('file')
+                    unzip_file = embeddings_global_config_i.get('unzip', True)
                     embed_dsz = embeddings_global_config_i['dsz']
                     embed_sha1 = embeddings_global_config_i.get('sha1')
                     # Should we grab vocab here too?
@@ -423,7 +424,7 @@ class Task(object):
                         # models in the Hub addon, the `embed_file` should be downloaded using HuggingFace's library,
                         # not by us.  In this case we want it to be None and we dont want to download it
                         if embed_file:
-                            embed_file = EmbeddingDownloader(embed_file, embed_dsz, embed_sha1, self.data_download_cache).download()
+                            embed_file = EmbeddingDownloader(embed_file, embed_dsz, embed_sha1, self.data_download_cache, unzip_file=unzip_file).download()
                             embed_files.append(embed_file)
                         else:
                             embed_files.append(None)
