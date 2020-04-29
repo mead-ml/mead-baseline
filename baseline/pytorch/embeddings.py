@@ -1,7 +1,7 @@
 from baseline.embeddings import register_embeddings, create_embeddings
 from eight_mile.pytorch.embeddings import *
 from eight_mile.pytorch.serialize import load_tlm_npz
-from eight_mile.utils import read_json
+from eight_mile.utils import read_json, mime_type
 from baseline.vectorizers import load_bert_vocab
 
 
@@ -181,14 +181,15 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
     def load(cls, embeddings, **kwargs):
         c = cls("tlm-words-embed", **kwargs)
 
-        if embeddings.endswith('.npz'):
-            load_tlm_npz(c, embeddings)
-        elif embeddings.endswith('.bin'):
+
+        if embeddings.endswith('.bin'):
             # HuggingFace checkpoint, convert on the fly
             from eight_mile.pytorch.serialize import load_tlm_transformers_bin, BERT_HF_FT_LAYER_MAP
             unmatch = load_tlm_transformers_bin(c, embeddings, replace_layers=BERT_HF_FT_LAYER_MAP)
             if unmatch['missing'] or unmatch['unexpected']:
                 raise Exception("Unable to load the HuggingFace checkpoint")
+        if mime_type(embeddings) == 'application/zip':
+            load_tlm_npz(c, embeddings)
         else:
             unmatch = c.load_state_dict(torch.load(embeddings), strict=False)
             if unmatch.missing_keys or len(unmatch.unexpected_keys) > 2:
