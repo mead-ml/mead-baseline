@@ -14,7 +14,7 @@ from eight_mile.pytorch.layers import checkpoint_for, rm_old_checkpoints, Averag
 from eight_mile.pytorch.optz import *
 from eight_mile.pytorch.serialize import save_tlm_npz
 from baseline.pytorch.lm import TransformerLanguageModel
-from baseline.vectorizers import Char2DVectorizer, Token1DVectorizer, AbstractVectorizer, BPEVectorizer1D
+from baseline.vectorizers import Char2DVectorizer, Token1DVectorizer, WordpieceVectorizer1D, BPEVectorizer1D
 from baseline.utils import DataDownloader
 import numpy as np
 import codecs
@@ -94,79 +94,6 @@ X_CHAR_EMBEDDINGS = {
     "projsz": 512
 }
 
-BERT_TOKENIZER = None
-
-
-class WordPieceVectorizer1D(AbstractVectorizer):
-    """Define a Baseline Vectorizer that can do WordPiece with BERT tokenizer
-
-    If you use tokens=wordpiece, this vectorizer is used, and so then there is
-    a dependency on bert_pretrained_pytorch
-    """
-
-    def __init__(self, **kwargs):
-        """Loads a BertTokenizer using bert_pretrained_pytorch
-
-        :param kwargs:
-        """
-        super().__init__(kwargs.get('transform_fn'))
-        from pytorch_pretrained_bert import BertTokenizer
-        self.max_seen = 128
-        handle = kwargs.get('embed_file')
-        custom_vocab = kwargs.get('vocab_file')
-        if custom_vocab is None:
-            self.tokenizer = BertTokenizer.from_pretrained(handle, do_lower_case=True)
-        else:
-            special_tokens = kwargs.get('special_tokens')
-            never_split = ('[UNK]', '[SEP]', '[PAD]', '[CLS]', '[MASK]') + special_tokens
-            self.tokenizer = BertTokenizer(custom_vocab, do_basic_tokenize=True, never_split=never_split)
-        self.mxlen = kwargs.get('mxlen', -1)
-
-    @property
-    def vocab(self):
-        return self.tokenizer.vocab
-
-    def count(self, tokens):
-        seen = 0
-        counter = Counter()
-        for tok in self.iterable(tokens):
-            counter[tok] += 1
-            seen += 1
-        self.max_seen = max(self.max_seen, seen)
-        return counter
-
-    def iterable(self, tokens):
-        for tok in tokens:
-            if tok == '<unk>':
-                yield '[UNK]'
-            elif tok == '<EOS>':
-                yield '[SEP]'
-            else:
-                for subtok in self.tokenizer.tokenize(tok):
-                    yield subtok
-
-    def _next_element(self, tokens, vocab):
-        for atom in self.iterable(tokens):
-            value = vocab.get(atom)
-            if value is None:
-                value = vocab['[UNK]']
-            yield value
-
-    def run(self, tokens, vocab):
-        if self.mxlen < 0:
-            self.mxlen = self.max_seen
-        vec1d = np.zeros(self.mxlen, dtype=np.long)
-        for i, atom in enumerate(self._next_element(tokens, vocab)):
-            if i == self.mxlen:
-                i -= 1
-                break
-            vec1d[i] = atom
-        valid_length = i + 1
-        return vec1d, valid_length
-
-    def get_dims(self):
-        return self.mxlen,
-
 
 class TensorDatasetReaderBase(object):
     """Provide a base-class to do operations that are independent of token representation
@@ -223,7 +150,7 @@ class TensorWordDatasetReader(TensorDatasetReaderBase):
         if self.use_subword == 'bpe':
             vectorizer = BPEVectorizer1D(model_file=model_file, vocab_file=vocab_file)
         elif self.use_subword == 'wordpiece':
-            vectorizer = WordPieceVectorizer1D(embed_file=model_file, vocab_file=vocab_file,
+            vectorizer = WordpieceVectorizer1D(embed_file=model_file, vocab_file=vocab_file,
                                                special_tokens=special_tokens)
         else:
             vectorizer = Token1DVectorizer(transform_fn=baseline.lowercase)
