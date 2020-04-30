@@ -17,7 +17,7 @@ class TensorFlowEmbeddingsMixin(tf.keras.layers.Layer):
     def __init__(self, trainable=True, name=None, dtype=tf.float32, **kwargs):
         """Constructor
         """
-        super().__init__(trainable=trainable, name=name, dtype=dtype)
+        super().__init__(trainable=trainable, name=name, dtype=dtype, **kwargs)
         self._record_state(**kwargs)
 
     def detached_ref(self):
@@ -85,7 +85,7 @@ class TensorFlowEmbeddingsMixin(tf.keras.layers.Layer):
 
 
 @register_embeddings(name='default')
-class LookupTableEmbeddingsModel(LookupTableEmbeddings, TensorFlowEmbeddingsMixin):
+class LookupTableEmbeddingsModel(TensorFlowEmbeddingsMixin, LookupTableEmbeddings):
 
     @classmethod
     def create_placeholder(cls, name):
@@ -93,7 +93,7 @@ class LookupTableEmbeddingsModel(LookupTableEmbeddings, TensorFlowEmbeddingsMixi
 
 
 @register_embeddings(name='char-conv')
-class CharConvEmbeddingsModel(CharConvEmbeddings, TensorFlowEmbeddingsMixin):
+class CharConvEmbeddingsModel(TensorFlowEmbeddingsMixin, CharConvEmbeddings):
 
     @classmethod
     def create_placeholder(cls, name):
@@ -101,12 +101,12 @@ class CharConvEmbeddingsModel(CharConvEmbeddings, TensorFlowEmbeddingsMixin):
 
 
 @register_embeddings(name='char-transformer')
-class CharTransformerModel(CharTransformerEmbeddings, TensorFlowEmbeddingsMixin):
+class CharTransformerModel(TensorFlowEmbeddingsMixin, CharTransformerEmbeddings):
     pass
 
 
 @register_embeddings(name='char-lstm')
-class CharLSTMEmbeddingsModel(CharLSTMEmbeddings, TensorFlowEmbeddingsMixin):
+class CharLSTMEmbeddingsModel(TensorFlowEmbeddingsMixin, CharLSTMEmbeddings):
 
     @classmethod
     def create_placeholder(cls, name):
@@ -114,7 +114,7 @@ class CharLSTMEmbeddingsModel(CharLSTMEmbeddings, TensorFlowEmbeddingsMixin):
 
 
 @register_embeddings(name='positional')
-class PositionalLookupTableEmbeddingsModel(PositionalLookupTableEmbeddings, TensorFlowEmbeddingsMixin):
+class PositionalLookupTableEmbeddingsModel(TensorFlowEmbeddingsMixin, PositionalLookupTableEmbeddings):
 
     @classmethod
     def create_placeholder(cls, name):
@@ -122,7 +122,7 @@ class PositionalLookupTableEmbeddingsModel(PositionalLookupTableEmbeddings, Tens
 
 
 @register_embeddings(name='learned-positional')
-class LearnedPositionalLookupTableEmbeddingsModel(LearnedPositionalLookupTableEmbeddings, TensorFlowEmbeddingsMixin):
+class LearnedPositionalLookupTableEmbeddingsModel(TensorFlowEmbeddingsMixin, LearnedPositionalLookupTableEmbeddings):
 
     @classmethod
     def create_placeholder(cls, name):
@@ -130,7 +130,7 @@ class LearnedPositionalLookupTableEmbeddingsModel(LearnedPositionalLookupTableEm
 
 
 @register_embeddings(name='learned-positional-w-bias')
-class LearnedPositionalLookupTableEmbeddingsWithBiasModel(LearnedPositionalLookupTableEmbeddingsWithBias, TensorFlowEmbeddingsMixin):
+class LearnedPositionalLookupTableEmbeddingsWithBiasModel(TensorFlowEmbeddingsMixin, LearnedPositionalLookupTableEmbeddingsWithBias):
 
     @classmethod
     def create_placeholder(cls, name):
@@ -138,7 +138,7 @@ class LearnedPositionalLookupTableEmbeddingsWithBiasModel(LearnedPositionalLooku
 
 
 @register_embeddings(name='positional-char-conv')
-class PositionalCharConvEmbeddingsModel(PositionalCharConvEmbeddings, TensorFlowEmbeddingsMixin):
+class PositionalCharConvEmbeddingsModel(TensorFlowEmbeddingsMixin, PositionalCharConvEmbeddings):
 
     @classmethod
     def create_placeholder(cls, name):
@@ -146,7 +146,7 @@ class PositionalCharConvEmbeddingsModel(PositionalCharConvEmbeddings, TensorFlow
 
 
 @register_embeddings(name='learned-positional-char-conv')
-class PositionalCharConvEmbeddingsModel(LearnedPositionalCharConvEmbeddings, TensorFlowEmbeddingsMixin):
+class PositionalCharConvEmbeddingsModel(TensorFlowEmbeddingsMixin, LearnedPositionalCharConvEmbeddings):
 
     @classmethod
     def create_placeholder(cls, name):
@@ -154,7 +154,7 @@ class PositionalCharConvEmbeddingsModel(LearnedPositionalCharConvEmbeddings, Ten
 
 
 @register_embeddings(name='positional-char-lstm')
-class PositionalCharLSTMEmbeddingsModel(PositionalCharLSTMEmbeddings, TensorFlowEmbeddingsMixin):
+class PositionalCharLSTMEmbeddingsModel(TensorFlowEmbeddingsMixin, PositionalCharLSTMEmbeddings):
 
     @classmethod
     def create_placeholder(cls, name):
@@ -162,7 +162,7 @@ class PositionalCharLSTMEmbeddingsModel(PositionalCharLSTMEmbeddings, TensorFlow
 
 
 @register_embeddings(name='learned-positional-char-lstm')
-class LearnedPositionalCharLSTMEmbeddingsModel(LearnedPositionalCharLSTMEmbeddings, TensorFlowEmbeddingsMixin):
+class LearnedPositionalCharLSTMEmbeddingsModel(TensorFlowEmbeddingsMixin, LearnedPositionalCharLSTMEmbeddings):
 
     @classmethod
     def create_placeholder(cls, name):
@@ -299,7 +299,7 @@ class TransformerLMPooledEmbeddings(TransformerLMEmbeddings):
 
 
 @register_embeddings(name='tlm-words-embed')
-class TransformerLMEmbeddingsModel(TransformerLMEmbeddings, TensorFlowEmbeddingsMixin):
+class TransformerLMEmbeddingsModel(TensorFlowEmbeddingsMixin, TransformerLMEmbeddings):
 
     @classmethod
     def create_placeholder(cls, name):
@@ -307,7 +307,7 @@ class TransformerLMEmbeddingsModel(TransformerLMEmbeddings, TensorFlowEmbeddings
 
 
 @register_embeddings(name='tlm-words-embed-pooled')
-class TransformerLMPooledEmbeddingsModel(TransformerLMPooledEmbeddings, TensorFlowEmbeddingsMixin):
+class TransformerLMPooledEmbeddingsModel(TensorFlowEmbeddingsMixin, TransformerLMPooledEmbeddings):
     pass
 
 def _identity(x):
