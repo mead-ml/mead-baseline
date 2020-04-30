@@ -13,6 +13,12 @@
     "unzip": false,
     "dsz": 768
   },
+   {
+    "label": "glove-twitter-27B",
+    "file": "http://nlp.stanford.edu/data/glove.twitter.27B.zip",
+    "sha1": "dce69c404025a8312c323197347695e81fd529fc",
+    "dsz": 200
+  },
   {
     "label": "w2v-twitter-30M",
     "file": "https://www.dropbox.com/s/ihs4or6z5bq33tb/oct-s140clean-uber.cbow-bin?dl=1",
