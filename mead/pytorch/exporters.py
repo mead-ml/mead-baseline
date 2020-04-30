@@ -153,9 +153,8 @@ class TaggerPytorchONNXExporter(PytorchONNXExporter):
         self.sig_name = 'tag_text'
 
     def apply_model_patches(self, model):
-        if hasattr(model, 'layers'):
-            if hasattr(model.layers, 'decoder_model'):
-                if isinstance(model.layers.decoder_model, CRF):
-                    model.layers.decoder_model.viterbi = ViterbiBatchSize1(model.layers.decoder_model.viterbi.start_idx,
-                                                                           model.layers.decoder_model.viterbi.end_idx)
+        if hasattr(model, 'decoder'):
+            if isinstance(model.decoder, CRF):
+                model.decoder.viterbi = ViterbiBatchSize1(model.decoder.viterbi.start_idx,
+                                                          model.decoder.viterbi.end_idx)
         return model

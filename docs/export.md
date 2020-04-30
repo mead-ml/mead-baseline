@@ -1,6 +1,6 @@
 DNNs can be deployed within a model serving framework such as __TensorFlow Serving__, a high-performance and highly scalable deployment architecture. All of the baseline implementations have exporters, though some customization may be required for user-defined models, for which we provide interfaces. The exporter transforms the model to include pre-processing and service-consumable output.
 
-Currently we provide code to export and serve TensorFlow models. The saved model is a typical TensorFlow checkpoint: model graph and data (values for the variables).
+Currently we provide code to export and serve TensorFlow models when the backend is TensorFlow, and code to export ONNX models from PyTorch. 
 
 ## Exporting a model
 
@@ -10,20 +10,24 @@ To export a model, use [export.py](../python/mead/export.py). The following are 
 - `--task`: classify,taggger,seq2seq,lm (for which task the model was trained, see [baseline](baseline.md))
 - `--model`: location of the saved model checkpoint.
 - `--output_dir`: location of the directory where the exported model is saved.
+- `--backend`: If you override this param from the config in `mead-train`, pass the same argument here
 
-Here is an example of running for a saved model with pid 27015.  Adjust for your model name:
-
-```
-python export.py --config config/sst2.json --model classify-model-tf-27015
+Here is an example of running for a saved model from training.  Adjust for your model name:
 
 ```
+mead-export --config config/sst2.json --model sst2-29858.zip
+
+```
+
 The last command will store the model at `./models/1` (note the version number). Please see `export.py` for more customization. 
 
-## Serving a model
+## Serving a TensorFlow Model with TensorFlow Serving
+
+TODO: Update this section, its quite old!
 
 To serve the model you must run [Tensorflow Serving](https://github.com/tensorflow/serving).  
 
-### Serving the model using bazel:
+### TensorFlow Serving using bazel:
 
 1. Clone serving:
 
@@ -79,7 +83,9 @@ model_config_list: {
   }
 }
 ```
-### The docker way
+### The Docker way
+
+TODO: This is way out of date
 
 You can alternately test your module by running a docker image pulled from [epigram ai](https://github.com/tensorflow/serving): `docker pull epigramai/model-server:light-1.5`. 
 
@@ -90,7 +96,41 @@ Once you have an exported model and the docker image pulled, you can load it in 
 docker run -it --name tf_classify -p 9000:9000 -v ./models:/models/ epigramai/model-server:light --port=9000 --model_name=tf_classify --model_base_path=/models/
 
 ```
+## Exporting an ONNX model from PyTorch
 
+To export a model to ONNX for a PyTorch model, use `mead-export` as usual.  If you want to run the model locally with the api-examples, use the `is_remote` parameter.
+
+```
+mead-export --config config/conll.json --model tagger-29891.zip --is_remote false
+```
+
+### Testing out your ONNX model with api-examples
+
+There are API examples that mirror their `*-text.py` counterparts, and are named `*-text-onnx.py*` for trying out your ONNX-exported models with `onnxruntime`.  To make this work, you need to first install that:
+
+```
+pip install onnxruntime
+```
+
+To run the checkpoint we just exported:
+
+```
+python tag-text-onnx.py --model ../mead/models/1/ --text "Mr. Jones went to Last Vegas ."
+../mead/models/1/tagger-model-29891.labels
+../mead/models/1/vocabs-char-29891.json
+../mead/models/1/vocabs-senna-29891.json
+../mead/models/1/vocabs-word-29891.json
+2020-04-29 21:01:58.184187301 [W:onnxruntime:, graph.cc:2413 CleanUnusedInitializers] Removing initializer 'embeddings.embeddings.2.proj.bias'. It is not used by any node and should be removed from the model.
+2020-04-29 21:01:58.184211421 [W:onnxruntime:, graph.cc:2413 CleanUnusedInitializers] Removing initializer 'embeddings.embeddings.2.proj.weight'. It is not used by any node and should be removed from the model.
+Mr. B-PER
+Jones E-PER
+went O
+to O
+Last B-LOC
+Vegas E-LOC
+. O
+
+```
 
 ## Paths
 
