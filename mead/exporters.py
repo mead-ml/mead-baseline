@@ -25,7 +25,8 @@ class Exporter(object):
             output_dir,
             project=project,
             name=name,
-            model_version=model_version
+            model_version=model_version,
+            **kwargs
         )
         if model_version is None:
             try:
