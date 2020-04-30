@@ -17,7 +17,7 @@ def reload_embeddings(embeddings_dict, basename):
         mod = import_user_module(module)
         embed_args['name'] = key
         Constructor = getattr(mod, cls)
-        embeddings[key] = Constructor(key, **embed_args)
+        embeddings[key] = Constructor(**embed_args)
     return embeddings
 
 
