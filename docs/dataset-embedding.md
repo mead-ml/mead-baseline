@@ -124,7 +124,7 @@ Embeddings can also be referenced from the file system
 
 ### File formats supported for download
 
-The links can have the usual data format supported by `baseline` or standard zip formats such as `.gz, tar.gz, tgz, zip`. We automatically extract them as needed.
+The links can have the usual data format supported by `baseline` or standard zip formats such as `.gz, tar.gz, tgz, zip`.  The embeddings downloader code automatically checks the file header to see if its in an extractable format, and in most cases, we automatically extract them as needed.  If the embedding should not be extracted, the index entry should contain an  `unzip` property in the index is set to `false`.  In that case, we will not unpack the model.  This functionality is used for BERT NPZ checkpoints, for example, which are in the PKZIP format but which we dont want to unzip, since the checkpoint is opened by the model itself.
 
 ### Caching
 

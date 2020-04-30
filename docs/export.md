@@ -132,6 +132,19 @@ Vegas E-LOC
 
 ```
 
+### MEAD Baseline PyTorch model ONNX Capabilities
+
+The following MEAD Baseline models have been tested with ONNX
+
+----------------------------------------------------------
+| Task       | PyTorch | Encoder | Decoder | ORT Version |
+|------------|---------|---------|---------|-------------|
+| Tagger     | 1.4     |  BiLSTM | Greedy  |       1.2.0 |
+| Tagger     | 1.4     |  BiLSTM |    CRF  |       1.2.0 |
+| Classifier | 1.4     |     CNN |    N/A  |       1.2.0 |
+| Classifier | 1.4     |    LSTM |    N/A  |       1.2.0 |
+----------------------------------------------------------
+
 ## Paths
 
 A few commandline arguments to `mead-export` can be used to control what the output paths look like.
