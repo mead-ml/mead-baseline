@@ -10,7 +10,7 @@ logger = logging.getLogger("baseline")
 
 
 def create_model(model_type, embeddings, d_model=512, d_ff=2048, dropout=0., num_heads=8, num_layers=6,
-                 stacking_layers=None, rpr_k=[], d_k=None):
+                 stacking_layers=None, rpr_k=[], ra_masking=False, d_k=None):
     if len(rpr_k) == 0 or rpr_k[0] < 1:
         rpr_k = None
     if model_type == "encoder-decoder":
@@ -29,7 +29,7 @@ def create_model(model_type, embeddings, d_model=512, d_ff=2048, dropout=0., num
         model = TiedEmbeddingsSeq2SeqModel(embeddings, **hps)
     elif model_type == 'dual-encoder':
         model = PairedModel(embeddings, d_model, d_ff, dropout, num_heads, num_layers, stacking_layers=stacking_layers,
-                            rpr_k=rpr_k, d_k=d_k)
+                            rpr_k=rpr_k, ra_masking=ra_masking, d_k=d_k)
     else:
         model = TransformerLanguageModel.create({'x': embeddings},
                                                 hsz=d_model,
@@ -77,6 +77,7 @@ parser.add_argument("--nctx", type=int, default=64, help="Max context length (fo
 parser.add_argument("--embed_type", type=str, default='positional',
                     help="register label of the embeddings, so far support positional or learned-positional")
 parser.add_argument("--stacking_layers", type=int, nargs='+', default=[1024, 1024, 1024])
+parser.add_argument("--ra_masking", type=str2bool, default=False, help="whether prevent attention beyond rpr_k")
 parser.add_argument('--rpr_k', help='Relative attention positional sizes pass 0 if you dont want relative attention',
                     type=int, default=[3, 5, 48, 48, 48, 48], nargs='+')
 parser.add_argument("--ckpt", type=str, help="path to the model checkpoint")
@@ -114,6 +115,7 @@ model = create_model(args.model_type,
                      num_layers=args.num_layers,
                      stacking_layers=args.stacking_layers,
                      rpr_k=args.rpr_k,
+                     ra_masking=args.ra_masking,
                      d_k=args.d_k)
 
 if os.path.isdir(args.ckpt):
