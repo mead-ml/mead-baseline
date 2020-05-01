@@ -57,10 +57,12 @@ def create_fake_data(shapes, vectorizers, order, min_=0, max_=50,):
 
 def create_data_dict(vocabs, vectorizers, transpose=False, min_=0, max_=50, default_size=100):
     data = {}
+    lengths = None
     for k, v in vectorizers.items():
-        data[k], lengths = vectorizers[k].run(FAKE_SENTENCE.split(), vocabs[k])
+        data[k], feature_length = vectorizers[k].run(FAKE_SENTENCE.split(), vocabs[k])
         data[k] = torch.LongTensor(data[k]).unsqueeze(0)
-        lengths = [lengths]
+        if not lengths:
+            lengths = [feature_length]
         # TODO: use the vectorizers, thats their job!!
         # data[k][0][0] = 101
 
