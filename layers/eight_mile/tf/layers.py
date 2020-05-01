@@ -1859,11 +1859,13 @@ class DenseStack(tf.keras.layers.Layer):
     def __init__(
         self,
         insz: Optional[int],
-        hsz: int,
-        activation: str = "relu",
+        hsz: Union[int, List[int]],
+        activation: Union[str, List[str]] = "relu",
         pdrop_value: float = 0.5,
         init: Optional[Any] = None,
         name: Optional[str] = None,
+        skip_connect = False,
+        layer_norm = False,
         **kwargs,
     ):
         """Stack 1 or more hidden layers, optionally (forming an MLP)
@@ -1876,7 +1878,27 @@ class DenseStack(tf.keras.layers.Layer):
         """
         super().__init__(name=name)
         hszs = listify(hsz)
-        self.layer_stack = [tf.keras.layers.Dense(hsz, kernel_initializer=init, activation=activation) for hsz in hszs]
+        activations = listify(activation)
+        if len(activations) == 1:
+            activations = activations * len(hszs)
+        if len(activations) != len(hszs):
+            raise ValueError("Number of activations must match number of hidden sizes in a stack!")
+        if layer_norm:
+            layer_norm_eps = kwargs.get('layer_norm_eps', 1e-6)
+        if skip_connect:
+            if not insz:
+                raise ValueError("In order to use skip connection, insz must be provided in DenseStack!")
+            current = insz
+        layer_stack = []
+        for hsz, activation in zip(hszs, activations):
+            if skip_connect and current == hsz:
+                layer_stack.append(SkipConnection(hsz, activation))
+                current = hsz
+            else:
+                layer_stack.append(tf.keras.layers.Dense(hsz, activation))
+            if layer_norm:
+                layer_stack.append(tf.keras.layers.LayerNormalization(epsilon=layer_norm_eps))
+        self.layer_stack = layer_stack
         self.dropout = tf.keras.layers.Dropout(pdrop_value)
 
     def call(self, inputs):

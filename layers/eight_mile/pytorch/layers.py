@@ -1634,6 +1634,7 @@ class EmbeddingsStack(nn.Module):
         for k, v in zip(self.keys(), self.embeddings):
             yield k, v
 
+
 class DenseStack(nn.Module):
     """A stack of one or more hidden layers
     """
@@ -1642,9 +1643,11 @@ class DenseStack(nn.Module):
         self,
         insz: int,
         hsz: Union[int, List[int]],
-        activation: str = "relu",
+        activation: Union[str, List[str]] = "relu",
         pdrop_value: float = 0.5,
         init=None,
+        skip_connect=False,
+        layer_norm=False,
         **kwargs,
     ):
         """Stack 1 or more hidden layers, optionally (forming an MLP)
@@ -1654,15 +1657,30 @@ class DenseStack(nn.Module):
         :param activation: The name of the activation function to use
         :param pdrop_value: The dropout probability
         :param init: The initializer
+        :param skip_connect: whether use skip connection when insz is equal to outsz for a layer
+        :param layer_norm: whether use layer norm in each layer
 
         """
         super().__init__()
         hszs = listify(hsz)
         self.output_dim = hsz[-1]
+        activations = listify(activation)
+        if len(activations) == 1:
+            activations = activations * len(hszs)
+        if len(activations) != len(hszs):
+            raise ValueError("Number of activations must match number of hidden sizes in a stack!")
         current = insz
         layer_stack = []
-        for hsz in hszs:
-            layer_stack.append(WithDropout(Dense(current, hsz, activation=activation), pdrop_value))
+        if layer_norm:
+            layer_norm_eps = kwargs.get('layer_norm_eps', 1e-6)
+        for hsz, activation in zip(hszs, activations):
+            if skip_connect and current == hsz:
+                layer = SkipConnection(current, activation)
+            else:
+                layer = Dense(current, hsz, activation)
+            if layer_norm:
+                layer = nn.Sequential(layer, nn.LayerNorm(hsz, eps=layer_norm_eps))
+            layer_stack.append(WithDropout(layer, pdrop_value))
             current = hsz
         self.layer_stack = nn.Sequential(*layer_stack)
         self.requires_length = False
@@ -1677,10 +1695,7 @@ class DenseStack(nn.Module):
 
         :return: The final layer
         """
-        x = inputs
-        for layer in self.layer_stack:
-            x = layer(x)
-        return x
+        return self.layer_stack(inputs)
 
 
 class VectorSequenceAttention(nn.Module):
@@ -3331,3 +3346,62 @@ class Average(object):
     def __str__(self):
         fmtstr = '{name} {val' + self.fmt + '} ({avg' + self.fmt + '})'
         return fmtstr.format(**self.__dict__)
+
+
+class SingleHeadReduction(nn.Module):
+    """
+    Implementation of the "self_attention_head" layer from the conveRT paper (https://arxiv.org/pdf/1911.03688.pdf)
+    """
+    def __init__(
+            self, d_model: int, dropout: float = 0.0, scale: bool = True, d_k: Optional[int] = None
+    ):
+        """
+        :param d_model: The model hidden size
+        :param dropout (``float``): The amount of dropout to use
+        :param scale: should we scale the dot product attention
+        :param d_k: The low-order project per head.  This is normally `d_model // num_heads` unless set explicitly
+        """
+        super().__init__()
+        self.d_model = d_model
+        if d_k is None:
+            self.d_k = d_model
+        else:
+            self.d_k = d_k
+        self.w_Q = Dense(d_model, self.d_k)
+        self.w_K = Dense(d_model, self.d_k)
+        if scale:
+            self.attn_fn = SeqScaledDotProductAttention(dropout)
+        else:
+            self.attn_fn = SeqDotProductAttention(dropout)
+        self.attn = None
+
+    def forward(self, qkvm: Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]) -> torch.Tensor:
+        """According to conveRT model's graph, they project token encodings to lower-dimensional query and key in single
+        head, use them to calculate the attention score matrix that has dim [B, T, T], then sum over the query dim to
+        get a tensor with [B, 1, T] (meaning the amount of attentions each token gets from all other tokens), scale it
+        by sqrt of sequence lengths, then use it as the weight to weighted sum the token encoding to get the sentence
+        encoding. we implement it in an equivalent way that can best make use of the eight_mile codes: do the matrix
+        multiply with value first, then sum over the query dimension.
+        :param query: a query for alignment. Can come from self in case of self-attn or decoder in case of E/D
+        :param key: a set of keys from encoder or self
+        :param value: a set of values from encoder or self
+        :param mask: masking (for destination) to prevent seeing what we shouldnt
+        :return: sentence-level encoding with dim [B, d_model]
+        """
+        query, key, value, mask = qkvm
+        batchsz = query.size(0)
+        seq_mask = mask.squeeze()  # [B, T]
+        seq_lengths = seq_mask.sum(dim=1)
+
+        # (B, H, T, D), still have num_heads = 1 to use the attention function defined in eight_miles
+        query = self.w_Q(query).view(batchsz, -1, 1, self.d_k).transpose(1, 2)
+        key = self.w_K(key).view(batchsz, -1, 1, self.d_k).transpose(1, 2)
+        value = value.view(batchsz, -1, 1, self.d_model).transpose(1, 2)
+        x = self.attn_fn((query, key, value, mask))  # [B, 1, T, D]
+        self.attn = self.attn_fn.attn
+
+        x = x.squeeze(1)  # [B, T, D]
+        x = x * seq_mask.unsqueeze(-1)
+        x = x.sum(dim=1)  # [B, D]
+        x = x * seq_lengths.float().sqrt().unsqueeze(-1)
+        return x

@@ -127,7 +127,7 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
         #    tt_embedding = LookupTableEmbeddings(vsz=token_type_vsz, dsz=self.dsz)
         #    embeddings['tt'] = tt_embedding
         # For bert, make sure this is `sum-layer-norm`
-        reduction = kwargs.get('embeddings_reduction', kwargs.get('reduction'))
+        reduction = kwargs.get('embeddings_reduction', kwargs.get('reduction', 'concat'))
         embeddings_dropout = kwargs.get('embeddings_dropout', 0.1)
         self.embeddings = EmbeddingsStack(embeddings, dropout_rate=embeddings_dropout, reduction=reduction)
 
@@ -208,11 +208,16 @@ def _identity(x):
     return x
 
 
-def _mean_pool(_, embeddings):
-    return torch.mean(embeddings, 1, False)
+def _mean_pool(inputs, embeddings):
+    mask = (inputs != 0)
+    seq_lengths = mask.sum(1).float()
+    embeddings = embeddings.masked_fill(mask.unsqueeze(-1) == False, 0.)
+    return embeddings.sum(1)/seq_lengths.unsqueeze(-1)
 
 
-def _max_pool(_, embeddings):
+def _max_pool(inputs, embeddings):
+    mask = (inputs != 0)
+    embeddings = embeddings.masked_fill(mask.unsqueeze(-1) == False, 0.)
     return torch.max(embeddings, 1, False)[0]
 
 
@@ -233,9 +238,11 @@ class TransformerLMPooledEmbeddingsModel(TransformerLMEmbeddingsModel):
             self.pooling_op = self._cls_pool
 
     def _sqrt_length_pool(self, inputs, embeddings):
-        lengths = (inputs != 0).sum(1)
-        sqrt_length = lengths.float().sqrt().unsqueeze(1)
-        embeddings = embeddings.sum(1) / sqrt_length
+        mask = (inputs != 0)
+        lengths = mask.sum(1)
+        sqrt_length = lengths.float()
+        embeddings = embeddings.masked_fill(mask.unsqueeze(-1) == False, 0.)
+        embeddings = embeddings.sum(1) * sqrt_length.sqrt().unsqueeze(-1)
         return embeddings
 
     def _cls_pool(self, inputs, tensor):

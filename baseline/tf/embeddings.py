@@ -211,7 +211,7 @@ class TransformerLMEmbeddings(TensorFlowEmbeddings):
         #    tt_embedding = LookupTableEmbeddings(vsz=token_type_vsz, dsz=self.dsz, name='tt')
         #    embeddings['tt'] = tt_embedding
         # For bert, make sure this is `sum-layer-norm`
-        reduction = kwargs.get('embeddings_reduction', kwargs.get('reduction'))
+        reduction = kwargs.get('embeddings_reduction', kwargs.get('reduction', 'concat'))
         embeddings_dropout = kwargs.get('embeddings_dropout', 0.1)
         self.embeddings = EmbeddingsStack(embeddings, dropout_rate=embeddings_dropout, reduction=reduction)
 
@@ -310,15 +310,19 @@ class TransformerLMEmbeddingsModel(TensorFlowEmbeddingsMixin, TransformerLMEmbed
 class TransformerLMPooledEmbeddingsModel(TensorFlowEmbeddingsMixin, TransformerLMPooledEmbeddings):
     pass
 
+
 def _identity(x):
     return x
 
 
-def _mean_pool(_, embeddings):
-    return tf.reduce_mean(embeddings, 1, False)
+def _mean_pool(inputs, embeddings):
+    mask = tf.not_equal(inputs, 0)
+    seq_lengths = tf.reduce_sum(tf.cast(mask, tf.int8), axis=1, keepdims=True)
+    embeddings = tf.where(tf.expand_dims(mask, -1), embeddings, 0.)
+    return tf.reduce_sum(embeddings, 1, False) / tf.cast(seq_lengths, embeddings.dtype)
 
 
-def _max_pool(_, embeddings):
+def _max_pool(inputs, embeddings):
+    mask = tf.not_equal(inputs, 0)
+    embeddings = tf.where(tf.expand_dims(mask, -1), embeddings, 0.)
     return tf.reduce_max(embeddings, 1, False)
-
-
