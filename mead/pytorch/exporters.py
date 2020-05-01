@@ -56,6 +56,8 @@ def create_data_dict(shapes, vectorizers, transpose=False, min_=0, max_=50, defa
     for k, v in vectorizers.items():
         dims = [d if d >= 0 else default_size for d in v.get_dims()]
         data[k] = torch.randint(min_, max_, [1, *dims])
+        # TODO: use the vectorizers, thats their job!!
+        # data[k][0][0] = 101
 
     lengths = torch.LongTensor([data[list(data.keys())[0]].shape[1]])
 

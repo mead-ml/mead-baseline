@@ -239,7 +239,12 @@ class TransformerLMPooledEmbeddingsModel(TransformerLMEmbeddingsModel):
         return embeddings
 
     def _cls_pool(self, inputs, tensor):
-        pooled = tensor[inputs == self.cls_index]
+        # Would prefer
+        # tensor[inputs == self.cls_index]
+        # but ONNX export fails
+        B = tensor.shape[0]
+        mask = (inputs == self.cls_index).unsqueeze(-1).expand_as(tensor)
+        pooled = tensor.masked_select(mask).view(B, -1)
         return pooled
 
     def get_output(self, inputs, z):
