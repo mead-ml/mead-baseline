@@ -208,11 +208,15 @@ def _identity(x):
     return x
 
 
-def _mean_pool(_, embeddings):
+def _mean_pool(inputs, embeddings):
+    mask = (inputs != 0)
+    embeddings = embeddings * mask.unsqueeze(-1)
     return torch.mean(embeddings, 1, False)
 
 
-def _max_pool(_, embeddings):
+def _max_pool(inputs, embeddings):
+    mask = (inputs != 0)
+    embeddings = embeddings * mask.unsqueeze(-1)
     return torch.max(embeddings, 1, False)[0]
 
 
@@ -233,8 +237,10 @@ class TransformerLMPooledEmbeddingsModel(TransformerLMEmbeddingsModel):
             self.pooling_op = self._cls_pool
 
     def _sqrt_length_pool(self, inputs, embeddings):
-        lengths = (inputs != 0).sum(1)
+        mask = (inputs != 0)
+        lengths = mask.sum(1)
         sqrt_length = lengths.float().sqrt().unsqueeze(1)
+        embeddings = embeddings * mask.unsqueeze(-1)
         embeddings = embeddings.sum(1) / sqrt_length
         return embeddings
 

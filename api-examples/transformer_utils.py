@@ -21,6 +21,7 @@ def find_latest_checkpoint(checkpoint_dir: str, wildcard="checkpoint") -> str:
             step_num = this_step_num
     return checkpoint
 
+
 class TripletLoss(nn.Module):
     """Provide a Triplet Loss using the reversed batch for negatives"""
     def __init__(self, model):
@@ -92,6 +93,59 @@ class AllLoss(nn.Module):
         return -loss
 
 
+class TwoHeadConcat(nn.Module):
+    """Use two parallel SingleHeadReduction, and concatenate the outputs. It is used in the conveRT
+    paper (https://arxiv.org/pdf/1911.03688.pdf)"""
+
+    def __init__(self, d_model, dropout, scale=False, d_k=None):
+        """Two parallel 1-head self-attention, then concatenate the output
+        :param d_model: dim of the self-attention
+        :param dropout: dropout of the self-attention
+        :param scale: scale fo the self-attention
+        :param d_k: d_k of the self-attention
+        :return: concatenation of the two 1-head attention
+        """
+        super().__init__()
+        self.reduction1 = SingleHeadReduction(d_model, dropout, scale=scale, d_k=d_k)
+        self.reduction2 = SingleHeadReduction(d_model, dropout, scale=scale, d_k=d_k)
+
+    def forward(self, inputs: torch.Tensor):
+        x = inputs
+        encoding1 = self.reduction1(x)
+        encoding2 = self.reduction2(x)
+        x = torch.cat([encoding1, encoding2], dim=-1)
+        return x
+
+
+class ConveRTFFN(nn.Module):
+    """Implementation of the FFN layer from the convert paper (https://arxiv.org/pdf/1911.03688.pdf)"""
+    def __init__(self, insz, hszs, outsz, pdrop):
+        """
+        :param insz: input dim
+        :param hszs: list of hidden sizes
+        :param outsz: output dim
+        :param pdrop: dropout of each hidden layer
+        """
+        super().__init__()
+        self.dense_stack = DenseStack(insz,
+                                      hszs,
+                                      activation='gelu',
+                                      pdrop_value=pdrop,
+                                      skip_connect=True,
+                                      layer_norm=True)
+        self.final = Dense(hszs[-1], outsz)
+        self.proj = Dense(insz, outsz) if insz != outsz else nn.Identity()
+        self.ln1 = nn.LayerNorm(insz, eps=1e-6)
+        self.ln2 = nn.LayerNorm(outsz, eps=1e-6)
+
+    def forward(self, inputs):
+        x = self.ln1(inputs)
+        x = self.dense_stack(x)
+        x = self.final(x)
+        x = x + self.proj(inputs)
+        return self.ln2(x)
+
+
 class PairedModel(nn.Module):
 
     def __init__(self, embeddings,
@@ -102,9 +156,11 @@ class PairedModel(nn.Module):
                  num_layers,
                  stacking_layers=None,
                  d_out=512,
-                 d_k=64,
+                 d_k=None,
                  weight_std=0.02,
-                 rpr_k=None):
+                 rpr_k=None,
+                 reduction_d_k=64,
+                 ff_pdrop=0.1):
         super().__init__()
         if stacking_layers is None:
             stacking_layers = [d_model] * 3
@@ -114,11 +170,11 @@ class PairedModel(nn.Module):
         transformer = TransformerEncoderStack(num_heads=num_heads, d_model=d_model,
                                               pdrop=dropout, layers=num_layers, activation='gelu', d_ff=d_ff,
                                               d_k=d_k, rpr_k=rpr_k)
-        self.attention_layer = MultiHeadedAttention(2, d_model, dropout, scale=False, d_k=d_k)
+        self.attention_layer = TwoHeadConcat(d_model, dropout, scale=False, d_k=reduction_d_k)
         self.transformer_layers = transformer
         self.embedding_layers = embeddings
-        self.ff1 = DenseStack(d_model, stacking_layers + [d_out], activation='gelu')
-        self.ff2 = DenseStack(d_model, stacking_layers + [d_out], activation='gelu')
+        self.ff1 = ConveRTFFN(2*d_model, stacking_layers, d_out, ff_pdrop)
+        self.ff2 = ConveRTFFN(2*d_model, stacking_layers, d_out, ff_pdrop)
         self.apply(self.init_layer_weights)
 
     def init_layer_weights(self, module):
@@ -129,25 +185,20 @@ class PairedModel(nn.Module):
 
     def encode_query(self, query):
         query_mask = (query != Offsets.PAD)
-        query_length = query_mask.sum(-1)
-        query_mask = query_mask.unsqueeze(1).unsqueeze(1)
+        att_mask = query_mask.unsqueeze(1).unsqueeze(1)
         embedded = self.embedding_layers(query)
-        encoded_query = self.transformer_layers((embedded, query_mask))
-        encoded_query = self.attention_layer((encoded_query, encoded_query, encoded_query, query_mask))
-        encoded_query = encoded_query.sum(1) / query_length.float().sqrt().unsqueeze(1)
+        encoded_query = self.transformer_layers((embedded, att_mask))
+        encoded_query = self.attention_layer((encoded_query, encoded_query, encoded_query, att_mask))
         encoded_query = self.ff1(encoded_query)
         return encoded_query
 
     def encode_response(self, response):
         response_mask = (response != Offsets.PAD)
-        response_length = response_mask.sum(-1)
-        response_mask = response_mask.unsqueeze(1).unsqueeze(1)
+        att_mask = response_mask.unsqueeze(1).unsqueeze(1)
         embedded = self.embedding_layers(response)
-        encoded_response = self.transformer_layers((embedded, response_mask))
-        encoded_response = self.attention_layer((encoded_response, encoded_response, encoded_response, response_mask))
-        encoded_response = encoded_response.sum(1) / response_length.float().sqrt().unsqueeze(1)
+        encoded_response = self.transformer_layers((embedded, att_mask))
+        encoded_response = self.attention_layer((encoded_response, encoded_response, encoded_response, att_mask))
         encoded_response = self.ff2(encoded_response)
-
         return encoded_response
 
     def forward(self, query, response):
@@ -407,3 +458,29 @@ class TiedEmbeddingsSeq2SeqModel(Seq2SeqModel):
                 pred = self.model(in_)
                 return self._loss(pred, targets)
         return LossFn(self, loss)
+
+
+def create_model(embeddings, d_model, d_ff, dropout, num_heads, num_layers, model_type, rpr_k, d_k, reduction_d_k,
+                 stacking_layers, ff_pdrop, logger):
+    if len(rpr_k) == 0 or rpr_k[0] < 1:
+        rpr_k = None
+    if model_type == "encoder-decoder":
+        logger.info("Creating tied encoder decoder model")
+        hps = {"dsz": d_model,
+               "hsz": d_model,
+               "d_ff": d_ff,
+               "dropout": dropout,
+               "num_heads": num_heads,
+               "layers": num_layers,
+               "encoder_type": "transformer",
+               "decoder_type": "transformer",
+               "src_lengths_key": "x_lengths",
+               "d_k": d_k,
+               "rpr_k": rpr_k}
+        model = TiedEmbeddingsSeq2SeqModel(embeddings, **hps)
+    else:
+        model = PairedModel(embeddings, d_model, d_ff, dropout, num_heads, num_layers, rpr_k=rpr_k, d_k=d_k,
+                            reduction_d_k=reduction_d_k, stacking_layers=stacking_layers, ff_pdrop=ff_pdrop)
+
+    logger.info(model)
+    return model
