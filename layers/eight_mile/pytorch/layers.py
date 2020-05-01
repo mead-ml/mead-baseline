@@ -1671,13 +1671,15 @@ class DenseStack(nn.Module):
             raise ValueError("Number of activations must match number of hidden sizes in a stack!")
         current = insz
         layer_stack = []
+        if layer_norm:
+            layer_norm_eps = kwargs.get('layer_norm_eps', 1e-6)
         for hsz, activation in zip(hszs, activations):
             if skip_connect and current == hsz:
                 layer = SkipConnection(current, activation)
             else:
                 layer = Dense(current, hsz, activation)
             if layer_norm:
-                layer = nn.Sequential(layer, nn.LayerNorm(hsz, eps=1e-6))
+                layer = nn.Sequential(layer, nn.LayerNorm(hsz, eps=layer_norm_eps))
             layer_stack.append(WithDropout(layer, pdrop_value))
             current = hsz
         self.layer_stack = nn.Sequential(*layer_stack)
