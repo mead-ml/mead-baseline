@@ -9,6 +9,7 @@ from baseline.utils import (
     Offsets,
     write_json,
     load_vectorizers,
+    load_vocabs,
     find_model_basename,
 )
 from baseline.model import load_model_for
@@ -41,6 +42,9 @@ VECTORIZER_SHAPE_MAP = {
     Char1DVectorizer: [1, 100],
 }
 
+FAKE_SENTENCE = """
+Common starlings may be kept as pets or as laboratory animals . Austrian <unk> Konrad Lorenz wrote of them in his book King Solomon 's Ring as " the poor man 's dog " and " something to love " , because nestlings are easily obtained from the wild and after careful hand rearing they are straightforward to look after . They adapt well to captivity , and thrive on a diet of standard bird feed and <unk> . Several birds may be kept in the same cage , and their <unk> makes them easy to train or study . The only disadvantages are their <unk> and indiscriminate defecation habits and the need to take precautions against diseases that may be transmitted to humans . As a laboratory bird , the common starling is second in numbers only to the domestic <unk> . 
+"""
 
 def create_fake_data(shapes, vectorizers, order, min_=0, max_=50,):
     data = {
@@ -51,15 +55,16 @@ def create_fake_data(shapes, vectorizers, order, min_=0, max_=50,):
     return ordered_data, lengths
 
 
-def create_data_dict(shapes, vectorizers, transpose=False, min_=0, max_=50, default_size=100):
+def create_data_dict(vocabs, vectorizers, transpose=False, min_=0, max_=50, default_size=100):
     data = {}
     for k, v in vectorizers.items():
-        dims = [d if d >= 0 else default_size for d in v.get_dims()]
-        data[k] = torch.randint(min_, max_, [1, *dims])
+        data[k], lengths = vectorizers[k].run(FAKE_SENTENCE.split(), vocabs[k])
+        data[k] = torch.LongTensor(data[k]).unsqueeze(0)
+        lengths = [lengths]
         # TODO: use the vectorizers, thats their job!!
         # data[k][0][0] = 101
 
-    lengths = torch.LongTensor([data[list(data.keys())[0]].shape[1]])
+    lengths = torch.LongTensor(lengths)
 
     if transpose:
         for k in vectorizers.keys():
@@ -90,9 +95,9 @@ class PytorchONNXExporter(Exporter):
         )
         logger.info("Saving vectorizers and vocabs to %s", client_output)
         logger.info("Saving serialized model to %s", server_output)
-        model, vectorizers, model_name = self.load_model(basename)
+        model, vectorizers, vocabs, model_name = self.load_model(basename)
         model = self.apply_model_patches(model)
-        data = create_data_dict(VECTORIZER_SHAPE_MAP, vectorizers, transpose=self.transpose, default_size=self.default_size)
+        data = create_data_dict(vocabs, vectorizers, transpose=self.transpose, default_size=self.default_size)
 
         inputs = [k for k, _ in model.embeddings.items()] + ['lengths']
 
@@ -132,11 +137,12 @@ class PytorchONNXExporter(Exporter):
     def load_model(self, model_dir):
         model_name = find_model_basename(model_dir)
         vectorizers = load_vectorizers(model_dir)
+        vocabs = load_vocabs(model_dir)
         model = load_model_for(self.task.task_name(), model_name, device='cpu')
         model = model.cpu()
         model.eval()
         model_name = os.path.basename(model_name)
-        return model, vectorizers, model_name
+        return model, vectorizers, vocabs, model_name
 
 
 @export
