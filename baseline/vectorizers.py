@@ -881,6 +881,9 @@ class WordpieceVectorizer1D(AbstractVectorizer):
         valid_length = i + 1
         return vec1d, valid_length
 
+    def get_dims(self):
+        return self.mxlen,
+
 
 @register_vectorizer(name='wordpiece-label-dict1d')
 class WordpieceLabelDict1DVectorizer(WordpieceVectorizer1D):
