@@ -30,11 +30,6 @@ The library is designed to make this process extremely easy.
 The user can build a model by overriding the methods of a model base class and can run an experiment with the new model by passing the class name as an argument to the driver program.
 The data loading and training algorithm is decoupled from the model and can be overridden if necessary.
 
-Driver programs are provided to train/test a model from the command line.
-In the following docs, we document how to use them, the implemented algorithms and the results in details.
-However, we recommend using [mead](mead.md) and [xpctl](xpctl.md) to run deep learning experiments.  
-
-
 ## Dependencies
 
 The Baseline module has almost no dependencies. The requirements are `six` and `numpy`, and your choice of either `tensorflow` or `pytorch` as a deep learning backend.
