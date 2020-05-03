@@ -18,7 +18,7 @@ These are the most common NLP tasks and many common problems can be mapped to th
 For example NER and slot filling are typically implemented as Sequence Tagging tasks.
 Machine Translation is typically implemented using Encoder-Decoder models.
 
-The lower-level modules provide at least one implementation for each task in TensorFlow, PyTorch. 
+The task modules provide at least one implementation for each task in TensorFlow, PyTorch. 
 These are well-known algorithms with strong results so that new algorithms can be compared against them. 
 
 The library provides methods to calculate standard evaluation metrics including precision, recall, F1, average loss, and perplexity.
