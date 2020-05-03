@@ -18,11 +18,15 @@ production environment.
 
 ## Components
 
+- [**8 mile**]: An lightweight implementation of NLP layers and embeddings built on Keras and PyTorch.  This is used
+  by `mead-baseline` to create reusable models that are nearly identical in PyTorch and TensorFlow.  It also provides
+  core utilities and metrics APIs used by the library
+  
 - [**baseline**](baseline.md): An object-oriented Python library for
   rapid development of deep learning algorithms. The library provides extensible
   base classes for common components in a deep learning architecture (data
-  loading, model development, training, evaluation, and export) in TensorFlow,
-  PyTorch and DyNet. In addition, it provides strong, deep learning baselines
+  loading, model development, training, evaluation, and export) in TensorFlow and
+  PyTorch. In addition, it provides strong, deep learning baselines
   for four fundamental NLP tasks -- [Classification](classify.md),
   [Sequence Tagging](tagging.md), [Seq-to-Seq Encoder-Decoders](seq2seq.md)
   and [Language Modeling](lm.md). Many NLP problems can be seen as

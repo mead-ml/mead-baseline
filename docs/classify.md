@@ -1,9 +1,9 @@
-# Sentence Classification
+# Text Classification
 
-There are several models built in to the `baseline` codebase.  These are summarized individually in the sections below, and an overall performance summary is given at the bottom.
+There are several classification models built in to the `baseline` codebase.  These are summarized individually in the sections below, and an overall performance summary is given at the bottom.
 The final section provides information on the API design, and how to make your own models
 
-## A Note About Fine-Tuning and Embeddings
+## A Note About Fine-Tuning Embeddings
 
 For the lookup-table embeddings, you can control whether or not the embeddings should be fine-tuned by passing a boolean `finetune` in for the `embeddings` section of the mead config.  If you are using random weights, you definitely should fine tune.  If you are using pre-trained embeddings, it may be worth experimenting with this option.  The default behavior is to fine-tune embeddings.  We randomly initialize unattested words and add them to the weight matrix for the Lookup Table.  This can be controlled with the 'unif' parameter in the driver program.
 
@@ -41,6 +41,18 @@ mead-train --config config/sst2-lstm.json
 ## Neural Bag of Words (NBoW) Model (Max and Average Pooling)
 
 Two different pooling methods for NBoW are supported: max (`"model_type": "nbowmax"`) and average (`"model_type": "nbow"`).  Passing `"layers": <N>` defines the number of hidden layers, and passing `"hsz": <HU>` defines the number of hidden units for each layer.
+
+## Fine-Tuning Models
+
+These models are just defined as a final layer on top of some pre-trained, pooled embedding representation, but may also include additional MLP layers.
+[This document has a more in-depth discussion](fine-tuning.md) of fine-tuning in MEAD/Baseline.
+
+For example, we can fine-tune BERT using
+
+```
+mead-train --config config/sst2-bert-base-uncased.yml --vecs hub:v1:vecs
+```
+
 
 ## Classifier Performance
 

@@ -17,6 +17,22 @@ Under the hood, MEAD tests what version of TensorFlow is running and creates an 
 
 ### Dropout and the TRAIN_FLAG()
 
+
+In the TensorFlow backend, we use a global method function `TRAIN_FLAG()` to determine if things like dropout should be applied.  If the user is running `mead` to train (which is the typical case), this flag is automatically defined as a `tf.placeholder` that will default `False` (meaning no dropout will be applied).
+
+This is convenient because it is possible to use the same graph definition for training and evaluation by simply re-defining the placeholder to `True` when we are training.
+
+However, in some cases, we may wish to define multiple graphs, in which case this default behavior may not be suitable.  A typical example of this would be if the user is running a Baseline model outside of `mead` and wants to define separate graphs depending on what mode is running.  In this case, the `TRAIN_FLAG()` may be better suited as a boolean.  To facilitate this, we provide a method which allows the user to override the value of the `TRAIN_FLAG()` on demand.  This makes it possible to do code such as:
+
+```
+bl.tf.SET_TRAIN_FLAG(True)
+model = bl.model.create_model(embeddings, labels=params['labels'], word=features['word'], y=y, **model_params)
+```
+
+This is particularly helpful when using the `tf.estimator` API.  See [this example](../api-examples/tf-estimator.py) for details
+
+
+
 In early TensorFlow versions, it was quite common to construct the graph in code, whether or not it was to reload a checkpoint or to train a model.
 Code that was executing for training typically would construct a different execution graph than training, to account for things like dropout.
 
@@ -63,6 +79,16 @@ Keras layers already handle this logic internally, so we dont use this in Tensor
 
 training mode or inference.  This actually causes the graph to be identical as the placeholder itself changes the value of things like dropout.
 
+
+#### Injecting inputs & avoiding placeholders in TensorFlow
+
+The Baseline models are defined to support input inject, which bypasses placeholder creation.  This means that from custom user code, it is possible to directly inject the inputs. In the example below, we assume that embeddings is a dict containing the single key 'word', and we inject the input to that embedding via keyword arguments:
+
+```
+model = bl.model.create_model(embeddings, labels=params['labels'], word=word_source, y=y, **model_params)
+```
+
+This allows the user to access some of the advanced input capabilities in TensorFlow like `tf.dataset`s and `tf.Queue`s
 
 
 ## PyTorch
