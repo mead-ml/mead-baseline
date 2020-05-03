@@ -30,7 +30,7 @@ cd ../
 pip install -e .
 ```
 
-This first installs `mead-layers` locally and then `mead-baseline`
+This first installs `mead-layers` (8 mile) locally and then `mead-baseline`
 
 ## A Note About Versions
 
