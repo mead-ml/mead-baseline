@@ -29,18 +29,22 @@ logger = logging.getLogger('baseline')
 # These are inputs to models that shouldn't be saved out
 MAGIC_VARS = ['sess', 'tgt', 'y', 'lengths', 'gpus']
 MAGIC_VARS = ['sess', 'tgt', 'y', 'lengths']
-
-
+MEAD_HUB_MODULES = []
+DEFAULT_DATA_CACHE = os.path.expanduser('~/.bl-data')
 export = exporter(__all__)
 
 
 export(str2bool)
+
+@export
 @export
 def import_user_module(module_name: str, data_download_cache: Optional[str] = None):
     """Load a module that is in the python path
     :param model_name: (``str``) - the name of the module
     :return:
     """
+    if not data_download_cache and os.path.exists(DEFAULT_DATA_CACHE):
+        data_download_cache = DEFAULT_DATA_CACHE
     if data_download_cache:
         if module_name.startswith("hub:") or module_name.startswith("http"):
             if module_name.startswith("hub:"):
@@ -53,6 +57,7 @@ def import_user_module(module_name: str, data_download_cache: Optional[str] = No
                 if addons_literal != "addons":
                     raise Exception("We only support downloading addons right now")
                 module_name = f"http://raw.githubusercontent.com/mead-ml/hub/master/{version}/addons/{rest}"
+                MEAD_HUB_MODULES.append(module_name)
             module_name = AddonDownloader(module_name, data_download_cache, cache_ignore=True).download()
 
     # TODO: get rid of this!

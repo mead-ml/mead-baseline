@@ -34,25 +34,16 @@ Only one issue remains -- how to know where to find user code.  Obviously we sho
 
 The answer is actually quite simple -- we tell MEAD what additional modules to import from the mead config.  Unlike previous versions where you needed some canonical file named something like `classify_rnf.py` (indicating this is a `classify` task handler named `rnf`), lets imagine we have a whole user-defined library of things living in a file called `userlib.py`.  We can simply tell mead, load `userlib.py`, and as long as we have a classifier registered to `rnf`, we can tell mead to use `model_type: rnf` as we did previously.
 
-### A Simple Example
+### Addons and mead-hub
 
-- [Here is a model](../python/addons/rnf_pyt.py) we want to train.  Its based off: https://github.com/bloomberg/cnn-rnf but I have rewritten it in PyTorch as a simple single class inheriting from `ClassifierModelBase` (just to remove some boilerplate code).
+Addons that live on mead-hub (or any other URL) can be downloaded and used for training automatically.  They are downloaded
+into the user's data-cache, which defaults to `~/.bl-data` and an entry will be recorded in the data-cache index which
+is located inside the data-cache in a file called `data-cache.json`.  The addons will be automatically added to the user's
+import path for training.  For example, the example [demolib module](https://github.com/mead-ml/hub/blob/master/v1/addons/demolib.py)
+can be referenced from the mead config as `hub:v1:addons:demolib` as in [this example](../mead/config/sst2-demolib.yml).
 
-Its defined as a simple class with a decorator that will register the class with Baseline.  The decorator tells Baseline that this class is going to handle any training instantion where the `model_type` given is 'rnf'.
+The library will download this path into the cache, usually at `~/.bl-data/addons/demolib.py` and it will add it to a field called `hub_modules`
+in the model (for TensorFlow, in PyTorch the entire module is persisted already). 
 
-- [Here is the config](../python/mead/config/sst2-rnf-pyt.yml) that can be used in MEAD to run train this model
-  - There are two points of interest
-    1. the `model_type` is defined as 'rnf'
-    2. the `modules` section (a list), tells us python modules to load into MEAD
+When we go to reload the model for inference, the module will automaticall be re-added to the data-cache if its not present ni the model.
 
-- Now all I have to do is call `mead-train` (trainer.py)
-
-```
-python trainer.py --config config/sst2-rnf-pyt.yml
-```
-
-We can put our code in any python module that we wish -- for instance, we might have library of registered hooks for training, models and readers.  We can just tell mead about the library in the `modules` section, and then through proper decoration, they become available for training.  Here is an example of a module that customizes several aspects of training:
-  - https://github.com/dpressel/baseline/blob/feature/v1/python/addons/demolib.py
-And here is the corresponding YAML to run this in mead:
-
-  - https://github.com/dpressel/baseline/blob/feature/v1/python/mead/config/sst2-demolib.yml

@@ -130,6 +130,9 @@ def create_lang_model(embeddings, **kwargs):
 def load_model_for(activity, filename, **kwargs):
     # Sniff state to see if we need to import things
     state = read_json('{}.state'.format(filename))
+    if 'hub_modules' in state:
+        for hub_module in state['hub_modules']:
+            import_user_module(hub_module)
     # There won't be a module for pytorch (there is no state file to load).
     if 'module' in state:
         import_user_module(state['module'])

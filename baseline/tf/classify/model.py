@@ -15,6 +15,7 @@ from baseline.utils import (
     read_json,
     write_json,
     MAGIC_VARS,
+    MEAD_HUB_MODULES
 )
 from baseline.model import ClassifierModel, register_model
 from baseline.tf.tfy import (
@@ -90,6 +91,7 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
             'module': self.__class__.__module__,
             'class': self.__class__.__name__,
             'embeddings': embeddings_info,
+            'hub_modules': MEAD_HUB_MODULES
         })
 
     def save(self, basename, **kwargs):
