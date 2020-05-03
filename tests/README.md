@@ -2,7 +2,7 @@
 
 # Dealing with the registry
 
-Baseline uses a global registry (explained [here](https://github.com/dpressel/baseline/blob/feature/v1/docs/addons.md)) to handle both user defined and included models. This causes problems with testing where things try to overwrite each other when the tests are being collected.
+Baseline uses a global registry (explained [here](../docs/addons.md)) to handle both user defined and included models. This causes problems with testing where things try to overwrite each other when the tests are being collected.
 
 To fix this make sure that **all imports** that will import a registered things (models, vectorizers, embeddings, reporting hooks, readers, trainers, and fit funcs) are done inside of the tests themselves.
 
