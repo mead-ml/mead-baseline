@@ -120,7 +120,6 @@ class Service(object):
 
         model_basename = find_model_basename(directory)
         vocabs = load_vocabs(directory)
-        vectorizers = load_vectorizers(directory)
 
         be = normalize_backend(kwargs.get('backend', 'tf'))
 
@@ -135,6 +134,7 @@ class Service(object):
                 version=kwargs.get('version'),
                 remote_type=kwargs.get('remote_type'),
             )
+            vectorizers = load_vectorizers(directory)
             return cls(vocabs, vectorizers, model, preproc)
 
         # Currently nothing to do here
@@ -146,6 +146,7 @@ class Service(object):
         except:
             pass
         model = load_model_for(cls.task_name(), model_basename, **kwargs)
+        vectorizers = load_vectorizers(directory)
         return cls(vocabs, vectorizers, model, 'client')
 
     @staticmethod
