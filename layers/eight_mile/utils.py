@@ -491,15 +491,19 @@ def ls_props(thing):
 
 
 @export
-def idempotent_append(element: Any, data: List[Any]) -> List[Any]:
+def idempotent_append(element: Any, data: List[Any], position: int=-1) -> List[Any]:
     """Append to a list if that element is not already in the list.
 
     :param element: The element to add to the list.
     :param data: `List` the list to add to.
+    :param position: An optional place to insert, defaults to the end
     :returns: `List` the list with the element in it.
     """
     if element not in data:
-        data.append(element)
+        if position < 0:
+            data.append(element)
+        else:
+            data.insert(position, element)
     return data
 
 
@@ -516,6 +520,7 @@ def parse_module_as_path(module_name):
     module_dir = os.path.realpath(os.path.expanduser(module_dir)) if module_dir else module_dir
     module_name, _ = os.path.splitext(module_name)
     return module_name, module_dir
+
 
 @export
 def fill_y(nc, yidx):

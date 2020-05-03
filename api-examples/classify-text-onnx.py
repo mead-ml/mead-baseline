@@ -7,9 +7,10 @@ from baseline.utils import str2bool, read_json
 import numpy as np
 from collections import defaultdict
 import onnxruntime as ort
-from baseline.utils import unzip_files, find_model_basename, load_vectorizers, load_vocabs
+from baseline.utils import unzip_files, find_model_basename, load_vectorizers, load_vocabs, put_addons_in_path
 
-class ONNXClassifierService(object):
+
+class ONNXClassifierService:
 
     def __init__(self, vocabs=None, vectorizers=None, model=None, labels=None, lengths_key=None):
         self.vectorizers = vectorizers
@@ -125,10 +126,12 @@ parser.add_argument('--export_mapping', help='mapping between features and the f
                                                          'request, eg: token:word ner:ner. This should match with the '
                                                          '`exporter_field` definition in the mead config',
                     default=[], nargs='+')
+parser.add_argument("--addon_path", type=str, default=os.path.expanduser('~/.bl-data/addons'),
+                    help="Path or url of the dataset cache")
 args = parser.parse_args()
 
 
-
+put_addons_in_path(args.addon_path)
 if os.path.exists(args.text) and os.path.isfile(args.text):
     texts = []
     with open(args.text, 'r') as f:

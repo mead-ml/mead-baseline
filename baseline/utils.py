@@ -71,6 +71,14 @@ def import_user_module(module_name: str, data_download_cache: Optional[str] = No
     mod = importlib.import_module(module_name)
     return mod
 
+@export
+def put_addons_in_path(addons_dir: Optional[str] = None):
+    """Insert addons into the path"""
+    import sys
+    if not addons_dir:
+        addons_dir = os.path.expanduser("~/.bl-data/addons")
+    if os.path.exists(addons_dir):
+        idempotent_append(addons_dir, sys.path, 0)
 
 @export
 def normalize_backend(name: str) -> str:

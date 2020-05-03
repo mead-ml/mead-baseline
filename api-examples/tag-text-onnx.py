@@ -4,7 +4,7 @@ import baseline as bl
 import numpy as np
 import argparse
 import os
-from baseline.utils import str2bool, read_conll, read_json, revlut
+from baseline.utils import str2bool, read_conll, read_json, revlut, put_addons_in_path
 import onnxruntime as ort
 from baseline.utils import unzip_files, find_model_basename, load_vectorizers, load_vocabs
 
@@ -124,8 +124,11 @@ parser.add_argument('--export_mapping', help='mapping between features and the f
                                                          'request, eg: token:word ner:ner. This should match with the '
                                                          '`exporter_field` definition in the mead config',
                     default=[], nargs='+')
+parser.add_argument("--addon_path", type=str, default=os.path.expanduser('~/.bl-data/addons'),
+                    help="Path or url of the dataset cache")
 args = parser.parse_args()
 
+put_addons_in_path(args.addon_path)
 
 def create_export_mapping(feature_map_strings):
     feature_map_strings = [x.strip() for x in feature_map_strings if x.strip()]

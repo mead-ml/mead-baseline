@@ -2,7 +2,7 @@ from __future__ import print_function
 import baseline as bl
 import argparse
 import os
-from baseline.utils import str2bool
+from baseline.utils import str2bool, put_addons_in_path
 
 parser = argparse.ArgumentParser(description='Encoder-Decoder execution')
 parser.add_argument('--model', help='An encoder-decoder model', required=True, type=str)
@@ -17,8 +17,11 @@ parser.add_argument('--device', help='device')
 parser.add_argument('--alpha', type=float, help='If set use in the gnmt length penalty.')
 parser.add_argument('--beam', type=int, default=30, help='The size of beam to use.')
 parser.add_argument('--prefer_eager', help="If running in TensorFlow, should we prefer eager model", type=str2bool)
-
+parser.add_argument("--addon_path", type=str, default=os.path.expanduser('~/.bl-data/addons'),
+                    help="Path or url of the dataset cache")
 args = parser.parse_known_args()[0]
+
+put_addons_in_path(args.addon_path)
 
 if args.backend == 'tf':
     from eight_mile.tf.layers import set_tf_eager_mode

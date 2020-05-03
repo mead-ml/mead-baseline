@@ -1,7 +1,7 @@
 import baseline as bl
 import argparse
 import os
-from baseline.utils import str2bool
+from baseline.utils import str2bool, put_addons_in_path
 
 parser = argparse.ArgumentParser(description='Classify text with a model')
 parser.add_argument('--model', help='The path to either the .zip file created by training or to the client bundle '
@@ -18,8 +18,12 @@ parser.add_argument('--batchsz', help='batch size when --text is a file', defaul
 parser.add_argument('--model_type', type=str, default='default')
 parser.add_argument('--modules', default=[])
 parser.add_argument('--prefer_eager', help="If running in TensorFlow, should we prefer eager model", type=str2bool, default=False)
+parser.add_argument("--addon_path", type=str, default=os.path.expanduser('~/.bl-data/addons'),
+                    help="Path or url of the dataset cache")
 
 args = parser.parse_args()
+
+put_addons_in_path(args.addon_path)
 
 if args.backend == 'tf':
     from eight_mile.tf.layers import set_tf_eager_mode
