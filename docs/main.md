@@ -18,7 +18,7 @@ production environment.
 
 ## Components
 
-- [**8 mile**]: An lightweight implementation of NLP layers and embeddings built on Keras and PyTorch.  This is used
+- [**8 mile**](../layers/eight_mile): An lightweight implementation of NLP layers and embeddings built on Keras and PyTorch.  This is used
   by `mead-baseline` to create reusable models that are nearly identical in PyTorch and TensorFlow.  It also provides
   core utilities and metrics APIs used by the library
   
