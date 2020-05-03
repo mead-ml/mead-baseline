@@ -52,7 +52,7 @@ mead-train --config config/conll.json
 ```
 
 
-See more running options in [trainer.py](../python/mead/trainer.py).
+See more running options in [trainer.py](../mead/trainer.py).
 
 It is possible to use the Baseline models without mead as in this [example using tf estimators](../api-examples/tf-estimator.py).
 
@@ -67,7 +67,7 @@ You can also think of the library itself as an abstraction layer at the "solutio
 
 ### As scaffolding for an experiment
 
-If you have a problem where the input is the same as a `baseline` task, you can easily use the API to set up your boilerplate work for you, and focus on your model, by creating a user-defined `addon`.  This is just a sub-class of the bae task in the framework you wish to use, with a @register_model annotation around it, identifying the name by which to reference the model from mead
+If you have a problem where the input is the same as a `baseline` task, you can easily use the API to set up your boilerplate work for you, and focus on your model, by creating a user-defined `addon`.  This is just a sub-class of the bae task in the framework you wish to use, with a [@register_model annotation](addons.md) around it, identifying the name by which to reference the model from mead
 There are example addons in [addons area](../addons) and [example mead configs](../mead/config).
 
 In the mead config, under the `model` block, you identify the `type` of model, which is a reference to the name you gave when registering your model.
