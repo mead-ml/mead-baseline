@@ -38,7 +38,7 @@
     "finetune": true
   },
   "train": {
-    "fit_func": "estimator",
+    "fit_func": "distributed",
     "epochs": 2,
     "optim": "adam",
     "eta": 0.001,

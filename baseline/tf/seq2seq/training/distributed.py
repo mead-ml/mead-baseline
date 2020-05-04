@@ -200,15 +200,16 @@ class Seq2SeqTrainerDistributedTf(Trainer):
             per_replica_report_loss = per_replica_loss * tf.cast(per_replica_toks, tf.float32)
             return per_replica_report_loss, per_replica_toks, top_preds
 
+        if phase == 'Test':
+            SET_TRAIN_FLAG(False)
+            return self._evaluate(vs, reporting_fns, **kwargs)
+
         strategy = self.strategy
         num_replicas = strategy.num_replicas_in_sync
 
         with strategy.scope():
 
             SET_TRAIN_FLAG(False)
-            if phase == 'Test':
-                return self._evaluate(vs, reporting_fns, **kwargs)
-
             self.valid_epochs += 1
 
             total_loss = tf.Variable(0.0)
@@ -224,14 +225,12 @@ class Seq2SeqTrainerDistributedTf(Trainer):
                 features, tgt = next(test_iter)
                 features['dst'] = tgt[:, :-1]
                 inputs = (features, tgt)
-                per_replica_loss, per_replica_toks, top_preds = strategy.experimental_run_v2(_replicated_valid_step, args=(inputs,))
+                per_replica_loss, per_replica_toks, _ = strategy.experimental_run_v2(_replicated_valid_step, args=(inputs,))
                 total_loss.assign_add(strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_loss, axis=None))
                 total_toks.assign_add(strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_toks, axis=None))
-                preds.extend(convert_seq2seq_preds(top_preds[:, 0, :], self.tgt_rlut))
-                golds.extend(convert_seq2seq_golds(tgt, features['tgt_len'], self.tgt_rlut))
+                # Not sure a good way to get top preds merged yet
 
             metrics = self.calc_metrics(total_loss.numpy(), total_toks.numpy())
-            metrics['bleu'] = bleu(preds, golds)[0]
             self.report(
                 self.valid_epochs, metrics, start,
                 phase, 'EPOCH', reporting_fns
@@ -284,7 +283,7 @@ def fit_eager_distributed(model_params, ts, vs, es=None, **kwargs):
 
     best_metric = 0
     if do_early_stopping:
-        early_stopping_metric = kwargs.get('early_stopping_metric', 'bleu')
+        early_stopping_metric = kwargs.get('early_stopping_metric', 'perplexity')
         early_stopping_cmp, best_metric = get_metric_cmp(early_stopping_metric, kwargs.get('early_stopping_cmp'))
         patience = kwargs.get('patience', epochs)
         print('Doing early stopping on [%s] with patience [%d]' % (early_stopping_metric, patience))

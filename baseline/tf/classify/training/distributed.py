@@ -95,8 +95,8 @@ class ClassifyTrainerDistributedTf(EpochReportingTrainer):
             """Replicated training step."""
             features, y = inputs
             per_replica_loss = self.optimizer.update(self.model, features, y, num_replicas)
-            per_replica_batchsz = get_shape_as_list(y)[0]
-            per_replica_report_loss = per_replica_loss * tf.cast(per_replica_batchsz, tf.float32)
+            per_replica_batchsz = tf.cast(get_shape_as_list(y)[0], tf.float32)
+            per_replica_report_loss = per_replica_loss * per_replica_batchsz
             return per_replica_report_loss, per_replica_batchsz
 
         with strategy.scope():
@@ -104,9 +104,9 @@ class ClassifyTrainerDistributedTf(EpochReportingTrainer):
             SET_TRAIN_FLAG(True)
             reporting_fns = kwargs.get('reporting_fns', [])
             epoch_loss = tf.Variable(0.0)
-            epoch_div = tf.Variable(0, dtype=tf.int32)
+            epoch_div = tf.Variable(0.0)
             nstep_loss = tf.Variable(0.0)
-            nstep_div = tf.Variable(0, dtype=tf.int32)
+            nstep_div = tf.Variable(0.0)
             self.nstep_start = time.time()
 
             @tf.function
@@ -130,7 +130,7 @@ class ClassifyTrainerDistributedTf(EpochReportingTrainer):
                         'Train', 'STEP', reporting_fns, self.nsteps
                     )
                     nstep_loss.assign(0.0)
-                    nstep_div.assign(0)
+                    nstep_div.assign(0.0)
                     self.nstep_start = time.time()
 
             epoch_loss = epoch_loss.numpy()
@@ -173,8 +173,8 @@ class ClassifyTrainerDistributedTf(EpochReportingTrainer):
                                          dense_shape=dense_shape)
             per_replica_cm = tf.compat.v1.sparse_add(per_replica_cm, sparse_ups)
             per_replica_loss = tf.compat.v1.losses.sparse_softmax_cross_entropy(labels=y, logits=logits)
-            per_replica_batchsz = get_shape_as_list(y)[0]
-            per_replica_report_loss = per_replica_loss * tf.cast(per_replica_batchsz, tf.float32)
+            per_replica_batchsz = tf.cast(get_shape_as_list(y)[0], tf.float32)
+            per_replica_report_loss = per_replica_loss * per_replica_batchsz
             return per_replica_report_loss, per_replica_batchsz, per_replica_cm
 
         @tf.function
@@ -188,7 +188,7 @@ class ClassifyTrainerDistributedTf(EpochReportingTrainer):
         with strategy.scope():
 
             total_loss = tf.Variable(0.0)
-            total_norm = tf.Variable(0, dtype=tf.int32)
+            total_norm = tf.Variable(0.0)
             verbose = kwargs.get("verbose", None)
 
             SET_TRAIN_FLAG(False)
