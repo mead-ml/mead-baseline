@@ -4,6 +4,7 @@ from eight_mile.tf.embeddings import *
 from eight_mile.tf.serialize import load_tlm_npz
 from eight_mile.utils import read_json
 from baseline.vectorizers import load_bert_vocab
+from baseline.utils import MEAD_HUB_MODULES
 import tensorflow as tf
 
 
@@ -80,6 +81,7 @@ class TensorFlowEmbeddingsMixin(tf.keras.layers.Layer):
         config['vsz'] = int(self.get_vsz())
         config['module'] = self.__class__.__module__
         config['class'] = self.__class__.__name__
+        config['mead_hub_modules'] = MEAD_HUB_MODULES
         config.update(self._state)
         return config
 

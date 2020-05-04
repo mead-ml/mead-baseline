@@ -24,7 +24,7 @@ def loss_with_state(model, h, x, y):
 
 def loss_without_state(model, x, y):
     # Model will produce a null hidden state
-    logits = model(x)[0]
+    logits = model(x, None)[0]
     vsz = model.embeddings[model.tgt_key].get_vsz()
     targets = tf.reshape(y, [-1])
     bt_x_v = tf.nn.log_softmax(tf.reshape(logits, [-1, vsz]), axis=-1)
