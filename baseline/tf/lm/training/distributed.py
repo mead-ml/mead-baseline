@@ -23,7 +23,7 @@ def loss_with_state(model, h, x, y):
 
 def loss_without_state(model, x, y):
     # Model will produce a null hidden state
-    logits = model(x)[0]
+    logits = model(x, None)[0]
     vsz = model.embeddings[model.tgt_key].get_vsz()
     targets = tf.reshape(y, [-1])
     bt_x_v = tf.nn.log_softmax(tf.reshape(logits, [-1, vsz]), axis=-1)
@@ -98,7 +98,6 @@ class LanguageModelTrainerDistributedTf(Trainer):
             per_replica_report_loss = per_replica_loss * tf.cast(per_replica_toks, tf.float32)
             return per_replica_report_loss, per_replica_toks
 
-        @tf.function
         def _replicated_train_step_with_state(inputs, hidden):
             features, y = inputs
             per_replica_loss, new_hidden = self.optimizer.update_with_hidden(self.model, hidden, features, y)
@@ -121,15 +120,24 @@ class LanguageModelTrainerDistributedTf(Trainer):
                 per_replica_loss, per_replica_toks = strategy.experimental_run_v2(_replicated_train_step_no_state, args=(inputs,))
                 return strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_loss, axis=None), strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_toks, axis=None)
 
+
+            @tf.function
+            def _distributed_train_with_state(inputs, hidden):
+
+                h, per_replica_loss, per_replica_toks = strategy.experimental_run_v2(_replicated_train_step_with_state, args=(inputs, hidden,))
+                step_loss = strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_loss, axis=None)
+                step_toks = strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_toks, axis=None)
+                return h, step_loss, step_toks
             h = None
             for i in range(steps):
 
                 inputs = next(train_iter)
                 if self.model.requires_state:
-                    h, per_replica_report_loss, per_replica_toks = strategy.experimental_run_v2(_replicated_train_step_with_state,
-                                                                                                args=(inputs, h,))
-                    step_loss = strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_report_loss, axis=None)
-                    step_toks = strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_toks, axis=None)
+                    h, step_loss, step_toks = _distributed_train_with_state(inputs, h)
+                #    h, per_replica_report_loss, per_replica_toks = strategy.experimental_run_v2(_replicated_train_step_with_state,
+                #                                                                                args=(inputs, h,))
+                #    step_loss = strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_report_loss, axis=None)
+                #    step_toks = strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_toks, axis=None)
                 else:
                     step_loss, step_toks = _distributed_train_no_state(inputs)
                 epoch_loss.assign_add(step_loss)
