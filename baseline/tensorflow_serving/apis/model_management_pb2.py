@@ -13,8 +13,8 @@ from google.protobuf import descriptor_pb2
 _sym_db = _symbol_database.Default()
 
 
-from tensorflow_serving.config import model_server_config_pb2 as tensorflow__serving_dot_config_dot_model__server__config__pb2
-from tensorflow_serving.util import status_pb2 as tensorflow__serving_dot_util_dot_status__pb2
+from baseline.tensorflow_serving.config import model_server_config_pb2 as tensorflow__serving_dot_config_dot_model__server__config__pb2
+from baseline.tensorflow_serving.util import status_pb2 as tensorflow__serving_dot_util_dot_status__pb2
 
 
 DESCRIPTOR = _descriptor.FileDescriptor(
