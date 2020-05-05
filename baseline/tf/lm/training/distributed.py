@@ -232,7 +232,6 @@ class LanguageModelTrainerDistributedTf(Trainer):
                     per_replica_loss, per_replica_toks = _distributed_test_no_state(inputs)
                 epoch_loss.assign_add(per_replica_loss)
                 epoch_div.assign_add(per_replica_toks)
-            
             metrics = self.calc_metrics(epoch_loss.numpy(), epoch_div.numpy())
             self.report(
                 epochs, metrics, start,
