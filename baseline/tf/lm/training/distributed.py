@@ -303,16 +303,12 @@ def fit_eager_distributed(model_params, ts, vs, es=None, **kwargs):
 
     train_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(ts))
     train_dataset = train_dataset.shuffle(buffer_size=SHUF_BUF_SZ)
-    train_dataset = train_dataset.batch(batchsz, drop_remainder=False)
+    train_dataset = train_dataset.batch(batchsz, drop_remainder=True)
     train_dataset = train_dataset.prefetch(NUM_PREFETCH)
 
     valid_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(vs))
-    valid_dataset = valid_dataset.batch(batchsz, drop_remainder=False)
+    valid_dataset = valid_dataset.batch(batchsz, drop_remainder=True)
     valid_dataset = valid_dataset.prefetch(NUM_PREFETCH)
-
-    test_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(es))
-    test_dataset = test_dataset.batch(test_batchsz, drop_remainder=False)
-    test_dataset = test_dataset.prefetch(NUM_PREFETCH)
 
     trainer = LanguageModelTrainerDistributedTf(model_params, **kwargs)
     train_dataset = trainer.distribute(train_dataset)
@@ -348,6 +344,9 @@ def fit_eager_distributed(model_params, ts, vs, es=None, **kwargs):
         print('Reloading best checkpoint')
         trainer.recover_last_checkpoint()
         trainer.strategy = tf.distribute.OneDeviceStrategy('/device:GPU:0')
+        test_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(es))
+        test_dataset = test_dataset.batch(test_batchsz, drop_remainder=False)
+        test_dataset = test_dataset.prefetch(NUM_PREFETCH)
         test_dataset = trainer.distribute(test_dataset)
         trainer.test(test_dataset, reporting_fns, phase='Test', steps=len(es))
 

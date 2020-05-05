@@ -196,8 +196,8 @@ class ClassifyTrainerDistributedTf(EpochReportingTrainer):
 
             for i in range(steps):
                 step_loss, step_batchsz, distributed_cm = _distributed_test_step(next(test_iter))
-                total_loss += step_loss
-                total_norm += step_batchsz
+                total_loss.assign_add(step_loss)
+                total_norm.assign_add(step_batchsz)
                 cm._cm += distributed_cm.numpy()
 
             metrics = cm.get_all_metrics()
@@ -273,16 +273,12 @@ def fit_eager_distributed(model_params, ts, vs, es=None, **kwargs):
     test_batchsz = kwargs.get('test_batchsz', batchsz)
     train_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(ts, lengths_key))
     train_dataset = train_dataset.shuffle(buffer_size=SHUF_BUF_SZ)
-    train_dataset = train_dataset.batch(batchsz, drop_remainder=False)
+    train_dataset = train_dataset.batch(batchsz, drop_remainder=True)
     train_dataset = train_dataset.prefetch(NUM_PREFETCH)
 
     valid_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(vs, lengths_key))
-    valid_dataset = valid_dataset.batch(batchsz, drop_remainder=False)
+    valid_dataset = valid_dataset.batch(batchsz, drop_remainder=True)
     valid_dataset = valid_dataset.prefetch(NUM_PREFETCH)
-
-    test_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(es, lengths_key))
-    test_dataset = test_dataset.batch(test_batchsz, drop_remainder=False)
-    test_dataset = test_dataset.prefetch(NUM_PREFETCH)
 
     best_metric = 0
     if do_early_stopping:
@@ -297,7 +293,6 @@ def fit_eager_distributed(model_params, ts, vs, es=None, **kwargs):
     trainer = ClassifyTrainerDistributedTf(model_params, **kwargs)
     train_dataset = trainer.distribute(train_dataset)
     valid_dataset = trainer.distribute(valid_dataset)
-    test_dataset = trainer.distribute(test_dataset)
     
     last_improved = 0
 
@@ -327,4 +322,9 @@ def fit_eager_distributed(model_params, ts, vs, es=None, **kwargs):
     if es is not None:
         print('Reloading best checkpoint')
         trainer.recover_last_checkpoint()
+        trainer.strategy = tf.distribute.OneDeviceStrategy('/device:GPU:0')
+        test_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(es, lengths_key))
+        test_dataset = test_dataset.batch(test_batchsz, drop_remainder=False)
+        test_dataset = test_dataset.prefetch(NUM_PREFETCH)
+        test_dataset = trainer.distribute(test_dataset)
         trainer.test(test_dataset, reporting_fns, phase='Test', verbose=verbose, steps=len(es))

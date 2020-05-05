@@ -119,7 +119,6 @@ class Seq2SeqTrainerDistributedTf(Trainer):
                 train_iter = iter(ts)
                 for i in range(steps):
                     features, y = next(train_iter)
-                    features['dst'] = y[:, :-1]
                     step_report_loss, step_toks = _distributed_train_step((features, y))
                     epoch_loss.assign_add(step_report_loss)
                     nstep_loss.assign_add(step_report_loss)
@@ -164,7 +163,6 @@ class Seq2SeqTrainerDistributedTf(Trainer):
         start = time.time()
 
         for features, tgt in es:
-            features['dst'] = tgt[:, :-1]
             tgt_lens = features.pop('tgt_len')
             top_preds = self.model.predict(features, **kwargs)
             preds.extend(convert_seq2seq_preds(top_preds[:, 0, :], self.tgt_rlut))
@@ -223,7 +221,6 @@ class Seq2SeqTrainerDistributedTf(Trainer):
 
             for i in range(steps):
                 features, tgt = next(test_iter)
-                features['dst'] = tgt[:, :-1]
                 inputs = (features, tgt)
                 per_replica_loss, per_replica_toks, _ = strategy.experimental_run_v2(_replicated_valid_step, args=(inputs,))
                 total_loss.assign_add(strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_loss, axis=None))
@@ -298,18 +295,14 @@ def fit_eager_distributed(model_params, ts, vs, es=None, **kwargs):
     tgt_key = model_params.get('tgt_key')
 
     src_lengths_key = model_params.get('src_lengths_key')
-    train_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(ts, src_lengths_key))
+    train_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(ts, src_lengths_key, dst=True))
     train_dataset = train_dataset.shuffle(buffer_size=SHUF_BUF_SZ)
-    train_dataset = train_dataset.batch(batchsz, drop_remainder=False)
+    train_dataset = train_dataset.batch(batchsz, drop_remainder=True)
     train_dataset = train_dataset.prefetch(NUM_PREFETCH)
 
-    valid_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(vs, src_lengths_key))
-    valid_dataset = valid_dataset.batch(batchsz, drop_remainder=False)
+    valid_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(vs, src_lengths_key, dst=True))
+    valid_dataset = valid_dataset.batch(batchsz, drop_remainder=True)
     valid_dataset = valid_dataset.prefetch(NUM_PREFETCH)
-
-    test_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(es, src_lengths_key))
-    test_dataset = test_dataset.batch(test_batchsz, drop_remainder=False)
-    test_dataset = test_dataset.prefetch(NUM_PREFETCH)
 
     trainer = Seq2SeqTrainerDistributedTf(model_params, **kwargs)
     
@@ -345,5 +338,8 @@ def fit_eager_distributed(model_params, ts, vs, es=None, **kwargs):
     if es is not None:
         print('Reloading best checkpoint')
         trainer.recover_last_checkpoint()
+        test_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(es, src_lengths_key, dst=True))
+        test_dataset = test_dataset.batch(test_batchsz, drop_remainder=False)
+        test_dataset = test_dataset.prefetch(NUM_PREFETCH)
         trainer.test(test_dataset, steps=len(es), reporting_fns=reporting_fns, phase='Test')
 
