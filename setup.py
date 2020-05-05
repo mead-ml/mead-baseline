@@ -86,6 +86,7 @@ def main():
             'report': ['visdom', 'tensorboardX'],
             'yaml': ['pyyaml'],
             'tf2': ['tensorflow_addons'],
+            'grpc': ['grpc'],
         },
         entry_points={
             'console_scripts': [
