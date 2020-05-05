@@ -237,6 +237,8 @@ class Seq2SeqTrainerDistributedTf(Trainer):
             )
             return metrics
 
+    def distribute(self, dataset):
+        return self.strategy.experimental_distribute_dataset(dataset)
 
 @register_training_func('seq2seq', name="distributed")
 def fit_eager_distributed(model_params, ts, vs, es=None, **kwargs):
@@ -310,6 +312,10 @@ def fit_eager_distributed(model_params, ts, vs, es=None, **kwargs):
     test_dataset = test_dataset.prefetch(NUM_PREFETCH)
 
     trainer = Seq2SeqTrainerDistributedTf(model_params, **kwargs)
+    
+    train_dataset = trainer.distribute(train_dataset)
+    valid_dataset = trainer.distribute(valid_dataset)
+    
     last_improved = 0
     SET_TRAIN_FLAG(True)
 

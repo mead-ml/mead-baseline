@@ -134,10 +134,6 @@ class LanguageModelTrainerDistributedTf(Trainer):
                 inputs = next(train_iter)
                 if self.model.requires_state:
                     h, step_loss, step_toks = _distributed_train_with_state(inputs, h)
-                #    h, per_replica_report_loss, per_replica_toks = strategy.experimental_run_v2(_replicated_train_step_with_state,
-                #                                                                                args=(inputs, h,))
-                #    step_loss = strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_report_loss, axis=None)
-                #    step_toks = strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_toks, axis=None)
                 else:
                     step_loss, step_toks = _distributed_train_no_state(inputs)
                 epoch_loss.assign_add(step_loss)
@@ -187,7 +183,6 @@ class LanguageModelTrainerDistributedTf(Trainer):
         """
         strategy = self.strategy
 
-        @tf.function
         def _replicated_test_step_no_state(inputs):
             features, y = inputs
             per_replica_loss = loss_without_state(self.model, features, y)
@@ -195,7 +190,6 @@ class LanguageModelTrainerDistributedTf(Trainer):
             per_replica_report_loss = per_replica_loss * tf.cast(per_replica_toks, tf.float32)
             return per_replica_report_loss, per_replica_toks
 
-        @tf.function
         def _replicated_test_step_with_state(inputs, hidden):
             features, y = inputs
             per_replica_loss, new_hidden = loss_with_state(self.model, hidden, features, y)
@@ -211,6 +205,19 @@ class LanguageModelTrainerDistributedTf(Trainer):
             self.nstep_start = time.time()
             start = time.time()
 
+            @tf.function
+            def _distributed_test_no_state(inputs):
+                per_replica_loss, per_replica_toks = strategy.experimental_run_v2(_replicated_test_step_no_state, args=(inputs,))
+                return strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_loss, axis=None), strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_toks, axis=None)
+
+            @tf.function
+            def _distributed_test_with_state(inputs, hidden):
+
+                h, per_replica_loss, per_replica_toks = strategy.experimental_run_v2(_replicated_test_step_with_state, args=(inputs, hidden,))
+                step_loss = strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_loss, axis=None)
+                step_toks = strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_toks, axis=None)
+                return h, step_loss, step_toks
+
             epochs = 0
             if phase == 'Valid':
                 self.valid_epochs += 1
@@ -220,18 +227,21 @@ class LanguageModelTrainerDistributedTf(Trainer):
             for i in range(steps):
                 inputs = next(test_iter)
                 if self.model.requires_state:
-                    h, per_replica_loss, per_replica_toks = _replicated_test_step_with_state(inputs, h)
+                    h, per_replica_loss, per_replica_toks = _distributed_test_with_state(inputs, h)
                 else:
-                    per_replica_loss, per_replica_toks = _replicated_test_step_no_state(inputs)
-                epoch_loss.assign_add(strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_loss, axis=None))
-                epoch_div.assign_add(strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_toks, axis=None))
-
+                    per_replica_loss, per_replica_toks = _distributed_test_no_state(inputs)
+                epoch_loss.assign_add(per_replica_loss)
+                epoch_div.assign_add(per_replica_toks)
+            
             metrics = self.calc_metrics(epoch_loss.numpy(), epoch_div.numpy())
             self.report(
                 epochs, metrics, start,
                 phase, 'EPOCH', reporting_fns
             )
             return metrics
+
+    def distribute(self, dataset):
+        return self.strategy.experimental_distribute_dataset(dataset)
 
 
 @register_training_func('lm', name='distributed')
@@ -305,6 +315,9 @@ def fit_eager_distributed(model_params, ts, vs, es=None, **kwargs):
     test_dataset = test_dataset.prefetch(NUM_PREFETCH)
 
     trainer = LanguageModelTrainerDistributedTf(model_params, **kwargs)
+    train_dataset = trainer.distribute(train_dataset)
+    valid_dataset = trainer.distribute(valid_dataset)
+    
     last_improved = 0
     SET_TRAIN_FLAG(True)
 
@@ -334,5 +347,7 @@ def fit_eager_distributed(model_params, ts, vs, es=None, **kwargs):
     if es is not None:
         print('Reloading best checkpoint')
         trainer.recover_last_checkpoint()
+        trainer.strategy = tf.distribute.OneDeviceStrategy('/device:GPU:0')
+        test_dataset = trainer.distribute(test_dataset)
         trainer.test(test_dataset, reporting_fns, phase='Test', steps=len(es))
 

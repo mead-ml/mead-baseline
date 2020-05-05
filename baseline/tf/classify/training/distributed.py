@@ -222,6 +222,9 @@ class ClassifyTrainerDistributedTf(EpochReportingTrainer):
         """
         print(self._checkpoint.restore(self.checkpoint_manager.latest_checkpoint))
 
+    def distribute(self, dataset):
+        return self.strategy.experimental_distribute_dataset(dataset)
+
 
 @register_training_func('classify', name='distributed')
 def fit_eager_distributed(model_params, ts, vs, es=None, **kwargs):
@@ -292,6 +295,10 @@ def fit_eager_distributed(model_params, ts, vs, es=None, **kwargs):
     print('reporting', reporting_fns)
     SET_TRAIN_FLAG(True)
     trainer = ClassifyTrainerDistributedTf(model_params, **kwargs)
+    train_dataset = trainer.distribute(train_dataset)
+    valid_dataset = trainer.distribute(valid_dataset)
+    test_dataset = trainer.distribute(test_dataset)
+    
     last_improved = 0
 
     for epoch in range(epochs):
