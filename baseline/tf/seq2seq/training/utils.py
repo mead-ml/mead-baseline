@@ -23,7 +23,7 @@ NUM_PREFETCH = 2
 SHUF_BUF_SZ = 5000
 
 
-def to_tensors(ts, src_lengths_key):
+def to_tensors(ts, src_lengths_key, dst=False):
     """Convert a data feed into a tuple of `features` (`dict`) and `y` values
 
     This method is required to produce `tf.dataset`s from the input data feed.
@@ -32,6 +32,7 @@ def to_tensors(ts, src_lengths_key):
 
     :param ts: The data feed to convert
     :param lengths_key: This is a field passed from the model params specifying source of truth of the temporal lengths
+    :param dst: `bool` that says if we should prepare a `dst` tensor.  This is needed in distributed mode
     :return: A `tuple` of `features` and `y` (labels)
     """
     keys = ts[0].keys()
@@ -39,18 +40,19 @@ def to_tensors(ts, src_lengths_key):
     keys = [k for k in keys if '_lengths' not in k and k != 'ids'] + [src_lengths_key, "tgt_lengths"]
 
     features = dict((k, []) for k in keys)
-
     for sample in ts:
-        for k in features.keys():
+        for k in keys:
             for s in sample[k]:
                 features[k].append(s)
-
     features['src_len'] = features[src_lengths_key]
     del features[src_lengths_key]
     features['tgt_len'] = features['tgt_lengths']
     del features['tgt_lengths']
     features = dict((k, np.stack(v).astype(np.int32)) for k, v in features.items())
+    if dst:
+        features['dst'] = features['tgt'][:, :-1]
     tgt = features.pop('tgt')
+
     return features, tgt
 
 
