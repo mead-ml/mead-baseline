@@ -261,7 +261,6 @@ class RemoteModelGRPC(RemoteModel):
         super(RemoteModelGRPC, self).__init__(
             remote, name, signature, labels, beam, lengths_key, inputs, version, return_labels
         )
-        import pdb; pdb.set_trace()
         self.predictpb = import_user_module('baseline.tensorflow_serving.apis.predict_pb2')
         self.servicepb = import_user_module('baseline.tensorflow_serving.apis.prediction_service_pb2_grpc')
         self.metadatapb = import_user_module('baseline.tensorflow_serving.apis.get_model_metadata_pb2')
