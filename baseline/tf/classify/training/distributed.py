@@ -95,8 +95,8 @@ class ClassifyTrainerDistributedTf(EpochReportingTrainer):
             """Replicated training step."""
             features, y = inputs
             per_replica_loss = self.optimizer.update(self.model, features, y, num_replicas)
-            per_replica_batchsz = get_shape_as_list(y)[0]
-            per_replica_report_loss = per_replica_loss * tf.cast(per_replica_batchsz, tf.float32)
+            per_replica_batchsz = tf.cast(get_shape_as_list(y)[0], tf.float32)
+            per_replica_report_loss = per_replica_loss * per_replica_batchsz
             return per_replica_report_loss, per_replica_batchsz
 
         with strategy.scope():
@@ -104,9 +104,9 @@ class ClassifyTrainerDistributedTf(EpochReportingTrainer):
             SET_TRAIN_FLAG(True)
             reporting_fns = kwargs.get('reporting_fns', [])
             epoch_loss = tf.Variable(0.0)
-            epoch_div = tf.Variable(0, dtype=tf.int32)
+            epoch_div = tf.Variable(0.0)
             nstep_loss = tf.Variable(0.0)
-            nstep_div = tf.Variable(0, dtype=tf.int32)
+            nstep_div = tf.Variable(0.0)
             self.nstep_start = time.time()
 
             @tf.function
@@ -130,7 +130,7 @@ class ClassifyTrainerDistributedTf(EpochReportingTrainer):
                         'Train', 'STEP', reporting_fns, self.nsteps
                     )
                     nstep_loss.assign(0.0)
-                    nstep_div.assign(0)
+                    nstep_div.assign(0.0)
                     self.nstep_start = time.time()
 
             epoch_loss = epoch_loss.numpy()
@@ -173,8 +173,8 @@ class ClassifyTrainerDistributedTf(EpochReportingTrainer):
                                          dense_shape=dense_shape)
             per_replica_cm = tf.compat.v1.sparse_add(per_replica_cm, sparse_ups)
             per_replica_loss = tf.compat.v1.losses.sparse_softmax_cross_entropy(labels=y, logits=logits)
-            per_replica_batchsz = get_shape_as_list(y)[0]
-            per_replica_report_loss = per_replica_loss * tf.cast(per_replica_batchsz, tf.float32)
+            per_replica_batchsz = tf.cast(get_shape_as_list(y)[0], tf.float32)
+            per_replica_report_loss = per_replica_loss * per_replica_batchsz
             return per_replica_report_loss, per_replica_batchsz, per_replica_cm
 
         @tf.function
@@ -188,7 +188,7 @@ class ClassifyTrainerDistributedTf(EpochReportingTrainer):
         with strategy.scope():
 
             total_loss = tf.Variable(0.0)
-            total_norm = tf.Variable(0, dtype=tf.int32)
+            total_norm = tf.Variable(0.0)
             verbose = kwargs.get("verbose", None)
 
             SET_TRAIN_FLAG(False)
@@ -196,8 +196,8 @@ class ClassifyTrainerDistributedTf(EpochReportingTrainer):
 
             for i in range(steps):
                 step_loss, step_batchsz, distributed_cm = _distributed_test_step(next(test_iter))
-                total_loss += step_loss
-                total_norm += step_batchsz
+                total_loss.assign_add(step_loss)
+                total_norm.assign_add(step_batchsz)
                 cm._cm += distributed_cm.numpy()
 
             metrics = cm.get_all_metrics()
@@ -221,6 +221,9 @@ class ClassifyTrainerDistributedTf(EpochReportingTrainer):
         :return: None
         """
         print(self._checkpoint.restore(self.checkpoint_manager.latest_checkpoint))
+
+    def distribute(self, dataset):
+        return self.strategy.experimental_distribute_dataset(dataset)
 
 
 @register_training_func('classify', name='distributed')
@@ -270,16 +273,12 @@ def fit_eager_distributed(model_params, ts, vs, es=None, **kwargs):
     test_batchsz = kwargs.get('test_batchsz', batchsz)
     train_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(ts, lengths_key))
     train_dataset = train_dataset.shuffle(buffer_size=SHUF_BUF_SZ)
-    train_dataset = train_dataset.batch(batchsz, drop_remainder=False)
+    train_dataset = train_dataset.batch(batchsz, drop_remainder=True)
     train_dataset = train_dataset.prefetch(NUM_PREFETCH)
 
     valid_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(vs, lengths_key))
-    valid_dataset = valid_dataset.batch(batchsz, drop_remainder=False)
+    valid_dataset = valid_dataset.batch(batchsz, drop_remainder=True)
     valid_dataset = valid_dataset.prefetch(NUM_PREFETCH)
-
-    test_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(es, lengths_key))
-    test_dataset = test_dataset.batch(test_batchsz, drop_remainder=False)
-    test_dataset = test_dataset.prefetch(NUM_PREFETCH)
 
     best_metric = 0
     if do_early_stopping:
@@ -292,6 +291,9 @@ def fit_eager_distributed(model_params, ts, vs, es=None, **kwargs):
     print('reporting', reporting_fns)
     SET_TRAIN_FLAG(True)
     trainer = ClassifyTrainerDistributedTf(model_params, **kwargs)
+    train_dataset = trainer.distribute(train_dataset)
+    valid_dataset = trainer.distribute(valid_dataset)
+    
     last_improved = 0
 
     for epoch in range(epochs):
@@ -320,4 +322,9 @@ def fit_eager_distributed(model_params, ts, vs, es=None, **kwargs):
     if es is not None:
         print('Reloading best checkpoint')
         trainer.recover_last_checkpoint()
+        trainer.strategy = tf.distribute.OneDeviceStrategy('/device:GPU:0')
+        test_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(es, lengths_key))
+        test_dataset = test_dataset.batch(test_batchsz, drop_remainder=False)
+        test_dataset = test_dataset.prefetch(NUM_PREFETCH)
+        test_dataset = trainer.distribute(test_dataset)
         trainer.test(test_dataset, reporting_fns, phase='Test', verbose=verbose, steps=len(es))

@@ -119,7 +119,6 @@ class Seq2SeqTrainerDistributedTf(Trainer):
                 train_iter = iter(ts)
                 for i in range(steps):
                     features, y = next(train_iter)
-                    features['dst'] = y[:, :-1]
                     step_report_loss, step_toks = _distributed_train_step((features, y))
                     epoch_loss.assign_add(step_report_loss)
                     nstep_loss.assign_add(step_report_loss)
@@ -164,7 +163,6 @@ class Seq2SeqTrainerDistributedTf(Trainer):
         start = time.time()
 
         for features, tgt in es:
-            features['dst'] = tgt[:, :-1]
             tgt_lens = features.pop('tgt_len')
             top_preds = self.model.predict(features, **kwargs)
             preds.extend(convert_seq2seq_preds(top_preds[:, 0, :], self.tgt_rlut))
@@ -200,15 +198,16 @@ class Seq2SeqTrainerDistributedTf(Trainer):
             per_replica_report_loss = per_replica_loss * tf.cast(per_replica_toks, tf.float32)
             return per_replica_report_loss, per_replica_toks, top_preds
 
+        if phase == 'Test':
+            SET_TRAIN_FLAG(False)
+            return self._evaluate(vs, reporting_fns, **kwargs)
+
         strategy = self.strategy
         num_replicas = strategy.num_replicas_in_sync
 
         with strategy.scope():
 
             SET_TRAIN_FLAG(False)
-            if phase == 'Test':
-                return self._evaluate(vs, reporting_fns, **kwargs)
-
             self.valid_epochs += 1
 
             total_loss = tf.Variable(0.0)
@@ -222,22 +221,21 @@ class Seq2SeqTrainerDistributedTf(Trainer):
 
             for i in range(steps):
                 features, tgt = next(test_iter)
-                features['dst'] = tgt[:, :-1]
                 inputs = (features, tgt)
-                per_replica_loss, per_replica_toks, top_preds = strategy.experimental_run_v2(_replicated_valid_step, args=(inputs,))
+                per_replica_loss, per_replica_toks, _ = strategy.experimental_run_v2(_replicated_valid_step, args=(inputs,))
                 total_loss.assign_add(strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_loss, axis=None))
                 total_toks.assign_add(strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_toks, axis=None))
-                preds.extend(convert_seq2seq_preds(top_preds[:, 0, :], self.tgt_rlut))
-                golds.extend(convert_seq2seq_golds(tgt, features['tgt_len'], self.tgt_rlut))
+                # Not sure a good way to get top preds merged yet
 
             metrics = self.calc_metrics(total_loss.numpy(), total_toks.numpy())
-            metrics['bleu'] = bleu(preds, golds)[0]
             self.report(
                 self.valid_epochs, metrics, start,
                 phase, 'EPOCH', reporting_fns
             )
             return metrics
 
+    def distribute(self, dataset):
+        return self.strategy.experimental_distribute_dataset(dataset)
 
 @register_training_func('seq2seq', name="distributed")
 def fit_eager_distributed(model_params, ts, vs, es=None, **kwargs):
@@ -284,7 +282,7 @@ def fit_eager_distributed(model_params, ts, vs, es=None, **kwargs):
 
     best_metric = 0
     if do_early_stopping:
-        early_stopping_metric = kwargs.get('early_stopping_metric', 'bleu')
+        early_stopping_metric = kwargs.get('early_stopping_metric', 'perplexity')
         early_stopping_cmp, best_metric = get_metric_cmp(early_stopping_metric, kwargs.get('early_stopping_cmp'))
         patience = kwargs.get('patience', epochs)
         print('Doing early stopping on [%s] with patience [%d]' % (early_stopping_metric, patience))
@@ -297,20 +295,20 @@ def fit_eager_distributed(model_params, ts, vs, es=None, **kwargs):
     tgt_key = model_params.get('tgt_key')
 
     src_lengths_key = model_params.get('src_lengths_key')
-    train_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(ts, src_lengths_key))
+    train_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(ts, src_lengths_key, dst=True))
     train_dataset = train_dataset.shuffle(buffer_size=SHUF_BUF_SZ)
-    train_dataset = train_dataset.batch(batchsz, drop_remainder=False)
+    train_dataset = train_dataset.batch(batchsz, drop_remainder=True)
     train_dataset = train_dataset.prefetch(NUM_PREFETCH)
 
-    valid_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(vs, src_lengths_key))
-    valid_dataset = valid_dataset.batch(batchsz, drop_remainder=False)
+    valid_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(vs, src_lengths_key, dst=True))
+    valid_dataset = valid_dataset.batch(batchsz, drop_remainder=True)
     valid_dataset = valid_dataset.prefetch(NUM_PREFETCH)
 
-    test_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(es, src_lengths_key))
-    test_dataset = test_dataset.batch(test_batchsz, drop_remainder=False)
-    test_dataset = test_dataset.prefetch(NUM_PREFETCH)
-
     trainer = Seq2SeqTrainerDistributedTf(model_params, **kwargs)
+    
+    train_dataset = trainer.distribute(train_dataset)
+    valid_dataset = trainer.distribute(valid_dataset)
+    
     last_improved = 0
     SET_TRAIN_FLAG(True)
 
@@ -340,5 +338,8 @@ def fit_eager_distributed(model_params, ts, vs, es=None, **kwargs):
     if es is not None:
         print('Reloading best checkpoint')
         trainer.recover_last_checkpoint()
+        test_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(es, src_lengths_key, dst=True))
+        test_dataset = test_dataset.batch(test_batchsz, drop_remainder=False)
+        test_dataset = test_dataset.prefetch(NUM_PREFETCH)
         trainer.test(test_dataset, steps=len(es), reporting_fns=reporting_fns, phase='Test')
 
