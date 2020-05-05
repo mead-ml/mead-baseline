@@ -1,6 +1,6 @@
 {
   "task": "tagger",
-  "modules": ["da"],
+  "modules": ["hub:v1:addons:da"],
   "unif": 0.1,
   "features": [
     {
