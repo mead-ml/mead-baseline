@@ -2679,25 +2679,27 @@ class TaggerGreedyDecoder(tf.keras.layers.Layer):
         """
         super().__init__(name=name)
         self.num_tags = num_tags
+        self.A = None
         self.inv_mask = None
         if constraint_mask is not None:
             _, inv_mask = constraint_mask
-            inv_mask = inv_mask * -1e4
+            self.inv_mask = inv_mask * -1e4
 
-            self.A = self.add_weight(
-                "transitions_raw",
-                shape=(num_tags, num_tags),
-                dtype=tf.float32,
-                initializer="zeros",
-                trainable=False
-            )
-            self.inv_mask = self.add_weight(
-                "inv_constraint_mask",
-                shape=(num_tags, num_tags),
-                dtype=tf.float32,
-                initializer=tf.constant_initializer(inv_mask),
-                trainable=False
-            )
+    def build(self, input_shape):
+        self.A = self.add_weight(
+            "transitions",
+            shape=(self.num_tags, self.num_tags),
+            dtype=tf.float32,
+            initializer=tf.zeros_initializer(),
+            trainable=False
+        )
+        self.inv_mask = self.add_weight(
+            "inverse_constraint_mask",
+            shape=(self.num_tags, self.num_tags),
+            dtype=tf.float32,
+            initializer=tf.constant_initializer(self.inv_mask),
+            trainable=False
+        )
 
     @property
     def transitions(self):
@@ -2744,26 +2746,37 @@ class CRF(tf.keras.layers.Layer):
         """
         super().__init__(name=name)
 
-        self.A = self.add_weight("transitions_raw", shape=(num_tags, num_tags), dtype=tf.float32)
         self.num_tags = num_tags
+        self.A = None
         self.mask = None
         self.inv_mask = None
         if constraint_mask is not None:
             mask, inv_mask = constraint_mask
-            inv_mask = inv_mask * -1e4
+            self.mask = mask
+            self.inv_mask = inv_mask * -1e4
+
+    def build(self, input_shape):
+        self.A = self.add_weight(
+            "transitions",
+            shape=(self.num_tags, self.num_tags),
+            dtype=tf.float32,
+            initializer=tf.zeros_initializer()
+        )
+        if self.mask is not None:
             self.mask = self.add_weight(
                 "constraint_mask",
-                shape=(num_tags, num_tags),
+                shape=(self.num_tags, self.num_tags),
                 dtype=tf.float32,
                 trainable=False,
-                initializer=tf.constant_initializer(mask)
+                initializer=tf.constant_initializer(self.mask)
             )
+        if self.inv_mask is not None:
             self.inv_mask = self.add_weight(
                 "inverse_constraint_mask",
-                shape=(num_tags, num_tags),
+                shape=(self.num_tags, self.num_tags),
                 dtype=tf.float32,
                 trainable=False,
-                initializer=tf.constant_initializer(inv_mask)
+                initializer=tf.constant_initializer(self.inv_mask)
             )
 
     @property
