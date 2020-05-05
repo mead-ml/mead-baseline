@@ -313,7 +313,7 @@ class RemoteModelGRPC(RemoteModel):
             elif issubclass(dtype, np.floating): dtype = tf.float32
             else: dtype = tf.string
 
-            tensor_proto = tf.contrib.util.make_tensor_proto(examples[feature], shape=shape, dtype=dtype)
+            tensor_proto = tf.compat.v1.make_tensor_proto(examples[feature], shape=shape, dtype=dtype)
             request.inputs[feature].CopyFrom(
                 tensor_proto
             )
