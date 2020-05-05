@@ -57,6 +57,9 @@ def import_user_module(module_name: str, data_download_cache: Optional[str] = No
                 if addons_literal != "addons":
                     raise Exception("We only support downloading addons right now")
                 module_name = f"http://raw.githubusercontent.com/mead-ml/hub/master/{version}/addons/{rest}"
+                if module_name in MEAD_HUB_MODULES:
+                    logger.warning(f"Skipping previously downloaded module: {module_name}")
+                    return None
                 MEAD_HUB_MODULES.append(module_name)
             module_name = AddonDownloader(module_name, data_download_cache, cache_ignore=True).download()
 
