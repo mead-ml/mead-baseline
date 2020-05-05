@@ -394,6 +394,7 @@ class LSTMEncoder2(tf.keras.layers.Layer):
         :param projsz: TF only! This parameter isnt currently supported in TF Keras implementation
         """
         super().__init__(name=name)
+        self.output_dim = hsz
         self._requires_length = requires_length
         self.rnns = []
         for _ in range(nlayers - 1):
@@ -459,6 +460,7 @@ class LSTMEncoderWithState2(tf.keras.layers.Layer):
         **kwargs,
     ):
         super().__init__(name=name)
+
         self._requires_length = False
         self.hsz = hsz
         self.rnns = []
@@ -484,6 +486,10 @@ class LSTMEncoderWithState2(tf.keras.layers.Layer):
             )
         )
         self.requires_state = True
+
+    @property
+    def output_dim(self):
+        return self.hsz
 
     def call(self, inputs):
         """The format of the output here is
@@ -607,6 +613,8 @@ class GRUEncoder(tf.keras.layers.Layer):
         super().__init__(name=name)
         self._requires_length = requires_length
         self.rnns = []
+        self.output_dim = hsz
+
         for _ in range(nlayers - 1):
             self.rnns.append(
                 tf.keras.layers.GRU(
@@ -686,6 +694,8 @@ class GRUEncoderAll(tf.keras.layers.Layer):
         super().__init__(name=name)
         self._requires_length = requires_length
         self.rnns = []
+        self.output_dim = hsz
+
         for _ in range(nlayers - 1):
             rnn = tf.keras.layers.GRU(
                 hsz,
@@ -808,6 +818,7 @@ class LSTMEncoder1(tf.keras.layers.Layer):
         """
         super().__init__(name=name)
         self._requires_length = requires_length
+        self.output_dim = hsz
 
         if variational or dropout_in_single_layer:
             self.rnn = tf.contrib.rnn.MultiRNNCell(
@@ -1029,6 +1040,7 @@ class LSTMEncoderAll2(tf.keras.layers.Layer):
         """
         super().__init__(name=name)
         self._requires_length = requires_length
+        self.output_dim = hsz
         self.rnns = []
         for _ in range(nlayers - 1):
             rnn = tf.keras.layers.LSTM(
@@ -1111,6 +1123,7 @@ class BiLSTMEncoderAll2(tf.keras.layers.Layer):
         """
         super().__init__(name=name)
         self._requires_length = requires_length
+        self.output_dim = hsz
         self.rnns = []
         for _ in range(nlayers - 1):
             rnn = tf.keras.layers.LSTM(
@@ -1206,6 +1219,7 @@ class BiLSTMEncoder2(tf.keras.layers.Layer):
         super().__init__(name=name)
         self._requires_length = requires_length
         self.rnns = []
+        self.output_dim = hsz
         for _ in range(nlayers - 1):
             rnn = tf.keras.layers.LSTM(
                 hsz // 2,
@@ -1313,6 +1327,7 @@ class BiGRUEncoder(tf.keras.layers.Layer):
         super().__init__(name=name)
         self._requires_length = requires_length
         self.rnns = []
+        self.output_dim = hsz
         for _ in range(nlayers - 1):
             rnn = tf.keras.layers.GRU(
                 hsz // 2,
@@ -1413,6 +1428,8 @@ class BiGRUEncoderAll(tf.keras.layers.Layer):
         super().__init__(name=name)
         self._requires_length = requires_length
         self.rnns = []
+        self.output_dim = hsz
+
         for _ in range(nlayers - 1):
             rnn = tf.keras.layers.GRU(
                 hsz // 2,
@@ -1503,6 +1520,8 @@ class BiLSTMEncoder1(tf.keras.layers.Layer):
         super().__init__(name=name)
         self._requires_length = requires_length
         self.layers = nlayers
+        self.output_dim = hsz
+
         hsz = hsz // 2
         if variational:
             self.fwd_rnn = tf.contrib.rnn.MultiRNNCell(
@@ -1878,6 +1897,7 @@ class DenseStack(tf.keras.layers.Layer):
         """
         super().__init__(name=name)
         hszs = listify(hsz)
+        self.output_dim = hszs[-1]
         activations = listify(activation)
         if len(activations) == 1:
             activations = activations * len(hszs)
@@ -1974,6 +1994,7 @@ class Highway(tf.keras.layers.Layer):
         self.transform = tf.keras.layers.Dense(
             input_size, bias_initializer=tf.keras.initializers.Constant(value=-2.0), activation="sigmoid"
         )
+        self.output_dim = input_size
 
     def call(self, inputs):
         proj_result = self.proj(inputs)
