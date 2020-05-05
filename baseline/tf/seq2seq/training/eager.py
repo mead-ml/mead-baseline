@@ -280,10 +280,6 @@ def fit_eager(model_params, ts, vs, es=None, **kwargs):
     valid_dataset = valid_dataset.batch(batchsz, drop_remainder=False)
     valid_dataset = valid_dataset.prefetch(NUM_PREFETCH)
 
-    test_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(es, src_lengths_key))
-    test_dataset = test_dataset.batch(test_batchsz, drop_remainder=False)
-    test_dataset = test_dataset.prefetch(NUM_PREFETCH)
-
     trainer = Seq2SeqTrainerEagerTf(model_params, **kwargs)
     last_improved = 0
     SET_TRAIN_FLAG(True)
@@ -314,5 +310,8 @@ def fit_eager(model_params, ts, vs, es=None, **kwargs):
     if es is not None:
         print('Reloading best checkpoint')
         trainer.recover_last_checkpoint()
+        test_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(es, src_lengths_key))
+        test_dataset = test_dataset.batch(test_batchsz, drop_remainder=False)
+        test_dataset = test_dataset.prefetch(NUM_PREFETCH)
         trainer.test(test_dataset, reporting_fns, phase='Test')
 

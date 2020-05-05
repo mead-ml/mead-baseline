@@ -298,10 +298,6 @@ def fit_eager(model_params, ts, vs, es=None, **kwargs):
     valid_dataset = valid_dataset.batch(batchsz, drop_remainder=False)
     valid_dataset = valid_dataset.prefetch(NUM_PREFETCH)
 
-    test_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(es, lengths_key))
-    test_dataset = test_dataset.batch(test_batchsz, drop_remainder=False)
-    test_dataset = test_dataset.prefetch(NUM_PREFETCH)
-
     best_metric = 0
     if do_early_stopping:
         early_stopping_metric = kwargs.get('early_stopping_metric', 'acc')
@@ -343,6 +339,9 @@ def fit_eager(model_params, ts, vs, es=None, **kwargs):
     if es is not None:
         print('Reloading best checkpoint')
         trainer.recover_last_checkpoint()
+        test_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(es, lengths_key))
+        test_dataset = test_dataset.batch(test_batchsz, drop_remainder=False)
+        test_dataset = test_dataset.prefetch(NUM_PREFETCH)
         evaluator = TaggerEvaluatorEagerTf(trainer.model, span_type, verbose)
         start = time.time()
         test_metrics = evaluator.test(test_dataset, conll_output=conll_output, txts=txts, steps=len(es))
