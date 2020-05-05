@@ -2,21 +2,15 @@
   "task": "classify",
   "basedir": "./sst2",
   "batchsz": 10,
-  "modules": [
-    "embed_bert_pytorch"
-  ],
   "features": [
     {
       "name": "bert",
       "vectorizer": {
-        "type": "wordpiece1d",
-        "embed_file": "bert-base-uncased"
+        "label": "bert-base-uncased"
       },
       "embeddings": {
         "type": "bert-pooled",
-        "embed_file": "bert-base-uncased",
-        "dsz": 768,
-        "trainable": true
+        "label": "bert-base-uncased-pooled-pytorch"
       }
     }
   ],
