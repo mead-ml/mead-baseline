@@ -181,7 +181,6 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
     def load(cls, embeddings, **kwargs):
         c = cls("tlm-words-embed", **kwargs)
 
-
         if embeddings.endswith('.bin'):
             # HuggingFace checkpoint, convert on the fly
             from eight_mile.pytorch.serialize import load_tlm_transformers_bin, BERT_HF_FT_LAYER_MAP

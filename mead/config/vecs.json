@@ -6,6 +6,12 @@
     "transform": "baseline.lowercase"
   },
   {
+    "label": "bert-base-uncased-dict1d",
+    "type": "wordpiece-dict1d",
+    "vocab_file": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-uncased-vocab.txt",
+    "transform": "baseline.lowercase"
+  },
+  {
     "label": "bert-large-uncased",
     "type": "wordpiece1d",
     "vocab_file": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-large-uncased-vocab.txt",
@@ -14,6 +20,11 @@
   {
     "label": "bert-base-cased",
     "type": "wordpiece1d",
+    "vocab_file": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-cased-vocab.txt"
+  },
+  {
+    "label": "bert-base-cased-dict1d",
+    "type": "wordpiece-dict1d",
     "vocab_file": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-cased-vocab.txt"
   },
   {
