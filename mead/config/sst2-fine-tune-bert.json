@@ -2,9 +2,6 @@
   "task": "classify",
   "basedir": "./sst2-bert",
   "batchsz": 12,
-  "modules": [
-    "embed_bert_tf"
-  ],
   "features": [
     {
       "name": "bert",
@@ -13,10 +10,7 @@
         "dtype": "int32"
       },
       "embeddings": {
-        "type": "bert-pooled",
-        "embed_file": "bert_uncased_L-12_H-768_A-12/1",
-        "dsz": 768,
-        "trainable": true
+        "label": "bert-base-uncased-pooled-tf"
       }
     }
   ],
