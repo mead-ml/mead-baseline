@@ -1,6 +1,6 @@
 {
     "task": "tagger",
-    "modules": ["pytorch_blstm_lan"],
+    "modules": ["hub:v1:addons:lan_pyt"],
     "basedir": "./twpos",
     "conll_output": "twposresults.conll",
     "charsz": 16,
