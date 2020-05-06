@@ -19,7 +19,6 @@ features:
      reduction: sum-layer-norm
      layer_norms_after: true
      finetune: true
-     dropout: 0.0
      mlm: true
 loader:
   reader_type: default
@@ -34,7 +33,6 @@ model:
   crf: 0
 
 train:
-  dropout: 0.1
   batchsz: 32
   epochs: 50
   optim: adam
