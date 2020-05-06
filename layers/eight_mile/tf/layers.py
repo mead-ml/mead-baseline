@@ -1848,28 +1848,41 @@ class EmbeddingsStack(tf.keras.layers.Layer):
 
 
 class WeightTieDense(tf.keras.layers.Layer):
-    def __init__(self, tied, name="weight-tied"):
+    def __init__(self, tied, name="weight-tied", use_bias=False):
         super().__init__(name=name)
         self.tied = tied
+        self.use_bias = use_bias
+
+    def _add_bias(self, W):
+        if self.use_bias:
+            self.bias = self.add_weight('bias', shape=[tf.shape(W)[0], ], initializer='zeros', regularizer=None,
+                                        constraint=None, dtype=self.W.dtype, trainable=True)
+        else:
+            self.bias = None
 
     def build(self, input_shape):
         emb = getattr(self.tied, "embedding_layer", None)
         if emb is not None:
             self.W = getattr(emb, "W")
+            self._add_bias(self.W)
             super().build(input_shape)
             return
         W = getattr(self.tied, "W", None)
         if W is not None:
             self.W = W
+            self._add_bias(self.W)
             super().build(input_shape)
             return
         self.W = getattr(self.tied, "kernel")
+        self._add_bias(self.W)
         super().build()
 
     def call(self, inputs):
         shape = tf.shape(inputs)
         inputs = tf.reshape(inputs, [-1, shape[-1]])
         outs = tf.matmul(inputs, self.W, transpose_b=True)
+        if self.use_bias:
+            outs = tf.nn.bias_add(outs, self.bias)
         new_shape = tf.concat([shape[:-1], tf.constant([-1])], axis=0)
         return tf.reshape(outs, new_shape)
 

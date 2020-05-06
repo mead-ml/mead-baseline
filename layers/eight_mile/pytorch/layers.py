@@ -707,11 +707,15 @@ class WeightTieDense(nn.Module):
     """Do weight tying from the input parameter
     """
 
-    def __init__(self, tie: nn.Module):
+    def __init__(self, tie: nn.Module, bias=False):
         super().__init__()
         self.tie = tie
         self.weight, self.transform = self._get_weight(tie)
-        self.register_parameter("bias", None)
+        if bias:
+            bias = torch.nn.Parameter(torch.zeros(self.transform(self.weight).shape[0]))
+        else:
+            bias = None
+        self.register_parameter("bias", bias)
 
     def _get_weight(self, tie: nn.Module):
         emb = getattr(tie, "embeddings", None)
