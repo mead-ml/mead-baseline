@@ -337,8 +337,9 @@ class AbstractGeneratorModel(LanguageModelBase):
     def init_output(self, **kwargs):
         vsz = self.embeddings[self.tgt_key].get_vsz()
         do_weight_tying = bool(kwargs.get('tie_weights', False))
+        output_bias = kwargs.get('output_bias', False)
         if do_weight_tying:
-            output = WeightTieDense(self.embeddings[self.tgt_key])
+            output = WeightTieDense(self.embeddings[self.tgt_key], use_bias=output_bias)
         else:
             output = tf.keras.layers.Dense(vsz)
         return output
