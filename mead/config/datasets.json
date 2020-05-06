@@ -30,6 +30,13 @@
     "label": "AG"
   },
   {
+    "train_file": "train.conll",
+    "valid_file": "dev.conll",
+    "test_file": "test.conll",
+    "download": "https://www.dropbox.com/s/w5okrel68d8x4n4/snips.tar.gz?dl=1",
+    "label": "snips-conll"
+  },
+  {
     "train_file": "trec.nodev.utf8",
     "valid_file": "trec.dev.utf8",
     "test_file": "trec.test.utf8",
