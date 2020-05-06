@@ -34,8 +34,8 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
         if self.gpus > 1:
             logger.info("Trainer for PyTorch tagger currently doesnt support multiple GPUs.  Setting to 1")
             self.gpus = 1
-        if self.gpus > 0:
-            self.model = model.to_gpu()
+        if self.gpus > 0 and self.model.gpu:
+            self.model = model.cuda()
         else:
             logger.warning("Requested training on CPU.  This will be slow.")
 

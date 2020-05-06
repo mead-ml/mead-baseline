@@ -41,7 +41,7 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
 
         self.optimizer = OptimizerManager(model, **kwargs)
         self.model = model
-        if self.gpus > 0:
+        if self.gpus > 0 and self.model.gpu:
             self.crit = model.create_loss().cuda()
             if self.gpus > 1:
                 self.model = torch.nn.DataParallel(model).cuda()
