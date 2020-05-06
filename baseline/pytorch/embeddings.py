@@ -140,8 +140,10 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
         rpr_k = kwargs.get('rpr_k')
         layer_norms_after = kwargs.get('layer_norms_after', False)
         layer_norm_eps = kwargs.get('layer_norm_eps', 1e-12)
+        activation = kwargs.get('activation', 'gelu')
         self.transformer = TransformerEncoderStack(num_heads, d_model=self.d_model, pdrop=pdrop, scale=True,
                                                    layers=num_layers, d_ff=d_ff, rpr_k=rpr_k, d_k=d_k,
+                                                   activation=activation,
                                                    layer_norms_after=layer_norms_after, layer_norm_eps=layer_norm_eps)
         self.mlm = kwargs.get('mlm', False)
         self.finetune = kwargs.get('finetune', True)

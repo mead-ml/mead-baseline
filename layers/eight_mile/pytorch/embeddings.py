@@ -304,7 +304,7 @@ class LearnedPositionalLookupTableEmbeddingsWithBias(LookupTableEmbeddings):
     """
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.dropout = nn.Dropout(kwargs.get('dropout', 0.1))
+        self.dropout = nn.Dropout(kwargs.get('dropout', 0.0))
         self.mxlen = int(kwargs.get('mxlen', 512))
         self.pos_embeddings = nn.Embedding(self.mxlen, self.get_dsz())
         self.bias = nn.Parameter(torch.zeros(self.get_dsz()))
@@ -323,7 +323,7 @@ class LearnedPositionalLookupTableEmbeddingsWithBias(LookupTableEmbeddings):
 class PositionalLookupTableEmbeddings(SinusoidalPositionalMixin, LookupTableEmbeddings):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.dropout = nn.Dropout(kwargs.get("dropout", 0.1))
+        self.dropout = nn.Dropout(kwargs.get("dropout", 0.0))
         self.scale = math.sqrt(self.get_dsz())
 
     def forward(self, x):
@@ -340,7 +340,7 @@ class PositionalLookupTableEmbeddings(SinusoidalPositionalMixin, LookupTableEmbe
 class LearnedPositionalLookupTableEmbeddings(LearnedPositionalMixin, LookupTableEmbeddings):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.dropout = nn.Dropout(kwargs.get("dropout", 0.1))
+        self.dropout = nn.Dropout(kwargs.get("dropout", 0.0))
 
     def forward(self, x):
         T = x.size(1)
@@ -352,7 +352,7 @@ class LearnedPositionalLookupTableEmbeddings(LearnedPositionalMixin, LookupTable
 class PositionalCharConvEmbeddings(SinusoidalPositionalMixin, CharConvEmbeddings):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.dropout = nn.Dropout(kwargs.get("dropout", 0.1))
+        self.dropout = nn.Dropout(kwargs.get("dropout", 0.0))
         self.scale = math.sqrt(self.get_dsz())
 
     def forward(self, xch):
@@ -369,7 +369,7 @@ class PositionalCharConvEmbeddings(SinusoidalPositionalMixin, CharConvEmbeddings
 class LearnedPositionalCharConvEmbeddings(LearnedPositionalMixin, CharConvEmbeddings):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.dropout = nn.Dropout(kwargs.get("dropout", 0.1))
+        self.dropout = nn.Dropout(kwargs.get("dropout", 0.0))
 
     def forward(self, xch):
         """Add a positional encoding to the embedding, followed by dropout
@@ -385,7 +385,7 @@ class LearnedPositionalCharConvEmbeddings(LearnedPositionalMixin, CharConvEmbedd
 class PositionalCharLSTMEmbeddings(SinusoidalPositionalMixin, CharLSTMEmbeddings):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.dropout = nn.Dropout(kwargs.get("dropout", 0.1))
+        self.dropout = nn.Dropout(kwargs.get("dropout", 0.0))
         self.scale = math.sqrt(self.get_dsz())
 
     def forward(self, xch):
@@ -397,7 +397,7 @@ class PositionalCharLSTMEmbeddings(SinusoidalPositionalMixin, CharLSTMEmbeddings
 class LearnedPositionalCharLSTMEmbeddings(LearnedPositionalMixin, CharLSTMEmbeddings):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.dropout = nn.Dropout(kwargs.get("dropout", 0.1))
+        self.dropout = nn.Dropout(kwargs.get("dropout", 0.0))
 
     def forward(self, xch):
         xch = super().forward(xch)

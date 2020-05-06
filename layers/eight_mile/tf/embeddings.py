@@ -362,7 +362,7 @@ class PositionalLookupTableEmbeddings(SinusoidalPositionalMixin, LookupTableEmbe
     def __init__(self, trainable=True, name=None, dtype=tf.float32, **kwargs):
         super().__init__(name=name, **kwargs)
         self.scale = math.sqrt(self.get_dsz())
-        self.dropout = tf.keras.layers.Dropout(kwargs.get("dropout", 0.1))
+        self.dropout = tf.keras.layers.Dropout(kwargs.get("dropout", 0.0))
 
     def encode(self, x):
         x = super().encode(x) * tf.constant(self.scale)
@@ -374,7 +374,7 @@ class PositionalLookupTableEmbeddings(SinusoidalPositionalMixin, LookupTableEmbe
 class LearnedPositionalLookupTableEmbeddings(LearnedPositionalMixin, LookupTableEmbeddings):
     def __init__(self, trainable=True, name=None, dtype=tf.float32, **kwargs):
         super().__init__(name=name, **kwargs)
-        self.dropout = tf.keras.layers.Dropout(kwargs.get("dropout", 0.1))
+        self.dropout = tf.keras.layers.Dropout(kwargs.get("dropout", 0.0))
 
     def encode(self, x):
         x = super().encode(x)
@@ -415,7 +415,7 @@ class PositionalCharConvEmbeddings(SinusoidalPositionalMixin, CharConvEmbeddings
     def __init__(self, trainable=True, name=None, dtype=tf.float32, **kwargs):
         super().__init__(name=name, **kwargs)
         self.scale = math.sqrt(self.get_dsz())
-        self.dropout = tf.keras.layers.Dropout(kwargs.get("dropout", 0.1))
+        self.dropout = tf.keras.layers.Dropout(kwargs.get("dropout", 0.0))
 
     def encode(self, x):
         x = super().encode(x) * tf.constant(self.scale)
@@ -427,7 +427,7 @@ class PositionalCharConvEmbeddings(SinusoidalPositionalMixin, CharConvEmbeddings
 class LearnedPositionalCharConvEmbeddings(LearnedPositionalMixin, CharConvEmbeddings):
     def __init__(self, trainable=True, name=None, dtype=tf.float32, **kwargs):
         super().__init__(name=name, **kwargs)
-        self.dropout = tf.keras.layers.Dropout(kwargs.get("dropout", 0.1))
+        self.dropout = tf.keras.layers.Dropout(kwargs.get("dropout", 0.0))
 
     def encode(self, x):
         x = super().encode(x)
@@ -441,7 +441,7 @@ class PositionalCharLSTMEmbeddings(SinusoidalPositionalMixin, CharLSTMEmbeddings
         trainable = kwargs.get("finetune", trainable)
         super().__init__(trainable=trainable, name=name, dtype=dtype, **kwargs)
         self.scale = math.sqrt(self.get_dsz())
-        self.dropout = tf.keras.layers.Dropout(kwargs.get("dropout", 0.1))
+        self.dropout = tf.keras.layers.Dropout(kwargs.get("dropout", 0.0))
 
     def encode(self, x):
         x = super().encode(x) * tf.constant(self.scale)
@@ -454,7 +454,7 @@ class LearnedPositionalCharLSTMEmbeddings(LearnedPositionalMixin, CharLSTMEmbedd
     def __init__(self, trainable=True, name=None, dtype=tf.float32, **kwargs):
         trainable = kwargs.get("finetune", trainable)
         super().__init__(trainable=trainable, name=name, dtype=dtype, **kwargs)
-        self.dropout = tf.keras.layers.Dropout(kwargs.get("dropout", 0.1))
+        self.dropout = tf.keras.layers.Dropout(kwargs.get("dropout", 0.0))
 
     def encode(self, x):
         x = super().encode(x)
