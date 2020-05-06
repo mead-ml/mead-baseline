@@ -13,14 +13,9 @@ features:
    vectorizer:
      label: bert-base-cased-dict1d
    embeddings:
-     type: tlm-words-embed 
-     word_embed_type: learned-positional-w-bias
-     label: bert-base-cased-npz
-     reduction: sum-layer-norm
-     layer_norms_after: true
-     finetune: true
-     dropout: 0.0
-     mlm: true
+     label: bert-base-cased-pytorch
+     layers: [-1]
+
 loader:
   reader_type: default
   named_fields: {"0": "text", "-1": "y"}
@@ -34,7 +29,6 @@ model:
   crf: 0
 
 train:
-  dropout: 0.1
   batchsz: 32
   epochs: 50
   optim: adam
