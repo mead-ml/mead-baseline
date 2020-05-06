@@ -1,6 +1,11 @@
+# This configuration file uses the HuggingFace library via mead-hub
+# To run it, do `mead-config --config/conll-bert-hf.yml --embeddings hub:v1:embeddings
+#
+# To see an example of a BERT configuration that does not require mead-hub
+# or HuggingFace dependencies, see `config/conll-bert.yml`
 task: tagger
 backend: pytorch
-conll_output: conll-bert-iobes.conll
+conll_output: conll-bert-iobes-hf.conll
 unif: 0.1
 dataset: conll-iobes
 

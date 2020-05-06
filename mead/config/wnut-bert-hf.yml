@@ -1,3 +1,8 @@
+# This configuration file uses the HuggingFace library via mead-hub
+# To run it, do `mead-config --config/wnut-bert-hf.yml --embeddings hub:v1:embeddings
+#
+# To see an example of a BERT configuration that does not require mead-hub
+# or HuggingFace dependencies, see `config/wnut-bert.yml`
 task: tagger
 backend: pytorch
 dataset: wnut-iobes
@@ -7,25 +12,21 @@ unif: 0.1
 preproc:
   mxlen: -1
   mxwlen: -1
-
 features:
  - name: word
    vectorizer:
      label: bert-base-cased-dict1d
    embeddings:
-     type: tlm-words-embed
-     word_embed_type: learned-positional-w-bias
-     label: bert-base-cased-npz
-     reduction: sum-layer-norm
-     layer_norms_after: true
-     finetune: true
-     mlm: true
+     label: bert-base-cased-pytorch
+     layers: [-1]
+
 loader:
   reader_type: default
   named_fields: {"0": "text", "-1": "y"}
   label_vectorizer:
     label: y
     type: wordpiece-label-dict1d
+    embed_file: bert-base-cased
 
 model:
   model_type: pass
