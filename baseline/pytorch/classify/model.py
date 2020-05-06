@@ -52,8 +52,8 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
         return model
 
     def cuda(self, device=None):
-        super().cuda(device=device)
         self.gpu = True
+        return super().cuda(device=device)
 
     def create_loss(self):
         return nn.NLLLoss()

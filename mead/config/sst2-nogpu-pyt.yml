@@ -10,6 +10,7 @@ loader:
   reader_type: default
 unif: 0.25
 model: 
+  nogpu: true 
   model_type: default
   filtsz: [3,4,5]
   cmotsz: 100

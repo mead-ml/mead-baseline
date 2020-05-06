@@ -31,12 +31,10 @@ class TaggerModelBase(nn.Module, TaggerModel):
         basename, _ = os.path.splitext(outname)
         write_json(self.labels, basename + ".labels")
 
-    def to_gpu(self):
-        """Put the model onto the GPU
-        """
+    def cuda(self, device=None):
         self.gpu = True
-        self.cuda()
-        return self
+        return super().cuda(device=device)
+
 
     @staticmethod
     def load(filename: str, **kwargs) -> 'TaggerModelBase':
@@ -175,6 +173,7 @@ class TaggerModelBase(nn.Module, TaggerModel):
         model.pdrop = float(kwargs.get('dropout', 0.5))
         model.dropin_values = kwargs.get('dropin', {})
         model.labels = labels
+        model.gpu = not bool(kwargs.get('nogpu', False))
         model.create_layers(embeddings, **kwargs)
         return model
 
