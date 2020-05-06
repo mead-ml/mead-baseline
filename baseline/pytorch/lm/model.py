@@ -139,8 +139,9 @@ class AbstractGeneratorLanguageModel(LanguageModelBase):
         hsz = kwargs.get('hsz', kwargs.get('d_model'))
         unif = float(kwargs.get('unif', 0.0))
         do_weight_tying = bool(kwargs.get('tie_weights', False))
+        output_bias = kwargs.get('output_bias', False)
         if do_weight_tying:
-            output = WeightTieDense(self.embeddings[self.tgt_key])
+            output = WeightTieDense(self.embeddings[self.tgt_key], output_bias)
         else:
             output = pytorch_linear(hsz, vsz, unif)
         return output
