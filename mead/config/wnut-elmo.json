@@ -1,9 +1,8 @@
 {
-    "version":2,
     "task": "tagger",
-    "modules":["vec_text","embed_elmo"],
+    "modules": ["hub:v1:addons:embed_elmo_tf"],
     "batchsz": 20,
-    "conll_output": "wnutresults.conll",
+    "conll_output": "wnut-elmo-results.conll",
     "charsz": 16,
     "unif": 0.1,
     "preproc": {
@@ -12,26 +11,30 @@
         "lower": true
     },
     "features": [
-        {
-            "name":"word",
-            "vectorizer": {
-                "type":"dict1d",
-                "fields":"text",
-                  "transform": "baseline.lowercase"
-            },
-            "embeddings": {"label":"glove-42B"}
-        },
-        {
-            "name":"char",
-            "vectorizer": {"type":"dict2d"},
-            "embeddings": {"dsz":16,"wsz":10,"cfiltsz":[3],"type":"char-conv"}
-        },
-        {
-            "name":"elmo",
-            "vectorizer": {"type":"dict_text","fields": "text"},
-            "embeddings": {"type":"elmo","dsz":1024}
-        }
-    ],
+    {
+      "name": "word",
+      "vectorizer": {
+        "type": "dict1d",
+	"transform": "baseline.lowercase"
+      },
+      "embeddings": {
+        "label": "glove-42B"
+      }
+    },
+    {
+      "name": "elmo",
+      "vectorizer": {
+        "type": "dict_elmo"
+      },
+      "embeddings": {
+        "label": "elmo-small-tf"
+      }
+    }, {
+      "name":"char",
+        "vectorizer": {"type":"dict2d"},
+        "embeddings": {"dsz":16,"wsz":10,"cfiltsz":[3],"type":"char-conv"}
+    }
+  ],
     "backend": "tensorflow",
     "dataset": "wnut",
     "loader": {
