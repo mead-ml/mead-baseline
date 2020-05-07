@@ -90,10 +90,9 @@ class LanguageModelBase(tf.keras.Model, LanguageModel):
 
     def _create_loss(self, scope):
         with tf.compat.v1.variable_scope(scope):
-            vsz = self.embeddings[self.tgt_key].get_vsz()
             targets = tf.reshape(self.y, [-1])
-            bt_x_v = tf.nn.log_softmax(tf.reshape(self.logits, [-1, vsz]), axis=-1)
-            one_hots = tf.one_hot(targets, vsz)
+            bt_x_v = tf.nn.log_softmax(tf.reshape(self.logits, [-1, self.vsz]), axis=-1)
+            one_hots = tf.one_hot(targets, self.vsz)
             example_loss = -tf.reduce_sum(one_hots * bt_x_v, axis=-1)
             loss = tf.reduce_mean(example_loss)
             return loss
@@ -174,7 +173,6 @@ class LanguageModelBase(tf.keras.Model, LanguageModel):
         :return: The created model
         """
         lm = cls()
-        #lm.embeddings = {k: embedding.detached_ref() for k, embedding in embeddings.items()}
         lm.src_keys = kwargs.get('src_keys', embeddings.keys())
         lm.tgt_key = kwargs.get('tgt_key')
         if lm.tgt_key is None:
@@ -183,7 +181,6 @@ class LanguageModelBase(tf.keras.Model, LanguageModel):
         lm._unserializable.append(lm.tgt_key)
         lm._record_state(embeddings, **kwargs)
         inputs = {}
-        #lm.batchsz = 0
 
         if not tf.executing_eagerly():
 
@@ -194,7 +191,6 @@ class LanguageModelBase(tf.keras.Model, LanguageModel):
             lm.y = kwargs.get('y', tf.compat.v1.placeholder(tf.int32, [None, None], name="y"))
             lm.sess = kwargs.get('sess', tf.compat.v1.Session())
         lm.create_layers(embeddings, **kwargs)
-        #nc = embeddings[lm.tgt_key].get_vsz()
 
         if not tf.executing_eagerly():
             if lm.requires_state:
@@ -291,7 +287,7 @@ class AbstractGeneratorModel(LanguageModelBase):
         self.embeddings = self.init_embed(embeddings, **kwargs)
         self.embeddings_proj = self.init_embeddings_proj(**kwargs)
         self.generator = self.init_generate(**kwargs)
-        self.output_layer = self.init_output(**kwargs)
+        self.output_layer = self.init_output(embeddings, **kwargs)
 
     def call(self, inputs: Dict[str, TensorDef], hidden: TensorDef) -> Tuple[TensorDef, TensorDef]:
         emb = self.embed(inputs)
@@ -316,7 +312,7 @@ class AbstractGeneratorModel(LanguageModelBase):
         """
         reduction = kwargs.get('embeddings_reduction', 'concat')
         embeddings_dropout = float(kwargs.get('embeddings_dropout', 0.0))
-        return EmbeddingsStack(embeddings, embeddings_dropout, reduction=reduction)
+        return EmbeddingsStack({k: embeddings[k] for k in self.src_keys}, embeddings_dropout, reduction=reduction)
 
     def init_embeddings_proj(self, **kwargs):
         input_sz = self.embeddings.output_dim
@@ -334,14 +330,14 @@ class AbstractGeneratorModel(LanguageModelBase):
     def generate(self, emb, hidden):
         return self.generator((emb, hidden))
 
-    def init_output(self, **kwargs):
-        vsz = self.embeddings[self.tgt_key].get_vsz()
+    def init_output(self, embeddings, **kwargs):
+        self.vsz = embeddings[self.tgt_key].get_vsz()
         do_weight_tying = bool(kwargs.get('tie_weights', False))
         output_bias = kwargs.get('output_bias', False)
         if do_weight_tying:
-            output = WeightTieDense(self.embeddings[self.tgt_key], use_bias=output_bias)
+            output = WeightTieDense(embeddings[self.tgt_key], use_bias=output_bias)
         else:
-            output = tf.keras.layers.Dense(vsz)
+            output = tf.keras.layers.Dense(self.vsz)
         return output
 
 

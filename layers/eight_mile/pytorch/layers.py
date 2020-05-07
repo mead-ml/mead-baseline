@@ -573,8 +573,8 @@ class Highway(nn.Module):
         :param input: Input tensor
         :return: output tensor
         """
-        proj_result = nn.functional.relu(self.proj(input))
-        proj_gate = nn.functional.sigmoid(self.transform(input))
+        proj_result = torch.relu(self.proj(input))
+        proj_gate = torch.sigmoid(self.transform(input))
         gated = (proj_gate * proj_result) + ((1 - proj_gate) * input)
         return gated
 
