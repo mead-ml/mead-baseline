@@ -112,7 +112,7 @@ class VariationalDropout(nn.Module):
         self.batch_first = batch_first
 
     def extra_repr(self):
-        return "p=%.1f" % self.p
+        return "p=%.1f" % self.pdrop
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         if not self.training:
