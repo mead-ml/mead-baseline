@@ -1,6 +1,6 @@
 batchsz: 50
 basedir: sst2-pyt
-modules: [hub:v1:addons:resconv]
+modules: ["hub:v1:addons:resconv"]
 preproc: 
   mxlen: 100
   clean: true
