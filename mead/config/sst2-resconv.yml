@@ -12,7 +12,6 @@ unif: 0.25
 model: 
   model_type: resconv 
   filtsz: 3 
-  cmotsz: 100
   dropout: 0.5
 
 features:
