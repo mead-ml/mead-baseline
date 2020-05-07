@@ -75,31 +75,31 @@ class TensorFlowExporter(Exporter):
         we reuse the classify constants from tensorflow to define the predict
         endpoint so that we can call the output by classes/scores.
         """
-        builder = tf.saved_model.builder.SavedModelBuilder(output_path)
+        builder = tf.compat.v1.saved_model.builder.SavedModelBuilder(output_path)
 
-        classes_output_tensor = tf.saved_model.utils.build_tensor_info(
+        classes_output_tensor = tf.compat.v1.saved_model.utils.build_tensor_info(
             sig_output.classes)
 
         output_def_map = {
-            tf.saved_model.signature_constants.CLASSIFY_OUTPUT_CLASSES: classes_output_tensor
+            tf.compat.v1.saved_model.signature_constants.CLASSIFY_OUTPUT_CLASSES: classes_output_tensor
         }
         if sig_output.scores is not None:
-            scores_output_tensor = tf.saved_model.utils.build_tensor_info(sig_output.scores)
-            output_def_map[tf.saved_model.signature_constants.CLASSIFY_OUTPUT_SCORES] = scores_output_tensor
+            scores_output_tensor = tf.compat.v1.saved_model.utils.build_tensor_info(sig_output.scores)
+            output_def_map[tf.compat.v1.saved_model.signature_constants.CLASSIFY_OUTPUT_SCORES] = scores_output_tensor
 
         prediction_signature = (
-            tf.saved_model.signature_def_utils.build_signature_def(
+            tf.compat.v1.saved_model.signature_def_utils.build_signature_def(
                 inputs=sig_input,
                 outputs=output_def_map,  # we reuse classify constants here.
-                method_name=tf.saved_model.signature_constants.PREDICT_METHOD_NAME
+                method_name=tf.compat.v1.saved_model.signature_constants.PREDICT_METHOD_NAME
             )
         )
 
-        legacy_init_op = tf.group(tf.tables_initializer(), name='legacy_init_op')
+        legacy_init_op = tf.group(tf.compat.v1.tables_initializer(), name='legacy_init_op')
         definition = dict({})
         definition[sig_name] = prediction_signature
         builder.add_meta_graph_and_variables(
-            sess, [tf.saved_model.tag_constants.SERVING],
+            sess, [tf.compat.v1.saved_model.tag_constants.SERVING],
             signature_def_map=definition,
             legacy_init_op=legacy_init_op)
 
@@ -133,11 +133,11 @@ class ClassifyTensorFlowExporter(TensorFlowExporter):
         model, classes, values = self._create_model(sess, basename)
 
         predict_tensors = {}
-        predict_tensors[model.lengths_key] = tf.saved_model.utils.build_tensor_info(model.lengths)
+        predict_tensors[model.lengths_key] = tf.compat.v1.saved_model.utils.build_tensor_info(model.lengths)
 
         for k, v in model.embeddings.items():
             try:
-                predict_tensors[k] = tf.saved_model.utils.build_tensor_info(v.x)
+                predict_tensors[k] = tf.compat.v1.saved_model.utils.build_tensor_info(v.x)
             except:
                 raise Exception('Unknown attribute in signature: {}'.format(v))
 
@@ -184,11 +184,11 @@ class TaggerTensorFlowExporter(TensorFlowExporter):
         model, classes, values = self._create_model(sess, basename)
 
         predict_tensors = {}
-        predict_tensors[model.lengths_key] = tf.saved_model.utils.build_tensor_info(model.lengths)
+        predict_tensors[model.lengths_key] = tf.compat.v1.saved_model.utils.build_tensor_info(model.lengths)
 
         for k, v in model.embeddings.items():
             try:
-                predict_tensors[k] = tf.saved_model.utils.build_tensor_info(v.x)
+                predict_tensors[k] = tf.compat.v1.saved_model.utils.build_tensor_info(v.x)
             except:
                 raise Exception('Unknown attribute in signature: {}'.format(v))
 
@@ -246,11 +246,11 @@ class Seq2SeqTensorFlowExporter(TensorFlowExporter):
         model, classes, values = self._create_model(sess, basename)
 
         predict_tensors = {}
-        predict_tensors[model.src_lengths_key] = tf.saved_model.utils.build_tensor_info(model.src_len)
+        predict_tensors[model.src_lengths_key] = tf.compat.v1.saved_model.utils.build_tensor_info(model.src_len)
 
         for k, v in model.src_embeddings.items():
             try:
-                predict_tensors[k] = tf.saved_model.utils.build_tensor_info(v.x)
+                predict_tensors[k] = tf.compat.v1.saved_model.utils.build_tensor_info(v.x)
             except:
                 raise Exception('Unknown attribute in signature: {}'.format(v))
 
