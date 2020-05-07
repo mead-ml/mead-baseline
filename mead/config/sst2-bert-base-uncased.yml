@@ -1,5 +1,5 @@
 backend: pytorch
-basedir: ./reddit-tlm
+basedir: ./sst2-bert-base-uncased
 batchsz: 12
 dataset: SST2
 features:
