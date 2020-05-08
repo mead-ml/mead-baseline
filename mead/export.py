@@ -4,6 +4,7 @@ import argparse
 from itertools import chain
 from baseline.utils import (
     unzip_files,
+    str2bool,
     read_config_file,
     normalize_backend,
     read_config_stream
@@ -47,6 +48,8 @@ def main():
     parser.add_argument('--is_remote', help='if True, separate items for remote server and client. If False bundle everything together (default True)', default=None)
     parser.add_argument('--backend', help='The deep learning backend to use')
     parser.add_argument('--reporting', help='reporting hooks', nargs='+')
+    parser.add_argument('--use_version', help='Should we use the version?', type=str2bool, default=True)
+    parser.add_argument('--zip', help='Should we zip the results?', type=str2bool, default=False)
 
     args, overrides = parser.parse_known_args()
     configure_logger(args.logging)
@@ -101,7 +104,7 @@ def main():
     feature_exporter_field_map = create_feature_exporter_field_map(config_params['features'])
     exporter = create_exporter(task, exporter_type, return_labels=return_labels,
                                feature_exporter_field_map=feature_exporter_field_map)
-    exporter.run(args.model, output_dir, project, name, model_version, remote=is_remote)
+    exporter.run(args.model, output_dir, project, name, model_version, remote=is_remote, use_version=args.use_version, zip_results=args.zip)
 
 
 if __name__ == "__main__":

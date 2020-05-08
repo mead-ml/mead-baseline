@@ -30,7 +30,7 @@ __all__ = []
 export = exporter(__all__)
 
 
-class Service(object):
+class Service:
 
     def __init__(self, vocabs=None, vectorizers=None, model=None, preproc='client'):
         self.vectorizers = vectorizers
@@ -193,11 +193,113 @@ class Service(object):
         )
         return model, preproc
 
+@export
+class ONNXClassifierService:
+
+    def __init__(self, vocabs=None, vectorizers=None, model=None, labels=None, lengths_key=None, **kwargs):
+        self.vectorizers = vectorizers
+        self.model = model
+        self.vocabs = vocabs
+        self.label_vocab = labels
+        self.lengths_key = lengths_key
+
+    def get_vocab(self, vocab_type='word'):
+        return self.vocabs.get(vocab_type)
+
+    def get_labels(self):
+        return self.model.get_labels()
+
+    def predict(self, tokens, **kwargs):
+        tokens_batch = self.batch_input(tokens)
+        self.prepare_vectorizers(tokens_batch)
+        examples = self.vectorize(tokens_batch)
+        outcomes_list = self.model.run(None, examples)[0]
+        return self.format_output(outcomes_list)
+
+    def format_output(self, predicted):
+        results = []
+        for outcomes in predicted:
+            outcomes = list(zip(self.label_vocab, outcomes))
+            results += [list(map(lambda x: (x[0], x[1].item()), sorted(outcomes, key=lambda tup: tup[1], reverse=True)))]
+        return results
+
+    def batch_input(self, tokens):
+        """Turn the input into a consistent format.
+        :param tokens: tokens in format List[str] or List[List[str]]
+        :return: List[List[str]]
+        """
+        # If the input is List[str] wrap it in list to make a batch of size one.
+        return (tokens,) if isinstance(tokens[0], str) else tokens
+
+    def prepare_vectorizers(self, tokens_batch):
+        """Batch the input tokens, and call reset and count method on each vectorizers to set up their mxlen.
+           This method is mainly for reducing repeated code blocks.
+
+        :param tokens_batch: input tokens in format or List[List[str]]
+        """
+        for vectorizer in self.vectorizers.values():
+            vectorizer.reset()
+            for tokens in tokens_batch:
+                _ = vectorizer.count(tokens)
+
+    def vectorize(self, tokens_batch):
+        """Turn the input into that batch dict for prediction.
+
+        :param tokens_batch: `List[List[str]]`: The input text batch.
+
+        :returns: dict[str] -> np.ndarray: The vectorized batch.
+        """
+        examples = defaultdict(list)
+        if self.lengths_key is None:
+            self.lengths_key = list(self.vectorizers.keys())[0]
+
+        for i, tokens in enumerate(tokens_batch):
+            for k, vectorizer in self.vectorizers.items():
+                vec, length = vectorizer.run(tokens, self.vocabs[k])
+                examples[k].append(vec)
+                if self.lengths_key == k and length:
+                    #examples[f'{self.lengths_key}_lengths'].append(length)
+                    examples['lengths'].append(length)
+        for k in self.vectorizers.keys():
+            examples[k] = np.stack(examples[k])
+        if 'lengths' in examples:
+            examples['lengths'] = np.stack(examples['lengths'])
+        return examples
+
+    @classmethod
+    def load(cls, bundle, **kwargs):
+        """Load a model from a bundle.
+
+        This can be either a local model or a remote, exported model.
+
+        :returns a Service implementation
+        """
+        import onnxruntime as ort
+
+        # can delegate
+        if os.path.isdir(bundle):
+            directory = bundle
+        else:
+            directory = unzip_files(bundle)
+
+        model_basename = find_model_basename(directory)
+        # model_basename = model_basename.replace(".pyt", "")
+        model_name = f"{model_basename}.onnx"
+
+        vocabs = load_vocabs(directory)
+        vectorizers = load_vectorizers(directory)
+
+        # Currently nothing to do here
+        labels = read_json(model_basename + '.labels')
+
+        model = ort.InferenceSession(model_name)
+        return cls(vocabs, vectorizers, model, labels)
+
 
 @export
 class ClassifierService(Service):
     def __init__(self, vocabs=None, vectorizers=None, model=None, preproc='client'):
-        super(ClassifierService, self).__init__(vocabs, vectorizers, model, preproc)
+        super().__init__(vocabs, vectorizers, model, preproc)
         if hasattr(self.model, 'return_labels'):
             self.return_labels = self.model.return_labels
         else:
@@ -212,6 +314,13 @@ class ClassifierService(Service):
     @classmethod
     def signature_name(cls):
         return 'predict_text'
+
+    @classmethod
+    def load(cls, bundle, **kwargs):
+        backend = kwargs.get('backend', 'tf')
+        if backend == 'onnx':
+            return ONNXClassifierService.load(bundle, **kwargs)
+        return super().load(bundle, **kwargs)
 
     def predict(self, tokens, preproc=None, raw=False, dense=False):
         """Take tokens and apply the internal vocab and vectorizers.  The tokens should be either a batch of text
@@ -250,6 +359,7 @@ class ClassifierService(Service):
                                      sorted(outcomes, key=lambda tup: tup[1], reverse=True)))]
         return results
 
+
 @export
 class EmbeddingsService(Service):
     @classmethod
@@ -282,6 +392,107 @@ class EmbeddingsService(Service):
         return super().load(bundle, **kwargs)
 
 
+
+
+class ONNXTaggerService:
+
+    def __init__(self, vocabs=None, vectorizers=None, model=None, labels=None, lengths_key=None, **kwargs):
+        self.vectorizers = vectorizers
+        self.model = model
+        self.vocabs = vocabs
+        self.label_vocab = labels
+        self.lengths_key = lengths_key
+
+    def get_vocab(self, vocab_type='word'):
+        return self.vocabs.get(vocab_type)
+
+    def get_labels(self):
+        return self.model.get_labels()
+
+    def predict(self, tokens, **kwargs):
+        tokens_batch = self.batch_input(tokens)
+        self.prepare_vectorizers(tokens_batch)
+        examples = self.vectorize(tokens_batch)
+        outcomes_list = self.model.run(None, examples)
+        outcomes_list = outcomes_list[0]
+        return self.format_output(tokens, outcomes_list)
+
+    def format_output(self, tokens, predicted):
+        results = []
+        for inputs, outcomes in zip(tokens, predicted):
+            outcomes = [{'text': x, 'label': self.label_vocab[y]} for x, y in zip(inputs, outcomes)]
+            results.append(outcomes)
+        return results
+
+    def batch_input(self, tokens):
+        """Turn the input into a consistent format.
+        :param tokens: tokens in format List[str] or List[List[str]]
+        :return: List[List[str]]
+        """
+        # If the input is List[str] wrap it in list to make a batch of size one.
+        return (tokens,) if isinstance(tokens[0], str) else tokens
+
+    def prepare_vectorizers(self, tokens_batch):
+        """Batch the input tokens, and call reset and count method on each vectorizers to set up their mxlen.
+           This method is mainly for reducing repeated code blocks.
+
+        :param tokens_batch: input tokens in format or List[List[str]]
+        """
+        for vectorizer in self.vectorizers.values():
+            vectorizer.reset()
+            for tokens in tokens_batch:
+                _ = vectorizer.count(tokens)
+
+    def vectorize(self, tokens_batch):
+        """Turn the input into that batch dict for prediction.
+
+        :param tokens_batch: `List[List[str]]`: The input text batch.
+
+        :returns: dict[str] -> np.ndarray: The vectorized batch.
+        """
+        examples = defaultdict(list)
+        if self.lengths_key is None:
+            self.lengths_key = list(self.vectorizers.keys())[0]
+
+        for i, tokens in enumerate(tokens_batch):
+            for k, vectorizer in self.vectorizers.items():
+                vec, length = vectorizer.run(tokens, self.vocabs[k])
+                examples[k].append(vec)
+                if self.lengths_key == k and length:
+                    examples['lengths'].append(length)
+        for k in self.vectorizers.keys():
+            examples[k] = np.stack(examples[k])
+        if 'lengths' in examples:
+            examples['lengths'] = np.stack(examples['lengths'])
+        return examples
+
+    @classmethod
+    def load(cls, bundle, **kwargs):
+        """Load a model from a bundle.
+
+        This can be either a local model or a remote, exported model.
+
+        :returns a Service implementation
+        """
+        import onnxruntime as ort
+        if os.path.isdir(bundle):
+            directory = bundle
+        else:
+            directory = unzip_files(bundle)
+
+        model_basename = find_model_basename(directory)
+        model_name = f"{model_basename}.onnx"
+
+        vocabs = load_vocabs(directory)
+        vectorizers = load_vectorizers(directory)
+
+        # Currently nothing to do here
+        labels = revlut(read_json(model_basename + '.labels'))
+
+        model = ort.InferenceSession(model_name)
+        return cls(vocabs, vectorizers, model, labels)
+
+
 @export
 class TaggerService(Service):
 
@@ -301,6 +512,13 @@ class TaggerService(Service):
     @classmethod
     def signature_name(cls):
         return 'tag_text'
+
+    @classmethod
+    def load(cls, bundle, **kwargs):
+        backend = kwargs.get('backend', 'tf')
+        if backend == 'onnx':
+            return ONNXTaggerService.load(bundle, **kwargs)
+        return super().load(bundle, **kwargs)
 
     def batch_input(self, tokens):
         """Convert the input into a consistent format.

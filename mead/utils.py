@@ -4,13 +4,13 @@ import shutil
 import logging
 import logging.config
 import hashlib
-from typing import List
+from typing import Optional, List, Dict
 from datetime import datetime
 import argparse
 from copy import deepcopy
 from itertools import chain
 from collections import OrderedDict, MutableMapping
-from baseline.utils import exporter, str2bool, read_config_file, write_json, get_logging_level, validate_url
+from baseline.utils import exporter, str2bool, read_config_file, write_json, get_logging_level, validate_url, zip_files, delete_old_copy
 
 __all__ = []
 export = exporter(__all__)
@@ -405,12 +405,14 @@ def find_model_version(model_dir):
 
 @export
 def get_output_paths(
-        output_dir,
-        project=None, name=None,
-        version=None,
-        remote=False,
-        make_server=True
-):
+        output_dir: str,
+        project: Optional[str] = None,
+        name: Optional[str] = None,
+        version: Optional[str] = None,
+        remote: bool = False,
+        make_server: bool = True,
+        use_version: bool = True,
+    ):
     """Create the output paths for export.
 
     Old behavior:
@@ -440,7 +442,7 @@ def get_output_paths(
     :param remote: `bool` Should we create separate client and server bundles?
     :param maker_server: `bool` When false don't actually make the directory that the
         server part will go in. This is because TF really wants to make it itself.
-
+    :param use_version: Should we use
     :returns: `Tuple[str, str]` The client and server output dirs.
     """
     # In this case we use the basename to simulate the old behavior.
@@ -453,9 +455,10 @@ def get_output_paths(
     server_path = [output_dir, server, project, name]
     client_path = [output_dir, client, project, name]
     # Sniff the dir and see what version we should use
-    version = find_model_version(os.path.join(*server_path)) if version is None else version
-    server_path.append(version)
-    client_path.append(version)
+    if use_version:
+        version = find_model_version(os.path.join(*server_path)) if version is None else version
+        server_path.append(version)
+        client_path.append(version)
     server_path = os.path.join(*server_path)
     client_path = os.path.join(*client_path)
     if remote:
@@ -467,24 +470,26 @@ def get_output_paths(
 
 @export
 def get_export_params(
-        config,
-        output_dir=None,
-        project=None, name=None,
-        model_version=None,
-        exporter_type=None,
-        return_labels=None,
-        is_remote=None,
+        config: Dict,
+        output_dir: Optional[str] = None,
+        project: Optional[str] = None,
+        name: Optional[str] = None,
+        model_version: Optional[str] = None,
+        exporter_type: Optional[str] = None,
+        return_labels: Optional[bool] = None,
+        is_remote: Optional[bool] = None
 ):
     """Combine export parameters from the config file and cli arguments.
 
-    :param config: `dict` The export block of the config.
-    :param output_dir: `str` The base of export paths. (defaults to './models')
-    :param project: `str` The name of the project this model is for.
-    :param name: `str` The name of this model (often the use case for it, `ner`, `intent` etc).
-    :param model_version: `str` The version of this model.
-    :param exporter_type: `str` The name of the exporter to use (defaults to 'default')
-    :param return_labels: `str` Should labels be returned? (defaults to False)
-    :param is_remote: `str` Should the bundle be split into client and server dirs.
+    :param config: The export block of the config.
+    :param output_dir: The base of export paths. (defaults to './models')
+    :param project: The name of the project this model is for.
+    :param name: The name of this model (often the use case for it, `ner`, `intent` etc).
+    :param model_version: The version of this model.
+    :param exporter_type: The name of the exporter to use (defaults to 'default')
+    :param return_labels: Should labels be returned? (defaults to False)
+    :param is_remote: Should the bundle be split into client and server dirs.
+    :param user_version
 
     :returns: `Tuple[str, str, str, str, str, bool, bool]`
         The output_dir, project, name, model_version, exporter_type, return_labels, and remote
@@ -522,7 +527,7 @@ def create_metadata(inputs, outputs, sig_name, model_name, lengths_key=None, bea
     return meta
 
 
-def save_to_bundle(output_path, directory, assets=None):
+def save_to_bundle(output_path, directory, assets=None, zip_results=False):
     """Save files to the exported bundle.
 
     :vocabs
@@ -541,6 +546,9 @@ def save_to_bundle(output_path, directory, assets=None):
         asset_file = os.path.join(output_path, 'model.assets')
         write_json(assets, asset_file)
 
+    if zip_results:
+        zip_files(output_path, False)
+        delete_old_copy(output_path)
 
 def create_feature_exporter_field_map(feature_section, default_exporter_field='tokens'):
     feature_exporter_field_map = {}
