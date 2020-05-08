@@ -91,7 +91,7 @@ class AbstractGeneratorLanguageModel(LanguageModelBase):
         self.embeddings = self.init_embed(embeddings, **kwargs)
         self.embeddings_proj = self.init_embeddings_proj(**kwargs)
         self.generator = self.init_generate(**kwargs)
-        self.output_layer = self.init_output(**kwargs)
+        self.output_layer = self.init_output(embeddings, **kwargs)
 
     def forward(self, input: Dict[str, TensorDef], hidden: TensorDef) -> Tuple[TensorDef, TensorDef]:
         emb = self.embed(input)
@@ -116,7 +116,7 @@ class AbstractGeneratorLanguageModel(LanguageModelBase):
         """
         reduction = kwargs.get('embeddings_reduction', 'concat')
         embeddings_dropout = float(kwargs.get('embeddings_dropout', 0.0))
-        return EmbeddingsStack(embeddings, embeddings_dropout, reduction=reduction)
+        return EmbeddingsStack({k: embeddings[k] for k in self.src_keys}, embeddings_dropout, reduction=reduction)
 
     def init_embeddings_proj(self, **kwargs):
         input_sz = self.embeddings.output_dim
@@ -134,16 +134,16 @@ class AbstractGeneratorLanguageModel(LanguageModelBase):
     def generate(self, emb, hidden):
         return self.generator((emb, hidden))
 
-    def init_output(self, **kwargs):
-        vsz = self.embeddings[self.tgt_key].get_vsz()
+    def init_output(self, embeddings, **kwargs):
+        self.vsz = embeddings[self.tgt_key].get_vsz()
         hsz = kwargs.get('hsz', kwargs.get('d_model'))
         unif = float(kwargs.get('unif', 0.0))
         do_weight_tying = bool(kwargs.get('tie_weights', False))
         output_bias = kwargs.get('output_bias', False)
         if do_weight_tying:
-            output = WeightTieDense(self.embeddings[self.tgt_key], output_bias)
+            output = WeightTieDense(embeddings[self.tgt_key], output_bias)
         else:
-            output = pytorch_linear(hsz, vsz, unif)
+            output = pytorch_linear(hsz, self.vsz, unif)
         return output
 
 

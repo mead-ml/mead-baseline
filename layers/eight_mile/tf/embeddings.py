@@ -160,21 +160,27 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
         self.x = None
         # These are the actual final filter sizes and num features
         filtsz, nfeats = calc_nfeats(self.cfiltsz, self.nfeat_factor, self.max_feat, self.wsz)
-        self.conv_outsz = np.sum(nfeats)
-        self.outsz = self.conv_outsz
+
+        self.embed = LookupTableEmbeddings(name=f"{self.name}/CharLUT", finetune=self.finetune, **kwargs)
+        dsz = self.embed.output_dim
+        self.parallel_conv = ParallelConv(dsz, nfeats, filtsz, activation)
+        self.gating_fns = tf.keras.Sequential()
+        for _ in range(num_gates):
+            if gating == 'skip':
+                self.gating_fns.add(SkipConnection(self.parallel_conv.output_dim, activation))
+            else:
+                self.gating_fns.add(Highway(self.parallel_conv.output_dim))
+
+        self.outsz = self.parallel_conv.output_dim
         if self.projsz is not None:
             self.outsz = self.projsz
             self.proj = tf.keras.layers.Dense(self.outsz, bias_initializer=tf.constant_initializer(0.0))
 
-        self.embed = LookupTableEmbeddings(name=f"{self.name}/CharLUT", finetune=self.finetune, **kwargs)
-        dsz = self.embed.output_dim
-        self.parallel_conv = ParallelConv(dsz, self.conv_outsz, filtsz, activation)
-        self.gating_fns = tf.keras.Sequential()
-        for _ in range(num_gates):
-            if gating == 'skip':
-                self.gating_fns.add(SkipConnection(self.conv_outsz, activation))
-            else:
-                self.gating_fns.add(Highway(self.conv_outsz))
+
+
+    @property
+    def dsz(self):
+        return self.outsz
 
     def encode(self, x):
         self.x = x

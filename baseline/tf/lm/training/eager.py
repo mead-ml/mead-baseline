@@ -13,7 +13,7 @@ from baseline.tf.lm.training.utils import to_tensors, SHUF_BUF_SZ, NUM_PREFETCH
 
 def loss_with_state(model, h, x, y):
     logits, h_out = model(x, h)
-    vsz = model.embeddings[model.tgt_key].get_vsz()
+    vsz = model.vsz
     targets = tf.reshape(y, [-1])
     bt_x_v = tf.nn.log_softmax(tf.reshape(logits, [-1, vsz]), axis=-1)
     one_hots = tf.one_hot(targets, vsz)
@@ -25,7 +25,7 @@ def loss_with_state(model, h, x, y):
 def loss_without_state(model, x, y):
     # Model will produce a null hidden state
     logits = model(x, None)[0]
-    vsz = model.embeddings[model.tgt_key].get_vsz()
+    vsz = model.vsz
     targets = tf.reshape(y, [-1])
     bt_x_v = tf.nn.log_softmax(tf.reshape(logits, [-1, vsz]), axis=-1)
     one_hots = tf.one_hot(targets, vsz)
