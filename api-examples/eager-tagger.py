@@ -6,22 +6,12 @@ import baseline
 import eight_mile.tf.layers as L
 from eight_mile.utils import get_version
 import baseline.embeddings
+import baseline.tf.embeddings
 from eight_mile.tf.optz import EagerOptimizer
 from baseline.tf.tfy import SET_TRAIN_FLAG
 import tensorflow as tf
 import logging
 import numpy as np
-
-
-TF_VERSION = get_version(tf)
-if TF_VERSION < 2:
-    from tensorflow import count_nonzero
-    tf.enable_eager_execution()
-    Optimizer = tf.train.AdamOptimizer
-
-else:
-    from tensorflow.compat.v1 import count_nonzero
-    Optimizer = tf.optimizers.Adam
 
 
 NUM_PREFETCH = 2
@@ -111,7 +101,7 @@ def train_input_fn():
     dataset = tf.data.Dataset.from_tensor_slices((X_train, Xch_train, y_train))
     dataset = dataset.shuffle(buffer_size=SHUF_BUF_SZ)
     dataset = dataset.batch(args.batchsz)
-    dataset = dataset.map(lambda x, xch, y: ({'word': x, 'char': xch, 'lengths': count_nonzero(x, axis=1)}, y))
+    dataset = dataset.map(lambda x, xch, y: ({'word': x, 'char': xch, 'lengths': tf.compat.v1.count_nonzero(x, axis=1)}, y))
     dataset = dataset.prefetch(NUM_PREFETCH)
     return dataset
 
@@ -120,7 +110,7 @@ def eval_input_fn():
     SET_TRAIN_FLAG(False)
     dataset = tf.data.Dataset.from_tensor_slices((X_valid, Xch_valid, y_valid))
     dataset = dataset.batch(args.batchsz)
-    dataset = dataset.map(lambda x, xch, y: ({'word': x, 'char': xch, 'lengths': count_nonzero(x, axis=1)}, y))
+    dataset = dataset.map(lambda x, xch, y: ({'word': x, 'char': xch, 'lengths': tf.compat.v1.count_nonzero(x, axis=1)}, y))
     return dataset
 
 
@@ -128,7 +118,7 @@ def predict_input_fn():
     SET_TRAIN_FLAG(False)
     dataset = tf.data.Dataset.from_tensor_slices((X_test, y_test))
     dataset = dataset.batch(1)
-    dataset = dataset.map(lambda x, xch, y: ({'word': x, 'char': xch, 'lengths': count_nonzero(x, axis=1)}, y))
+    dataset = dataset.map(lambda x, xch, y: ({'word': x, 'char': xch, 'lengths': tf.compat.v1.count_nonzero(x, axis=1)}, y))
     return dataset
 
 
@@ -144,7 +134,7 @@ def loss(model, x, y):
   return model.decoder_model.neg_log_loss(unary, y, x['lengths'])
 
 
-optim = EagerOptimizer(loss, Optimizer(learning_rate=args.lr))
+optim = EagerOptimizer(loss, optim="adam", lr=args.lr)
 
 
 import time
