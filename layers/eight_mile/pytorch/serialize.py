@@ -82,6 +82,28 @@ def convert_transformers_keys(num_layers: int, d: Dict, replace_layer_map: Dict 
     return m
 
 
+def tlm_load_state_dict(module: nn.Module, checkpoint_file: str):
+    """
+
+    :param tlm: Safely loads the state dict for a transformer encoder
+    :param checkpoint_file: The file name
+    :return: None
+    """
+    from_str = 'transformer'
+    to_str = 'generator'
+    if hasattr(module, 'transformer'):
+        from_str = 'generator'
+        to_str = 'transformer'
+    ckpt_dict = torch.load(checkpoint_file)
+    renamed = {}
+    for k, v in ckpt_dict.items():
+        renamed[k.replace('generator', 'transformer')] = v
+    unmatch = module.load_state_dict(renamed, strict=False)
+    if unmatch.missing_keys or len(unmatch.unexpected_keys) > 2:
+        print("Warning: Embedding doesn't match with the checkpoint being loaded.")
+        print(f"missing keys: {unmatch.missing_keys}\n unexpected keys: {unmatch.unexpected_keys}")
+
+
 def to_weight_array(pytorch_layer: nn.Module, name: str) -> Dict:
     """Convert a {`LayerNorm`, `Linear`, `layers.Dense`} to `weights` and `bias` arrays
 
