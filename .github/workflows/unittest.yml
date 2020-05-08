@@ -21,7 +21,7 @@ jobs:
         - 1.15.0
     container: tensorflow/tensorflow:${{matrix.tf-version}}-py3
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v2
     - name: Install Baseline
       run: |
         cd layers
@@ -41,7 +41,7 @@ jobs:
         - 2.0.0
     container: tensorflow/tensorflow:${{matrix.tf-version}}-py3
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v2
     - name: Install Baseline
       run: |
         cd layers
@@ -62,7 +62,7 @@ jobs:
         - 2.1.0
     container: tensorflow/tensorflow:${{matrix.tf-version}}-py3
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v2
     - name: Install Baseline
       run: |
         cd layers
@@ -84,7 +84,7 @@ jobs:
         - 1.4-cuda10.1-cudnn7-runtime
     container: pytorch/pytorch:${{matrix.pyt-version}}
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v2
     - name: Install Baseline
       run: |
         cd layers
