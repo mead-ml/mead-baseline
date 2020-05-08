@@ -2,7 +2,6 @@ batchsz: 50
 basedir: sst2-pyt
 preproc: 
   mxlen: 100
-  rev: false
   clean: true
 backend: pytorch
 dataset: SST2

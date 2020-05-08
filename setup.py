@@ -87,6 +87,7 @@ def main():
             'yaml': ['pyyaml'],
             'tf2': ['tensorflow_addons'],
             'grpc': ['grpc'],
+            'onnx': ['onnxruntime']
         },
         entry_points={
             'console_scripts': [
