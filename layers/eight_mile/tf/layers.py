@@ -2706,8 +2706,8 @@ class TaggerGreedyDecoder(tf.keras.layers.Layer):
             initializer=tf.zeros_initializer(),
             trainable=False
         )
-	if self.inv_mask is not None:
-      	    self.inv_mask = self.add_weight(
+        if self.inv_mask is not None:
+            self.inv_mask = self.add_weight(
                 "inverse_constraint_mask",
                 shape=(self.num_tags, self.num_tags),
                 dtype=tf.float32,
