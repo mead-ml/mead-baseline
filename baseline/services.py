@@ -278,7 +278,7 @@ class EmbeddingsService(Service):
 
     @classmethod
     def load(cls, bundle, **kwargs):
-        import_user_module('create_servable_embeddings')
+        import_user_module('hub:v1:addons:create_servable_embeddings')
         return super().load(bundle, **kwargs)
 
 
