@@ -6,6 +6,7 @@ import glob
 from argparse import ArgumentParser
 import baseline
 #from eight_mile.pytorch.layers import EmbeddingsStack
+from eight_mile.pytorch.serialize import tlm_load_state_dict
 from baseline.pytorch.lm import TransformerMaskedLanguageModel
 from baseline.utils import str2bool, read_json, Offsets, revlut
 from baseline.vectorizers import Token1DVectorizer, BPEVectorizer1D
@@ -67,7 +68,8 @@ def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, d_k, c
                                                   rpr_k=rpr_k,
                                                   d_k=d_k,
                                                   src_keys=['x'], tgt_key='x')
-    model.load_state_dict(torch.load(checkpoint_name))
+    tlm_load_state_dict(model, checkpoint_name)
+    #model.load_state_dict(torch.load(checkpoint_name))
     model.eval()
     print(model)
     return model
