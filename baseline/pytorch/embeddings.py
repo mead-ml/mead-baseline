@@ -192,7 +192,11 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
         if mime_type(embeddings) == 'application/zip':
             load_tlm_npz(c, embeddings)
         else:
-            unmatch = c.load_state_dict(torch.load(embeddings), strict=False)
+            ckpt_dict = torch.load(embeddings)
+            renamed = {}
+            for k, v in ckpt_dict.items():
+                renamed[k.replace('generator', 'transformer')] = v
+            unmatch = c.load_state_dict(renamed, strict=False)
             if unmatch.missing_keys or len(unmatch.unexpected_keys) > 2:
                 print("Warning: Embedding doesn't match with the checkpoint being loaded.")
                 print(f"missing keys: {unmatch.missing_keys}\n unexpected keys: {unmatch.unexpected_keys}")
