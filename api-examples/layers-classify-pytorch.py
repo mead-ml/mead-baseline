@@ -3,7 +3,7 @@ import baseline.embeddings
 from eight_mile.confusion import ConfusionMatrix
 import baseline
 from eight_mile.pytorch.optz import OptimizerManager, EagerOptimizer
-import eight_mile.pytorch.embeddings
+import baseline.pytorch.embeddings
 import eight_mile.pytorch.layers as L
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader, TensorDataset
@@ -11,15 +11,6 @@ import logging
 import numpy as np
 import time
 import torch
-
-
-def get_logging_level(ll):
-    ll = ll.lower()
-    if ll == 'debug':
-        return logging.DEBUG
-    if ll == 'info':
-        return logging.INFO
-    return logging.WARNING
 
 
 def to_device(m):

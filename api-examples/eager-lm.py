@@ -11,12 +11,6 @@ import logging
 import numpy as np
 import time
 
-if get_version(tf) < 2:
-    tf.compat.v1.enable_eager_execution()
-    Adam = tf.compat.v1.train.AdamOptimizer
-
-else:
-    Adam = tf.optimizers.Adam
 NUM_PREFETCH = 2
 SHUF_BUF_SZ = 5000
 
@@ -163,7 +157,7 @@ def loss(model, h, x, y):
     loss = tf.reduce_mean(example_loss)
     return loss, h
 
-optimizer = EagerOptimizer(loss, Adam(args.lr))
+optimizer = EagerOptimizer(loss, optim="adam", lr=args.lr)
 for epoch in range(args.epochs):
 
 

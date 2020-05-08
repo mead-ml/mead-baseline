@@ -2,7 +2,7 @@ import argparse
 import baseline
 from eight_mile.utils import get_version
 from eight_mile.confusion import ConfusionMatrix
-import eight_mile.tf.embeddings
+import baseline.tf.embeddings
 import eight_mile.tf.layers as L
 from eight_mile.tf.layers import SET_TRAIN_FLAG, set_tf_log_level
 from eight_mile.tf.optz import EagerOptimizer
