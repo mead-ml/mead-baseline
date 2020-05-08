@@ -1,6 +1,7 @@
 import baseline as bl
 import baseline.tf.embeddings
 import baseline.tf.classify
+from eight_mile.tf.layers import set_tf_log_level
 import time
 import tensorflow as tf
 import numpy as np
@@ -50,8 +51,7 @@ parser.add_argument('--optim', help='Optimizer (sgd, adam) (default is adam)', t
 args = parser.parse_known_args()[0]
 
 logging.basicConfig(level=get_logging_level(args.ll))
-tf.compat.v1.logging.set_verbosity(get_tf_logging_level(args.tf_ll))
-
+set_tf_log_level(args.tf_ll)
 
 pool_field = 'cmotsz' if args.model_type == 'default' else 'rnnsz'
 
@@ -112,4 +112,7 @@ ts = reader.load(train_file, vocabs=vocabs, batchsz=args.batchsz)
 vs = reader.load(valid_file, vocabs=vocabs, batchsz=args.batchsz)
 es = reader.load(test_file, vocabs=vocabs, batchsz=args.batchsz)
 
-bl.train.fit(model, ts, vs, es, epochs=args.epochs, optim=args.optim, eta=args.lr, reporting=[r.step for r in (bl.reporting.LoggingReporting(),)])
+bl.train.fit(model, ts, vs, es, epochs=args.epochs,
+             optim=args.optim, eta=args.lr,
+             reporting=[r.step for r in (bl.reporting.LoggingReporting(),)],
+             fit_func='feed_dict')
