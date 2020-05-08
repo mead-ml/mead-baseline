@@ -383,11 +383,14 @@ def find_files_with_prefix(directory, prefix):
 
 
 @export
-def zip_files(basedir):
+def zip_files(basedir, limit_to_pid=True):
     pid = str(os.getpid())
     tgt_zip_base = os.path.abspath(basedir)
     zip_name = os.path.basename(tgt_zip_base)
-    model_files = [x for x in os.listdir(basedir) if pid in x and os.path.isfile(os.path.join(basedir, x))]
+    if limit_to_pid:
+        model_files = [x for x in os.listdir(basedir) if pid in x and os.path.isfile(os.path.join(basedir, x))]
+    else:
+        model_files = [x for x in os.listdir(basedir) if os.path.isfile(os.path.join(basedir, x))]
     with zipfile.ZipFile("{}-{}.zip".format(tgt_zip_base, pid), "w") as z:
         for f in model_files:
             abs_f = os.path.join(basedir, f)

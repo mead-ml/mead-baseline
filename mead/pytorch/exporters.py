@@ -87,13 +87,14 @@ class PytorchONNXExporter(Exporter):
     def apply_model_patches(self, model):
         return model
 
-    def _run(self, basename, output_dir, project=None, name=None, model_version=None, **kwargs):
+    def _run(self, basename, output_dir, project=None, name=None, model_version=None, use_version=False, zip_results=True, **kwargs):
         logger.warning("Pytorch exporting is experimental and is not guaranteed to work for plugin models.")
         client_output, server_output = get_output_paths(
             output_dir,
             project, name,
             model_version,
             kwargs.get('remote', True),
+            use_version=use_version
         )
         logger.info("Saving vectorizers and vocabs to %s", client_output)
         logger.info("Saving serialized model to %s", server_output)
@@ -132,7 +133,7 @@ class PytorchONNXExporter(Exporter):
                           example_outputs=torch.ones((1, len(model.labels))))
 
         logger.info("Saving metadata.")
-        save_to_bundle(client_output, basename, assets=meta)
+        save_to_bundle(client_output, basename, assets=meta, zip_results=zip_results)
         logger.info('Successfully exported model to %s', output_dir)
         return client_output, server_output
 

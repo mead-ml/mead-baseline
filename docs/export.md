@@ -11,7 +11,7 @@ To export a model, use [export.py](../python/mead/export.py). The following are 
 - `--model`: location of the saved model checkpoint.
 - `--output_dir`: location of the directory where the exported model is saved.
 - `--backend`: If you override this param from the config in `mead-train`, pass the same argument here
-
+- `--is_remote`: If you set this to false, the model's vectorizers and meta-data files will be packaged in the same place as the exported model
 Here is an example of running for a saved model from training.  Adjust for your model name:
 
 ```
@@ -101,33 +101,43 @@ docker run -it --name tf_classify -p 9000:9000 -v ./models:/models/ epigramai/mo
 To export a model to ONNX for a PyTorch model, use `mead-export` as usual.  If you want to run the model locally with the api-examples, use the `is_remote` parameter.
 
 ```
-mead-export --config config/conll.json --model tagger-29891.zip --is_remote false
+mead-export --config config/conll.json --model tagger-31405.zip --name conll-iobes --use_version false --zip true --is_remote False
 ```
+
+The options above make tell `mead-export` to ignore versioning and generate a fully-contained `onnx` bundle in zip format.
 
 ### Testing out your ONNX model with api-examples
 
-There are API examples that mirror their `*-text.py` counterparts, and are named `*-text-onnx.py*` for trying out your ONNX-exported models with `onnxruntime`.  To make this work, you need to first install that:
+The API examples `classify-text` and `text-text` use the `baseline.Service` classes to load and run models that are either remote or local.
+They can run `onnx` models if you pass `--backend onnx` to them.  To do this, you need the `onnxruntime` package installed.
+
+You can install it manually like this:
 
 ```
 pip install onnxruntime
 ```
 
+Or you can install it as a dependency of mead like this
+```
+pip install mead-baseline[onnx]
+```
+
 To run the checkpoint we just exported:
 
 ```
-python tag-text-onnx.py --model ../mead/models/1/ --text "Mr. Jones went to Last Vegas ."
-../mead/models/1/tagger-model-29891.labels
-../mead/models/1/vocabs-char-29891.json
-../mead/models/1/vocabs-senna-29891.json
-../mead/models/1/vocabs-word-29891.json
-2020-04-29 21:01:58.184187301 [W:onnxruntime:, graph.cc:2413 CleanUnusedInitializers] Removing initializer 'embeddings.embeddings.2.proj.bias'. It is not used by any node and should be removed from the model.
-2020-04-29 21:01:58.184211421 [W:onnxruntime:, graph.cc:2413 CleanUnusedInitializers] Removing initializer 'embeddings.embeddings.2.proj.weight'. It is not used by any node and should be removed from the model.
-Mr. B-PER
-Jones E-PER
-went O
+(base) dpressel@dpressel-CORSAIR-ONE:~/dev/work/baseline/api-examples$ python tag-text.py --model ../mead/models/conll-iobes-11335.zip --text "Mr. Jones flew to New York ." --backend onnx
+/tmp/43cd89440a7111ce9180faee69b1e75aac71c661/conll-iobes/tagger-model-31405.onnx
+/tmp/43cd89440a7111ce9180faee69b1e75aac71c661/conll-iobes/vocabs-word-31405.json
+/tmp/43cd89440a7111ce9180faee69b1e75aac71c661/conll-iobes/vocabs-char-31405.json
+/tmp/43cd89440a7111ce9180faee69b1e75aac71c661/conll-iobes/vocabs-senna-31405.json
+2020-05-08 13:45:41.131100225 [W:onnxruntime:, graph.cc:2413 CleanUnusedInitializers] Removing initializer 'embeddings.embeddings.2.proj.bias'. It is not used by any node and should be removed from the model.
+2020-05-08 13:45:41.131122836 [W:onnxruntime:, graph.cc:2413 CleanUnusedInitializers] Removing initializer 'embeddings.embeddings.2.proj.weight'. It is not used by any node and should be removed from the model.
+Mr. O
+Jones S-PER
+flew O
 to O
-Last B-LOC
-Vegas E-LOC
+New B-LOC
+York E-LOC
 . O
 
 ```
