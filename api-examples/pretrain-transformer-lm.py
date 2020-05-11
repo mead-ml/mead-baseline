@@ -461,7 +461,9 @@ def train():
 
     logger.info("Loaded model and loss")
 
-    steps_per_epoch = len(train_loader) // num_gpus
+    # in this case (train_loader is not iterator) the division by number of gpus is automatically taken care of by
+    # torch.DataLoader
+    steps_per_epoch = len(train_loader)
     update_on = steps_per_epoch // 10
     logger.info(f"Steps per epoch per GPU: {steps_per_epoch}. Reporting loss every {update_on} steps.")
     cosine_decay = CosineDecaySchedulerPyTorch(steps_per_epoch * args.epochs, lr=args.lr)
