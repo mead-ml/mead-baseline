@@ -324,7 +324,7 @@ def save_vocabs(basedir, embeds_or_vocabs, name='vocabs'):
 
 
 @export
-def load_vocabs(directory):
+def load_vocabs(directory: str, suffix: Optional[str] = None):
     vocab_fnames = find_files_with_prefix(directory, 'vocabs')
     vocabs = {}
     for f in vocab_fnames:
@@ -370,16 +370,29 @@ def unzip_files(zip_path):
 
 
 @export
-def find_model_basename(directory):
-    path = os.path.join(directory, [x for x in os.listdir(directory) if 'model' in x and '-md' not in x and 'wgt' not in x and '.assets' not in x][0])
+def find_model_basename(directory, basename=None):
+    if not basename:
+        basename = [x for x in os.listdir(directory) if 'model' in x and '-md' not in x and 'wgt' not in x and '.assets' not in x][0]
+    else:
+        globname = os.path.join(directory, basename)
+        if not os.path.isfile(globname):
+            import glob
+            out = glob.glob(f'{globname}*')
+            out = [x for x in out if 'model' in x and '-md' not in x and 'wgt' not in x and '.assets' not in x][0]
+            basename = out
+    path = os.path.join(directory, basename)
     logger.info(path)
     path = path.split('.')[:-1]
     return '.'.join(path)
 
 
 @export
-def find_files_with_prefix(directory, prefix):
-    return [os.path.join(directory, x) for x in os.listdir(directory) if x.startswith(prefix)]
+def find_files_with_prefix(directory, prefix, suffix=None):
+
+    files_with_prefix = [os.path.join(directory, x) for x in os.listdir(directory) if x.startswith(prefix)]
+    if suffix:
+        files_with_prefix = [f for f in files_with_prefix if f.endswith(suffix)]
+    return files_with_prefix
 
 
 @export
