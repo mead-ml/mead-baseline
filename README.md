@@ -10,6 +10,7 @@ provides functionalities to track them. The goal is to allow a researcher to
 focus on model development, delegating the repetitive tasks to the library.
 
 [Documentation](https://github.com/dpressel/mead-baseline/blob/master/docs/main.md)
+
 [Tutorials using Colab](https://github.com/dpressel/mead-tutorials)
 
 ## Installation
