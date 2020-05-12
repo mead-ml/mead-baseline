@@ -16,6 +16,7 @@ from eight_mile.pytorch.serialize import save_tlm_npz
 from baseline.pytorch.lm import TransformerLanguageModel
 from baseline.vectorizers import Char2DVectorizer, Token1DVectorizer, WordpieceVectorizer1D, BPEVectorizer1D
 from baseline.utils import DataDownloader
+from transformer_utils import TensorWordDatasetReader, TensorCharDatasetReader, load_data_caching
 import numpy as np
 import codecs
 from collections import Counter
@@ -93,120 +94,6 @@ X_CHAR_EMBEDDINGS = {
     "num_gates": 2,
     "projsz": 512
 }
-
-
-class TensorDatasetReaderBase(object):
-    """Provide a base-class to do operations that are independent of token representation
-    """
-    def __init__(self, nctx, vectorizers):
-        self.vectorizers = vectorizers
-        self.nctx = nctx
-        self.num_words = {}
-
-    def build_vocab(self, files):
-        vocabs = {k: Counter({'[CLS]': 1}) for k in self.vectorizers.keys()}
-
-        for file in files:
-            if file is None:
-                continue
-            self.num_words[file] = 0
-            with codecs.open(file, encoding='utf-8', mode='r') as f:
-                sentences = []
-                for line in f:
-                    split_sentence = line.split() + ['<EOS>']
-                    self.num_words[file] += len(split_sentence)
-                    sentences += split_sentence
-                for k, vectorizer in self.vectorizers.items():
-                    vocabs[k].update(vectorizer.count(sentences))
-        return vocabs
-
-    def load_features(self, filename, vocabs):
-
-        features = dict()
-        with codecs.open(filename, encoding='utf-8', mode='r') as f:
-            sentences = []
-            for line in f:
-                sentences += line.strip().split() + ['<EOS>']
-            for k, vectorizer in self.vectorizers.items():
-                vec, valid_lengths = vectorizer.run(sentences, vocabs[k])
-                features[k] = vec[:valid_lengths]
-                shp = list(vectorizer.get_dims())
-                shp[0] = valid_lengths
-                features['{}_dims'.format(k)] = tuple(shp)
-        return features
-
-
-class TensorWordDatasetReader(TensorDatasetReaderBase):
-    """Read each word, and produce a tensor of x and y that are identical
-    """
-    def __init__(self, nctx, use_subword=None, model_file=None, vocab_file=None, special_tokens=None):
-        """Create a reader with a context window that reads words
-
-        :param nctx: The context window length
-        :param use_subword: If this is not none, it should be either 'bpe' or 'wordpiece'
-        """
-        self.use_subword = use_subword
-
-        if self.use_subword == 'bpe':
-            vectorizer = BPEVectorizer1D(model_file=model_file, vocab_file=vocab_file)
-        elif self.use_subword == 'wordpiece':
-            vectorizer = WordpieceVectorizer1D(embed_file=model_file, vocab_file=vocab_file,
-                                               special_tokens=special_tokens)
-        else:
-            vectorizer = Token1DVectorizer(transform_fn=baseline.lowercase)
-        super().__init__(nctx, {'x': vectorizer})
-
-    def build_vocab(self, files):
-        """Read the vocab file to get the tokens
-
-        :param files:
-        :return:
-        """
-        if self.use_subword is not None:
-            super().build_vocab(files)
-            return {'x': self.vectorizers['x'].vocab}
-        return super().build_vocab(files)
-
-    def load(self, filename, vocabs):
-        features = self.load_features(filename, vocabs)
-        x_tensor = torch.tensor(features['x'], dtype=torch.long)
-        num_sequences_word = (x_tensor.size(0) // self.nctx) * self.nctx
-        x_tensor = x_tensor.narrow(0, 0, num_sequences_word).view(-1, self.nctx)
-        return TensorDataset(x_tensor, x_tensor)
-
-
-class TensorCharDatasetReader(TensorDatasetReaderBase):
-    """TensorCharDatasetReader reads in a vocab and then a dataset and returns as a `dict` of `string` to `ndarray`
-    """
-    def __init__(self, nctx, chars_per_word):
-        y_vectorizer = Token1DVectorizer(transform_fn=baseline.lowercase)
-        x_vectorizer = Char2DVectorizer(mxwlen=chars_per_word)
-        super(TensorCharDatasetReader, self).__init__(nctx, {'x': x_vectorizer, 'y': y_vectorizer})
-        self.chars_per_word = chars_per_word
-
-    def load(self, filename, vocabs):
-        features = self.load_features(filename, vocabs)
-        y_tensor = torch.tensor(features['y'], dtype=torch.long)
-        num_sequences_word = (y_tensor.size(0) // self.nctx) * self.nctx
-        y_tensor = y_tensor.narrow(0, 0, num_sequences_word).view(-1, self.nctx)
-
-        x_dataset = torch.tensor(features['x'], dtype=torch.long)
-        x_tensor = torch.tensor(x_dataset, dtype=torch.long)
-        x_tensor = x_tensor.narrow(0, 0, num_sequences_word)
-        x_tensor = x_tensor.view(-1, self.nctx, self.chars_per_word)
-        return TensorDataset(x_tensor, y_tensor)
-
-
-def load_data(token_type, reader, dataset, file_key, vocabs, caching):
-    cached_file = '{}-{}.cache'.format(dataset[file_key], token_type)
-    if caching and os.path.exists(cached_file):
-        logger.info("Reloading %s from cached file [%s]", file_key, cached_file)
-        loaded = torch.load(cached_file)
-    else:
-        loaded = reader.load(dataset[file_key], vocabs)
-        logger.info("Caching %s to [%s]", file_key, cached_file)
-        torch.save(loaded, cached_file)
-    return loaded
 
 
 def create_reader(token_type, nctx, chars_per_word, subword_model_file, subword_vocab_file, subword_special_tokens):
@@ -416,8 +303,8 @@ def train():
     tgt_key = preproc_data['tgt_key']
     logger.info("Loaded embeddings")
 
-    train_set = load_data(args.tokens, reader, dataset, 'train_file', vocabs, args.cache_features)
-    valid_set = load_data(args.tokens, reader, dataset, 'valid_file', vocabs, args.cache_features)
+    train_set = load_data_caching(args.tokens, reader, dataset, 'train_file', vocabs, args.cache_features, logger)
+    valid_set = load_data_caching(args.tokens, reader, dataset, 'valid_file', vocabs, args.cache_features, logger)
     logger.info("valid. tokens [%s], valid. words [%s]", valid_set.tensors[-1].numel(), valid_num_words)
 
     train_sampler = torch.utils.data.distributed.DistributedSampler(train_set) if args.distributed else None
