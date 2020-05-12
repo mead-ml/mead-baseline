@@ -325,7 +325,7 @@ def save_vocabs(basedir, embeds_or_vocabs, name='vocabs'):
 
 @export
 def load_vocabs(directory: str, suffix: Optional[str] = None):
-    vocab_fnames = find_files_with_prefix(directory, 'vocabs')
+    vocab_fnames = find_files_with_prefix(directory, 'vocabs', suffix)
     vocabs = {}
     for f in vocab_fnames:
         logger.info(f)

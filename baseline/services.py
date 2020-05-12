@@ -123,7 +123,7 @@ class Service:
             directory = os.path.dirname(bundle)
             basehead = os.path.basename(bundle)
         model_basename = find_model_basename(directory, basehead)
-        suffix = model_basename.split('-')[-1]
+        suffix = model_basename.split('-')[-1] + ".json"
         vocabs = load_vocabs(directory, suffix)
 
         be = normalize_backend(kwargs.get('backend', 'tf'))
