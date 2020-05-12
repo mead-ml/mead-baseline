@@ -1,6 +1,6 @@
 from baseline.embeddings import register_embeddings, create_embeddings
 from eight_mile.pytorch.embeddings import *
-from eight_mile.pytorch.serialize import load_tlm_npz
+from eight_mile.pytorch.serialize import load_tlm_npz, tlm_load_state_dict
 from eight_mile.utils import read_json, mime_type
 from baseline.vectorizers import load_bert_vocab
 
@@ -192,14 +192,7 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
         if mime_type(embeddings) == 'application/zip':
             load_tlm_npz(c, embeddings)
         else:
-            ckpt_dict = torch.load(embeddings)
-            renamed = {}
-            for k, v in ckpt_dict.items():
-                renamed[k.replace('generator', 'transformer')] = v
-            unmatch = c.load_state_dict(renamed, strict=False)
-            if unmatch.missing_keys or len(unmatch.unexpected_keys) > 2:
-                print("Warning: Embedding doesn't match with the checkpoint being loaded.")
-                print(f"missing keys: {unmatch.missing_keys}\n unexpected keys: {unmatch.unexpected_keys}")
+            tlm_load_state_dict(c, embeddings)
         return c
 
 
