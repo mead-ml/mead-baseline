@@ -97,7 +97,7 @@ def tlm_load_state_dict(module: nn.Module, checkpoint_file: str):
     ckpt_dict = torch.load(checkpoint_file)
     renamed = {}
     for k, v in ckpt_dict.items():
-        renamed[k.replace('generator', 'transformer')] = v
+        renamed[k.replace(from_str, to_str)] = v
     unmatch = module.load_state_dict(renamed, strict=False)
     if unmatch.missing_keys or len(unmatch.unexpected_keys) > 2:
         print("Warning: Embedding doesn't match with the checkpoint being loaded.")
