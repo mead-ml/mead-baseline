@@ -218,9 +218,8 @@ def train():
     else:
         reader = TensorWordDatasetReader(args.nctx, 'bpe', args.subword_model_file, args.subword_vocab_file)
 
-    # This looks a bit funny but the streaming reader ignores our vocab and gives us the one from the subword_model
-    # However, we do need to get counts from our dataset for validation so we can calculate the perplexity
-    vocab = reader.build_vocab([args.train_file, args.valid_file])
+    # This just return the vocab from the BPE vectorizer
+    vocab = reader.build_vocab([])
     gen_embed = baseline.embeddings.load_embeddings('x', dsz=args.gen_d_model, known_vocab=vocab['x'],
                                                     embed_type=args.embed_type)
     vocabs = gen_embed['vocab']

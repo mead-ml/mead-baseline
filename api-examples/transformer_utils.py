@@ -361,6 +361,9 @@ def load_data_caching(token_type, reader, dataset, file_key, vocabs, caching, lo
         logger.info("Reloading %s from cached file [%s]", file_key, cached_file)
         loaded = torch.load(cached_file)
     else:
+        # if build_vocab() was never run, need to run it to set reader.vectorizer.mxlen correctly
+        if reader.vectorizers['x'].mxlen == -1:
+            _ = reader.build_vocab([dataset[file_key]])
         loaded = reader.load(dataset[file_key], vocabs)
         logger.info("Caching %s to [%s]", file_key, cached_file)
         torch.save(loaded, cached_file)
