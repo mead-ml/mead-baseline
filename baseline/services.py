@@ -113,13 +113,18 @@ class Service:
         :returns a Service implementation
         """
         # can delegate
+        basehead = None
+
         if os.path.isdir(bundle):
             directory = bundle
-        else:
+        elif os.path.isfile(bundle):
             directory = unzip_files(bundle)
-
-        model_basename = find_model_basename(directory)
-        vocabs = load_vocabs(directory)
+        else:
+            directory = os.path.dirname(bundle)
+            basehead = os.path.basename(bundle)
+        model_basename = find_model_basename(directory, basehead)
+        suffix = model_basename.split('-')[-1] + ".json"
+        vocabs = load_vocabs(directory, suffix)
 
         be = normalize_backend(kwargs.get('backend', 'tf'))
 
@@ -279,6 +284,7 @@ class ONNXClassifierService:
         # can delegate
         if os.path.isdir(bundle):
             directory = bundle
+        # Try and unzip if its a zip file
         else:
             directory = unzip_files(bundle)
 
