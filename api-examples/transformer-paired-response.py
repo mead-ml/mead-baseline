@@ -22,16 +22,17 @@ def decode_sentence(model, vectorizer, query, word2index, index2word, device, ma
     with torch.no_grad():
         dst = [Offsets.GO]
         for i in range(max_response_length):
-            dst_tensor = torch.from_numpy(np.array(dst)).unsqueeze(0).to(device=device)
-            predictions = model({'x': toks, 'src_len': length, 'dst': dst_tensor})
-
+            dst_tensor = torch.zeros_like(toks).squeeze()
+            dst_tensor[:len(dst)] = torch.from_numpy(np.array(dst)).to(device=device)
+            predictions = model({'x': toks, 'src_len': length, 'dst': dst_tensor.unsqueeze(0)})
+            token_offset = len(dst) - 1
             if not sample:
                 output = torch.argmax(predictions, -1).squeeze(0)
-                output = output[-1].item()
+                output = output[token_offset].item()
             else:
                 # using a multinomial distribution to predict the word returned by the model
                 predictions = predictions.exp().squeeze(0)
-                output = torch.multinomial(predictions, num_samples=1).squeeze(0)[-1].item()
+                output = torch.multinomial(predictions, num_samples=1).squeeze(0)[token_offset].item()
 
 
             dst.append(output)
