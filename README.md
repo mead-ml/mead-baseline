@@ -21,7 +21,7 @@ Baseline can be installed as a Python package.
 
 `pip install mead-baseline`
 
-If you are using tensorflow 2 as your deep learning back end you will need to have
+If you are using tensorflow 2 as your deep learning backend you will need to have
 `tensorflow_addons` already installed or have it get installed with mead via
 
 `pip install mead-baseline[tf2]`
