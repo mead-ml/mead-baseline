@@ -447,7 +447,7 @@ class BPEVectorizer1D(AbstractVectorizer):
             elif t == '<eos>':
                 yield Offsets.VALUES[Offsets.EOS]
             else:
-                subwords = self.tokenizer.apply([t])[0].split()
+                subwords = self.tokenizer.apply([self.transform_fn(t)])[0].split()
                 for x in subwords:
                     yield x
         for t in self.emit_end_toks:
