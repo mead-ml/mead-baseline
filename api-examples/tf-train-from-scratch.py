@@ -1,7 +1,9 @@
 import baseline as bl
+
+from eight_mile.tf.layers import set_tf_log_level, set_tf_eager_mode
+set_tf_eager_mode(False)
 import baseline.tf.embeddings
 import baseline.tf.classify
-from eight_mile.tf.layers import set_tf_log_level
 import time
 import tensorflow as tf
 import numpy as np
@@ -17,15 +19,6 @@ def get_logging_level(ll):
     if ll == 'info':
         return logging.INFO
     return logging.WARNING
-
-
-def get_tf_logging_level(ll):
-    ll = ll.lower()
-    if ll == 'debug':
-        return tf.logging.DEBUG
-    if ll == 'info':
-        return logging.INFO
-    return tf.logging.WARN
 
 parser = argparse.ArgumentParser(description='Train a Baseline model with TensorFlow Estimator API')
 parser.add_argument('--checkpoint_dir', help='Directory for model checkpoints', default='./checkpoints', type=str)

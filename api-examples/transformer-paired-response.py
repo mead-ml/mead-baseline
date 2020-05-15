@@ -22,16 +22,17 @@ def decode_sentence(model, vectorizer, query, word2index, index2word, device, ma
     with torch.no_grad():
         dst = [Offsets.GO]
         for i in range(max_response_length):
-            dst_tensor = torch.from_numpy(np.array(dst)).unsqueeze(0).to(device=device)
-            predictions = model({'x': toks, 'src_len': length, 'dst': dst_tensor})
-
+            dst_tensor = torch.zeros_like(toks).squeeze()
+            dst_tensor[:len(dst)] = torch.from_numpy(np.array(dst)).to(device=device)
+            predictions = model({'x': toks, 'src_len': length, 'dst': dst_tensor.unsqueeze(0)})
+            token_offset = len(dst) - 1
             if not sample:
                 output = torch.argmax(predictions, -1).squeeze(0)
-                output = output[-1].item()
+                output = output[token_offset].item()
             else:
                 # using a multinomial distribution to predict the word returned by the model
                 predictions = predictions.exp().squeeze(0)
-                output = torch.multinomial(predictions, num_samples=1).squeeze(0)[-1].item()
+                output = torch.multinomial(predictions, num_samples=1).squeeze(0)[token_offset].item()
 
 
             dst.append(output)
@@ -41,7 +42,7 @@ def decode_sentence(model, vectorizer, query, word2index, index2word, device, ma
     return response
 
 
-def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, d_k, checkpoint_name):
+def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, d_k, activation, checkpoint_name):
     if len(rpr_k) == 0 or rpr_k[0] < 1:
         rpr_k = None
     logger.info("Creating tied encoder decoder model")
@@ -55,6 +56,7 @@ def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, d_k, c
            "decoder_type": "transformer",
            "src_lengths_key": "x_lengths",
            "d_k": d_k,
+           "activation": activation,
            "rpr_k": rpr_k}
     model = TiedEmbeddingsSeq2SeqModel(embeddings, **hps)
     model.load_state_dict(torch.load(checkpoint_name))
@@ -82,6 +84,7 @@ def run():
                         help="register label of the embeddings, so far support positional or learned-positional")
     parser.add_argument("--subword_model_file", type=str, required=True)
     parser.add_argument("--subword_vocab_file", type=str, required=True)
+    parser.add_argument("--activation", type=str, default='relu')
     parser.add_argument('--rpr_k', help='Relative attention positional sizes pass 0 if you dont want relative attention',
                         type=int, default=[3, 5, 48, 48, 48, 48], nargs='+')
 
@@ -111,7 +114,7 @@ def run():
     embeddings = preproc_data['embeddings']
 
     model = create_model(embeddings, d_model=args.d_model, d_ff=args.d_ff, num_heads=args.num_heads, num_layers=args.num_layers,
-                         rpr_k=args.rpr_k, d_k=args.d_k, checkpoint_name=checkpoint)
+                         rpr_k=args.rpr_k, d_k=args.d_k, checkpoint_name=checkpoint, activation=args.activation)
     model.to(args.device)
 
     vectorizer = BPEVectorizer1D(model_file=args.subword_model_file, vocab_file=args.subword_vocab_file, mxlen=args.nctx)
