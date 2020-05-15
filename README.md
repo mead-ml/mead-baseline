@@ -1,6 +1,6 @@
-# Baseline
+# MEAD Baseline
 
-Baseline is a library for reproducible deep learning research and fast model
+MEAD Baseline is a library for reproducible deep learning research and fast model
 development for NLP. The library provides easily extensible abstractions and
 implementations for data loading, model development, training and export of deep
 learning architectures. It also provides implementations for high-performance,
@@ -45,7 +45,7 @@ This first installs `mead-layers` (8 mile) locally and then `mead-baseline`
 Deep Learning Frameworks are evolving quickly, and changes are not always
 backwards compatible. We recommend recent versions of each framework. Baseline
 is known to work on most versions of TensorFlow, and is currently being run on
-versions between 1.13 and and 2.1 .
+versions between 1.13 and 2.1 .
 
 The PyTorch backend requires at least version 1.3.0.
 
