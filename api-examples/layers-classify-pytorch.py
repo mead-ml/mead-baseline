@@ -120,7 +120,7 @@ stacksz = len(args.filts) * args.poolsz
 num_epochs = 2
 
 model = to_device(
-    L.EmbedPoolStackModel(2, embeddings, L.ParallelConv(300, args.poolsz, args.filts), L.Highway(stacksz))
+    L.EmbedPoolStackModel(2, L.EmbeddingsStack(embeddings), L.WithoutLength(L.ParallelConv(300, args.poolsz, args.filts)), L.Highway(stacksz))
 )
 
 
@@ -130,7 +130,7 @@ def loss(model, x, y):
     return l
 
 
-optimizer = EagerOptimizer(loss, optim="adam", lr=0.001) ##Adam(model.parameters(), 0.001))
+optimizer = EagerOptimizer(loss, optim="adam", lr=0.001)
 
 for epoch in range(num_epochs):
     loss_acc = 0.

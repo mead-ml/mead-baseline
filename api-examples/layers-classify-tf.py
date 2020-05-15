@@ -4,13 +4,14 @@ from eight_mile.utils import get_version
 from eight_mile.confusion import ConfusionMatrix
 import baseline.tf.embeddings
 import eight_mile.tf.layers as L
-from eight_mile.tf.layers import SET_TRAIN_FLAG, set_tf_log_level
+from eight_mile.tf.layers import SET_TRAIN_FLAG, set_tf_log_level, set_tf_eager_mode
 from eight_mile.tf.optz import EagerOptimizer
+set_tf_eager_mode(True)
 import tensorflow as tf
+from tensorflow.compat.v1 import count_nonzero
 import logging
 import numpy as np
 import time
-import os
 
 def get_logging_level(ll):
     ll = ll.lower()
@@ -20,15 +21,6 @@ def get_logging_level(ll):
         return logging.INFO
     return logging.WARNING
 
-
-TF_VERSION = get_version(tf)
-if TF_VERSION < 2:
-    from tensorflow import count_nonzero
-    tf.enable_eager_execution()
-    Adam = tf.train.AdamOptimizer
-else:
-    from tensorflow.compat.v1 import count_nonzero
-    Adam = tf.optimizers.Adam
 
 
 #tf.config.gpu.set_per_process_memory_growth(True)
@@ -134,7 +126,7 @@ stacksz = len(args.filts) * args.poolsz
 num_epochs = 2
 
 model = to_device(
-    L.EmbedPoolStackModel(2, embeddings, L.ParallelConv(300, args.poolsz, args.filts), L.Highway(stacksz))
+    L.EmbedPoolStackModel(2, L.EmbeddingsStack(embeddings), L.WithoutLength(L.ParallelConv(None, args.poolsz, args.filts)), L.Highway(stacksz))
 )
 
 
@@ -144,17 +136,20 @@ def loss(model, x, y):
 
 
 # This works with TF 2.0 and PyTorch:
-#optimizer = EagerOptimizer(loss, optim="adam", lr=0.001)
+optimizer = EagerOptimizer(loss, optim="adam", lr=0.001)
 
-# This works on all 3
-optimizer = EagerOptimizer(loss, Adam(0.001))
+
+@tf.function
+def train_step(optimizer, model, x, y):
+    loss_value = optimizer.update(model, x, y)
+    return loss_value
 
 for epoch in range(num_epochs):
     loss_acc = 0.
     step = 0
     start = time.time()
     for x, y in train_set.get_input(training=True):
-        loss_value = optimizer.update(model, x, y)
+        loss_value = train_step(optimizer, model, x, y)
         loss_acc += loss_value
         step += 1
     
