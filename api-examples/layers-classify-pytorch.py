@@ -120,7 +120,7 @@ stacksz = len(args.filts) * args.poolsz
 num_epochs = 2
 
 model = to_device(
-    L.EmbedPoolStackModel(2, L.EmbeddingsStack(embeddings), L.ParallelConv(300, args.poolsz, args.filts), L.Highway(stacksz))
+    L.EmbedPoolStackModel(2, L.EmbeddingsStack(embeddings), L.WithoutLength(L.ParallelConv(300, args.poolsz, args.filts)), L.Highway(stacksz))
 )
 
 
