@@ -16,7 +16,7 @@ from eight_mile.pytorch.layers import Average, checkpoint_for, rm_old_checkpoint
 logger = logging.getLogger(__file__)
 from baseline.pytorch.lm import TransformerMaskedLanguageModel
 from eight_mile.pytorch.layers import TransformerEncoderStack, EmbeddingsStack, subsequent_mask
-from transformer_utils import MultiFileDatasetReader, TransformerDiscriminator, find_latest_checkpoint
+from transformer_utils import MultiFileDatasetReader, TransformerDiscriminator, find_latest_checkpoint, TensorWordDatasetReader, load_data_caching
 
 """Pre-train an discriminator Transformer model in PyTorch
 
@@ -112,6 +112,8 @@ def train():
     parser.add_argument("--basedir", type=str)
     parser.add_argument("--train_file", type=str, help='Optional file path to use for train file')
     parser.add_argument("--valid_file", type=str, help='Optional file path to use for valid file')
+    parser.add_argument("--streaming_load", type=str2bool, default=True,
+                        help="whether loading data in a streaming way or loading all data into memory once")
     parser.add_argument("--gen_d_model", type=int, default=256, help="Model dimension (and embedding dsz)")
     parser.add_argument("--discrim_d_model", type=int, default=512, help="Model dimension (and embedding dsz)")
     parser.add_argument("--gen_d_ff", type=int, default=1024, help="FFN dimension")
@@ -210,13 +212,14 @@ def train():
             args.device = torch.device("cuda", args.local_rank)
         torch.distributed.init_process_group(backend='nccl', init_method='env://')
 
+    if args.streaming_load:
+        reader = MultiFileDatasetReader(args.nctx, args.subword_model_file, args.subword_vocab_file, args.pattern,
+                                        reader_type="lang")
+    else:
+        reader = TensorWordDatasetReader(args.nctx, 'bpe', args.subword_model_file, args.subword_vocab_file)
 
-    reader = MultiFileDatasetReader(args.nctx, args.subword_model_file, args.subword_vocab_file, args.pattern,
-                                    reader_type="lang")
-
-    # This looks a bit funny but the streaming reader ignores our vocab and gives us the one from the subword_model
-    # However, we do need to get counts from our dataset for validation so we can calculate the perplexity
-    vocab = reader.build_vocab([args.valid_file])
+    # This just return the vocab from the BPE vectorizer
+    vocab = reader.build_vocab([])
     gen_embed = baseline.embeddings.load_embeddings('x', dsz=args.gen_d_model, known_vocab=vocab['x'],
                                                     embed_type=args.embed_type)
     vocabs = gen_embed['vocab']
@@ -231,11 +234,22 @@ def train():
     discrim_embeddings = {'x': discrim_embed['embeddings']}
     logger.info("Loaded embeddings")
 
-    train_set = reader.load(args.train_file, vocabs)
-    valid_set = reader.load(args.valid_file, vocabs)
+    if args.streaming_load:
+        train_set = reader.load(args.train_file, vocabs)
+        valid_set = reader.load(args.valid_file, vocabs)
+        train_loader = DataLoader(train_set, batch_size=args.batch_size, num_workers=args.num_train_workers)
+        valid_loader = DataLoader(valid_set, batch_size=args.batch_size, num_workers=args.num_valid_workers)
+        steps_per_epoch = len(train_loader) // (args.batch_size*num_gpus)
+    else:
+        dataset = {'train_file': args.train_file, 'valid_file': args.valid_file}
+        train_set = load_data_caching('bpe', reader, dataset, 'train_file', {'x': vocabs}, True, logger)
+        valid_set = load_data_caching('bpe', reader, dataset, 'valid_file', {'x': vocabs}, True, logger)
 
-    train_loader = DataLoader(train_set, batch_size=args.batch_size, num_workers=args.num_train_workers)
-    valid_loader = DataLoader(valid_set, batch_size=args.batch_size, num_workers=args.num_valid_workers)
+        train_sampler = torch.utils.data.distributed.DistributedSampler(train_set) if args.distributed else None
+        train_loader = DataLoader(train_set, sampler=train_sampler, batch_size=args.batch_size, shuffle=(not args.distributed))
+        valid_loader = DataLoader(valid_set, batch_size=args.batch_size, shuffle=False)
+        steps_per_epoch = len(train_loader)
+
     logger.info("Loaded datasets")
     logger.info("Using embedding type [%s]", args.embed_type)
 
@@ -245,10 +259,6 @@ def train():
         return
     os.makedirs(args.basedir, exist_ok=True)
     vocab_size = len(vocabs)
-    # We want to make sure to save our input vocab into the basedir for reuse later
-    # Get this from a YAML file?
-    logger.info("Loaded embeddings")
-    logger.info("Loaded datasets")
 
     if len(args.gen_rpr_k) == 0 or args.gen_rpr_k[0] < 1:
         gen_rpr_k = None
@@ -272,9 +282,6 @@ def train():
     discrim_loss_fn = discrim_model.create_loss()
     logger.info("Loaded model and loss")
 
-    # according to pytorch, len(train_loader) will return len(train_set) when train_set is IterableDataset, so manually
-    # correct it here
-    steps_per_epoch = len(train_loader) // (args.batch_size*num_gpus)
     update_on = steps_per_epoch // args.update_steps
     report_on = update_on // 10
     logger.info(f"Steps per epoch per GPU: {steps_per_epoch}. Saving checkpoint every {update_on} steps.")
