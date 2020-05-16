@@ -2,9 +2,9 @@
 
 Baseline models are built on a small NLP-specific layer API that is unified between PyTorch and TensorFlow, called [8 mile](../layers/eight_mile).
 The 8 mile API offers layers built on the underlying API's primitives.  For example, using TensorFlow, 8 mile defines a set of layers built on `tf.keras.layers.Layer`.
-The same API is implemented in PyTorch, but there, its built on top of `nn.Module`.  8 mile also defines metrics for experiments and many utilitieis that make it easy to write your own Deep Learning architectures.
+The same API is implemented in PyTorch, but there, its built on top of `nn.Module`.  8 mile also defines metrics for experiments and many utilities that make it easy to write your own Deep Learning architectures.
 
-Baseline applies the 8 mile layers to form a set of strong baseline models for various tasks, and also provides important utilities for loading data and handling each specific task.
+Baseline applies the 8 mile layers to form a set of strong baseline models for various tasks, and also provides primitives for loading data and handling each specific task.
 it brings together several core capabilities that it uses to provide implementations of several key deep learning NLP tasks.
 The data loader reads common file formats for classification, CONLL-formatted files for sequence tagging, TSV and standard parallel corpora files for Neural Machine Translation and text files for language modeling. The data is masked and padded as necessary. It is also shuffled, sorted and batched such that data vectors in each batch have similar lengths. For sequence tagging problems, the loader supports multiple user-defined features. Also, the reader supports common formats for pre-trained embeddings. The library also supports common data cleaning procedures.
 The top-level module also provides model base classes for four tasks: 
