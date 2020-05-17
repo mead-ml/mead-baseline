@@ -68,7 +68,8 @@ jobs:
         cd layers
         pip install -e .
         cd ..
-        pip install -e .[test,yaml,tf2]
+        pip install tensorflow_addons==0.10.0
+        pip install -e .[test,yaml]
     - name: Unit Test Tf ${{matrix.tf-version}}
       run: |
         pytest --forked
