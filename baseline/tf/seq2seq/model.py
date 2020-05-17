@@ -373,7 +373,6 @@ else:
         @classmethod
         @tf_device_wrapper
         def load(cls, basename, **kwargs):
-            import pdb; pdb.set_trace()
             _state = read_json('{}.state'.format(basename))
             if __version__ != _state['version']:
                 logger.warning("Loaded model is from baseline version %s, running version is %s", _state['version'], __version__)
