@@ -34,8 +34,8 @@ def create_vocabs(datasets, vectorizers):
     return vocabs
 
 
-def create_featurizer(vectorizers, vocabs, primary_key='word'):
-    def convert_to_features(batch):
+def create_train_featurizer(vectorizers, vocabs, primary_key='word'):
+    def train_features(batch):
 
         features = {k: [] for k in vectorizers.keys()}
 
@@ -51,7 +51,47 @@ def create_featurizer(vectorizers, vocabs, primary_key='word'):
                 features[k].append(vec.tolist())
 
         return features
-    return convert_to_features
+    return train_features
+
+
+def create_valid_featurizer(vectorizers, vocabs, primary_key='word'):
+    def valid_features(batch):
+
+        features = {k: [] for k in vectorizers.keys()}
+
+        features['lengths'] = []
+
+        features['y'] = [l for l in batch['label']]
+
+        for i, text in enumerate(batch['sentence']):
+            for k, v in vectorizers.items():
+                vec, lengths = v.run(text.split(), vocabs[k])
+                if k == primary_key:
+                    features['lengths'].append(lengths)
+                features[k].append(vec.tolist())
+
+        return features
+    return valid_features
+
+
+def create_test_featurizer(vectorizers, vocabs, primary_key='word'):
+    def test_features(batch):
+
+        features = {k: [] for k in vectorizers.keys()}
+
+        features['lengths'] = []
+
+        features['y'] = [l for l in batch['label']]
+
+        for i, text in enumerate(batch['sentence']):
+            for k, v in vectorizers.items():
+                vec, lengths = v.run(text.split(), vocabs[k])
+                if k == primary_key:
+                    features['lengths'].append(lengths)
+                features[k].append(vec.tolist())
+
+        return features
+    return test_features
 
 
 parser = argparse.ArgumentParser(description='Train a Layers model with PyTorch API')
@@ -106,21 +146,21 @@ train_set = dataset['train']
 valid_set = dataset['validation']
 test_set = dataset['test']
 
-convert_to_features = create_featurizer(vectorizers, vocabs)
-train_set = train_set.map(convert_to_features, batched=True)
+train_set = train_set.map(create_train_featurizer(vectorizers, vocabs), batched=True)
 train_set.set_format(type='torch', columns=list(vectorizers.keys()) + ['y', 'lengths'])
 train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batchsz)
 
-valid_set = valid_set.map(convert_to_features, batched=True)
+valid_set = valid_set.map(create_valid_featurizer(vectorizers, vocabs), batched=True)
 valid_set.set_format(type='torch', columns=list(vectorizers.keys()) + ['y', 'lengths'])
 valid_loader = torch.utils.data.DataLoader(valid_set, batch_size=args.batchsz)
 
-test_set = test_set.map(convert_to_features, batched=True)
+test_set = test_set.map(create_test_featurizer(vectorizers, vocabs), batched=True)
 test_set.set_format(type='torch', columns=list(vectorizers.keys()) + ['y', 'lengths'])
 test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batchsz)
 
+
 stacksz = len(args.filts) * args.poolsz
-num_epochs = 2
+
 
 model = to_device(
     L.EmbedPoolStackModel(2, L.EmbeddingsStack(embeddings), L.WithoutLength(L.ParallelConv(args.dsz, args.poolsz, args.filts)), L.Highway(stacksz))
@@ -135,10 +175,11 @@ def loss(model, x, y):
 
 optimizer = EagerOptimizer(loss, optim="adam", lr=0.001)
 
-for epoch in range(num_epochs):
+for epoch in range(args.epochs):
     loss_acc = 0.
     step = 0
     start = time.time()
+    model.train()
     for x in train_loader:
         x = to_device(x)
         y = x.pop('y')
@@ -149,6 +190,7 @@ for epoch in range(num_epochs):
     mean_loss = loss_acc / step
     print('Training Loss {}'.format(mean_loss))
     cm = ConfusionMatrix(['0', '1'])
+    model.eval()
     for x in valid_loader:
         x = to_device(x)
         with torch.no_grad():
@@ -159,7 +201,9 @@ for epoch in range(num_epochs):
     print(cm.get_all_metrics())
 
 print('FINAL')
+
 cm = ConfusionMatrix(['0', '1'])
+model.eval()
 with torch.no_grad():
     for x in test_loader:
         x = to_device(x)
