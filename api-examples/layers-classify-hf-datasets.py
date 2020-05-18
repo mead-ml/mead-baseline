@@ -16,7 +16,7 @@ import torch.nn.functional as F
 
 def to_device(d):
     if isinstance(d, dict):
-        return {k: v.cuda() for k, v in d.items()}
+        return {k: v.cuda() for k, v in d.items() if k != 'id'}
     return d.cuda()
 
 
@@ -34,14 +34,14 @@ def create_vocabs(datasets, vectorizers):
     return vocabs
 
 
-def create_train_featurizer(vectorizers, vocabs, primary_key='word'):
-    def train_features(batch):
+def create_featurizer(vectorizers, vocabs, primary_key='word'):
+    def convert_to_features(batch):
 
         features = {k: [] for k in vectorizers.keys()}
 
         features['lengths'] = []
-
-        features['y'] = [l for l in batch['label']]
+        features['id'] = batch['idx']
+        features['y'] = batch['label']
 
         for i, text in enumerate(batch['sentence']):
             for k, v in vectorizers.items():
@@ -51,47 +51,7 @@ def create_train_featurizer(vectorizers, vocabs, primary_key='word'):
                 features[k].append(vec.tolist())
 
         return features
-    return train_features
-
-
-def create_valid_featurizer(vectorizers, vocabs, primary_key='word'):
-    def valid_features(batch):
-
-        features = {k: [] for k in vectorizers.keys()}
-
-        features['lengths'] = []
-
-        features['y'] = [l for l in batch['label']]
-
-        for i, text in enumerate(batch['sentence']):
-            for k, v in vectorizers.items():
-                vec, lengths = v.run(text.split(), vocabs[k])
-                if k == primary_key:
-                    features['lengths'].append(lengths)
-                features[k].append(vec.tolist())
-
-        return features
-    return valid_features
-
-
-def create_test_featurizer(vectorizers, vocabs, primary_key='word'):
-    def test_features(batch):
-
-        features = {k: [] for k in vectorizers.keys()}
-
-        features['lengths'] = []
-
-        features['y'] = [l for l in batch['label']]
-
-        for i, text in enumerate(batch['sentence']):
-            for k, v in vectorizers.items():
-                vec, lengths = v.run(text.split(), vocabs[k])
-                if k == primary_key:
-                    features['lengths'].append(lengths)
-                features[k].append(vec.tolist())
-
-        return features
-    return test_features
+    return convert_to_features
 
 
 parser = argparse.ArgumentParser(description='Train a Layers model with PyTorch API')
@@ -109,7 +69,8 @@ parser.add_argument('--embeddings', help='Pretrained embeddings file', default='
 parser.add_argument('--ll', help='Log level', type=str, default='info')
 parser.add_argument('--lr', help='Learning rate', type=float, default=0.001)
 parser.add_argument('--blcache', help='Cache for embeddings', default=os.path.expanduser('~/.bl-data'))
-parser.add_argument("--device", type=str,
+parser.add_argument('--output', type=str, help='Write a glue-style file, e.g. [SST-2.tsv]')
+parser.add_argument('--device', type=str,
                     default="cuda" if torch.cuda.is_available() else "cpu",
                     help="Device (cuda or cpu)")
 args = parser.parse_known_args()[0]
@@ -146,16 +107,17 @@ train_set = dataset['train']
 valid_set = dataset['validation']
 test_set = dataset['test']
 
-train_set = train_set.map(create_train_featurizer(vectorizers, vocabs), batched=True)
+convert_to_features = create_featurizer(vectorizers, vocabs)
+train_set = train_set.map(convert_to_features, batched=True)
 train_set.set_format(type='torch', columns=list(vectorizers.keys()) + ['y', 'lengths'])
 train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batchsz)
 
-valid_set = valid_set.map(create_valid_featurizer(vectorizers, vocabs), batched=True)
+valid_set = valid_set.map(convert_to_features, batched=True)
 valid_set.set_format(type='torch', columns=list(vectorizers.keys()) + ['y', 'lengths'])
 valid_loader = torch.utils.data.DataLoader(valid_set, batch_size=args.batchsz)
 
-test_set = test_set.map(create_test_featurizer(vectorizers, vocabs), batched=True)
-test_set.set_format(type='torch', columns=list(vectorizers.keys()) + ['y', 'lengths'])
+test_set = test_set.map(convert_to_features, batched=True)
+test_set.set_format(type='torch', columns=list(vectorizers.keys()) + ['y', 'id', 'lengths'])
 test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batchsz)
 
 
@@ -200,16 +162,19 @@ for epoch in range(args.epochs):
     print(cm)
     print(cm.get_all_metrics())
 
-print('FINAL')
 
-cm = ConfusionMatrix(['0', '1'])
-model.eval()
-with torch.no_grad():
-    for x in test_loader:
-        x = to_device(x)
-        y = x.pop('y')
-        y_ = np.argmax(to_host(model(x)), axis=1)
-        cm.add_batch(y, y_)
+if args.output:
+    model.eval()
+    print(f'Writing GLUE-style output file {args.output}')
+    with open(args.output, 'w') as wf:
+        wf.write('id\tlabel')
+        with torch.no_grad():
+            for x in test_loader:
+                ids = x['id']
+                x = to_device(x)
+                y = x.pop('y')
+                ys = np.argmax(to_host(model(x)), axis=1)
+                for id, y in zip(ids, ys):
+                    wf.write(f'{id.item()}\t{y.item()}\n')
 
-print(cm)
-print(cm.get_all_metrics())
+
