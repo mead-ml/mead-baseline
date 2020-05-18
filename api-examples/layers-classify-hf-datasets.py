@@ -167,7 +167,7 @@ if args.output:
     model.eval()
     print(f'Writing GLUE-style output file {args.output}')
     with open(args.output, 'w') as wf:
-        wf.write('id\tlabel')
+        wf.write('id\tlabel\n')
         with torch.no_grad():
             for x in test_loader:
                 ids = x['id']
