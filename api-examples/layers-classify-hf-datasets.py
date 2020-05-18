@@ -1,22 +1,24 @@
 import argparse
-import baseline.embeddings
-from eight_mile.confusion import ConfusionMatrix
 import baseline
-from eight_mile.pytorch.optz import OptimizerManager, EagerOptimizer
+import baseline.embeddings
 import baseline.pytorch.embeddings
+from collections import Counter
+from eight_mile.confusion import ConfusionMatrix
+from eight_mile.pytorch.optz import EagerOptimizer
 import eight_mile.pytorch.layers as L
-import torch.nn.functional as F
 import nlp as nlp_datasets
-import logging
 import numpy as np
+import os
 import time
 import torch
-from collections import Counter
+import torch.nn.functional as F
+
 
 def to_device(d):
     if isinstance(d, dict):
         return {k: v.cuda() for k, v in d.items()}
     return d.cuda()
+
 
 def to_host(o):
     return o.cpu().float().numpy()
@@ -30,6 +32,7 @@ def create_vocabs(datasets, vectorizers):
             for example in dataset:
                 vocabs[k] += v.count(example['sentence'].split())
     return vocabs
+
 
 def create_featurizer(vectorizers, vocabs, primary_key='word'):
     def convert_to_features(batch):
@@ -50,9 +53,11 @@ def create_featurizer(vectorizers, vocabs, primary_key='word'):
         return features
     return convert_to_features
 
+
 parser = argparse.ArgumentParser(description='Train a Layers model with PyTorch API')
 parser.add_argument('--model_type', help='What type of model to build', type=str, default='default')
 parser.add_argument('--poolsz', help='How many hidden units for pooling', type=int, default=100)
+parser.add_argument('--dsz', help='Embeddings dimension size', type=int, default=300)
 parser.add_argument('--stacksz', help='How many hidden units for stacking', type=int, nargs='+')
 parser.add_argument('--name', help='(optional) signature name', type=str)
 parser.add_argument('--epochs', help='Number of epochs to train', type=int, default=2)
@@ -60,20 +65,21 @@ parser.add_argument('--batchsz', help='Batch size', type=int, default=50)
 parser.add_argument('--filts', help='Parallel convolution filter widths (if default model)', type=int, default=[3, 4, 5], nargs='+')
 parser.add_argument('--mxlen', help='Maximum post length (number of words) during training', type=int, default=100)
 parser.add_argument('--dataset', help='HuggingFace Datasets id', default=['glue', 'sst2'], nargs='+')
-parser.add_argument('--embeddings', help='Pretrained embeddings file', default='/data/embeddings/GoogleNews-vectors-negative300.bin')
+parser.add_argument('--embeddings', help='Pretrained embeddings file', default='https://www.dropbox.com/s/699kgut7hdb5tg9/GoogleNews-vectors-negative300.bin.gz?dl=1')
 parser.add_argument('--ll', help='Log level', type=str, default='info')
 parser.add_argument('--lr', help='Learning rate', type=float, default=0.001)
+parser.add_argument('--blcache', help='Cache for embeddings', default=os.path.expanduser('~/.bl-data'))
 parser.add_argument("--device", type=str,
                     default="cuda" if torch.cuda.is_available() else "cpu",
                     help="Device (cuda or cpu)")
 args = parser.parse_known_args()[0]
 
-
+embeddings_file = baseline.EmbeddingDownloader(args.embeddings, embedding_dsz=args.dsz, embedding_sha1=None, data_download_cache=args.blcache).download()
 
 feature_desc = {
     'word': {
         'vectorizer': baseline.Token1DVectorizer(mxlen=100, transform_fn=baseline.lowercase),
-        'embed': {'file': args.embeddings, 'type': 'default', 'unif': 0.25}
+        'embed': {'file': embeddings_file, 'type': 'default', 'unif': 0.25, 'dsz': args.dsz}
     }
 }
 
@@ -117,7 +123,7 @@ stacksz = len(args.filts) * args.poolsz
 num_epochs = 2
 
 model = to_device(
-    L.EmbedPoolStackModel(2, L.EmbeddingsStack(embeddings), L.WithoutLength(L.ParallelConv(300, args.poolsz, args.filts)), L.Highway(stacksz))
+    L.EmbedPoolStackModel(2, L.EmbeddingsStack(embeddings), L.WithoutLength(L.ParallelConv(args.dsz, args.poolsz, args.filts)), L.Highway(stacksz))
 )
 
 
