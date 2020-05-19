@@ -133,7 +133,7 @@ def predict_input_fn():
     return dataset
 
 
-model = L.EmbedPoolStackModel(NC, embeddings, L.ParallelConv(300, 100, [3, 4, 5])) #, L.Highway(300))
+model = L.EmbedPoolStackModel(NC, L.EmbeddingsStack(embeddings), L.ParallelConv(300, 100, [3, 4, 5])) #, L.Highway(300))
 
 
 # The compile step specifies the training configuration
