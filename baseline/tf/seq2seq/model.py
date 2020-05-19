@@ -106,6 +106,7 @@ if not tf.executing_eagerly():
                 if kwargs.get('init', True):
                     model.sess.run(tf.compat.v1.global_variables_initializer())
                 model.saver = tf.compat.v1.train.Saver()
+                #reload_checkpoint(model.sess, basename, ['OptimizeLoss/'])
                 model.saver.restore(model.sess, basename)
                 return model
 

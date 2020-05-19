@@ -53,8 +53,8 @@ class TransformerDecoder(DecoderBase):
         # In predict mode the placeholder for the tgt embedding isn't created so the weights in the tgt embedding object
         # is called `tgt/LUT/weights` because there isn't a placeholder called `tgt`. In decode where that placeholder
         # exists the weights are called `tgt_1/LUT/weights`
-        if kwargs.get('predict', False):
-            tf.no_op(name=f"{name}/{self.tgt_embedding.name}")
+        #if kwargs.get('predict', False):
+        #    tf.no_op(name=f"{name}/{self.tgt_embedding.name}")
         dsz = self.tgt_embedding.get_dsz()
         vsz = self.tgt_embedding.get_vsz()
         self.decoder = TransformerDecoderStack(dsz, num_heads, pdrop, scale, layers, activation_type, d_ff, name=scope)
