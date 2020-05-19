@@ -56,11 +56,9 @@ class TransformerDecoder(DecoderBase):
         if kwargs.get('predict', False):
             tf.no_op(name=f"{name}/{self.tgt_embedding.name}")
         dsz = self.tgt_embedding.get_dsz()
+        vsz = self.tgt_embedding.get_vsz()
         self.decoder = TransformerDecoderStack(dsz, num_heads, pdrop, scale, layers, activation_type, d_ff, name=scope)
         self.do_weight_tying = bool(kwargs.get('tie_weights', True))
-        if self.do_weight_tying:
-            if self.hsz != self.tgt_embedding.get_dsz():
-                raise ValueError("weight tying requires hsz == embedding dsz, got {} hsz and {} dsz".format(self.hsz, self.tgt_embedding.get_dsz()))
         if self.do_weight_tying:
             self.proj = WeightTieDense(self.tgt_embedding)
         else:
@@ -84,7 +82,7 @@ class TransformerDecoder(DecoderBase):
 
         def inner_loop(i, hit_eos, decoded_ids):
 
-            tgt_embed = self.tgt_embedding.encode(decoded_ids)
+            tgt_embed = self.tgt_embedding(decoded_ids)
             T = get_shape_as_list(tgt_embed)[1]
             tgt_mask = subsequent_mask(T)
             h = self.decoder((tgt_embed, src_enc, src_mask, tgt_mask))
@@ -124,9 +122,12 @@ class TransformerDecoder(DecoderBase):
 
     def decode(self, inputs):
         encoder_outputs, tgt, src_len, tgt_len = inputs
+        tgt_embed = self.tgt_embedding(tgt)
+        #if not tgt:
+        #    tgt = self.tgt_embedding.create_placeholder(self.tgt_embedding.name)
         src_enc = encoder_outputs.output
 
-        tgt_embed = self.tgt_embedding.encode(tgt)
+        #tgt_embed = self.tgt_embedding.encode(tgt)
         shape = get_shape_as_list(tgt_embed)
         B = shape[0]
         T = shape[1]

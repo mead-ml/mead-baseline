@@ -60,7 +60,7 @@ class TransformerEncoder(EncoderBase):
 
     def __init__(self, pdrop=0.1, hsz=650, num_heads=4, layers=1, scale=True, activation_type='relu', name="encode", d_ff=None, scope="TransformerEncoder", **kwargs):
         super().__init__(name=name)
-        self.encoder = TransformerEncoderStack(hsz, num_heads, pdrop, scale, layers, activation_type, d_ff, name=scope)
+        self.encoder = TransformerEncoderStack(num_heads, hsz, pdrop, scale, layers, activation_type, d_ff, name=scope)
 
     @property
     def encoder_type(self):
