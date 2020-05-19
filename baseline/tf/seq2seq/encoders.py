@@ -10,7 +10,7 @@ RNNEncoderOutput = namedtuple("RNNEncoderOutput", ("output", "hidden", "src_mask
 
 
 def _make_src_mask(output, lengths):
-    T = output.shape[1]
+    T = get_shape_as_list(output)[1]
     src_mask = tf.cast(tf.sequence_mask(lengths, T), dtype=tf.uint8)
     return src_mask
 

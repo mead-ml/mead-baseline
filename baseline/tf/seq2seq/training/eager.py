@@ -144,7 +144,6 @@ class Seq2SeqTrainerEagerTf(Trainer):
         metrics['perplexity'] = np.exp(metrics['avg_loss'])
         return metrics
 
-
     def _evaluate(self, es, reporting_fns, **kwargs):
         """Run the model with beam search and report Bleu.
 
@@ -158,7 +157,7 @@ class Seq2SeqTrainerEagerTf(Trainer):
         for features, tgt in es:
             features['dst'] = tgt[:, :-1]
             tgt_lens = features.pop('tgt_len')
-            top_preds = self.model.predict(features, **kwargs)
+            top_preds = self.model.predict(features, make_input=False, **kwargs)
             preds.extend(convert_seq2seq_preds(top_preds[:, 0, :], self.tgt_rlut))
             golds.extend(convert_seq2seq_golds(tgt, tgt_lens, self.tgt_rlut))
         metrics = {'bleu': bleu(preds, golds)[0]}
@@ -196,7 +195,7 @@ class Seq2SeqTrainerEagerTf(Trainer):
         start = time.time()
         for features, tgt in vs:
             features['dst'] = tgt[:, :-1]
-            top_preds = self.model.predict(features, beam=1)
+            top_preds = self.model.predict(features, beam=1, make_input=False)
             loss_value = loss(self.model, features, tgt).numpy()
             toks = tf.cast(self._num_toks(features['tgt_len']), tf.float32).numpy()
             total_loss += loss_value * toks

@@ -3558,35 +3558,3 @@ class StackedGRUCell(tf.keras.layers.AbstractRNNCell):
     def output_size(self):
         """Integer or TensorShape: size of outputs produced by this cell."""
         return self.rnn_size
-
-
-if get_version(tf) < 2:
-
-    def rnn_cell(hsz: int, rnntype: str, st: bool = None):
-        """Produce a single RNN cell
-
-        :param hsz: The number of hidden units per LSTM
-        :param rnntype: `lstm` or `gru`
-        :param st: state is tuple? defaults to `None`
-        :return: a cell
-        """
-        if st is not None:
-            cell = (
-                tf.contrib.rnn.LSTMCell(hsz, state_is_tuple=st)
-                if rnntype.endswith("lstm")
-                else tf.contrib.rnn.GRUCell(hsz)
-            )
-        else:
-            cell = tf.contrib.rnn.LSTMCell(hsz) if rnntype.endswith("lstm") else tf.contrib.rnn.GRUCell(hsz)
-        return cell
-
-
-else:
-
-    def rnn_cell(insz: int, hsz: int, rnntype: str, nlayers: int = 1, dropout: float = 0.5):
-
-        if rnntype == "gru":
-            rnn = StackedGRUCell(nlayers, insz, hsz, dropout)
-        else:
-            rnn = StackedLSTMCell(nlayers, insz, hsz, dropout)
-        return rnn

@@ -1,9 +1,7 @@
-from eight_mile.tf.layers import rnn_cell
-from baseline.tf.tfy import *
-from baseline.utils import ls_props, read_json, Offsets, exporter
+from baseline.utils import exporter
 from baseline.model import register_decoder, register_arc_policy, create_seq2seq_arc_policy
 from baseline.tf.embeddings import *
-from baseline.tf.seq2seq.encoders.v2 import TransformerEncoderOutput
+from baseline.tf.seq2seq.encoders import TransformerEncoderOutput
 from baseline.tf.transformer import subsequent_mask
 from functools import partial
 
@@ -95,7 +93,10 @@ class RNNDecoder(tf.keras.layers.Layer):
         else:
             self.input_i = self._basic_input
         pdrop = kwargs.get('dropout', 0.5)
-        self.decoder_rnn = rnn_cell(dsz, self.hsz, rnntype, layers, pdrop)
+        if rnntype == "gru":
+            self.decoder_rnn = StackedGRUCell(layers, dsz, self.hsz, pdrop)
+        else:
+            self.decoder_rnn = StackedLSTMCell(layers, dsz, self.hsz, pdrop)
         self.dropout = tf.keras.layers.Dropout(pdrop)
         self.init_attn(**kwargs)
 
