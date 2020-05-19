@@ -101,27 +101,22 @@ if not tf.executing_eagerly():
                 tgt_embedding_info = _state.pop('tgt_embedding')
                 tgt_embedding = reload_embeddings(tgt_embedding_info, basename)['tgt']
 
-                model = cls.create(src_embeddings, tgt_embedding, reload=True, **_state)
+                model = cls.create(src_embeddings, tgt_embedding, **_state)
                 model._state = _state
                 if kwargs.get('init', True):
                     model.sess.run(tf.compat.v1.global_variables_initializer())
                 model.saver = tf.compat.v1.train.Saver()
+                #reload_checkpoint(model.sess, basename, ['OptimizeLoss/'])
                 model.saver.restore(model.sess, basename)
                 return model
 
-        def embed(self, **kwargs):
+        def embed(self, inputs):
             """This method performs "embedding" of the inputs.  The base method here then concatenates along depth
             dimension to form word embeddings
 
             :return: A 3-d vector where the last dimension is the concatenated dimensions of all embeddings
             """
-            all_embeddings_src = []
-            for k, embedding in self.src_embeddings.items():
-                x = kwargs.get(k, None)
-                embeddings_out = embedding.encode(x)
-                all_embeddings_src.append(embeddings_out)
-            word_embeddings = tf.concat(values=all_embeddings_src, axis=-1)
-            return word_embeddings
+            return self.src_embeddings(inputs)
 
         def save_md(self, basename):
             state = {k: v for k, v in self._state.items()}
@@ -131,29 +126,29 @@ if not tf.executing_eagerly():
                 embedding.save_md('{}-{}-md.json'.format(basename, key))
             self.tgt_embedding.save_md('{}-{}-md.json'.format(basename, 'tgt'))
 
-        def _record_state(self, **kwargs):
+        def _record_state(self, src_embeddings, tgt_embedding, **kwargs):
             src_embeddings_info = {}
-            for k, v in self.src_embeddings.items():
+            for k, v in src_embeddings.items():
                 src_embeddings_info[k] = v.__class__.__name__
 
-            blacklist = set(chain(self._unserializable, MAGIC_VARS, self.src_embeddings.keys()))
+            blacklist = set(chain(self._unserializable, MAGIC_VARS, src_embeddings.keys()))
             self._state = {k: v for k, v in kwargs.items() if k not in blacklist}
             self._state.update({
                 'version': __version__,
                 'module': self.__class__.__module__,
                 'class': self.__class__.__name__,
                 'src_embeddings': src_embeddings_info,
-                'tgt_embedding': {'tgt': self.tgt_embedding.__class__.__name__}
+                'tgt_embedding': {'tgt': tgt_embedding.__class__.__name__}
             })
 
         @classmethod
         def create(cls, src_embeddings, tgt_embedding, **kwargs):
             model = cls()
-            model.src_embeddings = {}
-            for k, src_embedding in src_embeddings.items():
-                model.src_embeddings[k] = src_embedding  #.detached_ref()
-            model.tgt_embedding = tgt_embedding  #.detached_ref()
-            model._record_state(**kwargs)
+
+            model._record_state(src_embeddings, tgt_embedding, **kwargs)
+            model.src_embeddings = EmbeddingsStack(src_embeddings)
+            model.tgt_embedding = tgt_embedding
+
             model.src_len = kwargs.pop('src_len', tf.compat.v1.placeholder(tf.int32, [None], name="src_len"))
             model.tgt_len = kwargs.pop('tgt_len', tf.compat.v1.placeholder(tf.int32, [None], name="tgt_len"))
             model.mx_tgt_len = kwargs.pop('mx_tgt_len', tf.compat.v1.placeholder(tf.int32, name="mx_tgt_len"))
@@ -165,7 +160,8 @@ if not tf.executing_eagerly():
             model.num_layers = kwargs.get('layers', 1)
             model.hsz = kwargs['hsz']
 
-            embed_in = model.embed(**kwargs)
+            inputs = {k: kwargs.get(k, src_embeddings[k].create_placeholder(k)) for k in src_embeddings.keys()}
+            embed_in = model.embed(inputs)
             encoder_output = model.encode(embed_in, **kwargs)
             model.decode(encoder_output, **kwargs)
             return model
@@ -198,7 +194,7 @@ if not tf.executing_eagerly():
 
         def encode(self, embed_in, **kwargs):
             self.encoder = self.create_encoder(pdrop=self.pdrop_value, **kwargs)
-            return self.encoder((embed_in, self.src_len), **kwargs)
+            return self.encoder((embed_in, self.src_len))
 
         def save(self, model_base):
             self.save_md(model_base)
@@ -282,37 +278,97 @@ else:
 
     class EncoderDecoderModelBase(tf.keras.Model, EncoderDecoderModel):
 
+        @property
+        def src_lengths_key(self):
+            return self._src_lengths_key
+
+        @src_lengths_key.setter
+        def src_lengths_key(self, value):
+            self._src_lengths_key = value
+
+        def make_input(self, batch_dict: Dict[str, TensorDef], train: bool = False) -> Dict[str, TensorDef]:
+            """Transform a `batch_dict` into format suitable for tagging
+            :param batch_dict: (``dict``) A dictionary containing all inputs to the embeddings for this model
+            :param train: (``bool``) Are we training.  Defaults to False
+            :return: A dictionary representation of this batch suitable for processing
+            """
+            if not tf.executing_eagerly():
+                batch_for_model = new_placeholder_dict(train)
+
+                for k in self.src_embeddings.keys():
+                    batch_for_model["{}:0".format(k)] = self.drop_inputs(k, batch_dict[k], train)
+
+                # Allow us to track a length, which is needed for BLSTMs
+                batch_for_model[self.lengths] = batch_dict[self.lengths_key]
+
+                if self.src_lengths_key is not None:
+                    batch_for_model[self.src_len] = batch_dict[self.src_lengths_key]
+
+                tgt = batch_dict.get('tgt')
+                if tgt is not None:
+                    batch_for_model[self.tgt_embedding.x] = batch_dict['tgt']
+                    batch_for_model[self.tgt_len] = batch_dict['tgt_lengths']
+                    batch_for_model[self.mx_tgt_len] = np.max(batch_dict['tgt_lengths'])
+
+            else:
+                SET_TRAIN_FLAG(train)
+                batch_for_model = {}
+                for k in self.src_embeddings.keys():
+                    batch_for_model[k] = batch_dict[k] #self.drop_inputs(k, batch_dict[k], train)
+
+                if self.src_lengths_key is not None:
+                    batch_for_model["src_len"] = batch_dict[self.src_lengths_key]
+
+                if 'tgt' in batch_dict:
+                    tgt = batch_dict['tgt']
+                    batch_for_model['dst'] = tgt[:, :-1]
+                    batch_for_model['tgt'] = tgt[:, 1:]
+
+            return batch_for_model
+
+
+        def drop_inputs(self, key, x, do_dropout):
+            """Do dropout on inputs, using the dropout value (or none if not set)
+            This works by applying a dropout mask with the probability given by a
+            value within the `dropin_value: Dict[str, float]`, keyed off the text name
+            of the feature
+            :param key: The feature name
+            :param x: The tensor to drop inputs for
+            :param do_dropout: A `bool` specifying if dropout is turned on
+            :return: The dropped out tensor
+            """
+            v = self.dropin_values.get(key, 0)
+            if do_dropout and v > 0.0:
+                drop_indices = np.where((np.random.random(x.shape) < v) & (x != Offsets.PAD))
+                x[drop_indices[0], drop_indices[1]] = Offsets.UNK
+            return x
+
         def __init__(self, src_embeddings, tgt_embedding, **kwargs):
             super().__init__()
             self.beam_sz = kwargs.get('beam', 1)
-            self._unserializable = []
-            # These will get reinitialized as Layers
-            # TODO: shouldnt need this if we record later
-            self.src_embeddings = src_embeddings
-            self.tgt_embedding = tgt_embedding
+            self._unserializable = ['src_len', 'tgt_len', 'mx_tgt_len']
 
-            self._record_state(**kwargs)
+            # These will get reinitialized as Layers
+            self._record_state(src_embeddings, tgt_embedding, **kwargs)
             src_dsz = self.init_embed(src_embeddings, tgt_embedding)
             self.dropin_values = kwargs.get('dropin', {})
+
             self.encoder = self.init_encoder(src_dsz, **kwargs)
             self.decoder = self.init_decoder(tgt_embedding, **kwargs)
+            self.src_lengths_key = kwargs.get('src_lengths_key')
 
         def init_embed(self, src_embeddings, tgt_embedding, **kwargs):
             """This is the hook for providing embeddings.  It takes in a dictionary of `src_embeddings` and a single
             tgt_embedding` of type `PyTorchEmbedding`
-
             :param src_embeddings: (``dict``) A dictionary of PyTorchEmbeddings, one per embedding
             :param tgt_embedding: (``PyTorchEmbeddings``) A single PyTorchEmbeddings object
             :param kwargs:
             :return: Return the aggregate embedding input size
             """
-            if isinstance(src_embeddings, dict):
-                self.src_embeddings = EmbeddingsStack(src_embeddings)
-            else:
-                assert isinstance(src_embeddings, EmbeddingsStack)
-                self.src_embeddings = src_embeddings
+            self.src_embeddings = EmbeddingsStack(src_embeddings, reduction=kwargs.get('embeddings_reduction', 'concat'))
             self.tgt_embedding = tgt_embedding
-            return self.src_embeddings
+
+            return self.src_embeddings.output_dim
 
         def init_encoder(self, input_sz, **kwargs):
             # This is a hack since TF never needs this one, there is not a general constructor param, so shoehorn
@@ -343,19 +399,19 @@ else:
                 embedding.save_md('{}-{}-md.json'.format(basename, key))
             self.tgt_embedding.save_md('{}-{}-md.json'.format(basename, 'tgt'))
 
-        def _record_state(self, **kwargs):
+        def _record_state(self, src_embeddings, tgt_embedding, **kwargs):
             src_embeddings_info = {}
-            for k, v in self.src_embeddings.items():
+            for k, v in src_embeddings.items():
                 src_embeddings_info[k] = v.__class__.__name__
 
-            blacklist = set(chain(self._unserializable, MAGIC_VARS, self.src_embeddings.keys()))
+            blacklist = set(chain(self._unserializable, MAGIC_VARS, src_embeddings.keys()))
             self._state = {k: v for k, v in kwargs.items() if k not in blacklist}
             self._state.update({
                 'version': __version__,
                 'module': self.__class__.__module__,
                 'class': self.__class__.__name__,
                 'src_embeddings': src_embeddings_info,
-                'tgt_embedding': {'tgt': self.tgt_embedding.__class__.__name__}
+                'tgt_embedding': {'tgt': tgt_embedding.__class__.__name__}
             })
 
         def save(self, model_base):
@@ -381,7 +437,6 @@ else:
             if 'beam' in kwargs:
                 _state['beam'] = kwargs['beam']
 
-
             src_embeddings_info = _state.pop('src_embeddings')
             src_embeddings = reload_embeddings(src_embeddings_info, basename)
             for k in src_embeddings_info:
@@ -395,23 +450,11 @@ else:
             model.load_weights(f"{basename}.wgt")
             return model
 
-
         @classmethod
         def create(cls, src_embeddings, tgt_embedding, **kwargs):
             model = cls(src_embeddings, tgt_embedding, **kwargs)
             logger.info(model)
             return model
-
-        #def drop_inputs(self, key, x):
-        #    v = self.dropin_values.get(key, 0)
-        #
-        #    if not TRAIN_FLAG() or v == 0:
-        #        return x
-        #
-        #    mask_pad = x != Offsets.PAD
-        #    mask_drop = x.new(x.size(0), x.size(1)).bernoulli_(v).byte()
-        #    x.masked_fill_(mask_pad & mask_drop, Offsets.UNK)
-        #    return x
 
         def embed(self, input):
             return self.src_embeddings(input)
@@ -431,6 +474,10 @@ else:
             are already transformed.
             """
             SET_TRAIN_FLAG(False)
+            make = kwargs.get('make_input', True)
+            if make:
+                inputs = self.make_input(inputs)
+
             encoder_outputs = self.encode(inputs, inputs['src_len'])
             #outs = self.greedy_decode(encoder_outputs, **kwargs)
             #return outs
