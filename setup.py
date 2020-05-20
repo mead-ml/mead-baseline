@@ -79,7 +79,7 @@ def main():
         install_requires=[
             'numpy',
             'six',
-            'mead-layers',
+            'mead-layers=={}'.format(About.VERSION),
         ],
         extras_require={
             'test': ['pytest', 'mock', 'contextdecorator', 'pytest-forked'],
