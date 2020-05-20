@@ -658,7 +658,7 @@ class LanguageModelService(Service):
         for soft, value in zip(softmax_tokens[:, :-1], values):
             tokens = []
             for tok, val in zip(soft, value):
-                tokens.append(tok[val].item())
+                tokens.append(to_numpy(tok)[val].item())
             scores.append(tokens)
         scores = np.array(scores)
         return np.exp(np.sum(np.log(scores), axis=1))

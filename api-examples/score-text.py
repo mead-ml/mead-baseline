@@ -8,7 +8,12 @@ parser.add_argument("--text", help="The text to score as a string, or a path to 
 parser.add_argument("--backend", default="tf", help="the dl backend framework the model was trained with", choices=("tensorflow", "tf", "pytorch", "pyt"))
 parser.add_argument("--device", help="the device to run the model on")
 parser.add_argument("--prob", default="conditional", choices=("joint", "conditional"), help="Should you score the whole string (joint) or the score of the last token given the previous (conditional)")
+parser.add_argument('--prefer_eager', help="If running in TensorFlow, should we prefer eager model", type=bl.str2bool, default=False)
 args = parser.parse_args()
+
+if args.backend == 'tf':
+    from eight_mile.tf.layers import set_tf_eager_mode
+    set_tf_eager_mode(args.prefer_eager)
 
 if os.path.exists(args.text) and os.path.isfile(args.text):
     with open(args.text, 'r') as f:
