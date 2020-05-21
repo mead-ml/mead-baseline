@@ -16,6 +16,7 @@ class TensorFlowEmbeddings(tf.keras.layers.Layer):
     """This provides a base for TensorFlow embeddings sub-graphs
 
     """
+    backend = 'tf'
 
     def __init__(self, trainable=True, name=None, dtype=tf.float32, **kwargs):
         # tf.kers.layers.Layer has a validation step that only allows certain kwargs

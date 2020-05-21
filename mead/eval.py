@@ -8,7 +8,7 @@ from baseline.train import create_trainer
 from baseline.utils import read_config_stream, str2bool, import_user_module
 from baseline.services import ClassifierService, TaggerService, EncoderDecoderService, LanguageModelService
 from mead.utils import configure_logger, convert_path, parse_extra_args
-from mead.tasks import merge_reporting_with_settings, Backend
+from mead.tasks import merge_reporting_with_settings, BackendParams
 
 
 DEFAULT_SETTINGS_LOC = 'config/mead-settings.json'
@@ -145,7 +145,7 @@ def main():
         logger.warning('Warning: no mead-settings file was found at [{}]'.format(args.settings))
         args.settings = {}
 
-    backend = Backend(args.backend)
+    backend = BackendParams(args.backend)
     backend.load(args.task)
     for module in args.modules:
         import_user_module(module)

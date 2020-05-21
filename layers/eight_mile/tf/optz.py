@@ -23,7 +23,7 @@ export = exporter(__all__)
 
 if not tf.executing_eagerly():
 
-    @register_lr_scheduler("default")
+    @register_lr_scheduler("default", backend='tf')
     class ConstantSchedulerTensorFlow1:
         def __init__(self, **kwargs):
             pass
@@ -34,7 +34,7 @@ if not tf.executing_eagerly():
         def __str__(self):
             return type(self).__name__ + "()"
 
-    @register_lr_scheduler("warmup_linear")
+    @register_lr_scheduler("warmup_linear", backend='tf')
     class WarmupLinearSchedulerTensorFlow1(WarmupLearningRateScheduler):
         def __init__(self, **kwargs):
             super().__init__(**kwargs)
@@ -47,7 +47,7 @@ if not tf.executing_eagerly():
         def __str__(self):
             return type(self).__name__ + "()"
 
-    @register_lr_scheduler("clr")
+    @register_lr_scheduler("clr", backend='tf')
     class CyclicLRSchedulerTensorFlow1:
         def __init__(self, max_lr=1e-2, decay_steps=1000, **kwargs):
             super().__init__()
@@ -64,7 +64,7 @@ if not tf.executing_eagerly():
         def __str__(self):
             return type(self).__name__ + "()"
 
-    @register_lr_scheduler("sgdr")
+    @register_lr_scheduler("sgdr", backend='tf')
     class SGDRSchedulerTensorFlow1:
         def __init__(self, first_decay_steps=1000, **kwargs):
             super().__init__()
@@ -78,7 +78,7 @@ if not tf.executing_eagerly():
         def __str__(self):
             return type(self).__name__ + "()"
 
-    @register_lr_scheduler("composite")
+    @register_lr_scheduler("composite", backend='tf')
     class CompositeLRSchedulerTensorFlow1:
         def __init__(self, warm=None, rest=None, **kwargs):
             self.warm = warm
@@ -101,7 +101,7 @@ if not tf.executing_eagerly():
         def __str__(self):
             return "LRScheduler({}, {})".format(self.warm, self.rest)
 
-    @register_lr_scheduler("piecewise")
+    @register_lr_scheduler("piecewise", backend='tf')
     class PiecewiseDecaySchedulerTensorFlow:
         def __init__(self, boundaries=None, values=None, **kwargs):
             super().__init__()
@@ -114,7 +114,7 @@ if not tf.executing_eagerly():
         def __str__(self):
             return type(self).__name__ + "()"
 
-    @register_lr_scheduler("invtime")
+    @register_lr_scheduler("invtime", backend='tf')
     class InverseTimeDecaySchedulerTensorFlow:
         def __init__(self, decay_steps=16000, decay_rate=0.05, staircase=False, **kwargs):
             super().__init__()
@@ -133,7 +133,7 @@ if not tf.executing_eagerly():
         def __str__(self):
             return type(self).__name__ + "()"
 
-    @register_lr_scheduler("exponential")
+    @register_lr_scheduler("exponential", backend='tf')
     class ExponentialDecaySchedulerTensorFlow(object):
         def __init__(self, decay_steps=16000, decay_rate=0.5, staircase=False, **kwargs):
             self.decay_steps = decay_steps
@@ -151,7 +151,7 @@ if not tf.executing_eagerly():
         def __str__(self):
             return type(self).__name__ + "()"
 
-    @register_lr_scheduler("zaremba")
+    @register_lr_scheduler("zaremba", backend='tf')
     class ZarembaDecaySchedulerTensorFlow1(PiecewiseDecaySchedulerTensorFlow):
         """Utility only, just to simplify the JSON"""
 
@@ -166,7 +166,7 @@ if not tf.executing_eagerly():
 
 else:
 
-    @register_lr_scheduler("default")
+    @register_lr_scheduler("default", backend='tf')
     class ConstantSchedulerTensorFlow2(LearningRateScheduler, tf.keras.optimizers.schedules.LearningRateSchedule):
         def __init__(self, **kwargs):
             super().__init__(**kwargs)
@@ -177,7 +177,7 @@ else:
         def __str__(self):
             return type(self).__name__ + "()"
 
-    @register_lr_scheduler("warmup_linear")
+    @register_lr_scheduler("warmup_linear", backend='tf')
     class WarmupLinearSchedulerTensorFlow2(
         WarmupLearningRateScheduler, tf.keras.optimizers.schedules.LearningRateSchedule
     ):
@@ -192,7 +192,7 @@ else:
         def __str__(self):
             return type(self).__name__ + "()"
 
-    @register_lr_scheduler("clr")
+    @register_lr_scheduler("clr", backend='tf')
     class CyclicLRSchedulerTensorFlow2(LearningRateScheduler, tf.keras.optimizers.schedules.LearningRateSchedule):
         def __init__(self, max_lr=1e-2, decay_steps=1000, **kwargs):
             lr = float(kwargs.get("lr", kwargs.get("eta", 1.0)))
@@ -211,7 +211,7 @@ else:
         def __str__(self):
             return type(self).__name__ + "()"
 
-    @register_lr_scheduler("sgdr")
+    @register_lr_scheduler("sgdr", backend='tf')
     class SGDRSchedulerTensorFlow2(LearningRateScheduler, tf.keras.optimizers.schedules.LearningRateSchedule):
         def __init__(self, first_decay_steps=1000, **kwargs):
             super().__init__(**kwargs)
@@ -228,7 +228,7 @@ else:
         def __str__(self):
             return type(self).__name__ + "()"
 
-    @register_lr_scheduler("zaremba")
+    @register_lr_scheduler("zaremba", backend='tf')
     class ZarembaDecaySchedulerTensorFlow2(tf.keras.optimizers.schedules.PiecewiseConstantDecay):
         """Utility only, just to simplify the JSON"""
 
@@ -237,28 +237,28 @@ else:
             values = [lr / (float(decay_rate) ** i) for i in range(len(boundaries) + 1)]
             super().__init__(boundaries, values, kwargs.get("name"))
 
-    @register_lr_scheduler("composite")
+    @register_lr_scheduler("composite", backend='tf')
     class CompositeLRSchedulerTensorFlow2(CompositeLRScheduler, tf.keras.optimizers.schedules.LearningRateSchedule):
         pass
 
-    @register_lr_scheduler("piecewise")
+    @register_lr_scheduler("piecewise", backend='tf')
     class PiecewiseConstantDecayTensorFlow2(tf.keras.optimizers.schedules.PiecewiseConstantDecay):
         def __init__(self, boundaries, values, **kwargs):
             super().__init__(boundaries, values)
 
-    @register_lr_scheduler("invtime")
+    @register_lr_scheduler("invtime", backend='tf')
     class InverseTimeDecayTensorFlow2(tf.keras.optimizers.schedules.InverseTimeDecay):
         def __init__(self, decay_steps=16000, decay_rate=0.05, staircase=False, **kwargs):
             lr = kwargs.get("lr", kwargs.get("eta", 0.01))
             super().__init__(lr, decay_steps, decay_rate, staircase, kwargs.get("name"))
 
-    @register_lr_scheduler("exponential")
+    @register_lr_scheduler("exponential", backend='tf')
     class ExponentialDecayTensorFlow2(tf.keras.optimizers.schedules.ExponentialDecay):
         def __init__(self, decay_steps=16000, decay_rate=0.5, staircase=False, **kwargs):
             lr = kwargs.get("lr", kwargs.get("eta", 0.01))
             super().__init__(lr, decay_steps, decay_rate, staircase, kwargs.get("name"))
 
-    @register_lr_scheduler("cosine")
+    @register_lr_scheduler("cosine", backend='tf')
     class CosineDecayTensorFlow2(CosineDecayScheduler):
         def __init__(self, decay_steps=16000, alpha=0.0, **kwargs):
             kwargs['lr'] = kwargs.get("lr", kwargs.get("eta", 0.01))

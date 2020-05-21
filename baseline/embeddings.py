@@ -1,7 +1,7 @@
 import eight_mile.embeddings
 from eight_mile.embeddings import *
 from eight_mile.utils import exporter, optional_params, listify, idempotent_append, is_sequence
-from baseline.utils import import_user_module, AddonDownloader
+from baseline.utils import import_user_module, AddonDownloader, backend_for, get_selected_backend_registry
 import logging
 
 __all__ = []
@@ -21,26 +21,35 @@ def register_embeddings(cls, name=None):
     if name is None:
         name = cls.__name__
 
-    if name in MEAD_LAYERS_EMBEDDINGS:
+    backend = backend_for(cls)
+    if backend not in MEAD_LAYERS_EMBEDDINGS:
+        MEAD_LAYERS_EMBEDDINGS[backend] = {}
+        MEAD_LAYERS_EMBEDDINGS_LOADERS[backend] = {}
+
+    if name in MEAD_LAYERS_EMBEDDINGS[backend]:
+        old_cls = MEAD_LAYERS_EMBEDDINGS[backend][name]
         raise Exception(
-            "Error: attempt to re-define previously registered handler {} (old: {}, new: {}) in registry".format(
-                name, MEAD_LAYERS_EMBEDDINGS[name], cls
-            )
+            f"Error: attempt to re-define previously registered handler ({backend}) {name} (old: {old_cls}, new: {cls}) in registry"
         )
 
-    MEAD_LAYERS_EMBEDDINGS[name] = cls
+    MEAD_LAYERS_EMBEDDINGS[backend][name] = cls
 
     if hasattr(cls, "load"):
-        MEAD_LAYERS_EMBEDDINGS_LOADERS[name] = cls.load
+        MEAD_LAYERS_EMBEDDINGS_LOADERS[backend][name] = cls.load
     return cls
 
 
 @export
 def create_embeddings(**kwargs):
     embed_type = kwargs.get("embed_type", "default")
-    Constructor = MEAD_LAYERS_EMBEDDINGS.get(embed_type)
+    Constructor = get_selected_backend_registry(MEAD_LAYERS_EMBEDDINGS, kwargs.get('backend')).get(embed_type)
     return Constructor(**kwargs)
 
+
+@export
+def get_embeddings_class(backend, embed_type):
+    registry = get_selected_backend_registry(MEAD_LAYERS_EMBEDDINGS, backend)
+    return registry[embed_type]
 
 
 @export
@@ -77,7 +86,7 @@ def load_embeddings(name, **kwargs):
     # Dynamically load a module if its needed
     for module in listify(kwargs.get('module', kwargs.get('modules', []))):
         import_user_module(module, kwargs.get('data_download_cache'))
-    embeddings_cls = MEAD_LAYERS_EMBEDDINGS[embed_type]
+    embeddings_cls = get_embeddings_class(kwargs.get('backend'), embed_type)
 
     filename = kwargs.get("embed_file")
 
@@ -124,4 +133,3 @@ def load_embeddings(name, **kwargs):
     # If we dont have a load function, but filename is none, we should just instantiate the class
     model = embeddings_cls(name, **kwargs)
     return {"embeddings": model, "vocab": model.get_vocab()}
-

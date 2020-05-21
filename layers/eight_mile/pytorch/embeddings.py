@@ -8,6 +8,9 @@ from eight_mile.pytorch.layers import *
 
 
 class PyTorchEmbeddings(nn.Module):
+
+    backend = 'pytorch'
+
     def __init__(self, **kwargs):
         super().__init__()
 

@@ -2,6 +2,7 @@ import re
 import io
 import os
 import sys
+from enum import Enum
 import json
 import logging
 import inspect
@@ -70,19 +71,29 @@ export = exporter(__all__)
 
 
 @export
-def register(cls, registry, name=None, error=""):
+def register(cls, registry, name=None, error="", backend=None):
     if name is None:
         name = cls.__name__
-    if name in registry:
+    if backend is None and hasattr(cls, 'backend'):
+        backend = cls.backend
+
+    if not backend:
+        be_registry = registry
+    else:
+        if not backend in registry:
+            registry[backend] = {}
+        be_registry = registry[backend]
+
+    if name in be_registry:
         raise Exception(
             "Error: attempt to re-define previously registered {} {} (old: {}, new: {})".format(
-                error, name, registry[name], cls
+                error, name, be_registry[name], cls
             )
         )
     if hasattr(cls, "create"):
-        registry[name] = cls.create
+        be_registry[name] = cls.create
     else:
-        registry[name] = cls
+        be_registry[name] = cls
     return cls
 
 
@@ -1622,3 +1633,42 @@ def print_table(rows: collections.namedtuple, columns: Optional[Set[str]] = None
         for field in fields:
             print("%*s = %s" % (hwidth, field, getattr(row, field)))
 
+
+class Backend(Enum):
+    TF = 'tf'
+    PYTORCH = 'pytorch'
+
+
+@export
+def normalize_backend(name: str) -> str:
+    allowed_backends = {'tf', 'pytorch'}
+    name = name.lower()
+    if name == 'tensorflow':
+        name = 'tf'
+    elif name == 'torch' or name == 'pyt':
+        name = 'pytorch'
+    if name not in allowed_backends:
+        raise ValueError("Supported backends are %s, got %s" % (allowed_backends, name))
+    return name
+
+
+@export
+def backend_for(cls) -> Backend:
+    return Backend(normalize_backend(cls.backend))
+
+
+@export
+def get_selected_backend(backend=None):
+    if not backend:
+        backend = os.environ.get('MEAD_BACKEND', 'auto')
+    return normalize_backend(backend) if backend != 'auto' else backend
+
+
+@export
+def get_selected_backend_registry(registry, backend=None):
+    selected = get_selected_backend(backend)
+    if selected == 'auto':
+        selected = registry.keys()[0]
+    else:
+        selected = Backend(selected)
+    return registry[selected]

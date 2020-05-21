@@ -18,55 +18,55 @@ from eight_mile.optz import (
 logger = logging.getLogger("mead.layers")
 
 
-@register_lr_scheduler(name="default")
+@register_lr_scheduler(name="default", backend='pytorch')
 class ConstantSchedulerPyTorch(ConstantScheduler):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
 
-@register_lr_scheduler(name="warmup_linear")
+@register_lr_scheduler(name="warmup_linear", backend='pytorch')
 class WarmupLinearSchedulerPyTorch(WarmupLinearScheduler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
 
-@register_lr_scheduler(name="clr")
+@register_lr_scheduler(name="clr", backend='pytorch')
 class CyclicLRSchedulerPyTorch(CyclicLRScheduler):
     def __init__(self, *args, **kwargs):
         super().__init(*args, **kwargs)
 
 
-@register_lr_scheduler(name="piecewise")
+@register_lr_scheduler(name="piecewise", backend='pytorch')
 class PiecewiseDecaySchedulerPyTorch(PiecewiseDecayScheduler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
 
-@register_lr_scheduler(name="zaremba")
+@register_lr_scheduler(name="zaremba", backend='pytorch')
 class ZarembaDecaySchedulerPyTorch(ZarembaDecayScheduler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
 
-@register_lr_scheduler(name="cosine")
+@register_lr_scheduler(name="cosine", backend='pytorch')
 class CosineDecaySchedulerPyTorch(CosineDecayScheduler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
 
-@register_lr_scheduler(name="invtime")
+@register_lr_scheduler(name="invtime", backend='pytorch')
 class InverseTimeDecaySchedulerPytorch(InverseTimeDecayScheduler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
 
-@register_lr_scheduler(name="exponential")
+@register_lr_scheduler(name="exponential", backend='pytorch')
 class ExponentialDecaySchedulerPyTorch(ExponentialDecayScheduler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
 
-@register_lr_scheduler(name="composite")
+@register_lr_scheduler(name="composite", backend='pytorch')
 class CompositeLRSchedulerPyTorch(CompositeLRScheduler):
     pass
 

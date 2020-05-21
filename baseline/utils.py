@@ -80,18 +80,6 @@ def import_user_module(module_name: str, data_download_cache: Optional[str] = No
     return mod
 
 
-@export
-def normalize_backend(name: str) -> str:
-    allowed_backends = {'tf', 'pytorch'}
-    name = name.lower()
-    if name == 'tensorflow':
-        name = 'tf'
-    elif name == 'torch' or name == 'pyt':
-        name = 'pytorch'
-    if name not in allowed_backends:
-        raise ValueError("Supported backends are %s, got %s" % (allowed_backends, name))
-    return name
-
 
 @export
 def get_console_logger(name, level=None, env_key='LOG_LEVEL'):

@@ -1,7 +1,7 @@
 import math
 import numpy as np
 from eight_mile.utils import exporter, listify
-from eight_mile.utils import optional_params, register
+from eight_mile.utils import optional_params, register, get_selected_backend_registry
 
 
 __all__ = []
@@ -13,8 +13,8 @@ export = exporter(__all__)
 
 @export
 @optional_params
-def register_lr_scheduler(cls, name=None):
-    return register(cls, MEAD_LAYERS_LR_SCHEDULERS, name, "lr_scheduler")
+def register_lr_scheduler(cls, name=None, backend=None):
+    return register(cls, MEAD_LAYERS_LR_SCHEDULERS, name, "lr_scheduler", backend=backend)
 
 
 @export
@@ -28,13 +28,14 @@ def create_lr_scheduler(**kwargs):
     sched_type = kwargs.get("lr_scheduler_type")
     if sched_type is None:
         return None
+    registry = get_selected_backend_registry(MEAD_LAYERS_LR_SCHEDULERS, kwargs.get('backend'))
     sched_type = listify(sched_type)
     if len(sched_type) == 2:
-        warm = MEAD_LAYERS_LR_SCHEDULERS.get(sched_type[0])(**kwargs)
+        warm = registry.get(sched_type[0])(**kwargs)
         assert isinstance(warm, WarmupLearningRateScheduler), "First LR Scheduler must be a warmup scheduler."
-        rest = MEAD_LAYERS_LR_SCHEDULERS.get(sched_type[1])(**kwargs)
-        return MEAD_LAYERS_LR_SCHEDULERS.get("composite")(warm=warm, rest=rest, **kwargs)
-    Constructor = MEAD_LAYERS_LR_SCHEDULERS.get(sched_type[0])
+        rest = registry.get(sched_type[1])(**kwargs)
+        return registry.get("composite")(warm=warm, rest=rest, **kwargs)
+    Constructor = registry.get(sched_type[0])
     return Constructor(**kwargs)
 
 

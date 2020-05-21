@@ -54,7 +54,7 @@ def merge_reporting_with_settings(reporting, settings):
     return reporting_hooks, reporting
 
 
-class Backend(object):
+class BackendParams:
     """Simple object to represent a deep-learning framework backend"""
     def __init__(self, name=None, params=None, exporter=None):
         """Initialize the backend, optional with constructor args
@@ -63,8 +63,12 @@ class Backend(object):
         :param params: (``dict``) A dictionary of framework-specific user-data to pass through keyword args to each sub-module
         :param exporter: A framework-specific exporter to facilitate exporting to runtime deployment
         """
-        self.name = normalize_backend(name)
         self.params = params
+        self.params['backend'] = normalize_backend(name)
+
+    @property
+    def name(self) -> str:
+        return self.params['backend']
 
     def load(self, task_name=None):
         if self.name == 'tf':
@@ -491,7 +495,7 @@ class ClassifierTask(Task):
         return 'classify'
 
     def _create_backend(self, **kwargs):
-        backend = Backend(self.config_params.get('backend', 'tf'), kwargs)
+        backend = BackendParams(self.config_params.get('backend', 'tf'), kwargs)
         backend.load(self.task_name())
 
         return backend
@@ -583,7 +587,7 @@ class TaggerTask(Task):
         return 'tagger'
 
     def _create_backend(self, **kwargs):
-        backend = Backend(self.config_params.get('backend', 'tf'), kwargs)
+        backend = BackendParams(self.config_params.get('backend', 'tf'), kwargs)
         if 'preproc' not in self.config_params:
             self.config_params['preproc'] = {}
         if backend.name == 'pytorch':
@@ -706,7 +710,7 @@ class EncoderDecoderTask(Task):
         return 'seq2seq'
 
     def _create_backend(self, **kwargs):
-        backend = Backend(self.config_params.get('backend', 'tf'), kwargs)
+        backend = BackendParams(self.config_params.get('backend', 'tf'), kwargs)
         if 'preproc' not in self.config_params:
             self.config_params['preproc'] = {}
         self.config_params['preproc']['show_ex'] = show_examples
@@ -844,7 +848,7 @@ class LanguageModelingTask(Task):
         return baseline.reader.create_reader(self.task_name(), self.vectorizers, self.config_params.get('preproc', {}).get('trim', False), **reader_params)
 
     def _create_backend(self, **kwargs):
-        backend = Backend(self.config_params.get('backend', 'tf'), kwargs)
+        backend = BackendParams(self.config_params.get('backend', 'tf'), kwargs)
         if backend.name == 'pytorch':
             self.config_params.get('preproc', {})['trim'] = True
 
