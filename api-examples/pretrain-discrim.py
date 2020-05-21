@@ -358,7 +358,6 @@ def train():
             logits = gen_model({'x': noised_x}, None)[0]
             gen_loss_step = gen_loss_fn(logits.transpose(0, 1).contiguous(), labels)
             avg_gen_loss.update(gen_loss_step.item())
-            torch.nn.utils.clip_grad_norm_(gen_model.parameters(), args.clip)
             # Re-read labels from device, this clears the masked <PAD>
             labels = y.to(args.device)
 
