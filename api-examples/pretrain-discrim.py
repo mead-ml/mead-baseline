@@ -342,7 +342,7 @@ def train():
             x, y = batch
             noised_x = x.to(args.device)
             # We are going to mask inplace and that will leave us with <PAD> anywhere that isnt MLM
-            labels = y.to(args.device)
+            labels = y.to(args.device, copy=True)
             # Replace 15% of tokens
             masked_indices = torch.bernoulli(torch.full(labels.shape, 0.15)).type(torch.bool)
             # Anything not masked is 0 so no loss
@@ -408,7 +408,7 @@ def train():
             with torch.no_grad():
                 x, y = batch
                 noised_x = x.to(args.device)
-                labels = y.to(args.device)
+                labels = y.to(args.device, copy=True)
                 # Replace 15% of tokens
                 masked_indices = torch.bernoulli(torch.full(labels.shape, 0.15)).type(torch.bool)
                 # Anything not masked is 0 so no loss
