@@ -13,6 +13,8 @@ focus on model development, delegating the repetitive tasks to the library.
 
 [Tutorials using Colab](https://github.com/dpressel/mead-tutorials)
 
+[MEAD Hub](https://github.com/mead-ml/hub)
+
 ## Installation
 
 ### Pip
