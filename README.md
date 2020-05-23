@@ -5,7 +5,7 @@ development for NLP. The library provides easily extensible abstractions and
 implementations for data loading, model development, training and export of deep
 learning architectures. It also provides implementations for high-performance,
 deep learning models for various NLP tasks, against which newly developed models
-can be compared. Deep learning experiments are hard to reproduce, Baseline
+can be compared. Deep learning experiments are hard to reproduce, MEAD
 provides functionalities to track them. The goal is to allow a researcher to
 focus on model development, delegating the repetitive tasks to the library.
 
@@ -71,4 +71,4 @@ If you use the library, please cite the following paper:
 }
 ```
 
-MEAD/Baseline was selected for a Spotlight Poster at the NeurIPS MLOSS workshop in 2018.  [OpenReview link](https://openreview.net/forum?id=r1xEb7J15Q)
+MEAD Baseline was selected for a Spotlight Poster at the NeurIPS MLOSS workshop in 2018.  [OpenReview link](https://openreview.net/forum?id=r1xEb7J15Q)
