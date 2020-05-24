@@ -36,7 +36,6 @@ This pretraining module has multiple configurations that allow it to support
   * pretraining on several datasets including PTB, Wikitext 2 (including raw) and Wikitext 103 (including raw).
 
 If you use `tokens=bpe`, it requires fastBPE.
-If you use `tokens=wordpiece` it requires bert_pretrained_pytorch.  
 Otherwise, it depends only on six, numpy, pytorch, and baseline.
 
 Because we are trying to pretrain a language model so we can do better on downstream tasks, it probably makes more
