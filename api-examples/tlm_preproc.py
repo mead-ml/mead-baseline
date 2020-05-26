@@ -2,6 +2,7 @@ import argparse
 import baseline
 from baseline.vectorizers import BPEVectorizer1D
 import json
+import struct
 import logging
 import numpy as np
 
@@ -120,12 +121,50 @@ class JSONLWriter(RollingWriter):
         return 'json'
 
 
+class TFRecordRollingWriter(RollingWriter):
+    def __init__(self, name, fields, max_file_size_mb):
+        try:
+            import tfrecord
+            self.RecordWriterClass = tfrecord.TFRecordWriter
+        except Exception as e:
+            raise Exception("tfrecord package could not be loaded, pip install that first, along with crc32c")
+        super().__init__(name, fields, max_file_size_mb)
+
+    def _open_file(self, filename):
+        return self.RecordWriterClass(filename)
+
+    def _write_line(self, value):
+        record = self.RecordWriterClass.serialize_tf_example(value)
+        length = len(record)
+        length_bytes = struct.pack("<Q", length)
+        self.writer.file.write(length_bytes)
+        self.writer.file.write(self.RecordWriterClass.masked_crc(length_bytes))
+        self.writer.file.write(record)
+        self.writer.file.write(self.RecordWriterClass.masked_crc(record))
+        return length
+
+    def write(self, record):
+        r = {}
+
+        for f in self.fields:
+            if f.endswith('_str'):
+                value = ' '.join(record[f])
+                value = (value.encode('utf-8'), "byte")
+            else:
+                value = (record[f], 'int')
+            r[f] = value
+        self._write_line_rollover(r)
+
+    @property
+    def suffix(self):
+        return 'tfrecord'
+
 def create_file_writer(fmt, name, fields, max_file_size_mb):
     if fmt == 'tsv':
         return TSVWriter(name, fields, max_file_size_mb)
     if fmt == 'json':
         return JSONLWriter(name, fields, max_file_size_mb)
-
+    return TFRecordRollingWriter(name, fields, max_file_size_mb)
 
 
 parser = argparse.ArgumentParser(description='Convert text into MLM fixed width contexts')
@@ -135,7 +174,7 @@ parser.add_argument('--text', help='The text to classify as a string, or a path 
 parser.add_argument('--codes', help='BPE codes')
 parser.add_argument('--vocab', help='BPE vocab')
 parser.add_argument("--nctx", type=int, default=256, help="Max input length")
-parser.add_argument("--fmt", type=str, default='json', choices=['json', 'tsv'])
+parser.add_argument("--fmt", type=str, default='json', choices=['json', 'tsv', 'tfrecord'])
 parser.add_argument("--fields", type=str, nargs="+", default=["x_str", "y_str"])
 parser.add_argument("--output", type=str, help="Output base name, e.g. /path/to/output/record")
 parser.add_argument("--prefix", type=str, help="Prefix every line with this token")
