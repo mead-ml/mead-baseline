@@ -10,7 +10,7 @@ from baseline.vectorizers import Token1DVectorizer, BPEVectorizer1D, Char2DVecto
 import codecs
 from collections import Counter
 import glob
-
+import json
 
 def find_latest_checkpoint(checkpoint_dir: str, wildcard="checkpoint") -> str:
     step_num = 0
@@ -517,7 +517,8 @@ class SequencePredictionFileLoader(MultiFileLoader):
 class PreprocessedFileLoader(MultiFileLoader):
 
     def process_line(self, line):
-        return line['x'], line['y']
+        obj = json.loads(line)
+        return np.array(obj['x'], dtype=int), np.array(obj['y'], dtype=int)
 
 
 class NextSequencePredictionFileLoader(MultiFileLoader):
