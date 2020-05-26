@@ -14,7 +14,7 @@ from eight_mile.pytorch.layers import checkpoint_for, rm_old_checkpoints, Averag
 from eight_mile.pytorch.optz import *
 from eight_mile.pytorch.serialize import save_tlm_npz
 from baseline.pytorch.lm import TransformerLanguageModel, TransformerMaskedLanguageModel
-from transformer_utils import MultiFileDatasetReader, on_demand_mlm_masking
+from transformer_utils import MultiFileDatasetReader, on_demand_mlm_masking, get_lr_decay
 
 logger = logging.getLogger(__file__)
 
@@ -58,10 +58,10 @@ def train():
     parser.add_argument("--subword_model_file", type=str, help="The BPE model file", required=True)
     parser.add_argument("--subword_vocab_file", type=str, help="The BPE subword vocab", required=True)
     parser.add_argument("--dropout", type=float, default=0.1, help="Dropout")
-    parser.add_argument("--lr_scheduler", type=str, choices=['cosine', 'exponential', 'invtime'],
-                        help="choose the type of learning rate decay")
-    parser.add_argument("--lr_decay_steps", type=int, default=50000, help="decay steps of lr scheduler")
-    parser.add_argument("--lr_decay_rate", type=float, default=0.5, help="decay rate of lr scheduler")
+    parser.add_argument("--lr_scheduler", type=str, default='cosine', help="The type of learning rate decay scheduler")
+    parser.add_argument("--lr_decay_steps", type=int, help="decay steps of lr scheduler")
+    parser.add_argument("--lr_decay_rate", type=float, help="decay rate of lr scheduler")
+    parser.add_argument("--lr_alpha", type=float, help="parameter alpha for cosine decay scheduler")
     parser.add_argument("--optim", default="adam", type=str, help="Optimizer to use (defaults to adam)")
     parser.add_argument("--lr", type=float, default=4.0e-4, help="Learning rate")
     parser.add_argument("--clip", type=float, default=0.25, help="Clipping gradient norm")
@@ -174,14 +174,8 @@ def train():
     update_on = steps_per_epoch // args.saves_per_epoch
     report_on = update_on // 10
     logger.info(f"Steps per epoch per GPU: {steps_per_epoch}. Saving checkpoint every {update_on} steps.")
-    if args.lr_scheduler == 'cosine':
-        logger.info("Using cosine decay learning rate.")
-        lr_decay = CosineDecaySchedulerPyTorch(steps_per_epoch * args.epochs, lr=args.lr)
-    else:
-        logger.info(f"Using {args.lr_scheduler} decay learning rate with decay steps {args.lr_decay_steps} and decay "
-                    f"rate {args.lr_decay_rate}.")
-        lr_decay = create_lr_scheduler(lr_scheduler_type=args.lr_scheduler, decay_steps=args.lr_decay_steps,
-                                       decay_rate=args.lr_decay_rate, lr=args.lr)
+    lr_decay = get_lr_decay(args.lr_scheduler, args.lr, steps_per_epoch, args.epochs, logger,
+                            decay_steps=args.lr_decay_steps, decay_rate=args.lr_decay_rate, alpha=args.lr_alpha)
     linear_warmup = WarmupLinearSchedulerPyTorch(args.warmup_steps, lr=args.lr)
     lr_sched = CompositeLRScheduler(linear_warmup, lr_decay, lr=args.lr)
 
