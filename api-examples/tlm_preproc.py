@@ -9,10 +9,14 @@ import numpy as np
 logger = logging.getLogger('baseline')
 
 
-def mlm_masking(inputs, mask_value, vocab_size):
+def mlm_masking(inputs, mask_value, vocab_size, ignore_prefix, ignore_suffix):
     labels = np.copy(inputs)
     masked_indices = np.random.binomial(size=len(inputs), n=1, p=0.15)
     masked_indices[np.random.randint(1, len(inputs)-1)] = 1
+    if ignore_prefix:
+        masked_indices[0] = 0
+    if ignore_suffix:
+        masked_indices[-1] = 0
     # Anything not masked is 0 so no loss
     labels[masked_indices == 0] = 0
     # Of the masked items, mask 80% of them with [MASK]
@@ -28,12 +32,16 @@ def mlm_masking(inputs, mask_value, vocab_size):
 
 
 def create_record(chunk, str_lookup, prefix, suffix, mask_value, vocab_size):
+    ignore_prefix = False
+    ignore_suffix = False
     if prefix:
         chunk = [prefix] + chunk
+        ignore_prefix = True
     if suffix:
         chunk = [suffix] + chunk
+        ignore_suffix = True
 
-    inputs, labels = mlm_masking(np.array(chunk), mask_value, vocab_size)
+    inputs, labels = mlm_masking(np.array(chunk), mask_value, vocab_size, ignore_prefix, ignore_suffix)
     return {'x': inputs, 'y': labels, 'x_str': [str_lookup[s] for s in inputs], 'y_str': [str_lookup[s] for s in labels]}
 
 
