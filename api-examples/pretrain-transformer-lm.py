@@ -16,7 +16,7 @@ from eight_mile.pytorch.optz import *
 from eight_mile.pytorch.serialize import save_tlm_npz
 from baseline.pytorch.lm import TransformerLanguageModel, TransformerMaskedLanguageModel
 from baseline.utils import DataDownloader
-from transformer_utils import TensorWordDatasetReader, TensorCharDatasetReader, load_data_caching
+from transformer_utils import TensorWordDatasetReader, TensorCharDatasetReader, load_data_caching, save_checkpoint
 import numpy as np
 import codecs
 from collections import Counter
@@ -215,6 +215,7 @@ def train():
     parser.add_argument("--restart_from", type=str, help="Option allows you to restart from a previous checkpoint")
     parser.add_argument("--restart_tt", type=str, help="Optional param for legacy checkpoints (step|epoch)")
     parser.add_argument("--warmup_steps", type=int, default=1000, help="Num warmup steps")
+    parser.add_argument("--update_steps", type=int, default=5, help="The number of checkpoints to save within an epoch")
     parser.add_argument("--mlm", type=str2bool, default=False, help="Use Masked Language Model (MLM) objective")
     parser.add_argument('--rpr_k', help='Relative attention positional sizes pass 0 if you dont want relative attention',
                         type=int, default=[0], nargs='+')
@@ -326,8 +327,9 @@ def train():
     # in this case (train_loader is not iterator) the division by number of gpus is automatically taken care of by
     # torch.DataLoader
     steps_per_epoch = len(train_loader)
-    update_on = steps_per_epoch // 10
-    logger.info(f"Steps per epoch per GPU: {steps_per_epoch}. Reporting loss every {update_on} steps.")
+    update_on = steps_per_epoch // args.update_steps
+    report_on = update_on // 10
+    logger.info(f"Steps per epoch per GPU: {steps_per_epoch}. Saving a checkpoint every {update_on} steps.")
     if args.lr_scheduler == 'cosine':
         logger.info("Using cosine decay learning rate.")
         lr_decay = CosineDecaySchedulerPyTorch(steps_per_epoch * args.epochs, lr=args.lr)
@@ -375,6 +377,8 @@ def train():
         logger.info("Model located on %s", args.device)
 
     # This is the training loop
+    steps = global_step
+    model_base = os.path.join(args.basedir, 'checkpoint')
     for epoch in range(start_epoch, args.epochs):
         avg_loss = Average('average_train_loss')
         metrics = {}
@@ -386,6 +390,7 @@ def train():
         start = time.time()
         model.train()
         for i, batch in enumerate(train_loader):
+            steps += 1
             x, y = batch
             inputs = x.to(args.device)
             labels = y.to(args.device)
@@ -406,8 +411,13 @@ def train():
             torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip)
             optimizer.step()
             optimizer.zero_grad()
-            if (i + 1) % update_on == 0:
+            if (i + 1) % report_on == 0:
                 logging.info(avg_loss)
+            if (i + 1) % update_on == 0 and args.local_rank < 1:
+                elapsed = (time.time() - start)/60
+                logging.info('elapsed time this epoch %d min', elapsed)
+                logging.info('elapsed step time %f steps/min', i/elapsed)
+                save_checkpoint(model, model_base, steps, logger, tick_type='step')
 
         # How much time elapsed in minutes
         elapsed = (time.time() - start)/60

@@ -34,7 +34,6 @@ If the model is an MLM and the `preprocessed` value is false, on-demand MLM mask
 
 """
 
-
 def train():
     parser = ArgumentParser()
     parser.add_argument("--basedir", type=str)
@@ -74,7 +73,6 @@ def train():
     parser.add_argument("--saves_per_epoch", type=int, default=100, help="The number of checkpoints to save per epoch")
     parser.add_argument("--mlm", type=str2bool, default=True, help="Use Masked Language Model (MLM) objective")
     parser.add_argument("--preprocessed", type=str2bool, default=False, help="Has the data already been preprocessed?")
-
     parser.add_argument('--rpr_k',
                         help='Relative attention positional sizes pass 0 if you dont want relative attention',
                         type=int, default=[3, 5, 48, 48, 48, 48], nargs='+')
@@ -261,7 +259,7 @@ def train():
                 elapsed = (time.time() - start)/60
                 logging.info('elapsed time this epoch %d min', elapsed)
                 logging.info('elapsed step time %f steps/min', i/elapsed)
-                save_checkpoint(model, model_base, steps, tick_type='step')
+                save_checkpoint(model, model_base, steps, logger, tick_type='step')
 
         # How much time elapsed in minutes
         elapsed = (time.time() - start)/60

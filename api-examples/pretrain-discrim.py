@@ -16,7 +16,7 @@ from eight_mile.pytorch.layers import Average, checkpoint_for, rm_old_checkpoint
 logger = logging.getLogger(__file__)
 from baseline.pytorch.lm import TransformerMaskedLanguageModel
 from eight_mile.pytorch.layers import TransformerEncoderStack, EmbeddingsStack, subsequent_mask
-from transformer_utils import MultiFileDatasetReader, TransformerDiscriminator, find_latest_checkpoint, TensorWordDatasetReader, load_data_caching
+from transformer_utils import MultiFileDatasetReader, TransformerDiscriminator, find_latest_checkpoint, TensorWordDatasetReader, load_data_caching, save_checkpoint
 
 """Pre-train an discriminator Transformer model in PyTorch
 
@@ -364,8 +364,8 @@ def train():
                 elapsed = (time.time() - start)/60
                 logging.info('elapsed time this epoch %d min', elapsed)
                 logging.info('elapsed step time %f steps/min', i/elapsed)
-                save_checkpoint(gen_model, gen_base, steps, tick_type='step')
-                save_checkpoint(discrim_model, discrim_base, steps, tick_type='step')
+                save_checkpoint(gen_model, gen_base, steps, logger, tick_type='step')
+                save_checkpoint(discrim_model, discrim_base, steps, logger, tick_type='step')
         # How much time elapsed in minutes
         elapsed = (time.time() - start)/60
         # This is the average training token-level loss across all machines
