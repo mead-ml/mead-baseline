@@ -84,8 +84,13 @@ class TSVWriter(RollingWriter):
     def __init__(self, name, fields, max_file_size_mb):
         super().__init__(name, fields, max_file_size_mb)
 
+    def _to_str(self, value):
+        if isinstance(value, np.ndarray):
+            value = [str(v) for v in value]
+        return value
+
     def write(self, record):
-        l = [' '.join(record[f]) for f in self.fields]
+        l = [' '.join(self._to_str(record[f])) for f in self.fields]
         str_val = '\t'.join(l) + '\n'
         self._write_line_rollover(str_val)
 
@@ -102,7 +107,11 @@ class JSONLWriter(RollingWriter):
     def write(self, record):
         r = {}
         for f in self.fields:
-            r[f] = record[f]
+            if isinstance(record[f], np.ndarray):
+                value = record[f].tolist()
+            else:
+                value = record[f]
+            r[f] = value
         output = json.dumps(r) + '\n'
         self._write_line_rollover(output)
 
