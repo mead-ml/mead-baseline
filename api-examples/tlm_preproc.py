@@ -1,9 +1,12 @@
 import argparse
 import baseline
-
 from baseline.vectorizers import BPEVectorizer1D
-import numpy as np
 import json
+import logging
+import numpy as np
+
+logger = logging.getLogger('baseline')
+
 
 def mlm_masking(inputs, mask_value, vocab_size):
     labels = np.copy(inputs)
@@ -33,44 +36,86 @@ def create_record(chunk, str_lookup, prefix, suffix, mask_value, vocab_size):
     return {'x': inputs, 'y': labels, 'x_str': [str_lookup[s] for s in inputs], 'y_str': [str_lookup[s] for s in labels]}
 
 
-class TSVWriter:
-    def __init__(self, name, fields):
+def in_bytes(mb):
+    return mb * 1024 * 1024
+
+
+class RollingWriter:
+    def __init__(self, name, fields, max_file_size_mb):
+        self.name = name
+        self.counter = 1
         self.fields = fields
-        self.writer = open(name, 'w')
+        self.current_file_size = 0
+        self.writer = None
+        self.max_file_size = in_bytes(max_file_size_mb)
+        self._rollover_file()
 
-        self._write_list(self.fields)
+    def _open_file(self, filename):
+        return open(filename, 'w')
 
-    def _write_list(self, l):
-        self.writer.write('\t'.join(l) + '\n')
+    def _rollover_file(self):
+        if self.writer:
+            self.writer.close()
+        filename = f'{self.name}-{self.counter}.{self.suffix}'
+        self.counter += 1
+        self.current_file_size = 0
+        logger.info("Rolling over.  New file [%s]", filename)
+        self.writer = self._open_file(filename)
 
-    def write(self, record):
-        l = [' '.join(record[f]) for f in self.fields]
-        self._write_list(l)
+    @property
+    def suffix(self):
+        raise Exception("Dont know suffix in ABC")
+
+    def _write_line(self, str_val):
+        self.writer.write(str_val)
+        return len(str_val.encode("utf8"))
+
+    def _write_line_rollover(self, l):
+        sz = self._write_line(l)
+        self.current_file_size += sz
+        if self.current_file_size > self.max_file_size:
+            self._rollover_file()
 
     def close(self):
         self.writer.close()
 
-class JSONLWriter:
 
-    def __init__(self, name, fields):
-        self.fields = fields
-        self.writer = open(name, "w")
+class TSVWriter(RollingWriter):
+    def __init__(self, name, fields, max_file_size_mb):
+        super().__init__(name, fields, max_file_size_mb)
+
+    def write(self, record):
+        l = [' '.join(record[f]) for f in self.fields]
+        str_val = '\t'.join(l) + '\n'
+        self._write_line_rollover(str_val)
+
+    @property
+    def suffix(self):
+        return 'tsv'
+
+
+class JSONLWriter(RollingWriter):
+
+    def __init__(self, name, fields, max_file_size_mb):
+        super().__init__(name, fields, max_file_size_mb)
 
     def write(self, record):
         r = {}
         for f in self.fields:
             r[f] = record[f]
         output = json.dumps(r) + '\n'
-        self.writer.write(output)
+        self._write_line_rollover(output)
 
-    def close(self):
-        self.writer.close()
+    @property
+    def suffix(self):
+        return 'json'
 
-def create_file_writer(fmt, name, fields):
+
+def create_file_writer(fmt, name, fields, max_file_size_mb):
     if fmt == 'tsv':
-        return TSVWriter(name, fields)
+        return TSVWriter(name, fields, max_file_size_mb)
     if fmt == 'json':
-        return JSONLWriter(name, fields)
+        return JSONLWriter(name, fields, max_file_size_mb)
 
 
 
@@ -83,15 +128,16 @@ parser.add_argument('--vocab', help='BPE vocab')
 parser.add_argument("--nctx", type=int, default=256, help="Max input length")
 parser.add_argument("--fmt", type=str, default='json', choices=['json', 'tsv'])
 parser.add_argument("--fields", type=str, nargs="+", default=["x_str", "y_str"])
-parser.add_argument("--output", type=str, help="Output name")
+parser.add_argument("--output", type=str, help="Output base name, e.g. /path/to/output/record")
 parser.add_argument("--prefix", type=str, help="Prefix every line with this token")
 parser.add_argument("--suffix", type=str, help="Suffix every line with this token")
+parser.add_argument("--max_file_size", type=int, default=100, help="Shard size, defaults to 100MB")
 parser.add_argument("--stride", type=int, help="Tokens to stride before next read, defaults to `nctx`")
 parser.add_argument("--eos_on_eol", type=baseline.str2bool, default=True)
 parser.add_argument("--cased", type=baseline.str2bool, default=True)
 args = parser.parse_args()
 if not args.output:
-    args.output = f'{args.text}.records.{args.fmt}'
+    args.output = f'{args.text}.records'
 
 print(args.output)
 transform = baseline.lowercase
@@ -112,7 +158,7 @@ if args.suffix:
     nctx -= 1
     suffix = vectorizer.vocab[args.suffix]
 
-fw = create_file_writer(args.fmt, args.output, args.fields)
+fw = create_file_writer(args.fmt, args.output, args.fields, args.max_file_size)
 with open(args.text, encoding='utf-8') as rf:
     for line in rf:
         to_bpe = line.strip().split()
