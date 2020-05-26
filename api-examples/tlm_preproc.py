@@ -1,34 +1,16 @@
 import argparse
 import baseline
 from baseline.vectorizers import BPEVectorizer1D
+from eight_mile.utils import write_yaml
+from transformer_utils import mlm_masking
 import json
 import struct
 import logging
 import numpy as np
-
+import os
 logger = logging.getLogger('baseline')
 
 
-def mlm_masking(inputs, mask_value, vocab_size, ignore_prefix, ignore_suffix):
-    labels = np.copy(inputs)
-    masked_indices = np.random.binomial(size=len(inputs), n=1, p=0.15)
-    masked_indices[np.random.randint(1, len(inputs)-1)] = 1
-    if ignore_prefix:
-        masked_indices[0] = 0
-    if ignore_suffix:
-        masked_indices[-1] = 0
-    # Anything not masked is 0 so no loss
-    labels[masked_indices == 0] = 0
-    # Of the masked items, mask 80% of them with [MASK]
-    indices_replaced = np.random.binomial(size=len(inputs), n=1, p=0.8)
-    indices_replaced = indices_replaced & masked_indices
-    inputs[indices_replaced == 1] = mask_value
-    indices_random = np.random.binomial(size=len(inputs), n=1, p=0.5)
-    # Replace 10% of them with random words, rest preserved for auto-encoding
-    indices_random = indices_random & masked_indices & ~indices_replaced
-    random_words = np.random.randint(low=len(baseline.Offsets.VALUES) + 3, high=vocab_size-1, size=len(inputs))
-    inputs[indices_random == 1] = random_words[indices_random == 1]
-    return inputs, labels
 
 
 def create_record(chunk, str_lookup, prefix, suffix, mask_value, vocab_size):
@@ -206,6 +188,10 @@ vocab_size = max(vectorizer.vocab.values()) + 1
 nctx = args.nctx
 mask_value = vectorizer.vocab['[MASK]']
 prefix = suffix = None
+root_dir = os.path.dirname(args.output)
+if not os.path.exists(root_dir):
+    os.makedirs(root_dir)
+
 if args.prefix:
     nctx -= 1
     prefix = vectorizer.vocab[args.prefix]
@@ -215,6 +201,7 @@ if args.suffix:
     suffix = vectorizer.vocab[args.suffix]
 
 fw = create_file_writer(args.fmt, args.output, args.fields, args.max_file_size)
+num_samples = 0
 with open(args.text, encoding='utf-8') as rf:
     for line in rf:
         to_bpe = line.strip().split()
@@ -226,6 +213,7 @@ with open(args.text, encoding='utf-8') as rf:
             if len(lookup_indices) == nctx:
                 record = create_record(lookup_indices, indices2word, prefix, suffix, mask_value, vocab_size)
                 fw.write(record)
+                num_samples += 1
                 lookup_indices = []
             needed = nctx - len(lookup_indices)
             if available >= needed:
@@ -234,9 +222,12 @@ with open(args.text, encoding='utf-8') as rf:
                 available -= needed
                 record = create_record(lookup_indices, indices2word, prefix, suffix, mask_value, vocab_size)
                 fw.write(record)
+                num_samples += 1
                 lookup_indices = []
             # The amount available is less than what we need, so read the whole thing
             else:
                 lookup_indices += output[:available].tolist()
                 available = 0
+
 fw.close()
+write_yaml({'num_samples': num_samples}, os.path.join(root_dir, 'md.yml'))

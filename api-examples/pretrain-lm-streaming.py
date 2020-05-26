@@ -14,7 +14,7 @@ from eight_mile.pytorch.layers import checkpoint_for, rm_old_checkpoints, Averag
 from eight_mile.pytorch.optz import *
 from eight_mile.pytorch.serialize import save_tlm_npz
 from baseline.pytorch.lm import TransformerLanguageModel
-from transformer_utils import MultiFileDatasetReader
+from transformer_utils import MultiFileDatasetReader, on_demand_mlm_masking
 
 logger = logging.getLogger(__file__)
 
@@ -68,7 +68,9 @@ def train():
     parser.add_argument("--restart_tt", type=str, help="Optional param for legacy checkpoints (step|epoch)")
     parser.add_argument("--warmup_steps", type=int, default=10000, help="Num warmup steps")
     parser.add_argument("--update_steps", type=int, default=100, help="The number of steps to take before saving a checkpoint")
-    parser.add_argument("--mlm", type=str2bool, default=False, help="Use Masked Language Model (MLM) objective")
+    parser.add_argument("--mlm", type=str2bool, default=True, help="Use Masked Language Model (MLM) objective")
+    parser.add_argument("--preprocessed", type=str2bool, default=False, help="Has the data already been preprocessed?")
+
     parser.add_argument('--rpr_k',
                         help='Relative attention positional sizes pass 0 if you dont want relative attention',
                         type=int, default=[3, 5, 48, 48, 48, 48], nargs='+')
@@ -99,6 +101,8 @@ def train():
     args.distributed = args.distributed or num_gpus > 1
     logger.info(f"Using {num_gpus} GPUs in this job.")
 
+    do_on_demand_masking = args.mlm and not args.preprocessed
+
     if args.distributed:
         if args.local_rank == -1:
             # https://github.com/kubeflow/pytorch-operator/issues/128
@@ -124,8 +128,9 @@ def train():
             args.device = torch.device("cuda", args.local_rank)
         torch.distributed.init_process_group(backend='nccl', init_method='env://')
 
+    reader_type = "lang" if not args.preprocessed else "preprocessed"
     reader = MultiFileDatasetReader(args.nctx, args.subword_model_file, args.subword_vocab_file, args.pattern,
-                                    reader_type="lang")
+                                    reader_type=reader_type)
 
     # This looks a bit funny but the streaming reader ignores our vocab and gives us the one from the subword_model
     # However, we do need to get counts from our dataset for validation so we can calculate the perplexity
@@ -251,22 +256,13 @@ def train():
         for i, batch in enumerate(train_loader):
             steps += 1
             x, y = batch
-            inputs = {'x': x.to(args.device)}
+            inputs = x.to(args.device)
             labels = y.to(args.device)
-            if args.mlm:
-                # Replace 15% of tokens
-                masked_indices = torch.bernoulli(torch.full(labels.shape, 0.15)).type(torch.bool)
-                # Anything not masked is 0 so no loss
-                labels[~masked_indices] = 0
-                # Of the masked items, mask 80% of them with [MASK]
-                indices_replaced = torch.bernoulli(torch.full(labels.shape, 0.8)).type(torch.bool) & masked_indices
-                inputs['x'][indices_replaced] = mask_value
-                # Replace 10% of them with random words, rest preserved for auto-encoding
-                indices_random = torch.bernoulli(torch.full(labels.shape, 0.5)).type(torch.bool) & masked_indices & ~indices_replaced
-                random_words = torch.randint(vocab_size, labels.shape, dtype=torch.long, device=args.device)
-                inputs['x'][indices_random] = random_words[indices_random]
+            if do_on_demand_masking:
+                inputs, labels = on_demand_mlm_masking(inputs, labels, mask_value, vocab_size)
+            inputs = {'x': inputs}
 
-            labels = labels.transpose(0, 1).contiguous()
+            labels = labels.transpose(0, 1).contiguous().to(args.device)
             logits = model(inputs, None)[0].transpose(0, 1).contiguous()
             if args.mlm:
                 loss = loss_function(logits, labels)
@@ -303,22 +299,12 @@ def train():
         for batch in valid_loader:
             with torch.no_grad():
                 x, y = batch
-                inputs = {'x': x.to(args.device)}
+                inputs = x.to(args.device)
                 labels = y.to(args.device)
 
-                if args.mlm:
-                    # Replace 15% of tokens
-                    masked_indices = torch.bernoulli(torch.full(labels.shape, 0.15)).type(torch.bool)
-                    # Anything not masked is 0 so no loss
-                    labels[~masked_indices] = 0
-                    # Of the masked items, mask 80% of them with [MASK]
-                    indices_replaced = torch.bernoulli(torch.full(labels.shape, 0.8)).type(torch.bool) & masked_indices
-                    inputs['x'][indices_replaced] = mask_value
-                    # Replace 10% of them with random work
-                    indices_random = torch.bernoulli(torch.full(labels.shape, 0.5)).type(torch.bool) & masked_indices & ~indices_replaced
-                    random_words = torch.randint(vocab_size, labels.shape, dtype=torch.long, device=args.device)
-                    inputs['x'][indices_random] = random_words[indices_random]
-
+                if do_on_demand_masking:
+                    inputs, labels = on_demand_mlm_masking(inputs, labels, mask_value, vocab_size)
+                inputs = {'x': inputs}
                 labels = labels.transpose(0, 1).contiguous()
                 logits = model(inputs, None)[0].transpose(0, 1).contiguous()
                 if args.mlm:

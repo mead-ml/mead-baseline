@@ -6,6 +6,7 @@ import tempfile
 import baseline
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader, TensorDataset
+from transformer_utils import on_demand_mlm_masking
 from eight_mile.utils import str2bool, write_json, Offsets
 import baseline.pytorch.embeddings
 import baseline.embeddings
@@ -405,21 +406,11 @@ def train():
         model.train()
         for i, batch in enumerate(train_loader):
             x, y = batch
-            inputs = {'x': x.to(args.device)}
+            inputs = x.to(args.device)
             labels = y.to(args.device)
             if args.mlm:
-                # Replace 15% of tokens
-                masked_indices = torch.bernoulli(torch.full(labels.shape, 0.15)).type(torch.bool)
-                # Anything not masked is 0 so no loss
-                labels[~masked_indices] = 0
-                # Of the masked items, mask 80% of them with [MASK]
-                indices_replaced = torch.bernoulli(torch.full(labels.shape, 0.8)).type(torch.bool) & masked_indices
-                inputs['x'][indices_replaced] = mask_value
-                # Replace 10% of them with random words, rest preserved for auto-encoding
-                indices_random = torch.bernoulli(torch.full(labels.shape, 0.5)).type(torch.bool) & masked_indices & ~indices_replaced
-                random_words = torch.randint(vocab_size, labels.shape, dtype=torch.long, device=args.device)
-                inputs['x'][indices_random] = random_words[indices_random]
-
+                inputs, labels = on_demand_mlm_masking(inputs, labels, mask_value, vocab_size)
+            inputs = {'x': inputs}
             labels = labels.transpose(0, 1).contiguous()
             logits = model(inputs, None)[0].transpose(0, 1).contiguous()
             if args.mlm:
@@ -453,22 +444,11 @@ def train():
         for batch in valid_loader:
             with torch.no_grad():
                 x, y = batch
-                inputs = {'x': x.to(args.device)}
+                inputs = x.to(args.device)
                 labels = y.to(args.device)
-
                 if args.mlm:
-                    # Replace 15% of tokens
-                    masked_indices = torch.bernoulli(torch.full(labels.shape, 0.15)).type(torch.bool)
-                    # Anything not masked is 0 so no loss
-                    labels[~masked_indices] = 0
-                    # Of the masked items, mask 80% of them with [MASK]
-                    indices_replaced = torch.bernoulli(torch.full(labels.shape, 0.8)).type(torch.bool) & masked_indices
-                    inputs['x'][indices_replaced] = mask_value
-                    # Replace 10% of them with random work
-                    indices_random = torch.bernoulli(torch.full(labels.shape, 0.5)).type(torch.bool) & masked_indices & ~indices_replaced
-                    random_words = torch.randint(vocab_size, labels.shape, dtype=torch.long, device=args.device)
-                    inputs['x'][indices_random] = random_words[indices_random]
-
+                   inputs, labels = on_demand_mlm_masking(inputs, labels, mask_value, vocab_size)
+                inputs = {'x': inputs}
                 labels = labels.transpose(0, 1).contiguous()
                 logits = model(inputs, None)[0].transpose(0, 1).contiguous()
                 if args.mlm:
