@@ -63,7 +63,7 @@ def train():
     parser.add_argument("--restart_tt", type=str, help="Optional param for legacy checkpoints (step|epoch)")
     parser.add_argument("--warmup_steps", type=int, default=10000, help="Num warmup steps")
     parser.add_argument("--loss", type=str, default='all', choices=['triplet', 'all'])
-    parser.add_argument("--update_steps", type=int, default=100, help="The number of steps to take before saving a checkpoint")
+    parser.add_argument("--saves_per_epoch", type=int, default=100, help="The number of checkpoints to save per epoch")
     parser.add_argument('--rpr_k', help='Relative attention positional sizes pass 0 if you dont want relative attention',
                         type=int, default=[3, 5, 48, 48, 48, 48], nargs='+')
 
@@ -141,7 +141,7 @@ def train():
     # according to pytorch, len(train_loader) will return len(train_set) when train_set is IterableDataset, so manually
     # correct it here
     steps_per_epoch = len(train_loader) // (args.batch_size*num_gpus)
-    update_on = steps_per_epoch // args.update_steps
+    update_on = steps_per_epoch // args.saves_per_epoch
     report_on = update_on // 10
     logger.info(f"Steps per epoch per GPU: {steps_per_epoch}. Saving checkpoint every {update_on} steps.")
     cosine_decay = CosineDecaySchedulerPyTorch(steps_per_epoch * args.epochs, lr=args.lr)
