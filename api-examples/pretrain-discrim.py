@@ -359,8 +359,8 @@ def train():
                 elapsed = (time.time() - start)/60
                 logging.info('elapsed time this epoch %d min', elapsed)
                 logging.info('elapsed step time %f steps/min', i/elapsed)
-                save_checkpoint(gen_model, gen_base, steps, logger, tick_type='step')
-                save_checkpoint(discrim_model, discrim_base, steps, logger, tick_type='step')
+                save_checkpoint(gen_model, gen_base, steps, tick_type='step')
+                save_checkpoint(discrim_model, discrim_base, steps, tick_type='step')
         # How much time elapsed in minutes
         elapsed = (time.time() - start)/60
         # This is the average training token-level loss across all machines

@@ -253,7 +253,7 @@ def train():
                 elapsed = (time.time() - start)/60
                 logging.info('elapsed time this epoch %d min', elapsed)
                 logging.info('elapsed step time %f steps/min', i/elapsed)
-                save_checkpoint(model, model_base, steps, logger, tick_type='step')
+                save_checkpoint(model, model_base, steps, tick_type='step')
 
         # How much time elapsed in minutes
         elapsed = (time.time() - start)/60
