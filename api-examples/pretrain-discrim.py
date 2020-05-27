@@ -12,7 +12,8 @@ from baseline.pytorch.embeddings import *
 import baseline.embeddings
 from eight_mile.optz import *
 from eight_mile.pytorch.optz import *
-from eight_mile.pytorch.layers import Average, checkpoint_for, rm_old_checkpoints, save_checkpoint, init_distributed
+from eight_mile.utils import Average
+from eight_mile.pytorch.layers import checkpoint_for, rm_old_checkpoints, save_checkpoint, init_distributed
 logger = logging.getLogger(__file__)
 from baseline.pytorch.lm import TransformerMaskedLanguageModel
 from eight_mile.pytorch.layers import TransformerEncoderStack, EmbeddingsStack, subsequent_mask

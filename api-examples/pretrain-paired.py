@@ -10,10 +10,12 @@ import glob
 from baseline.pytorch.embeddings import *
 import baseline.embeddings
 from eight_mile.optz import *
+from eight_mile.utils import Average
 from eight_mile.pytorch.optz import *
-from eight_mile.pytorch.layers import Average, save_checkpoint, init_distributed
+from eight_mile.pytorch.layers import save_checkpoint, init_distributed
 from transformer_utils import MultiFileDatasetReader, PairedModel, TripletLoss, AllLoss, TiedEmbeddingsSeq2SeqModel, \
     create_model, get_lr_decay
+
 logger = logging.getLogger(__file__)
 
 """Pre-train a paired model in PyTorch

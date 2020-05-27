@@ -11,7 +11,8 @@ from eight_mile.utils import str2bool, write_json, Offsets
 import baseline.pytorch.embeddings
 import baseline.embeddings
 from eight_mile.optz import *
-from eight_mile.pytorch.layers import checkpoint_for, rm_old_checkpoints, Average, init_distributed, save_checkpoint
+from eight_mile.utils import Average
+from eight_mile.pytorch.layers import checkpoint_for, rm_old_checkpoints, init_distributed, save_checkpoint
 from eight_mile.pytorch.optz import *
 from eight_mile.pytorch.serialize import save_tlm_npz
 from baseline.pytorch.lm import TransformerLanguageModel, TransformerMaskedLanguageModel
