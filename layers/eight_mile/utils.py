@@ -1452,6 +1452,14 @@ def get_env_gpus() -> List[str]:
 
 
 @export
+def get_num_gpus_multiworker() -> int:
+    """Get the number of GPUs in multi-worker distributed training
+
+    :return:
+    """
+    int(os.environ.get("WORLD_SIZE", 1))
+
+@export
 def ngrams(sentence: List[str], filtsz: int = 3, joiner: str = "@@") -> List[str]:
     """Generate ngrams over a sentence
 

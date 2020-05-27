@@ -6,7 +6,7 @@ import tempfile
 import baseline
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader
-from eight_mile.utils import str2bool, write_json
+from eight_mile.utils import str2bool, write_json, get_num_gpus_multiworker
 import baseline.pytorch.embeddings
 import baseline.embeddings
 from eight_mile.optz import *
@@ -39,7 +39,7 @@ def train():
     parser.add_argument("--basedir", type=str)
     parser.add_argument("--train_file", type=str, required=True, help='File path to use for train file')
     parser.add_argument("--valid_file", type=str, required=True, help='File path to use for valid file')
-    parser.add_argument("--dataset_key", default="reddit",
+    parser.add_argument("--dataset_key", default="tlm",
                         help="dataset key for basedir")
     parser.add_argument("--embed_type", type=str, default='default',
                         help="register label of the embeddings, so far support positional or learned-positional")
@@ -92,7 +92,7 @@ def train():
         args.basedir = 'lm-{}-bpe-{}'.format(args.dataset_key, os.getpid())
     logging.basicConfig(level=logging.INFO if args.local_rank in [-1, 0] else logging.WARN)
 
-    num_gpus = int(os.environ.get("WORLD_SIZE", 1))
+    num_gpus = get_num_gpus_multiworker()
     args.distributed = args.distributed or num_gpus > 1
     logger.info(f"Using {num_gpus} GPUs in this job.")
 
@@ -226,7 +226,7 @@ def train():
                 inputs, labels = on_demand_mlm_masking(inputs, labels, mask_value, vocab_size)
             inputs = {'x': inputs}
 
-            labels = labels.transpose(0, 1).contiguous().to(args.device)
+            labels = labels.transpose(0, 1).contiguous()
             logits = model(inputs, None)[0].transpose(0, 1).contiguous()
             if args.mlm:
                 loss = loss_function(logits, labels)
