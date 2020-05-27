@@ -5,15 +5,15 @@ from argparse import ArgumentParser
 import tempfile
 import baseline
 from torch.nn.parallel import DistributedDataParallel
-from torch.utils.data import DataLoader, TensorDataset
-from eight_mile.utils import str2bool, write_json, Offsets
+from torch.utils.data import DataLoader
+from eight_mile.utils import str2bool, write_json
 import baseline.pytorch.embeddings
 import baseline.embeddings
 from eight_mile.optz import *
 from eight_mile.pytorch.layers import checkpoint_for, rm_old_checkpoints, Average, save_checkpoint, init_distributed
 from eight_mile.pytorch.optz import *
 from eight_mile.pytorch.serialize import save_tlm_npz
-from baseline.pytorch.lm import TransformerLanguageModel
+from baseline.pytorch.lm import TransformerLanguageModel, TransformerMaskedLanguageModel
 from transformer_utils import MultiFileDatasetReader, on_demand_mlm_masking
 
 logger = logging.getLogger(__file__)
@@ -146,31 +146,18 @@ def train():
     else:
         rpr_k = args.rpr_k
 
-    if args.mlm:
-        from baseline.pytorch.lm import TransformerMaskedLanguageModel
-        model = TransformerMaskedLanguageModel.create(embeddings,
-                                                      hsz=args.d_model,
-                                                      d_ff=args.d_ff,
-                                                      tie_weights=True,
-                                                      dropout=args.dropout,
-                                                      gpu=False,
-                                                      num_heads=args.num_heads,
-                                                      layers=args.num_layers,
-                                                      rpr_k=rpr_k,
-                                                      d_k=args.d_k,
-                                                      src_keys=['x'], tgt_key='x')
-    else:
-        model = TransformerLanguageModel.create(embeddings,
-                                                hsz=args.d_model,
-                                                d_ff=args.d_ff,
-                                                tie_weights=True,
-                                                dropout=args.dropout,
-                                                gpu=False,
-                                                num_heads=args.num_heads,
-                                                layers=args.num_layers,
-                                                rpr_k=rpr_k,
-                                                d_k=args.d_k,
-                                                src_keys=['x'], tgt_key='x')
+    TLM = TransformerMaskedLanguageModel if args.mlm else TransformerLanguageModel
+    model = TLM(embeddings,
+                hsz=args.d_model,
+                d_ff=args.d_ff,
+                tie_weights=True,
+                dropout=args.dropout,
+                gpu=False,
+                num_heads=args.num_heads,
+                layers=args.num_layers,
+                rpr_k=rpr_k,
+                d_k=args.d_k,
+                src_keys=['x'], tgt_key='x')
     model.to(args.device)
     loss_function = model.create_loss()
     loss_function.to(args.device)
