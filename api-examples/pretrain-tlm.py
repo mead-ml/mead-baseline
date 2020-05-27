@@ -5,34 +5,34 @@ from argparse import ArgumentParser
 import tempfile
 import baseline
 from torch.nn.parallel import DistributedDataParallel
-from torch.utils.data import DataLoader, TensorDataset
-from eight_mile.utils import str2bool, write_json, Offsets
+from torch.utils.data import DataLoader
+from eight_mile.utils import str2bool, write_json
 import baseline.pytorch.embeddings
 import baseline.embeddings
 from eight_mile.optz import *
-from eight_mile.pytorch.layers import checkpoint_for, rm_old_checkpoints, Average
+from eight_mile.pytorch.layers import checkpoint_for, rm_old_checkpoints, Average, save_checkpoint, init_distributed
 from eight_mile.pytorch.optz import *
 from eight_mile.pytorch.serialize import save_tlm_npz
-from baseline.pytorch.lm import TransformerLanguageModel
-from transformer_utils import MultiFileDatasetReader
+from baseline.pytorch.lm import TransformerLanguageModel, TransformerMaskedLanguageModel
+from transformer_utils import MultiFileDatasetReader, on_demand_mlm_masking
 
 logger = logging.getLogger(__file__)
 
 
-def save_checkpoint(model: torch.nn.Module, model_base: str, count: int, tick_type: str = 'epoch'):
+"""Pre-train a Transformer model in PyTorch
 
-    checkpoint_name = checkpoint_for(model_base, count, tick_type=tick_type)
-    # Its possible due to how its called that we might save the same checkpoint twice if we dont check first
-    if os.path.exists(checkpoint_name):
-        logger.info("Checkpoint already exists: %s", checkpoint_name)
-        return
-    logger.info("Creating checkpoint: %s", checkpoint_name)
-    if hasattr(model, 'module'):
-        torch.save(model.module.state_dict(), checkpoint_name)
-    else:
-        torch.save(model.state_dict(), checkpoint_name)
+The datasets in this program are read in as an `IterableDataset`, typically one line per sample, which
+makes it efficient to process even very large datasets that may not fit in core memory.  The datasets are
+assumed to be sharded over a set of files for training and validation.
 
-    rm_old_checkpoints(model_base, count)
+The `preproc-tlm` script can be used upfront to generate pre-processed representations which allows the reader
+to simple ingest the sample without any on demand vectorization or masking.  This approach should be preferred
+where available.  To run the model in this manner, first run `preproc-tlm`, generating keys `x` and `y` containing
+the numeric one-hot values for each token, and then in this script, pass `--preprocessed true`.
+
+If the model is an MLM and the `preprocessed` value is false, on-demand MLM masking is performed.
+
+"""
 
 
 def train():
@@ -68,7 +68,9 @@ def train():
     parser.add_argument("--restart_tt", type=str, help="Optional param for legacy checkpoints (step|epoch)")
     parser.add_argument("--warmup_steps", type=int, default=10000, help="Num warmup steps")
     parser.add_argument("--update_steps", type=int, default=100, help="The number of steps to take before saving a checkpoint")
-    parser.add_argument("--mlm", type=str2bool, default=False, help="Use Masked Language Model (MLM) objective")
+    parser.add_argument("--mlm", type=str2bool, default=True, help="Use Masked Language Model (MLM) objective")
+    parser.add_argument("--preprocessed", type=str2bool, default=False, help="Has the data already been preprocessed?")
+
     parser.add_argument('--rpr_k',
                         help='Relative attention positional sizes pass 0 if you dont want relative attention',
                         type=int, default=[3, 5, 48, 48, 48, 48], nargs='+')
@@ -99,33 +101,15 @@ def train():
     args.distributed = args.distributed or num_gpus > 1
     logger.info(f"Using {num_gpus} GPUs in this job.")
 
+    do_on_demand_masking = args.mlm and not args.preprocessed
+    if do_on_demand_masking:
+        logger.info(f"On-demand masking is turned on")
     if args.distributed:
-        if args.local_rank == -1:
-            # https://github.com/kubeflow/pytorch-operator/issues/128
-            # https://github.com/pytorch/examples/blob/master/imagenet/main.py
-            logger.info("Setting local rank to RANK env variable")
-            args.local_rank = int(os.environ['RANK'])
-        logger.warning("Local rank (%d)", args.local_rank)
-        # In an env like k8s with kubeflow each worker will only see a single gpu
-        # with an id of 0. If the gpu count is 1 then we are probably in an env like
-        # that so we should just use the first (and only) gpu avaiable
-        if torch.cuda.device_count() == 1:
-            torch.cuda.set_device(0)
-            args.device = torch.device("cuda", 0)
-        # This program assumes multiprocess/multi-device on a single node. Each
-        # process gets a rank (via cli or ENV variable) and uses that rank to select
-        # which gpu to use. This only makes sense on a single node, if you had 4
-        # processes on 2 nodes where each node has 2 GPUs then the ranks would be
-        # 0, 1, 2, 3 but the gpus numbers would be node 0: 0, 1 and node 1: 0, 1
-        # and this assignment to gpu 3 would fail. On a single node with 4 processes
-        # and 4 gpus the rank and gpu ids will align and this will work
-        else:
-            torch.cuda.set_device(args.local_rank)
-            args.device = torch.device("cuda", args.local_rank)
-        torch.distributed.init_process_group(backend='nccl', init_method='env://')
+        args.device = init_distributed(args.local_rank)
 
+    reader_type = "lang" if not args.preprocessed else "preprocessed"
     reader = MultiFileDatasetReader(args.nctx, args.subword_model_file, args.subword_vocab_file, args.pattern,
-                                    reader_type="lang")
+                                    reader_type=reader_type)
 
     # This looks a bit funny but the streaming reader ignores our vocab and gives us the one from the subword_model
     # However, we do need to get counts from our dataset for validation so we can calculate the perplexity
@@ -152,41 +136,30 @@ def train():
     if args.mlm:
         mask_from = vocabs
         vocab_size = len(mask_from)
-        mask_value = mask_from.get("[MASK]", mask_from.get("<MASK>", -1))
+        mask_value = mask_from.get("[MASK]")
         if mask_value == -1:
             logger.error("We could not find a suitable masking token in the vocab")
             return
 
     if len(args.rpr_k) == 0 or args.rpr_k[0] < 1:
         rpr_k = None
+    elif len(args.rpr_k) == 1:
+        rpr_k = args.rpr_k[0]
     else:
         rpr_k = args.rpr_k
 
-    if args.mlm:
-        from baseline.pytorch.lm import TransformerMaskedLanguageModel
-        model = TransformerMaskedLanguageModel.create(embeddings,
-                                                      hsz=args.d_model,
-                                                      d_ff=args.d_ff,
-                                                      tie_weights=True,
-                                                      dropout=args.dropout,
-                                                      gpu=False,
-                                                      num_heads=args.num_heads,
-                                                      layers=args.num_layers,
-                                                      rpr_k=rpr_k,
-                                                      d_k=args.d_k,
-                                                      src_keys=['x'], tgt_key='x')
-    else:
-        model = TransformerLanguageModel.create(embeddings,
-                                                hsz=args.d_model,
-                                                d_ff=args.d_ff,
-                                                tie_weights=True,
-                                                dropout=args.dropout,
-                                                gpu=False,
-                                                num_heads=args.num_heads,
-                                                layers=args.num_layers,
-                                                rpr_k=rpr_k,
-                                                d_k=args.d_k,
-                                                src_keys=['x'], tgt_key='x')
+    TLM = TransformerMaskedLanguageModel if args.mlm else TransformerLanguageModel
+    model = TLM(embeddings,
+                hsz=args.d_model,
+                d_ff=args.d_ff,
+                tie_weights=True,
+                dropout=args.dropout,
+                gpu=False,
+                num_heads=args.num_heads,
+                layers=args.num_layers,
+                rpr_k=rpr_k,
+                d_k=args.d_k,
+                src_keys=['x'], tgt_key='x')
     model.to(args.device)
     loss_function = model.create_loss()
     loss_function.to(args.device)
@@ -251,22 +224,13 @@ def train():
         for i, batch in enumerate(train_loader):
             steps += 1
             x, y = batch
-            inputs = {'x': x.to(args.device)}
+            inputs = x.to(args.device)
             labels = y.to(args.device)
-            if args.mlm:
-                # Replace 15% of tokens
-                masked_indices = torch.bernoulli(torch.full(labels.shape, 0.15)).type(torch.bool)
-                # Anything not masked is 0 so no loss
-                labels[~masked_indices] = 0
-                # Of the masked items, mask 80% of them with [MASK]
-                indices_replaced = torch.bernoulli(torch.full(labels.shape, 0.8)).type(torch.bool) & masked_indices
-                inputs['x'][indices_replaced] = mask_value
-                # Replace 10% of them with random words, rest preserved for auto-encoding
-                indices_random = torch.bernoulli(torch.full(labels.shape, 0.5)).type(torch.bool) & masked_indices & ~indices_replaced
-                random_words = torch.randint(vocab_size, labels.shape, dtype=torch.long, device=args.device)
-                inputs['x'][indices_random] = random_words[indices_random]
+            if do_on_demand_masking:
+                inputs, labels = on_demand_mlm_masking(inputs, labels, mask_value, vocab_size)
+            inputs = {'x': inputs}
 
-            labels = labels.transpose(0, 1).contiguous()
+            labels = labels.transpose(0, 1).contiguous().to(args.device)
             logits = model(inputs, None)[0].transpose(0, 1).contiguous()
             if args.mlm:
                 loss = loss_function(logits, labels)
@@ -303,22 +267,12 @@ def train():
         for batch in valid_loader:
             with torch.no_grad():
                 x, y = batch
-                inputs = {'x': x.to(args.device)}
+                inputs = x.to(args.device)
                 labels = y.to(args.device)
 
-                if args.mlm:
-                    # Replace 15% of tokens
-                    masked_indices = torch.bernoulli(torch.full(labels.shape, 0.15)).type(torch.bool)
-                    # Anything not masked is 0 so no loss
-                    labels[~masked_indices] = 0
-                    # Of the masked items, mask 80% of them with [MASK]
-                    indices_replaced = torch.bernoulli(torch.full(labels.shape, 0.8)).type(torch.bool) & masked_indices
-                    inputs['x'][indices_replaced] = mask_value
-                    # Replace 10% of them with random work
-                    indices_random = torch.bernoulli(torch.full(labels.shape, 0.5)).type(torch.bool) & masked_indices & ~indices_replaced
-                    random_words = torch.randint(vocab_size, labels.shape, dtype=torch.long, device=args.device)
-                    inputs['x'][indices_random] = random_words[indices_random]
-
+                if do_on_demand_masking:
+                    inputs, labels = on_demand_mlm_masking(inputs, labels, mask_value, vocab_size)
+                inputs = {'x': inputs}
                 labels = labels.transpose(0, 1).contiguous()
                 logits = model(inputs, None)[0].transpose(0, 1).contiguous()
                 if args.mlm:
@@ -334,7 +288,6 @@ def train():
 
         elapsed = (time.time() - start)/60
         metrics['valid_elapsed_min'] = elapsed
-
         metrics['average_valid_loss'] = valid_token_loss
         metrics['average_valid_word_ppl'] = valid_token_ppl
         logger.info(metrics)
