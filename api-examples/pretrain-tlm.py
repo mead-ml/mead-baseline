@@ -143,6 +143,8 @@ def train():
 
     if len(args.rpr_k) == 0 or args.rpr_k[0] < 1:
         rpr_k = None
+    elif len(args.rpr_k) == 1:
+        rpr_k = args.rpr_k[0]
     else:
         rpr_k = args.rpr_k
 

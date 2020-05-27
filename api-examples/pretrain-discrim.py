@@ -226,11 +226,15 @@ def train():
 
     if len(args.gen_rpr_k) == 0 or args.gen_rpr_k[0] < 1:
         gen_rpr_k = None
+    elif len(args.gen_rpr_k) == 1:
+        gen_rpr_k = args.gen_rpr_k[0]
     else:
         gen_rpr_k = args.gen_rpr_k
 
     if len(args.gen_rpr_k) == 0 or args.discrim_rpr_k[0] < 1:
         discrim_rpr_k = None
+    elif len(args.discrim_rpr_k) == 1:
+        discrim_rpr_k = args.discrim_rpr_k[0]
     else:
         discrim_rpr_k = args.discrim_rpr_k
 

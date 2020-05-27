@@ -622,8 +622,6 @@ class TiedEmbeddingsSeq2SeqModel(Seq2SeqModel):
 
 def create_model(embeddings, d_model, d_ff, dropout, num_heads, num_layers, model_type, rpr_k, d_k, reduction_d_k,
                  stacking_layers, ff_pdrop, logger):
-    if len(rpr_k) == 0 or rpr_k[0] < 1:
-        rpr_k = None
     if model_type == "encoder-decoder":
         logger.info("Creating tied encoder decoder model")
         hps = {"dsz": d_model,

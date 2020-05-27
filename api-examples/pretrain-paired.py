@@ -43,7 +43,7 @@ def train():
     parser.add_argument("--num_valid_workers", type=int, default=2, help="Number valid workers")
     parser.add_argument("--num_layers", type=int, default=6, help="Number of layers")
     parser.add_argument("--nctx", type=int, default=64, help="Max context length (for both encoder and decoder)")
-    parser.add_argument("--reader_type", type=str, default='ntp', choices=['ntp', 'nsp'])
+    parser.add_argument("--reader_type", type=str, default='ntp', choices=['ntp', 'nsp', 'preprocessed'])
     parser.add_argument("--embed_type", type=str, default='positional',
                         help="register label of the embeddings, so far support positional or learned-positional")
     parser.add_argument("--pattern", default='*.txt', help="Glob pattern for data")
@@ -99,6 +99,13 @@ def train():
     args.distributed = args.distributed or num_gpus > 1
     logger.info(f"Using {num_gpus} GPUs in this job.")
 
+    if len(args.rpr_k) == 0 or args.rpr_k[0] < 1:
+        rpr_k = None
+    elif len(args.rpr_k) == 1:
+        rpr_k = args.rpr_k[0]
+    else:
+        rpr_k = args.rpr_k
+
     if args.distributed:
         args.device = init_distributed(args.local_rank)
 
@@ -123,7 +130,7 @@ def train():
 
     model = create_model(embeddings, d_model=args.d_model, d_ff=args.d_ff, dropout=args.dropout,
                          num_heads=args.num_heads, num_layers=args.num_layers,
-                         model_type=args.model_type, rpr_k=args.rpr_k, d_k=args.d_k, reduction_d_k=args.reduction_d_k,
+                         model_type=args.model_type, rpr_k=rpr_k, d_k=args.d_k, reduction_d_k=args.reduction_d_k,
                          stacking_layers=args.stacking_layers, ff_pdrop=args.ff_pdrop, logger=logger)
     model.to(args.device)
     loss_function = model.create_loss(args.loss)
