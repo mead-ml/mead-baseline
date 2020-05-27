@@ -17,7 +17,7 @@ logger = logging.getLogger(__file__)
 from baseline.pytorch.lm import TransformerMaskedLanguageModel
 from eight_mile.pytorch.layers import TransformerEncoderStack, EmbeddingsStack, subsequent_mask
 from transformer_utils import MultiFileDatasetReader, TransformerDiscriminator, find_latest_checkpoint, \
-    TensorWordDatasetReader, load_data_caching, save_checkpoint, get_lr_decay
+    TensorWordDatasetReader, load_data_caching, get_lr_decay
 
 """Pre-train an discriminator Transformer model in PyTorch
 
@@ -114,15 +114,15 @@ def train():
     parser.add_argument("--gen_dropout", type=float, default=0.1, help="Dropout")
     parser.add_argument("--discrim_dropout", type=float, default=0.1, help="Dropout")
     parser.add_argument('--gen_rpr_k', help='Relative attention positional sizes pass 0 if you dont want relative attention',
-                        type=int, default=[3, 5, 48, 48, 48, 48], nargs='+')
+                        type=int, default=[8], nargs='+')
 
     parser.add_argument('--discrim_rpr_k', help='Relative attention positional sizes pass 0 if you dont want relative attention',
-                        type=int, default=[3, 5, 48, 48, 48, 48], nargs='+')
+                        type=int, default=[8], nargs='+')
 
     parser.add_argument("--num_train_workers", type=int, default=4, help="Number train workers")
     parser.add_argument("--num_valid_workers", type=int, default=2, help="Number valid workers")
     parser.add_argument("--nctx", type=int, default=64, help="Max context length (for both encoder and decoder)")
-    parser.add_argument("--embed_type", type=str, default='positional',
+    parser.add_argument("--embed_type", type=str, default='default',
                         help="register label of the embeddings, so far support positional or learned-positional")
     parser.add_argument("--pattern", default='*.txt', help="Glob pattern for data")
     parser.add_argument("--batch_size", type=int, default=256, help="Batch Size")

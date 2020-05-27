@@ -45,7 +45,7 @@ def train():
     parser.add_argument("--num_layers", type=int, default=6, help="Number of layers")
     parser.add_argument("--nctx", type=int, default=64, help="Max context length (for both encoder and decoder)")
     parser.add_argument("--reader_type", type=str, default='ntp', choices=['ntp', 'nsp', 'preprocessed'])
-    parser.add_argument("--embed_type", type=str, default='positional',
+    parser.add_argument("--embed_type", type=str, default='default',
                         help="register label of the embeddings, so far support positional or learned-positional")
     parser.add_argument("--pattern", default='*.txt', help="Glob pattern for data")
     parser.add_argument("--batch_size", type=int, default=256, help="Batch Size")
@@ -70,7 +70,7 @@ def train():
     parser.add_argument("--loss", type=str, default='all', choices=['triplet', 'all'])
     parser.add_argument("--saves_per_epoch", type=int, default=100, help="The number of checkpoints to save per epoch")
     parser.add_argument('--rpr_k', help='Relative attention positional sizes pass 0 if you dont want relative attention',
-                        type=int, default=[3, 5, 48, 48, 48, 48], nargs='+')
+                        type=int, default=[8], nargs='+')
 
     parser.add_argument("--device", type=str,
                         default="cuda" if torch.cuda.is_available() else "cpu",

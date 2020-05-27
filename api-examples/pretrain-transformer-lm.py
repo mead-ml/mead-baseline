@@ -11,12 +11,12 @@ from eight_mile.utils import str2bool, write_json, Offsets
 import baseline.pytorch.embeddings
 import baseline.embeddings
 from eight_mile.optz import *
-from eight_mile.pytorch.layers import checkpoint_for, rm_old_checkpoints, Average, init_distributed
+from eight_mile.pytorch.layers import checkpoint_for, rm_old_checkpoints, Average, init_distributed, save_checkpoint
 from eight_mile.pytorch.optz import *
 from eight_mile.pytorch.serialize import save_tlm_npz
 from baseline.pytorch.lm import TransformerLanguageModel, TransformerMaskedLanguageModel
 from baseline.utils import DataDownloader
-from transformer_utils import TensorWordDatasetReader, TensorCharDatasetReader, load_data_caching, save_checkpoint, get_lr_decay
+from transformer_utils import TensorWordDatasetReader, TensorCharDatasetReader, load_data_caching, get_lr_decay
 import numpy as np
 import codecs
 from collections import Counter
@@ -185,7 +185,7 @@ def train():
     parser.add_argument("--dataset_cache", type=str, default=os.path.expanduser('~/.bl-data'),
                         help="Path or url of the dataset cache")
     parser.add_argument("--cache_features", type=str2bool, default=True)
-    parser.add_argument("--embed_type", type=str, default='positional',
+    parser.add_argument("--embed_type", type=str, default='default',
                         help="register label of the embeddings, so far support positional or learned-positional")
     parser.add_argument("--d_model", type=int, default=410, help="Model dimension (and embedding dsz)")
     parser.add_argument("--d_ff", type=int, default=2100, help="FFN dimension")
@@ -218,7 +218,7 @@ def train():
     parser.add_argument("--update_steps", type=int, default=5, help="The number of checkpoints to save within an epoch")
     parser.add_argument("--mlm", type=str2bool, default=False, help="Use Masked Language Model (MLM) objective")
     parser.add_argument('--rpr_k', help='Relative attention positional sizes pass 0 if you dont want relative attention',
-                        type=int, default=[0], nargs='+')
+                        type=int, default=[8], nargs='+')
     parser.add_argument("--device", type=str,
                         default="cuda" if torch.cuda.is_available() else "cpu",
                         help="Device (cuda or cpu)")

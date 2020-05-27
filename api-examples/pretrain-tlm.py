@@ -43,7 +43,7 @@ def train():
                         help="Path or url of the dataset cache")
     parser.add_argument("--dataset_key", default="reddit",
                         help="dataset key for basedir")
-    parser.add_argument("--embed_type", type=str, default='positional',
+    parser.add_argument("--embed_type", type=str, default='default',
                         help="register label of the embeddings, so far support positional or learned-positional")
     parser.add_argument("--d_model", type=int, default=410, help="Model dimension (and embedding dsz)")
     parser.add_argument("--d_ff", type=int, default=2100, help="FFN dimension")
@@ -75,7 +75,7 @@ def train():
     parser.add_argument("--preprocessed", type=str2bool, default=False, help="Has the data already been preprocessed?")
     parser.add_argument('--rpr_k',
                         help='Relative attention positional sizes pass 0 if you dont want relative attention',
-                        type=int, default=[3, 5, 48, 48, 48, 48], nargs='+')
+                        type=int, default=[8], nargs='+')
     parser.add_argument("--device", type=str,
                         default="cuda" if torch.cuda.is_available() else "cpu",
                         help="Device (cuda or cpu)")

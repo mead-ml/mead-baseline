@@ -645,22 +645,6 @@ def create_model(embeddings, d_model, d_ff, dropout, num_heads, num_layers, mode
     return model
 
 
-def save_checkpoint(model: torch.nn.Module, model_base: str, count: int, logger, tick_type: str = 'epoch'):
-
-    checkpoint_name = checkpoint_for(model_base, count, tick_type=tick_type)
-    # Its possible due to how its called that we might save the same checkpoint twice if we dont check first
-    if os.path.exists(checkpoint_name):
-        logger.info("Checkpoint already exists: %s", checkpoint_name)
-        return
-    logger.info("Creating checkpoint: %s", checkpoint_name)
-    if hasattr(model, 'module'):
-        torch.save(model.module.state_dict(), checkpoint_name)
-    else:
-        torch.save(model.state_dict(), checkpoint_name)
-
-    rm_old_checkpoints(model_base, count)
-
-
 def get_lr_decay(sched_type, lr, steps_per_epoch, n_epochs, logger, decay_steps=None, decay_rate=None, alpha=None):
     if sched_type == 'cosine':
         decay_steps = decay_steps if decay_steps else steps_per_epoch * n_epochs
