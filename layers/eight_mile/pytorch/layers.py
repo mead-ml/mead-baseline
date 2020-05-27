@@ -1,5 +1,6 @@
 import copy
 import math
+import logging
 from typing import Dict, List, Optional, Tuple, Union
 import os
 import numpy as np
@@ -13,6 +14,7 @@ from eight_mile.utils import listify, Offsets, is_sequence
 from eight_mile.utils import transition_mask as transition_mask_np
 
 MASK_FALSE = False
+logger = logging.getLogger("mead.layers")
 
 
 def sequence_mask(lengths: torch.Tensor, max_len: int = -1) -> torch.Tensor:
@@ -3332,7 +3334,52 @@ def rm_old_checkpoints(base_path, current_epoch, last_n=10):
             if os.path.exists(checkpoint_name):
                 os.remove(checkpoint_name)
 
-class Average(object):
+
+
+def save_checkpoint(model: torch.nn.Module, model_base: str, count: int, tick_type: str = 'epoch'):
+
+    checkpoint_name = checkpoint_for(model_base, count, tick_type=tick_type)
+    # Its possible due to how its called that we might save the same checkpoint twice if we dont check first
+    if os.path.exists(checkpoint_name):
+        logger.info("Checkpoint already exists: %s", checkpoint_name)
+        return
+    logger.info("Creating checkpoint: %s", checkpoint_name)
+    if hasattr(model, 'module'):
+        torch.save(model.module.state_dict(), checkpoint_name)
+    else:
+        torch.save(model.state_dict(), checkpoint_name)
+
+    rm_old_checkpoints(model_base, count)
+
+
+def init_distributed(local_rank):
+    if local_rank == -1:
+        # https://github.com/kubeflow/pytorch-operator/issues/128
+        # https://github.com/pytorch/examples/blob/master/imagenet/main.py
+        logger.info("Setting local rank to RANK env variable")
+        local_rank = int(os.environ['RANK'])
+    logger.warning("Local rank (%d)", local_rank)
+    # In an env like k8s with kubeflow each worker will only see a single gpu
+    # with an id of 0. If the gpu count is 1 then we are probably in an env like
+    # that so we should just use the first (and only) gpu avaiable
+    if torch.cuda.device_count() == 1:
+        torch.cuda.set_device(0)
+        device = torch.device("cuda", 0)
+    # This program assumes multiprocess/multi-device on a single node. Each
+    # process gets a rank (via cli or ENV variable) and uses that rank to select
+    # which gpu to use. This only makes sense on a single node, if you had 4
+    # processes on 2 nodes where each node has 2 GPUs then the ranks would be
+    # 0, 1, 2, 3 but the gpus numbers would be node 0: 0, 1 and node 1: 0, 1
+    # and this assignment to gpu 3 would fail. On a single node with 4 processes
+    # and 4 gpus the rank and gpu ids will align and this will work
+    else:
+        torch.cuda.set_device(local_rank)
+        device = torch.device("cuda", local_rank)
+    torch.distributed.init_process_group(backend='nccl', init_method='env://')
+    return device
+
+
+class Average:
     def __init__(self, name, fmt=':f'):
         self.name = name
         self.fmt = fmt

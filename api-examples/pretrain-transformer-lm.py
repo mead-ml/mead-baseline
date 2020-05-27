@@ -11,11 +11,10 @@ from eight_mile.utils import str2bool, write_json, Offsets
 import baseline.pytorch.embeddings
 import baseline.embeddings
 from eight_mile.optz import *
-from eight_mile.pytorch.layers import checkpoint_for, rm_old_checkpoints, Average
+from eight_mile.pytorch.layers import checkpoint_for, rm_old_checkpoints, Average, init_distributed
 from eight_mile.pytorch.optz import *
 from eight_mile.pytorch.serialize import save_tlm_npz
 from baseline.pytorch.lm import TransformerLanguageModel
-from baseline.vectorizers import Char2DVectorizer, Token1DVectorizer, WordpieceVectorizer1D, BPEVectorizer1D
 from baseline.utils import DataDownloader
 from transformer_utils import TensorWordDatasetReader, TensorCharDatasetReader, load_data_caching
 import numpy as np
@@ -25,6 +24,11 @@ from collections import Counter
 logger = logging.getLogger(__file__)
 
 """Pre-train a Transformer model in PyTorch
+
+NOTE: Deprecated! This script reads the entire dataset into memory, which may be problematic for large datasets.  For
+typical use-cases (BPE single-token, MLM loss models), use pretrain-tlm instead, using the `preproc-tlm`
+script to generate fixed contexts upfront.  This is more efficient as it allows us to read and collate full
+rows of data without having the dataset in-core, and also because the masking is done upfront.
 
 This file uses Baseline to train a Transformer with PyTorch on multiple GPUs.
 It is inspired by: https://github.com/huggingface/naacl_transfer_learning_tutorial/blob/master/pretraining_train.py
@@ -249,29 +253,7 @@ def train():
     logger.info(f"Using {num_gpus} GPUs in this job.")
 
     if args.distributed:
-        if args.local_rank == -1:
-            # https://github.com/kubeflow/pytorch-operator/issues/128
-            # https://github.com/pytorch/examples/blob/master/imagenet/main.py
-            logger.info("Setting local rank to RANK env variable")
-            args.local_rank = int(os.environ['RANK'])
-        logger.warning("Local rank (%d)", args.local_rank)
-        # In an env like k8s with kubeflow each worker will only see a single gpu
-        # with an id of 0. If the gpu count is 1 then we are probably in an env like
-        # that so we should just use the first (and only) gpu avaiable
-        if torch.cuda.device_count() == 1:
-            torch.cuda.set_device(0)
-            args.device = torch.device("cuda", 0)
-        # This program assumes multiprocess/multi-device on a single node. Each
-        # process gets a rank (via cli or ENV variable) and uses that rank to select
-        # which gpu to use. This only makes sense on a single node, if you had 4
-        # processes on 2 nodes where each node has 2 GPUs then the ranks would be
-        # 0, 1, 2, 3 but the gpus numbers would be node 0: 0, 1 and node 1: 0, 1
-        # and this assignment to gpu 3 would fail. On a single node with 4 processes
-        # and 4 gpus the rank and gpu ids will align and this will work
-        else:
-            torch.cuda.set_device(args.local_rank)
-            args.device = torch.device("cuda", args.local_rank)
-        torch.distributed.init_process_group(backend='nccl', init_method='env://')
+        args.device = init_distributed(args.local_rank)
 
     if args.train_file:
         dataset = {'train_file': args.train_file, 'valid_file': args.valid_file}
@@ -378,7 +360,6 @@ def train():
 
         logger.info("Restarting from a previous checkpoint %s.\n\tStarting at global_step=%d, epoch=%d",
                     args.restart_from, global_step, start_epoch + 1)
-
 
     optimizer = OptimizerManager(model, global_step, optim=args.optim, lr=args.lr, lr_function=lr_sched, weight_decay=args.weight_decay)
     logger.info("Model has {:,} parameters".format(sum(p.numel() for p in model.parameters() if p.requires_grad)))

@@ -11,9 +11,17 @@ import os
 logger = logging.getLogger('baseline')
 
 
-
-
 def create_record(chunk, str_lookup, prefix, suffix, mask_value, vocab_size):
+    """Emit a record
+
+    :param chunk: A chunk of integer inputs
+    :param str_lookup: A lookup table from integers to strings
+    :param prefix: A prefix integer token
+    :param suffix: A suffix integer token
+    :param mask_value: An integer value representing a [MASK]
+    :param vocab_size: The total size of the vocab
+    :return: An object with `[xy]_str` and `[xy]` entries
+    """
     ignore_prefix = False
     ignore_suffix = False
     if prefix:

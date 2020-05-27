@@ -1,5 +1,7 @@
 import math
 import copy
+import os
+import logging
 import numpy as np
 import torch
 import torch.autograd
@@ -12,6 +14,7 @@ PYT_MAJOR_VERSION = get_version(torch)
 
 BaseLayer = nn.Module
 TensorDef = torch.Tensor
+
 
 class SequenceCriterion(nn.Module):
 

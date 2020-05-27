@@ -11,7 +11,7 @@ from baseline.pytorch.embeddings import *
 import baseline.embeddings
 from eight_mile.optz import *
 from eight_mile.pytorch.optz import *
-from eight_mile.pytorch.layers import Average, checkpoint_for, rm_old_checkpoints
+from eight_mile.pytorch.layers import Average, save_checkpoint, init_distributed
 from transformer_utils import MultiFileDatasetReader, PairedModel, TripletLoss, AllLoss, TiedEmbeddingsSeq2SeqModel, create_model
 logger = logging.getLogger(__file__)
 
@@ -21,22 +21,6 @@ This file uses Baseline to train a Transformer-based ConveRT
 model (https://arxiv.org/pdf/1911.03688.pdf) or Seq2Seq with fastBPE with PyTorch on multiple GPUs.
 
 """
-
-
-def save_checkpoint(model: torch.nn.Module, model_base: str, count: int, tick_type: str = 'epoch'):
-
-    checkpoint_name = checkpoint_for(model_base, count, tick_type=tick_type)
-    # Its possible due to how its called that we might save the same checkpoint twice if we dont check first
-    if os.path.exists(checkpoint_name):
-        logger.info("Checkpoint already exists: %s", checkpoint_name)
-        return
-    logger.info("Creating checkpoint: %s", checkpoint_name)
-    if hasattr(model, 'module'):
-        torch.save(model.module.state_dict(), checkpoint_name)
-    else:
-        torch.save(model.state_dict(), checkpoint_name)
-
-    rm_old_checkpoints(model_base, count)
 
 
 def train():
@@ -116,29 +100,7 @@ def train():
     logger.info(f"Using {num_gpus} GPUs in this job.")
 
     if args.distributed:
-        if args.local_rank == -1:
-            # https://github.com/kubeflow/pytorch-operator/issues/128
-            # https://github.com/pytorch/examples/blob/master/imagenet/main.py
-            logger.info("Setting local rank to RANK env variable")
-            args.local_rank = int(os.environ['RANK'])
-        logger.warning("Local rank (%d)", args.local_rank)
-        # In an env like k8s with kubeflow each worker will only see a single gpu
-        # with an id of 0. If the gpu count is 1 then we are probably in an env like
-        # that so we should just use the first (and only) gpu avaiable
-        if torch.cuda.device_count() == 1:
-            torch.cuda.set_device(0)
-            args.device = torch.device("cuda", 0)
-        # This program assumes multiprocess/multi-device on a single node. Each
-        # process gets a rank (via cli or ENV variable) and uses that rank to select
-        # which gpu to use. This only makes sense on a single node, if you had 4
-        # processes on 2 nodes where each node has 2 GPUs then the ranks would be
-        # 0, 1, 2, 3 but the gpus numbers would be node 0: 0, 1 and node 1: 0, 1
-        # and this assignment to gpu 3 would fail. On a single node with 4 processes
-        # and 4 gpus the rank and gpu ids will align and this will work
-        else:
-            torch.cuda.set_device(args.local_rank)
-            args.device = torch.device("cuda", args.local_rank)
-        torch.distributed.init_process_group(backend='nccl', init_method='env://')
+        args.device = init_distributed(args.local_rank)
 
     reader = MultiFileDatasetReader(args.nctx, args.subword_model_file, args.subword_vocab_file, args.pattern, args.reader_type)
     vocab = reader.build_vocab()

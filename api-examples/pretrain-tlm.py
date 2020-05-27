@@ -10,7 +10,7 @@ from eight_mile.utils import str2bool, write_json, Offsets
 import baseline.pytorch.embeddings
 import baseline.embeddings
 from eight_mile.optz import *
-from eight_mile.pytorch.layers import checkpoint_for, rm_old_checkpoints, Average
+from eight_mile.pytorch.layers import checkpoint_for, rm_old_checkpoints, Average, save_checkpoint, init_distributed
 from eight_mile.pytorch.optz import *
 from eight_mile.pytorch.serialize import save_tlm_npz
 from baseline.pytorch.lm import TransformerLanguageModel
@@ -19,20 +19,20 @@ from transformer_utils import MultiFileDatasetReader, on_demand_mlm_masking
 logger = logging.getLogger(__file__)
 
 
-def save_checkpoint(model: torch.nn.Module, model_base: str, count: int, tick_type: str = 'epoch'):
+"""Pre-train a Transformer model in PyTorch
 
-    checkpoint_name = checkpoint_for(model_base, count, tick_type=tick_type)
-    # Its possible due to how its called that we might save the same checkpoint twice if we dont check first
-    if os.path.exists(checkpoint_name):
-        logger.info("Checkpoint already exists: %s", checkpoint_name)
-        return
-    logger.info("Creating checkpoint: %s", checkpoint_name)
-    if hasattr(model, 'module'):
-        torch.save(model.module.state_dict(), checkpoint_name)
-    else:
-        torch.save(model.state_dict(), checkpoint_name)
+The datasets in this program are read in as an `IterableDataset`, typically one line per sample, which
+makes it efficient to process even very large datasets that may not fit in core memory.  The datasets are
+assumed to be sharded over a set of files for training and validation.
 
-    rm_old_checkpoints(model_base, count)
+The `preproc-tlm` script can be used upfront to generate pre-processed representations which allows the reader
+to simple ingest the sample without any on demand vectorization or masking.  This approach should be preferred
+where available.  To run the model in this manner, first run `preproc-tlm`, generating keys `x` and `y` containing
+the numeric one-hot values for each token, and then in this script, pass `--preprocessed true`.
+
+If the model is an MLM and the `preprocessed` value is false, on-demand MLM masking is performed.
+
+"""
 
 
 def train():
@@ -102,31 +102,10 @@ def train():
     logger.info(f"Using {num_gpus} GPUs in this job.")
 
     do_on_demand_masking = args.mlm and not args.preprocessed
-
+    if do_on_demand_masking:
+        logger.info(f"On-demand masking is turned on")
     if args.distributed:
-        if args.local_rank == -1:
-            # https://github.com/kubeflow/pytorch-operator/issues/128
-            # https://github.com/pytorch/examples/blob/master/imagenet/main.py
-            logger.info("Setting local rank to RANK env variable")
-            args.local_rank = int(os.environ['RANK'])
-        logger.warning("Local rank (%d)", args.local_rank)
-        # In an env like k8s with kubeflow each worker will only see a single gpu
-        # with an id of 0. If the gpu count is 1 then we are probably in an env like
-        # that so we should just use the first (and only) gpu avaiable
-        if torch.cuda.device_count() == 1:
-            torch.cuda.set_device(0)
-            args.device = torch.device("cuda", 0)
-        # This program assumes multiprocess/multi-device on a single node. Each
-        # process gets a rank (via cli or ENV variable) and uses that rank to select
-        # which gpu to use. This only makes sense on a single node, if you had 4
-        # processes on 2 nodes where each node has 2 GPUs then the ranks would be
-        # 0, 1, 2, 3 but the gpus numbers would be node 0: 0, 1 and node 1: 0, 1
-        # and this assignment to gpu 3 would fail. On a single node with 4 processes
-        # and 4 gpus the rank and gpu ids will align and this will work
-        else:
-            torch.cuda.set_device(args.local_rank)
-            args.device = torch.device("cuda", args.local_rank)
-        torch.distributed.init_process_group(backend='nccl', init_method='env://')
+        args.device = init_distributed(args.local_rank)
 
     reader_type = "lang" if not args.preprocessed else "preprocessed"
     reader = MultiFileDatasetReader(args.nctx, args.subword_model_file, args.subword_vocab_file, args.pattern,
@@ -157,7 +136,7 @@ def train():
     if args.mlm:
         mask_from = vocabs
         vocab_size = len(mask_from)
-        mask_value = mask_from.get("[MASK]", mask_from.get("<MASK>", -1))
+        mask_value = mask_from.get("[MASK]")
         if mask_value == -1:
             logger.error("We could not find a suitable masking token in the vocab")
             return
@@ -320,7 +299,6 @@ def train():
 
         elapsed = (time.time() - start)/60
         metrics['valid_elapsed_min'] = elapsed
-
         metrics['average_valid_loss'] = valid_token_loss
         metrics['average_valid_word_ppl'] = valid_token_ppl
         logger.info(metrics)
