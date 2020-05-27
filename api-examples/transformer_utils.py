@@ -2,6 +2,7 @@ from baseline.pytorch.torchy import vec_log_sum_exp
 from baseline.pytorch.seq2seq import Seq2SeqModel
 from eight_mile.utils import str2bool, write_yaml, read_yaml, Offsets
 from eight_mile.pytorch.layers import *
+from eight_mile.optz import create_lr_scheduler
 import baseline.pytorch.embeddings
 import baseline.embeddings
 from baseline.progress import create_progress_bar
@@ -642,3 +643,21 @@ def create_model(embeddings, d_model, d_ff, dropout, num_heads, num_layers, mode
 
     logger.info(model)
     return model
+
+
+def get_lr_decay(sched_type, lr, steps_per_epoch, n_epochs, logger, decay_steps=None, decay_rate=None, alpha=None):
+    if sched_type == 'cosine':
+        decay_steps = decay_steps if decay_steps else steps_per_epoch * n_epochs
+        alpha = alpha if alpha else 0.
+        params = {'decay_steps': decay_steps, 'alpha': alpha}
+    else:
+        decay_steps = decay_steps if decay_steps else steps_per_epoch
+        if not decay_rate:
+            if sched_type == 'exponential':
+                decay_rate = 0.5
+            elif sched_type == 'invtime':
+                decay_rate = 1.0
+        params = {'decay_steps': decay_steps, 'decay_rate': decay_rate}
+    lr_decay = create_lr_scheduler(lr_scheduler_type=sched_type, lr=lr, **params)
+    logger.info(f"Using {sched_type} decay learning rate with params {params}.")
+    return lr_decay

@@ -14,7 +14,7 @@ from eight_mile.pytorch.layers import checkpoint_for, rm_old_checkpoints, Averag
 from eight_mile.pytorch.optz import *
 from eight_mile.pytorch.serialize import save_tlm_npz
 from baseline.pytorch.lm import TransformerLanguageModel, TransformerMaskedLanguageModel
-from transformer_utils import MultiFileDatasetReader, on_demand_mlm_masking
+from transformer_utils import MultiFileDatasetReader, on_demand_mlm_masking, get_lr_decay
 
 logger = logging.getLogger(__file__)
 
@@ -34,7 +34,6 @@ If the model is an MLM and the `preprocessed` value is false, on-demand MLM mask
 
 """
 
-
 def train():
     parser = ArgumentParser()
     parser.add_argument("--basedir", type=str)
@@ -44,7 +43,7 @@ def train():
                         help="Path or url of the dataset cache")
     parser.add_argument("--dataset_key", default="reddit",
                         help="dataset key for basedir")
-    parser.add_argument("--embed_type", type=str, default='positional',
+    parser.add_argument("--embed_type", type=str, default='default',
                         help="register label of the embeddings, so far support positional or learned-positional")
     parser.add_argument("--d_model", type=int, default=410, help="Model dimension (and embedding dsz)")
     parser.add_argument("--d_ff", type=int, default=2100, help="FFN dimension")
@@ -59,6 +58,10 @@ def train():
     parser.add_argument("--subword_model_file", type=str, help="The BPE model file", required=True)
     parser.add_argument("--subword_vocab_file", type=str, help="The BPE subword vocab", required=True)
     parser.add_argument("--dropout", type=float, default=0.1, help="Dropout")
+    parser.add_argument("--lr_scheduler", type=str, default='cosine', help="The type of learning rate decay scheduler")
+    parser.add_argument("--lr_decay_steps", type=int, help="decay steps of lr scheduler")
+    parser.add_argument("--lr_decay_rate", type=float, help="decay rate of lr scheduler")
+    parser.add_argument("--lr_alpha", type=float, help="parameter alpha for cosine decay scheduler")
     parser.add_argument("--optim", default="adam", type=str, help="Optimizer to use (defaults to adam)")
     parser.add_argument("--lr", type=float, default=4.0e-4, help="Learning rate")
     parser.add_argument("--clip", type=float, default=0.25, help="Clipping gradient norm")
@@ -70,10 +73,9 @@ def train():
     parser.add_argument("--saves_per_epoch", type=int, default=100, help="The number of checkpoints to save per epoch")
     parser.add_argument("--mlm", type=str2bool, default=True, help="Use Masked Language Model (MLM) objective")
     parser.add_argument("--preprocessed", type=str2bool, default=False, help="Has the data already been preprocessed?")
-
     parser.add_argument('--rpr_k',
                         help='Relative attention positional sizes pass 0 if you dont want relative attention',
-                        type=int, default=[3, 5, 48, 48, 48, 48], nargs='+')
+                        type=int, default=[8], nargs='+')
     parser.add_argument("--device", type=str,
                         default="cuda" if torch.cuda.is_available() else "cpu",
                         help="Device (cuda or cpu)")
@@ -172,9 +174,10 @@ def train():
     update_on = steps_per_epoch // args.saves_per_epoch
     report_on = update_on // 10
     logger.info(f"Steps per epoch per GPU: {steps_per_epoch}. Saving checkpoint every {update_on} steps.")
-    cosine_decay = CosineDecaySchedulerPyTorch(steps_per_epoch * args.epochs, lr=args.lr)
+    lr_decay = get_lr_decay(args.lr_scheduler, args.lr, steps_per_epoch, args.epochs, logger,
+                            decay_steps=args.lr_decay_steps, decay_rate=args.lr_decay_rate, alpha=args.lr_alpha)
     linear_warmup = WarmupLinearSchedulerPyTorch(args.warmup_steps, lr=args.lr)
-    lr_sched = CompositeLRScheduler(linear_warmup, cosine_decay, lr=args.lr)
+    lr_sched = CompositeLRScheduler(linear_warmup, lr_decay, lr=args.lr)
 
     global_step = 0
     start_epoch = 0
