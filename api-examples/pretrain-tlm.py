@@ -67,7 +67,7 @@ def train():
     parser.add_argument("--restart_from", type=str, help="Option allows you to restart from a previous checkpoint")
     parser.add_argument("--restart_tt", type=str, help="Optional param for legacy checkpoints (step|epoch)")
     parser.add_argument("--warmup_steps", type=int, default=10000, help="Num warmup steps")
-    parser.add_argument("--update_steps", type=int, default=100, help="The number of steps to take before saving a checkpoint")
+    parser.add_argument("--saves_per_epoch", type=int, default=100, help="The number of checkpoints to save per epoch")
     parser.add_argument("--mlm", type=str2bool, default=True, help="Use Masked Language Model (MLM) objective")
     parser.add_argument("--preprocessed", type=str2bool, default=False, help="Has the data already been preprocessed?")
 
@@ -149,17 +149,17 @@ def train():
         rpr_k = args.rpr_k
 
     TLM = TransformerMaskedLanguageModel if args.mlm else TransformerLanguageModel
-    model = TLM(embeddings,
-                hsz=args.d_model,
-                d_ff=args.d_ff,
-                tie_weights=True,
-                dropout=args.dropout,
-                gpu=False,
-                num_heads=args.num_heads,
-                layers=args.num_layers,
-                rpr_k=rpr_k,
-                d_k=args.d_k,
-                src_keys=['x'], tgt_key='x')
+    model = TLM.create(embeddings,
+                       hsz=args.d_model,
+                       d_ff=args.d_ff,
+                       tie_weights=True,
+                       dropout=args.dropout,
+                       gpu=False,
+                       num_heads=args.num_heads,
+                       layers=args.num_layers,
+                       rpr_k=rpr_k,
+                       d_k=args.d_k,
+                       src_keys=['x'], tgt_key='x')
     model.to(args.device)
     loss_function = model.create_loss()
     loss_function.to(args.device)
@@ -169,7 +169,7 @@ def train():
     # according to pytorch, len(train_loader) will return len(train_set) when train_set is IterableDataset, so manually
     # correct it here
     steps_per_epoch = len(train_loader) // (args.batch_size*num_gpus)
-    update_on = steps_per_epoch // args.update_steps
+    update_on = steps_per_epoch // args.saves_per_epoch
     report_on = update_on // 10
     logger.info(f"Steps per epoch per GPU: {steps_per_epoch}. Saving checkpoint every {update_on} steps.")
     cosine_decay = CosineDecaySchedulerPyTorch(steps_per_epoch * args.epochs, lr=args.lr)

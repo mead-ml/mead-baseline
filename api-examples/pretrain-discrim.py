@@ -139,7 +139,7 @@ def train():
                         default='step',
                         help="Optional param for legacy checkpoints (step|epoch)")
     parser.add_argument("--warmup_steps", type=int, default=10000, help="Num warmup steps")
-    parser.add_argument("--update_steps", type=int, default=100, help="The number of steps to take before saving a checkpoint")
+    parser.add_argument("--saves_per_epoch", type=int, default=100, help="The number of checkpoints to save per epoch")
     parser.add_argument("--print", type=str2bool, default=True, help="Print some output")
     parser.add_argument("--device", type=str,
                         default="cuda" if torch.cuda.is_available() else "cpu",
@@ -250,7 +250,7 @@ def train():
     discrim_loss_fn = discrim_model.create_loss()
     logger.info("Loaded model and loss")
 
-    update_on = steps_per_epoch // args.update_steps
+    update_on = steps_per_epoch // args.saves_per_epoch
     report_on = update_on // 10
     logger.info(f"Steps per epoch per GPU: {steps_per_epoch}. Saving checkpoint every {update_on} steps.")
     cosine_decay = CosineDecaySchedulerPyTorch(steps_per_epoch * args.epochs, lr=args.lr)

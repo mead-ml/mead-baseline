@@ -14,7 +14,7 @@ from eight_mile.optz import *
 from eight_mile.pytorch.layers import checkpoint_for, rm_old_checkpoints, Average, init_distributed
 from eight_mile.pytorch.optz import *
 from eight_mile.pytorch.serialize import save_tlm_npz
-from baseline.pytorch.lm import TransformerLanguageModel
+from baseline.pytorch.lm import TransformerLanguageModel, TransformerMaskedLanguageModel
 from baseline.utils import DataDownloader
 from transformer_utils import TensorWordDatasetReader, TensorCharDatasetReader, load_data_caching
 import numpy as np
@@ -301,31 +301,18 @@ def train():
     else:
         rpr_k = args.rpr_k
 
-    if args.mlm:
-        from baseline.pytorch.lm import TransformerMaskedLanguageModel
-        model = TransformerMaskedLanguageModel.create(embeddings,
-                                                      hsz=args.d_model,
-                                                      d_ff=args.d_ff,
-                                                      tie_weights=(args.tokens != 'chars'),
-                                                      dropout=args.dropout,
-                                                      gpu=False,
-                                                      num_heads=args.num_heads,
-                                                      layers=args.num_layers,
-                                                      rpr_k=rpr_k,
-                                                      d_k=args.d_k,
-                                                      src_keys=['x'], tgt_key=tgt_key)
-    else:
-        model = TransformerLanguageModel.create(embeddings,
-                                                hsz=args.d_model,
-                                                d_ff=args.d_ff,
-                                                tie_weights=(args.tokens != 'chars'),
-                                                dropout=args.dropout,
-                                                gpu=False,
-                                                num_heads=args.num_heads,
-                                                layers=args.num_layers,
-                                                rpr_k=rpr_k,
-                                                d_k=args.d_k,
-                                                src_keys=['x'], tgt_key=tgt_key)
+    TLM = TransformerMaskedLanguageModel if args.mlm else TransformerLanguageModel
+    model = TLM.create(embeddings,
+                       hsz=args.d_model,
+                       d_ff=args.d_ff,
+                       tie_weights=(args.tokens != 'chars'),
+                       dropout=args.dropout,
+                       gpu=False,
+                       num_heads=args.num_heads,
+                       layers=args.num_layers,
+                       rpr_k=rpr_k,
+                       d_k=args.d_k,
+                       src_keys=['x'], tgt_key=tgt_key)
     model.to(args.device)
     loss_function = model.create_loss()
     loss_function.to(args.device)
