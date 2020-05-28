@@ -1,0 +1,43 @@
+backend: pytorch
+basedir: ./atis-sf
+batchsz: 10 
+#batchsz: 50 
+conll_output: atis.conll
+dataset: atis-iobes
+features:
+- embeddings:
+    label:
+    - glove-6B-100
+    - senna
+  name: word
+  vectorizer:
+    type: dict1d
+    transform: baseline.lowercase
+reader:
+  type: default
+  named_fields:
+    '0': text
+    '-1': y
+model:
+  constrain_decode: true
+  crf: 0 
+  dropin:
+    word: 0.4
+  dropout: 0.65
+  hsz: 600
+  layers: 1 
+  model_type: default
+  rnntype: blstm
+task: tagger
+train:
+  clip: 5.0
+  early_stopping_metric: f1
+  epochs: 100
+  eta: 0.015
+  mom: 0.9
+  optim: sgd
+  #weight_decay: 1e-4
+  patience: 20
+  span_type: iobes 
+unif: 0.1
+
