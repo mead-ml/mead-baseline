@@ -3,6 +3,7 @@ import time
 import os
 from argparse import ArgumentParser
 import math
+from typing import Tuple
 import tempfile
 import baseline
 from eight_mile.utils import str2bool, write_json
@@ -12,7 +13,7 @@ from baseline.vectorizers import BPEVectorizer1D
 from eight_mile.utils import Average, get_num_gpus_multiworker, read_yaml
 from eight_mile.optz import *
 from eight_mile.tf.optz import *
-from baseline.tf.lm import TransformerLanguageModel, TransformerMaskedLanguageModel
+from baseline.tf.lm import SET_TRAIN_FLAG, TransformerLanguageModel, TransformerMaskedLanguageModel
 import tensorflow as tf
 import glob
 import json
@@ -64,9 +65,15 @@ def get_dataset(pattern, num_parallel_reads=1):
     ds = tf.data.TextLineDataset(glob.glob(pattern), num_parallel_reads=num_parallel_reads)
     return ds.map(decode_json)
 
+
 def get_num_samples(data_dir):
     yml = read_yaml(os.path.join(data_dir, 'md.yml'))
     return yml['num_samples']
+
+def create_distribute_strategy(strategy_name):
+    num_gpus = get_num_gpus_multiworker()
+    devices = ['/device:GPU:{}'.format(i) for i in range(num_gpus)]
+    return tf.distribute.MirroredStrategy(devices)
 
 def train():
     parser = ArgumentParser()
@@ -76,7 +83,8 @@ def train():
     parser.add_argument("--dataset_key", default="reddit",
                         help="dataset key for basedir")
     parser.add_argument("--embed_type", type=str, default='default',
-                        help="register label of the embeddings, so far support positional or learned-positional")
+                        choices=["default", "positional", "learned-positional"],
+                        help="register label of the embeddings")
     parser.add_argument("--d_model", type=int, default=410, help="Model dimension (and embedding dsz)")
     parser.add_argument("--d_ff", type=int, default=2100, help="FFN dimension")
     parser.add_argument("--d_k", type=int, default=None, help="Dimension per head.  Use if num_heads=1 to reduce dims")
@@ -84,6 +92,7 @@ def train():
     parser.add_argument("--num_layers", type=int, default=6, help="Number of layers")
     parser.add_argument("--num_train_workers", type=int, default=4, help="Number train workers")
     parser.add_argument("--num_valid_workers", type=int, default=2, help="Number valid workers")
+    parser.add_argument("--distribute", type=str, default="mirror")
     parser.add_argument("--nctx", type=int, default=128, help="Max input length")
     parser.add_argument("--pattern", default='*.txt', help="Glob pattern for data")
     parser.add_argument("--batch_size", type=int, default=8, help="Batch Size")
@@ -106,16 +115,16 @@ def train():
     parser.add_argument("--strategy", help="Training strategy, defaults to `mirror`", choices=["mirror"])
 
     args = parser.parse_args()
+    SET_TRAIN_FLAG(True)
 
     if args.basedir is None:
         args.basedir = 'lm-{}-bpe-{}'.format(args.dataset_key, os.getpid())
     logging.basicConfig(level=logging.INFO)
 
-    num_gpus = get_num_gpus_multiworker()
 
-    devices = ['/device:GPU:{}'.format(i) for i in range(num_gpus)]
-    strategy = tf.distribute.MirroredStrategy(devices)
-    logger.info(f"Using {num_gpus} GPUs in this job.")
+    strategy = create_distribute_strategy(args.strategy)
+    num_replicas = strategy.num_replicas_in_sync
+    logger.info(f"Using {num_replicas} replicas in this job.")
     global_step = 1
     vectorizer = BPEVectorizer1D(model_file=args.subword_model_file, vocab_file=args.subword_vocab_file, mxlen=args.nctx)
     vocab = {'x': vectorizer.vocab}
@@ -124,9 +133,26 @@ def train():
                                                        embed_type=args.embed_type)
     vocabs = preproc_data['vocab']
     vocab_size = max(vocabs.values())
-    train_loader = get_dataset(os.path.join(args.train_dir, args.pattern), args.num_train_workers).batch(args.batch_size)
-    valid_loader = get_dataset(args.valid_dir, args.num_valid_workers).batch(args.batch_size)
+
+    def dataset_train_fn(input_context):
+        batch_size = input_context.get_per_replica_batch_size(args.batch_size)
+        ds = get_dataset(os.path.join(args.train_dir, args.pattern), args.num_train_workers).batch(batch_size)
+        return ds.shard(
+            input_context.num_input_pipelines, input_context.input_pipeline_id
+        )
+    train_loader = strategy.experimental_distribute_datasets_from_function(dataset_train_fn)
+
+    def dataset_test_fn(input_context):
+        batch_size = input_context.get_per_replica_batch_size(args.batch_size)
+        ds = get_dataset(os.path.join(args.valid_dir, args.pattern), args.num_train_workers).batch(batch_size)
+        return ds.shard(
+            input_context.num_input_pipelines, input_context.input_pipeline_id
+        )
+    valid_loader = strategy.experimental_distribute_datasets_from_function(dataset_test_fn)
+
+
     num_train_samples = get_num_samples(args.train_dir)
+    num_valid_samples = get_num_samples(args.valid_dir)
     os.makedirs(args.basedir, exist_ok=True)
     # We want to make sure to save our input vocab into the basedir for reuse later
     write_json(vocabs, os.path.join(args.basedir, 'vocabs.json'))
@@ -166,10 +192,8 @@ def train():
                                                     max_to_keep=5)
 
     logger.info("Loaded model and loss")
-
-    # according to pytorch, len(train_loader) will return len(train_set) when train_set is IterableDataset, so manually
-    # correct it here
-    steps_per_epoch = num_train_samples // (args.batch_size*num_gpus)
+    steps_per_epoch = num_train_samples // args.batch_size
+    steps_per_valid_epoch = num_valid_samples // args.batch_size
     update_on = steps_per_epoch // args.saves_per_epoch
     report_on = update_on // 10
     logger.info(f"Steps per epoch per GPU: {steps_per_epoch}. Saving checkpoint every {update_on} steps.")
@@ -177,51 +201,88 @@ def train():
     if args.restart_from:
         checkpoint.restore(checkpoint_manager.latest_checkpoint)
 
+    def _replicated_train_step(inputs):
+        """This runs on a single replica"""
+        x, y = inputs
+        per_replica_loss = optimizer.update(model, {'x': x}, y, num_replicas)
+        return per_replica_loss
+
+    @tf.function
+    def _distributed_train_step(inputs: Tuple[tf.Tensor, tf.Tensor]):
+        """Runs across multiple replicas and aggregates the results.
+
+        :param inputs:
+        :return:
+        """
+        per_replica_loss = strategy.experimental_run_v2(_replicated_train_step, args=(inputs,))
+        return strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_loss, axis=None)
+
+    def _replicated_test_step(inputs):
+        """This runs on a single replica"""
+        x, y = inputs
+        per_replica_loss = loss_function(model, {'x': x}, y) / num_replicas
+        return per_replica_loss
+
+    @tf.function
+    def _distributed_test_step(inputs: Tuple[tf.Tensor, tf.Tensor]):
+        """Runs across multiple replicas and aggregates the results.
+
+        :param inputs:
+        :return:
+        """
+        per_replica_loss = strategy.experimental_run_v2(_replicated_test_step, args=(inputs,))
+        return strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_loss, axis=None)
+
     # This is the training loop
     steps = global_step
     start_epoch = 0
 
-    for epoch in range(start_epoch, args.epochs):
-        avg_loss = Average('average_train_loss')
-        metrics = {}
-        start = time.time()
-        train_iter = iter(train_loader)
-        for i, batch in enumerate(train_iter):
-            steps += 1
-            x, y = batch
-            avg_loss = optimizer.update(model, {'x': x}, y)
-            if (i + 1) % report_on == 0:
-                logging.info(avg_loss.numpy().item())
-            if (i + 1) % update_on == 0:
-                elapsed = (time.time() - start)/60
-                logging.info('elapsed time this epoch %d min', elapsed)
-                logging.info('elapsed step time %f steps/min', i/elapsed)
-                checkpoint_manager.save()
+    with strategy.scope():
 
-        # How much time elapsed in minutes
-        elapsed = (time.time() - start)/60
-        train_token_loss = avg_loss.avg
-        # This is the average training token-level loss across all machines
-        # This is the token-level training perplexity
-        train_token_ppl = math.exp(train_token_loss)
-        metrics['train_elapsed_min'] = elapsed
-        metrics['average_train_loss'] = train_token_loss
-        metrics['train_ppl'] = train_token_ppl
-        avg_valid_loss = Average('average_valid_loss')
-        start = time.time()
-        for batch in valid_loader:
-            x, y = batch
-            loss = loss_function(model, x, y)
-            avg_valid_loss.update(loss.numpy().item())
+        SET_TRAIN_FLAG(True)
 
-        valid_token_loss = avg_valid_loss.avg
-        valid_token_ppl = math.exp(valid_token_loss)
+        for epoch in range(start_epoch, args.epochs):
+            avg_loss = Average('average_train_loss')
+            metrics = {}
+            start = time.time()
+            train_iter = iter(train_loader)
+            for i in range(steps_per_epoch):
+                steps += 1
+                loss = _distributed_train_step(next(train_iter))
+                avg_loss.update(loss.numpy().item())
+                if (i + 1) % report_on == 0:
+                    logging.info(avg_loss)
+                if (i + 1) % update_on == 0:
+                    elapsed = (time.time() - start)/60
+                    logging.info('elapsed time this epoch %d min', elapsed)
+                    logging.info('elapsed step time %f steps/min', i/elapsed)
+                    checkpoint_manager.save()
 
-        elapsed = (time.time() - start)/60
-        metrics['valid_elapsed_min'] = elapsed
-        metrics['average_valid_loss'] = valid_token_loss
-        metrics['average_valid_word_ppl'] = valid_token_ppl
-        logger.info(metrics)
+            # How much time elapsed in minutes
+            elapsed = (time.time() - start)/60
+            train_token_loss = avg_loss.avg
+            # This is the average training token-level loss across all machines
+            # This is the token-level training perplexity
+            train_token_ppl = math.exp(train_token_loss)
+            metrics['train_elapsed_min'] = elapsed
+            metrics['average_train_loss'] = train_token_loss
+            metrics['train_ppl'] = train_token_ppl
+            avg_valid_loss = Average('average_valid_loss')
+            start = time.time()
+            SET_TRAIN_FLAG(False)
+            valid_iter = iter(valid_loader)
+            for i in range(steps_per_valid_epoch):
+                valid_loss = _distributed_test_step(next(valid_iter))
+                avg_valid_loss.update(valid_loss.numpy().item())
+
+            valid_token_loss = avg_valid_loss.avg
+            valid_token_ppl = math.exp(valid_token_loss)
+
+            elapsed = (time.time() - start)/60
+            metrics['valid_elapsed_min'] = elapsed
+            metrics['average_valid_loss'] = valid_token_loss
+            metrics['average_valid_word_ppl'] = valid_token_ppl
+            logger.info(metrics)
 
 
 if __name__ == "__main__":

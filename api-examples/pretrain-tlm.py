@@ -42,7 +42,8 @@ def train():
     parser.add_argument("--dataset_key", default="tlm",
                         help="dataset key for basedir")
     parser.add_argument("--embed_type", type=str, default='default',
-                        help="register label of the embeddings, so far support positional or learned-positional")
+                        choices=["default", "positional", "learned-positional"],
+                        help="register label of the embeddings")
     parser.add_argument("--d_model", type=int, default=410, help="Model dimension (and embedding dsz)")
     parser.add_argument("--d_ff", type=int, default=2100, help="FFN dimension")
     parser.add_argument("--d_k", type=int, default=None, help="Dimension per head.  Use if num_heads=1 to reduce dims")
