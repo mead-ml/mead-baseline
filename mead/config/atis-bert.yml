@@ -1,0 +1,44 @@
+task: tagger
+backend: pytorch
+conll_output: atis-bert.conll
+unif: 0.1
+dataset: atis
+
+preproc: 
+  mxlen: -1
+  mxwlen: -1
+
+features:
+ - name: word
+   vectorizer:
+     label: bert-base-uncased-dict1d
+   embeddings:
+     type: tlm-words-embed 
+     word_embed_type: learned-positional-w-bias
+     label: bert-base-uncased-npz
+     reduction: sum-layer-norm
+     layer_norms_after: true
+     finetune: true
+     mlm: true
+loader:
+  reader_type: default
+  named_fields: {"0": "text", "-1": "y"}
+  label_vectorizer:
+    label: y
+    type: wordpiece-label-dict1d
+
+model:
+  model_type: pass
+  constrain_decode: 0
+  crf: 1
+  dropout: 0.65
+
+train:
+  batchsz: 32
+  epochs: 50
+  optim: adam
+  eta: 1.0e-5
+  patience: 15
+  early_stopping_metric: f1
+  clip: 5.0
+  span_type: bio 
