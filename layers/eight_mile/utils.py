@@ -1457,7 +1457,7 @@ def get_num_gpus_multiworker() -> int:
 
     :return:
     """
-    int(os.environ.get("WORLD_SIZE", 1))
+    return int(os.environ.get("WORLD_SIZE", 1))
 
 @export
 def ngrams(sentence: List[str], filtsz: int = 3, joiner: str = "@@") -> List[str]:
