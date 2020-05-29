@@ -292,6 +292,8 @@ register(CompositeLRSchedulerTensorFlow, MEAD_LAYERS_LR_SCHEDULERS, "composite",
 register(PiecewiseDecaySchedulerTensorFlow, MEAD_LAYERS_LR_SCHEDULERS, "piecewise", "lr_scheduler")
 register(ZarembaDecaySchedulerTensorFlow, MEAD_LAYERS_LR_SCHEDULERS, "zaremba", "lr_scheduler")
 register(CosineDecaySchedulerTensorFlow, MEAD_LAYERS_LR_SCHEDULERS, "cosine", "lr_scheduler")
+register(InverseTimeDecaySchedulerTensorFlow, MEAD_LAYERS_LR_SCHEDULERS, "invtime", "lr_scheduler")
+register(ExponentialDecaySchedulerTensorFlow, MEAD_LAYERS_LR_SCHEDULERS, "exponential", "lr_scheduler")
 
 
 class AdamWOptimizer(tf.compat.v1.train.Optimizer):
