@@ -12,7 +12,7 @@ import baseline.embeddings
 from baseline.vectorizers import BPEVectorizer1D
 from eight_mile.utils import Average, get_num_gpus_multiworker, read_yaml
 from eight_mile.optz import *
-from eight_mile.tf.optz import WarmupLinearSchedulerTensorFlow2, CosineDecayTensorFlow2, CompositeLRSchedulerTensorFlow2, EagerOptimizer
+from eight_mile.tf.optz import *  #WarmupLinearSchedulerTensorFlow2, CosineDecayTensorFlow2, CompositeLRSchedulerTensorFlow2, EagerOptimizer
 from baseline.tf.lm import SET_TRAIN_FLAG, TransformerLanguageModel, TransformerMaskedLanguageModel
 import tensorflow as tf
 import glob
@@ -35,6 +35,23 @@ the numeric one-hot values for each token, and then in this script, pass `--prep
 If the model is an MLM and the `preprocessed` value is false, on-demand MLM masking is performed.
 
 """
+
+def get_lr_decay(sched_type, lr, steps_per_epoch, n_epochs, logger, decay_steps=None, decay_rate=None, alpha=None):
+    if sched_type == 'cosine':
+        decay_steps = decay_steps if decay_steps else steps_per_epoch * n_epochs
+        alpha = alpha if alpha else 0.
+        params = {'decay_steps': decay_steps, 'alpha': alpha}
+    else:
+        decay_steps = decay_steps if decay_steps else steps_per_epoch
+        if not decay_rate:
+            if sched_type == 'exponential':
+                decay_rate = 0.5
+            elif sched_type == 'invtime':
+                decay_rate = 1.0
+        params = {'decay_steps': decay_steps, 'decay_rate': decay_rate}
+    lr_decay = create_lr_scheduler(lr_scheduler_type=sched_type, lr=lr, **params)
+    logger.info(f"Using {sched_type} decay learning rate with params {params}.")
+    return lr_decay
 
 
 class Loss:
@@ -110,6 +127,10 @@ def train():
     parser.add_argument("--restart_from", type=str, help="Option allows you to restart from a previous checkpoint")
     parser.add_argument("--restart_tt", type=str, help="Optional param for legacy checkpoints (step|epoch)")
     parser.add_argument("--warmup_steps", type=int, default=10000, help="Num warmup steps")
+    parser.add_argument("--lr_scheduler", type=str, help="The type of learning rate decay scheduler", default='cosine')
+    parser.add_argument("--lr_decay_steps", type=int, help="decay steps of lr scheduler")
+    parser.add_argument("--lr_decay_rate", type=float, help="decay rate of lr scheduler")
+    parser.add_argument("--lr_alpha", type=float, help="parameter alpha for cosine decay scheduler")
     parser.add_argument("--mlm", type=str2bool, default=True, help="Use Masked Language Model (MLM) objective")
     parser.add_argument("--saves_per_epoch", type=int, default=100, help="The number of checkpoints to save per epoch")
     parser.add_argument('--rpr_k',
@@ -193,9 +214,10 @@ def train():
     report_on = update_on // 10
     logger.info(f"Steps per epoch per GPU: {steps_per_epoch}. Saving checkpoint every {update_on} steps.")
 
-    linear_warmup = WarmupLinearSchedulerTensorFlow2(args.warmup_steps, lr=args.lr)
-    lr_decay = CosineDecayTensorFlow2(steps_per_epoch * args.epochs, lr=args.lr)
-    lr_sched = CompositeLRSchedulerTensorFlow2(linear_warmup, lr_decay, lr=args.lr)
+    lr_decay = get_lr_decay(args.lr_scheduler, args.lr, steps_per_epoch, args.epochs, logger,
+                            decay_steps=args.lr_decay_steps, decay_rate=args.lr_decay_rate, alpha=args.lr_alpha)
+    linear_warmup = WarmupLinearSchedulerTensorFlow(args.warmup_steps, lr=args.lr)
+    lr_sched = CompositeLRSchedulerTensorFlow(linear_warmup, lr_decay, lr=args.lr)
     optimizer = EagerOptimizer(loss_function, global_step=global_step, lr=args.lr, optim=args.optim, learning_rate_decay_fn=lr_sched, weight_decay=args.weight_decay)
     checkpoint = tf.train.Checkpoint(optimizer=optimizer.optimizer, model=model)
     checkpoint_dir = '{}-{}'.format("./tf-seq2seq", os.getpid())
