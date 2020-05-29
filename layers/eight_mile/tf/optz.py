@@ -267,6 +267,7 @@ if not tf.executing_eagerly():
 
     ConstantSchedulerTensorFlow = ConstantSchedulerTensorFlow1
     WarmupLinearSchedulerTensorFlow = WarmupLinearSchedulerTensorFlow1
+    CyclicLRSchedulerTensorFlow = CyclicLRSchedulerTensorFlow1
     SGDRSchedulerTensorFlow = SGDRSchedulerTensorFlow1
     CompositeLRSchedulerTensorFlow = CompositeLRSchedulerTensorFlow1
     PiecewiseDecaySchedulerTensorFlow = PiecewiseDecaySchedulerTensorFlow1
