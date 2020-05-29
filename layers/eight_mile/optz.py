@@ -39,7 +39,7 @@ def create_lr_scheduler(**kwargs):
 
 
 @export
-class LearningRateScheduler(object):
+class LearningRateScheduler:
     def __init__(self, **kwargs):
         self.lr = kwargs.get("lr", kwargs.get("eta", 1.0))
 

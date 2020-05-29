@@ -181,10 +181,10 @@ else:
     class WarmupLinearSchedulerTensorFlow2(
         WarmupLearningRateScheduler, tf.keras.optimizers.schedules.LearningRateSchedule
     ):
-        def __init__(self, **kwargs):
+        def __init__(self, warmup_steps=16000, **kwargs):
             lr = float(kwargs.get("lr", kwargs.get("eta", 1.0)))
             kwargs["lr"] = lr
-            super().__init__(**kwargs)
+            super().__init__(warmup_steps=warmup_steps, **kwargs)
 
         def __call__(self, global_step):
             return tf.minimum(1.0, global_step / float(self.warmup_steps)) * self.lr

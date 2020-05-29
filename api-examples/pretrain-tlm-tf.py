@@ -12,7 +12,7 @@ import baseline.embeddings
 from baseline.vectorizers import BPEVectorizer1D
 from eight_mile.utils import Average, get_num_gpus_multiworker, read_yaml
 from eight_mile.optz import *
-from eight_mile.tf.optz import *
+from eight_mile.tf.optz import WarmupLinearSchedulerTensorFlow2, CosineDecayTensorFlow2, CompositeLRSchedulerTensorFlow2, EagerOptimizer
 from baseline.tf.lm import SET_TRAIN_FLAG, TransformerLanguageModel, TransformerMaskedLanguageModel
 import tensorflow as tf
 import glob
@@ -21,6 +21,7 @@ logger = logging.getLogger(__file__)
 
 
 """Pre-train a Transformer model in TensorFlow
+
 
 The datasets in this program are read in as an `IterableDataset`, typically one line per sample, which
 makes it efficient to process even very large datasets that may not fit in core memory.  The datasets are
@@ -70,10 +71,12 @@ def get_num_samples(data_dir):
     yml = read_yaml(os.path.join(data_dir, 'md.yml'))
     return yml['num_samples']
 
+
 def create_distribute_strategy(strategy_name):
     num_gpus = get_num_gpus_multiworker()
     devices = ['/device:GPU:{}'.format(i) for i in range(num_gpus)]
     return tf.distribute.MirroredStrategy(devices)
+
 
 def train():
     parser = ArgumentParser()
@@ -182,7 +185,18 @@ def train():
                        src_keys=['x'], tgt_key='x')
 
     loss_function = Loss(vocab_size, args.nctx)
-    optimizer = EagerOptimizer(loss_function, global_step=global_step, optim=args.optim, lr=args.lr, weight_decay=args.weight_decay)
+
+    logger.info("Loaded model and loss")
+    steps_per_epoch = num_train_samples // args.batch_size
+    steps_per_valid_epoch = num_valid_samples // args.batch_size
+    update_on = steps_per_epoch // args.saves_per_epoch
+    report_on = update_on // 10
+    logger.info(f"Steps per epoch per GPU: {steps_per_epoch}. Saving checkpoint every {update_on} steps.")
+
+    linear_warmup = WarmupLinearSchedulerTensorFlow2(args.warmup_steps, lr=args.lr)
+    lr_decay = CosineDecayTensorFlow2(steps_per_epoch * args.epochs, lr=args.lr)
+    lr_sched = CompositeLRSchedulerTensorFlow2(linear_warmup, lr_decay, lr=args.lr)
+    optimizer = EagerOptimizer(loss_function, global_step=global_step, lr=args.lr, optim=args.optim, learning_rate_decay_fn=lr_sched, weight_decay=args.weight_decay)
     checkpoint = tf.train.Checkpoint(optimizer=optimizer.optimizer, model=model)
     checkpoint_dir = '{}-{}'.format("./tf-seq2seq", os.getpid())
     #model_base = os.path.join(args.basedir, 'checkpoint-step')
@@ -191,12 +205,7 @@ def train():
                                                     directory=checkpoint_dir,
                                                     max_to_keep=5)
 
-    logger.info("Loaded model and loss")
-    steps_per_epoch = num_train_samples // args.batch_size
-    steps_per_valid_epoch = num_valid_samples // args.batch_size
-    update_on = steps_per_epoch // args.saves_per_epoch
-    report_on = update_on // 10
-    logger.info(f"Steps per epoch per GPU: {steps_per_epoch}. Saving checkpoint every {update_on} steps.")
+
 
     if args.restart_from:
         checkpoint.restore(checkpoint_manager.latest_checkpoint)
