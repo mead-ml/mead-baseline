@@ -3,9 +3,9 @@ import json
 import pytest
 import numpy as np
 from eight_mile.utils import get_version
-
 tf = pytest.importorskip("tensorflow")
 pytestmark = pytest.mark.skipif(get_version(tf) < 2, reason="TF1.X")
+
 from eight_mile.optz import (
     create_lr_scheduler,
     ConstantScheduler,
@@ -17,6 +17,7 @@ from eight_mile.optz import (
     InverseTimeDecayScheduler,
     ExponentialDecayScheduler,
 )
+
 import numpy as np
 
 

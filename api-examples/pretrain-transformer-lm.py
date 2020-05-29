@@ -11,7 +11,8 @@ from eight_mile.utils import str2bool, write_json, Offsets
 import baseline.pytorch.embeddings
 import baseline.embeddings
 from eight_mile.optz import *
-from eight_mile.pytorch.layers import checkpoint_for, rm_old_checkpoints, Average, init_distributed, save_checkpoint
+from eight_mile.utils import Average, get_num_gpus_multiworker
+from eight_mile.pytorch.layers import checkpoint_for, rm_old_checkpoints, init_distributed, save_checkpoint
 from eight_mile.pytorch.optz import *
 from eight_mile.pytorch.serialize import save_tlm_npz
 from baseline.pytorch.lm import TransformerLanguageModel, TransformerMaskedLanguageModel
@@ -253,7 +254,7 @@ def train():
     logging.basicConfig(level=logging.INFO if args.local_rank in [-1, 0] else logging.WARN)
     logger.info("Cache directory [%s]", args.dataset_cache)
 
-    num_gpus = int(os.environ.get("WORLD_SIZE", 1))
+    num_gpus = get_num_gpus_multiworker()
     args.distributed = args.distributed or num_gpus > 1
     logger.info(f"Using {num_gpus} GPUs in this job.")
 

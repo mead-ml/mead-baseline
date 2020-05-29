@@ -10,10 +10,12 @@ import glob
 from baseline.pytorch.embeddings import *
 import baseline.embeddings
 from eight_mile.optz import *
+from eight_mile.utils import Average, get_num_gpus_multiworker
 from eight_mile.pytorch.optz import *
-from eight_mile.pytorch.layers import Average, save_checkpoint, init_distributed
+from eight_mile.pytorch.layers import save_checkpoint, init_distributed
 from transformer_utils import MultiFileDatasetReader, PairedModel, TripletLoss, AllLoss, TiedEmbeddingsSeq2SeqModel, \
     create_model, get_lr_decay
+
 logger = logging.getLogger(__file__)
 
 """Pre-train a paired model in PyTorch
@@ -100,7 +102,7 @@ def train():
         format="%(name)s: %(levelname)s: %(message)s",
         level=logging.INFO if args.local_rank in [-1, 0] else logging.WARN
     )
-    num_gpus = int(os.environ.get("WORLD_SIZE", 1))
+    num_gpus = get_num_gpus_multiworker()
     args.distributed = args.distributed or num_gpus > 1
     logger.info(f"Using {num_gpus} GPUs in this job.")
 

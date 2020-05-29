@@ -1452,6 +1452,14 @@ def get_env_gpus() -> List[str]:
 
 
 @export
+def get_num_gpus_multiworker() -> int:
+    """Get the number of GPUs in multi-worker distributed training
+
+    :return:
+    """
+    return int(os.environ.get("WORLD_SIZE", 1))
+
+@export
 def ngrams(sentence: List[str], filtsz: int = 3, joiner: str = "@@") -> List[str]:
     """Generate ngrams over a sentence
 
@@ -1621,4 +1629,25 @@ def print_table(rows: collections.namedtuple, columns: Optional[Set[str]] = None
         hwidth = len(max(fields, key=lambda x: len(x)))
         for field in fields:
             print("%*s = %s" % (hwidth, field, getattr(row, field)))
+
+
+@export
+class Average:
+    def __init__(self, name, fmt=':f'):
+        self.name = name
+        self.fmt = fmt
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
+
+    def update(self, val, n=1):
+        self.val = val
+        self.sum += val * n
+        self.count += n
+        self.avg = self.sum / self.count
+
+    def __str__(self):
+        fmtstr = '{name} {val' + self.fmt + '} ({avg' + self.fmt + '})'
+        return fmtstr.format(**self.__dict__)
 

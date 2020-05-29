@@ -6,7 +6,7 @@ import tempfile
 import baseline
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader
-from eight_mile.utils import str2bool, write_json
+from eight_mile.utils import str2bool, write_json, get_num_gpus_multiworker
 import baseline.pytorch.embeddings
 import baseline.embeddings
 from eight_mile.optz import *
@@ -39,12 +39,11 @@ def train():
     parser.add_argument("--basedir", type=str)
     parser.add_argument("--train_file", type=str, required=True, help='File path to use for train file')
     parser.add_argument("--valid_file", type=str, required=True, help='File path to use for valid file')
-    parser.add_argument("--dataset_cache", type=str, default=os.path.expanduser('~/.bl-data'),
-                        help="Path or url of the dataset cache")
     parser.add_argument("--dataset_key", default="reddit",
                         help="dataset key for basedir")
     parser.add_argument("--embed_type", type=str, default='default',
-                        help="register label of the embeddings, so far support positional or learned-positional")
+                        choices=["default", "positional", "learned-positional"],
+                        help="register label of the embeddings")
     parser.add_argument("--d_model", type=int, default=410, help="Model dimension (and embedding dsz)")
     parser.add_argument("--d_ff", type=int, default=2100, help="FFN dimension")
     parser.add_argument("--d_k", type=int, default=None, help="Dimension per head.  Use if num_heads=1 to reduce dims")
@@ -64,7 +63,7 @@ def train():
     parser.add_argument("--lr_alpha", type=float, help="parameter alpha for cosine decay scheduler")
     parser.add_argument("--optim", default="adam", type=str, help="Optimizer to use (defaults to adam)")
     parser.add_argument("--lr", type=float, default=4.0e-4, help="Learning rate")
-    parser.add_argument("--clip", type=float, default=0.25, help="Clipping gradient norm")
+    parser.add_argument("--clip", type=float, default=1.0, help="Clipping gradient norm")
     parser.add_argument("--weight_decay", type=float, default=0.0, help="Weight decay")
     parser.add_argument("--epochs", type=int, default=20, help="Num training epochs")
     parser.add_argument("--restart_from", type=str, help="Option allows you to restart from a previous checkpoint")
@@ -87,19 +86,14 @@ def train():
                         type=int,
                         default=-1,
                         help="Local rank for distributed training (-1 means use the environment variables to find)")
-    parser.add_argument("--chars_per_word",
-                        type=int,
-                        default=40,
-                        help="How many max characters per word")
 
     args = parser.parse_args()
 
     if args.basedir is None:
         args.basedir = 'lm-{}-bpe-{}'.format(args.dataset_key, os.getpid())
     logging.basicConfig(level=logging.INFO if args.local_rank in [-1, 0] else logging.WARN)
-    logger.info("Cache directory [%s]", args.dataset_cache)
 
-    num_gpus = int(os.environ.get("WORLD_SIZE", 1))
+    num_gpus = get_num_gpus_multiworker()
     args.distributed = args.distributed or num_gpus > 1
     logger.info(f"Using {num_gpus} GPUs in this job.")
 
@@ -233,7 +227,7 @@ def train():
                 inputs, labels = on_demand_mlm_masking(inputs, labels, mask_value, vocab_size)
             inputs = {'x': inputs}
 
-            labels = labels.transpose(0, 1).contiguous().to(args.device)
+            labels = labels.transpose(0, 1).contiguous()
             logits = model(inputs, None)[0].transpose(0, 1).contiguous()
             if args.mlm:
                 loss = loss_function(logits, labels)
