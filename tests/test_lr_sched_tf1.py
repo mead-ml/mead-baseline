@@ -17,7 +17,6 @@ from eight_mile.optz import (
     InverseTimeDecayScheduler,
     ExponentialDecayScheduler,
 )
-from eight_mile.tf.optz import *
 import numpy as np
 
 
