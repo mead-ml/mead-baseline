@@ -157,6 +157,7 @@ class TFRecordRollingWriter(RollingWriter):
     def suffix(self):
         return 'tfrecord'
 
+
 def create_file_writer(fmt, name, fields, max_file_size_mb):
     if fmt == 'tsv':
         return TSVWriter(name, fields, max_file_size_mb)
