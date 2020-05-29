@@ -39,7 +39,7 @@ def train():
     parser.add_argument("--basedir", type=str)
     parser.add_argument("--train_file", type=str, required=True, help='File path to use for train file')
     parser.add_argument("--valid_file", type=str, required=True, help='File path to use for valid file')
-    parser.add_argument("--dataset_key", default="tlm",
+    parser.add_argument("--dataset_key", default="reddit",
                         help="dataset key for basedir")
     parser.add_argument("--embed_type", type=str, default='default',
                         choices=["default", "positional", "learned-positional"],
@@ -63,7 +63,7 @@ def train():
     parser.add_argument("--lr_alpha", type=float, help="parameter alpha for cosine decay scheduler")
     parser.add_argument("--optim", default="adam", type=str, help="Optimizer to use (defaults to adam)")
     parser.add_argument("--lr", type=float, default=4.0e-4, help="Learning rate")
-    parser.add_argument("--clip", type=float, default=0.25, help="Clipping gradient norm")
+    parser.add_argument("--clip", type=float, default=1.0, help="Clipping gradient norm")
     parser.add_argument("--weight_decay", type=float, default=0.0, help="Weight decay")
     parser.add_argument("--epochs", type=int, default=20, help="Num training epochs")
     parser.add_argument("--restart_from", type=str, help="Option allows you to restart from a previous checkpoint")

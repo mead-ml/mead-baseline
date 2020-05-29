@@ -117,7 +117,7 @@ def train():
     parser.add_argument("--basedir", type=str)
     parser.add_argument("--train_dir", type=str, required=True, help='Training directory')
     parser.add_argument("--valid_dir", type=str, required=True, help='Validation directory')
-    parser.add_argument("--dataset_key", default="reddit",
+    parser.add_argument("--dataset_key", default="tlm",
                         help="dataset key for basedir")
     parser.add_argument("--embed_type", type=str, default='default',
                         choices=["default", "positional", "learned-positional"],
@@ -139,7 +139,7 @@ def train():
     parser.add_argument("--dropout", type=float, default=0.1, help="Dropout")
     parser.add_argument("--optim", default="adam", type=str, help="Optimizer to use (defaults to adam)")
     parser.add_argument("--lr", type=float, default=4.0e-4, help="Learning rate")
-    parser.add_argument("--clip", type=float, default=0.25, help="Clipping gradient norm")
+    parser.add_argument("--clip", type=float, default=1, help="Clipping gradient norm")
     parser.add_argument("--weight_decay", type=float, default=0.0, help="Weight decay")
     parser.add_argument("--epochs", type=int, default=20, help="Num training epochs")
     parser.add_argument("--restart_from", type=str, help="Option allows you to restart from a previous checkpoint")
@@ -224,26 +224,26 @@ def train():
     loss_function = Loss(vocab_size, args.nctx)
 
     logger.info("Loaded model and loss")
-    steps_per_epoch = num_train_samples // args.batch_size
-    steps_per_valid_epoch = num_valid_samples // args.batch_size
+    steps_per_epoch = math.ceil(num_train_samples / args.batch_size)
+    steps_per_valid_epoch = math.ceil(num_valid_samples / args.batch_size)
     update_on = steps_per_epoch // args.saves_per_epoch
-    report_on = update_on // 10
+    report_on = max(10, update_on) // 10
     logger.info(f"Steps per epoch per GPU: {steps_per_epoch}. Saving checkpoint every {update_on} steps.")
 
     lr_decay = get_lr_decay(args.lr_scheduler, args.lr, steps_per_epoch, args.epochs, logger,
                             decay_steps=args.lr_decay_steps, decay_rate=args.lr_decay_rate, alpha=args.lr_alpha)
     linear_warmup = WarmupLinearSchedulerTensorFlow(args.warmup_steps, lr=args.lr)
     lr_sched = CompositeLRSchedulerTensorFlow(linear_warmup, lr_decay, lr=args.lr)
-    optimizer = EagerOptimizer(loss_function, global_step=global_step, lr=args.lr, optim=args.optim, learning_rate_decay_fn=lr_sched, weight_decay=args.weight_decay)
+    optimizer = EagerOptimizer(loss_function, global_step=global_step, lr=args.lr, optim=args.optim,
+                               learning_rate_decay_fn=lr_sched, weight_decay=args.weight_decay, clip=args.clip)
     checkpoint = tf.train.Checkpoint(optimizer=optimizer.optimizer, model=model)
-    checkpoint_dir = '{}-{}'.format("./tf-seq2seq", os.getpid())
+    pid = os.getpid()
+    checkpoint_dir = f"./tf-{args.dataset_key}-{pid}"
     #model_base = os.path.join(args.basedir, 'checkpoint-step')
 
     checkpoint_manager = tf.train.CheckpointManager(checkpoint,
                                                     directory=checkpoint_dir,
                                                     max_to_keep=5)
-
-
 
     if args.restart_from:
         checkpoint.restore(checkpoint_manager.latest_checkpoint)
@@ -264,10 +264,11 @@ def train():
         per_replica_loss = strategy.experimental_run_v2(_replicated_train_step, args=(inputs,))
         return strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_loss, axis=None)
 
+    valid_loss_function = Loss(vocab_size, args.nctx)
     def _replicated_test_step(inputs):
         """This runs on a single replica"""
         x, y = inputs
-        per_replica_loss = loss_function(model, {'x': x}, y) / num_replicas
+        per_replica_loss = valid_loss_function(model, {'x': x}, y) / num_replicas
         return per_replica_loss
 
     @tf.function
@@ -287,7 +288,6 @@ def train():
     with strategy.scope():
 
         SET_TRAIN_FLAG(True)
-
         for epoch in range(start_epoch, args.epochs):
             avg_loss = Average('average_train_loss')
             metrics = {}
