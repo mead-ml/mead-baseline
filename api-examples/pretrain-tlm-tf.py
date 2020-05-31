@@ -79,14 +79,29 @@ def _parse_json(example):
     j = json.loads(example.numpy())
     return tf.constant(j['x'], dtype=tf.int32), tf.constant(j['y'], dtype=tf.int32)
 
+feature_description = {
+    'x': tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True, default_value=0),
+    'y': tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True, default_value=0),
+}
+
+
+def _parse_tf_record(example_proto):
+    record = tf.io.parse_single_example(example_proto, feature_description)
+    return record['x'], record['y']
+
 
 def decode_json(example):
     return tf.py_function(_parse_json, [example], [tf.int32, tf.int32])
 
 
-def get_dataset(pattern, num_parallel_reads=1):
-    ds = tf.data.TextLineDataset(glob.glob(pattern), num_parallel_reads=num_parallel_reads)
-    return ds.map(decode_json)
+def get_dataset(directory, file_type, num_parallel_reads=1):
+    pattern = os.path.join(directory, f'*.{file_type}')
+    files = glob.glob(pattern)
+    if file_type == 'json':
+        ds = tf.data.TextLineDataset(files, num_parallel_reads=num_parallel_reads)
+        return ds.map(decode_json)
+    ds = tf.data.TFRecordDataset(files).map(_parse_tf_record)
+    return ds
 
 
 def get_num_samples(data_dir):
@@ -133,7 +148,7 @@ def train():
     parser.add_argument("--distribute", type=str, default="mirror", choices=["mirror", "tpu"])
     parser.add_argument("--tpu_ep", type=str, help="The TPU endpoint if using `distribute=tpu`")
     parser.add_argument("--nctx", type=int, default=128, help="Max input length")
-    parser.add_argument("--pattern", default='*.txt', help="Glob pattern for data")
+    parser.add_argument("--file_type", default='tfrecord', choices=['json', 'tfrecord'], help="Glob pattern for data")
     parser.add_argument("--batch_size", type=int, default=8, help="Batch Size")
     parser.add_argument("--subword_model_file", type=str, help="The BPE model file", required=True)
     parser.add_argument("--subword_vocab_file", type=str, help="The BPE subword vocab", required=True)
@@ -161,7 +176,7 @@ def train():
     SET_TRAIN_FLAG(True)
 
     if args.basedir is None:
-        args.basedir = 'lm-{}-bpe-{}'.format(args.dataset_key, os.getpid())
+        args.basedir = f'lm-{args.dataset_key}-bpe-{os.getpid()}'
     logging.basicConfig(level=logging.INFO)
 
     strategy = create_distribute_strategy(args.distribute, args.tpu_ep)
@@ -178,7 +193,7 @@ def train():
 
     def dataset_train_fn(input_context):
         batch_size = input_context.get_per_replica_batch_size(args.batch_size)
-        ds = get_dataset(os.path.join(args.train_dir, args.pattern), args.num_train_workers).batch(batch_size)
+        ds = get_dataset(args.train_dir, args.file_type, args.num_train_workers).batch(batch_size)
         return ds.shard(
             input_context.num_input_pipelines, input_context.input_pipeline_id
         )
@@ -186,7 +201,7 @@ def train():
 
     def dataset_test_fn(input_context):
         batch_size = input_context.get_per_replica_batch_size(args.batch_size)
-        ds = get_dataset(os.path.join(args.valid_dir, args.pattern), args.num_train_workers).batch(batch_size)
+        ds = get_dataset(args.valid_dir, args.file_type, args.num_train_workers).batch(batch_size)
         return ds.shard(
             input_context.num_input_pipelines, input_context.input_pipeline_id
         )
@@ -229,7 +244,7 @@ def train():
     steps_per_valid_epoch = math.ceil(num_valid_samples / args.batch_size)
     update_on = steps_per_epoch // args.saves_per_epoch
     report_on = max(10, update_on) // 10
-    logger.info(f"Steps per epoch per GPU: {steps_per_epoch}. Saving checkpoint every {update_on} steps.")
+    logger.info(f"Steps per epoch: {steps_per_epoch}. Saving checkpoint every {update_on} steps.")
 
     lr_decay = get_lr_decay(args.lr_scheduler, args.lr, steps_per_epoch, args.epochs, logger,
                             decay_steps=args.lr_decay_steps, decay_rate=args.lr_decay_rate, alpha=args.lr_alpha)
@@ -238,12 +253,8 @@ def train():
     optimizer = EagerOptimizer(loss_function, global_step=global_step, lr=args.lr, optim=args.optim,
                                learning_rate_decay_fn=lr_sched, weight_decay=args.weight_decay, clip=args.clip)
     checkpoint = tf.train.Checkpoint(optimizer=optimizer.optimizer, model=model)
-    pid = os.getpid()
-    checkpoint_dir = f"./tf-{args.dataset_key}-{pid}"
-    #model_base = os.path.join(args.basedir, 'checkpoint-step')
-
     checkpoint_manager = tf.train.CheckpointManager(checkpoint,
-                                                    directory=checkpoint_dir,
+                                                    directory=args.basedir,
                                                     max_to_keep=5)
 
     if args.restart_from:

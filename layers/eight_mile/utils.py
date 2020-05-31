@@ -1594,6 +1594,28 @@ def to_numpy(x):
     return x.numpy()
 
 
+@export
+def mlm_masking(inputs, mask_value, vocab_size, ignore_prefix, ignore_suffix):
+    labels = np.copy(inputs)
+    masked_indices = np.random.binomial(size=len(inputs), n=1, p=0.15)
+    masked_indices[np.random.randint(1, len(inputs)-1)] = 1
+    if ignore_prefix:
+        masked_indices[0] = 0
+    if ignore_suffix:
+        masked_indices[-1] = 0
+    # Anything not masked is 0 so no loss
+    labels[masked_indices == 0] = 0
+    # Of the masked items, mask 80% of them with [MASK]
+    indices_replaced = np.random.binomial(size=len(inputs), n=1, p=0.8)
+    indices_replaced = indices_replaced & masked_indices
+    inputs[indices_replaced == 1] = mask_value
+    indices_random = np.random.binomial(size=len(inputs), n=1, p=0.5)
+    # Replace 10% of them with random words, rest preserved for auto-encoding
+    indices_random = indices_random & masked_indices & ~indices_replaced
+    random_words = np.random.randint(low=len(Offsets.VALUES) + 3, high=vocab_size-1, size=len(inputs))
+    inputs[indices_random == 1] = random_words[indices_random == 1]
+    return inputs, labels
+
 # https://stackoverflow.com/questions/5909873/how-can-i-pretty-print-ascii-tables-with-python
 @export
 def print_table(rows: collections.namedtuple, columns: Optional[Set[str]] = None) -> None:
