@@ -6,13 +6,12 @@ import tempfile
 import baseline
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader
-from eight_mile.utils import str2bool, write_json, get_num_gpus_multiworker
+from eight_mile.utils import str2bool, write_json, Average, get_num_gpus_multiworker
 import baseline.pytorch.embeddings
 import baseline.embeddings
 from eight_mile.optz import *
-from eight_mile.pytorch.layers import checkpoint_for, rm_old_checkpoints, Average, save_checkpoint, init_distributed
+from eight_mile.pytorch.layers import save_checkpoint, init_distributed
 from eight_mile.pytorch.optz import *
-from eight_mile.pytorch.serialize import save_tlm_npz
 from baseline.pytorch.lm import TransformerLanguageModel, TransformerMaskedLanguageModel
 from transformer_utils import MultiFileDatasetReader, on_demand_mlm_masking, get_lr_decay
 
@@ -290,18 +289,7 @@ def train():
         logger.info(metrics)
 
         if args.local_rank < 1:
-
-            # Should probably do this more often
-            checkpoint_name = checkpoint_for(model_base, epoch)
-            logger.info("Creating checkpoint: %s", checkpoint_name)
-            if args.distributed:
-                torch.save(model.module.state_dict(), checkpoint_name+'.pth')
-                save_tlm_npz(model.module, checkpoint_name+'.npz')
-            else:
-                torch.save(model.state_dict(), checkpoint_name+'.pth')
-                save_tlm_npz(model, checkpoint_name+'.npz')
-
-            rm_old_checkpoints(model_base, epoch)
+            save_checkpoint(model, model_base, epoch, save_npz=True)
 
 
 if __name__ == "__main__":
