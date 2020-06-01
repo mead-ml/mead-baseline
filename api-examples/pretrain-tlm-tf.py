@@ -14,7 +14,6 @@ from eight_mile.optz import *
 from eight_mile.tf.optz import *
 from baseline.tf.lm import SET_TRAIN_FLAG, TransformerLanguageModel, TransformerMaskedLanguageModel
 import tensorflow as tf
-import glob
 import json
 logger = logging.getLogger(__file__)
 
@@ -27,36 +26,6 @@ to train them across multiple workers.
 Sample preprocessed data can be found here: https://www.dropbox.com/s/jir4layu6nzjtqy/wt2.tar.gz
 
 """
-
-
-def get_lr_decay(sched_type, lr, steps_per_epoch, n_epochs, logger, decay_steps=None, decay_rate=None, alpha=None):
-    """Copied from transformer_utils.py but that imports torch and we dont want that here
-
-    :param sched_type:
-    :param lr:
-    :param steps_per_epoch:
-    :param n_epochs:
-    :param logger:
-    :param decay_steps:
-    :param decay_rate:
-    :param alpha:
-    :return:
-    """
-    if sched_type == 'cosine':
-        decay_steps = decay_steps if decay_steps else steps_per_epoch * n_epochs
-        alpha = alpha if alpha else 0.
-        params = {'decay_steps': decay_steps, 'alpha': alpha}
-    else:
-        decay_steps = decay_steps if decay_steps else steps_per_epoch
-        if not decay_rate:
-            if sched_type == 'exponential':
-                decay_rate = 0.5
-            elif sched_type == 'invtime':
-                decay_rate = 1.0
-        params = {'decay_steps': decay_steps, 'decay_rate': decay_rate}
-    lr_decay = create_lr_scheduler(lr_scheduler_type=sched_type, lr=lr, **params)
-    logger.info(f"Using {sched_type} decay learning rate with params {params}.")
-    return lr_decay
 
 
 class Loss:
@@ -96,7 +65,7 @@ def decode_json(example):
 
 def get_dataset(directory, file_type, num_parallel_reads=1):
     pattern = os.path.join(directory, f'*.{file_type}')
-    files = glob.glob(pattern)
+    files = tf.io.gfile.glob(pattern)
     if file_type == 'json':
         ds = tf.data.TextLineDataset(files, num_parallel_reads=num_parallel_reads)
         return ds.map(decode_json)
@@ -240,14 +209,13 @@ def train():
     loss_function = Loss(vocab_size, args.nctx)
 
     logger.info("Loaded model and loss")
-    steps_per_epoch = math.ceil(num_train_samples / args.batch_size)
-    steps_per_valid_epoch = math.ceil(num_valid_samples / args.batch_size)
+    steps_per_epoch = num_train_samples // args.batch_size
+    steps_per_valid_epoch = num_valid_samples // args.batch_size
     update_on = steps_per_epoch // args.saves_per_epoch
     report_on = max(10, update_on) // 10
     logger.info(f"Steps per epoch: {steps_per_epoch}. Saving checkpoint every {update_on} steps.")
 
-    lr_decay = get_lr_decay(args.lr_scheduler, args.lr, steps_per_epoch, args.epochs, logger,
-                            decay_steps=args.lr_decay_steps, decay_rate=args.lr_decay_rate, alpha=args.lr_alpha)
+    lr_decay = CosineDecaySchedulerTensorFlow(steps_per_epoch)
     linear_warmup = WarmupLinearSchedulerTensorFlow(args.warmup_steps, lr=args.lr)
     lr_sched = CompositeLRSchedulerTensorFlow(linear_warmup, lr_decay, lr=args.lr)
     optimizer = EagerOptimizer(loss_function, global_step=global_step, lr=args.lr, optim=args.optim,
@@ -277,6 +245,7 @@ def train():
         return strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_loss, axis=None)
 
     valid_loss_function = Loss(vocab_size, args.nctx)
+
     def _replicated_test_step(inputs):
         """This runs on a single replica"""
         x, y = inputs
