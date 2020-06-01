@@ -3336,8 +3336,8 @@ def rm_old_checkpoints(base_path, current_epoch, last_n=10):
 
 
 
-def save_checkpoint(model: torch.nn.Module, model_base: str, count: int, tick_type: str = 'epoch'):
-
+def save_checkpoint(model: torch.nn.Module, model_base: str, count: int, tick_type: str = 'epoch', save_npz: bool = False):
+    from eight_mile.pytorch.serialize import save_tlm_npz
     checkpoint_name = checkpoint_for(model_base, count, tick_type=tick_type)
     # Its possible due to how its called that we might save the same checkpoint twice if we dont check first
     if os.path.exists(checkpoint_name):
@@ -3345,11 +3345,15 @@ def save_checkpoint(model: torch.nn.Module, model_base: str, count: int, tick_ty
         return
     logger.info("Creating checkpoint: %s", checkpoint_name)
     if hasattr(model, 'module'):
-        torch.save(model.module.state_dict(), checkpoint_name)
+        torch.save(model.module.state_dict(), checkpoint_name+'.pth')
+        if save_npz:
+            save_tlm_npz(model.module, checkpoint_name+'.npz')
     else:
-        torch.save(model.state_dict(), checkpoint_name)
-
-    rm_old_checkpoints(model_base, count)
+        torch.save(model.state_dict(), checkpoint_name+'.pth')
+        if save_npz:
+            save_tlm_npz(model, checkpoint_name+'.npz')
+    if tick_type == 'epoch':
+        rm_old_checkpoints(model_base, count)
 
 
 def init_distributed(local_rank):

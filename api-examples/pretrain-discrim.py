@@ -420,22 +420,8 @@ def train():
         logger.info(metrics)
 
         if args.local_rank < 1:
-
-            # Should probably do this more often
-            gen_checkpoint_name = checkpoint_for(gen_base, epoch)
-            discrim_checkpoint_name = checkpoint_for(discrim_base, epoch)
-            logger.info("Creating checkpoint: %s", gen_checkpoint_name)
-            logger.info("Creating checkpoint: %s", discrim_checkpoint_name)
-            if args.distributed:
-                torch.save(discrim_model.module.state_dict(), discrim_checkpoint_name + '.pth')
-                torch.save(gen_model.module.state_dict(), gen_checkpoint_name + '.pth')
-
-            else:
-                torch.save(discrim_model.state_dict(), discrim_checkpoint_name + '.pth')
-                torch.save(gen_model.state_dict(), gen_checkpoint_name + '.pth')
-
-            rm_old_checkpoints(gen_base, epoch)
-            rm_old_checkpoints(discrim_base, epoch)
+            save_checkpoint(discrim_model, discrim_base, epoch, tick_type='epoch', save_npz=True)
+            save_checkpoint(gen_model, gen_base, epoch, tick_type='epoch', save_npz=True)
 
 
 if __name__ == "__main__":

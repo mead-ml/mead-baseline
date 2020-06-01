@@ -12,9 +12,8 @@ import baseline.pytorch.embeddings
 import baseline.embeddings
 from eight_mile.optz import *
 from eight_mile.utils import Average, get_num_gpus_multiworker
-from eight_mile.pytorch.layers import checkpoint_for, rm_old_checkpoints, init_distributed, save_checkpoint
+from eight_mile.pytorch.layers import init_distributed, save_checkpoint
 from eight_mile.pytorch.optz import *
-from eight_mile.pytorch.serialize import save_tlm_npz
 from baseline.pytorch.lm import TransformerLanguageModel, TransformerMaskedLanguageModel
 from baseline.utils import DataDownloader
 from transformer_utils import TensorWordDatasetReader, TensorCharDatasetReader, load_data_caching, get_lr_decay
@@ -216,7 +215,7 @@ def train():
     parser.add_argument("--restart_from", type=str, help="Option allows you to restart from a previous checkpoint")
     parser.add_argument("--restart_tt", type=str, help="Optional param for legacy checkpoints (step|epoch)")
     parser.add_argument("--warmup_steps", type=int, default=1000, help="Num warmup steps")
-    parser.add_argument("--update_steps", type=int, default=5, help="The number of checkpoints to save within an epoch")
+    parser.add_argument("--saves_per_epoch", type=int, default=5, help="The number of checkpoints to save within an epoch")
     parser.add_argument("--mlm", type=str2bool, default=False, help="Use Masked Language Model (MLM) objective")
     parser.add_argument('--rpr_k', help='Relative attention positional sizes pass 0 if you dont want relative attention',
                         type=int, default=[8], nargs='+')
@@ -328,7 +327,7 @@ def train():
     # in this case (train_loader is not iterator) the division by number of gpus is automatically taken care of by
     # torch.DataLoader
     steps_per_epoch = len(train_loader)
-    update_on = steps_per_epoch // args.update_steps
+    update_on = steps_per_epoch // args.saves_per_epoch
     report_on = update_on // 10
     logger.info(f"Steps per epoch per GPU: {steps_per_epoch}. Saving a checkpoint every {update_on} steps.")
     lr_decay = get_lr_decay(args.lr_scheduler, args.lr, steps_per_epoch, args.epochs, logger,
@@ -460,18 +459,7 @@ def train():
         logger.info(metrics)
 
         if args.local_rank < 1:
-
-            # Should probably do this more often
-            checkpoint_name = checkpoint_for(model_base, epoch)
-            logger.info("Creating checkpoint: %s", checkpoint_name)
-            if args.distributed:
-                torch.save(model.module.state_dict(), checkpoint_name+'.pth')
-                save_tlm_npz(model.module, checkpoint_name+'.npz')
-            else:
-                torch.save(model.state_dict(), checkpoint_name+'.pth')
-                save_tlm_npz(model, checkpoint_name+'.npz')
-
-            rm_old_checkpoints(model_base, epoch)
+            save_checkpoint(model, model_base, epoch, save_npz=True)
 
 
 if __name__ == "__main__":
