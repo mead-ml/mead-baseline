@@ -1,14 +1,17 @@
 import argparse
 import baseline
 from baseline.vectorizers import BPEVectorizer1D
-from eight_mile.utils import write_yaml
-from transformer_utils import mlm_masking
+from eight_mile.utils import write_yaml, mlm_masking
 import json
 import struct
 import logging
 import numpy as np
 import os
 logger = logging.getLogger('baseline')
+try:
+    import tensorflow as tf
+except:
+    pass
 
 
 def create_record(chunk, str_lookup, prefix, suffix, mask_value, vocab_size):
@@ -122,36 +125,51 @@ class JSONLWriter(RollingWriter):
 class TFRecordRollingWriter(RollingWriter):
     def __init__(self, name, fields, max_file_size_mb):
         try:
-            import tfrecord
-            self.RecordWriterClass = tfrecord.TFRecordWriter
+            self.RecordWriterClass = tf.io.TFRecordWriter
         except Exception as e:
             raise Exception("tfrecord package could not be loaded, pip install that first, along with crc32c")
         super().__init__(name, fields, max_file_size_mb)
 
+    @staticmethod
+    def _bytes_feature(value):
+        """Returns a bytes_list from a string / byte."""
+        if isinstance(value, type(tf.constant(0))):
+            value = value.numpy()  # BytesList won't unpack a string from an EagerTensor.
+        return tf.train.Feature(bytes_list=tf.train.BytesList(value=value))
+
+    @staticmethod
+    def _int64_feature(value):
+        """Returns an int64_list from a bool / enum / int / uint."""
+        return tf.train.Feature(int64_list=tf.train.Int64List(value=value))
+
     def _open_file(self, filename):
         return self.RecordWriterClass(filename)
 
-    def _write_line(self, value):
-        record = self.RecordWriterClass.serialize_tf_example(value)
-        length = len(record)
-        length_bytes = struct.pack("<Q", length)
-        self.writer.file.write(length_bytes)
-        self.writer.file.write(self.RecordWriterClass.masked_crc(length_bytes))
-        self.writer.file.write(record)
-        self.writer.file.write(self.RecordWriterClass.masked_crc(record))
-        return length
+    def _write_line(self, str_val):
+        self.writer.write(str_val)
+        return len(str_val)
 
-    def write(self, record):
-        r = {}
-
+    def serialize_tf_example(self, record):
+        """
+        Creates a tf.Example message ready to be written to a file.
+        """
+        # Create a dictionary mapping the feature name to the tf.Example-compatible
+        # data type.
+        feature= {}
         for f in self.fields:
             if f.endswith('_str'):
                 value = ' '.join(record[f])
-                value = (value.encode('utf-8'), "byte")
+                value = TFRecordRollingWriter._bytes_feature(value.encode('utf-8'))
             else:
-                value = (record[f], 'int')
-            r[f] = value
-        self._write_line_rollover(r)
+                value = TFRecordRollingWriter._int64_feature(record[f])
+            feature[f] = value
+
+        example_proto = tf.train.Example(features=tf.train.Features(feature=feature))
+        return example_proto.SerializeToString()
+
+    def write(self, record):
+        example_str = self.serialize_tf_example(record)
+        self._write_line_rollover(example_str)
 
     @property
     def suffix(self):

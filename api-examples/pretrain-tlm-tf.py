@@ -14,7 +14,6 @@ from eight_mile.optz import *
 from eight_mile.tf.optz import *
 from baseline.tf.lm import SET_TRAIN_FLAG, TransformerLanguageModel, TransformerMaskedLanguageModel
 import tensorflow as tf
-import glob
 import json
 logger = logging.getLogger(__file__)
 
@@ -27,36 +26,6 @@ to train them across multiple workers.
 Sample preprocessed data can be found here: https://www.dropbox.com/s/jir4layu6nzjtqy/wt2.tar.gz
 
 """
-
-
-def get_lr_decay(sched_type, lr, steps_per_epoch, n_epochs, logger, decay_steps=None, decay_rate=None, alpha=None):
-    """Copied from transformer_utils.py but that imports torch and we dont want that here
-
-    :param sched_type:
-    :param lr:
-    :param steps_per_epoch:
-    :param n_epochs:
-    :param logger:
-    :param decay_steps:
-    :param decay_rate:
-    :param alpha:
-    :return:
-    """
-    if sched_type == 'cosine':
-        decay_steps = decay_steps if decay_steps else steps_per_epoch * n_epochs
-        alpha = alpha if alpha else 0.
-        params = {'decay_steps': decay_steps, 'alpha': alpha}
-    else:
-        decay_steps = decay_steps if decay_steps else steps_per_epoch
-        if not decay_rate:
-            if sched_type == 'exponential':
-                decay_rate = 0.5
-            elif sched_type == 'invtime':
-                decay_rate = 1.0
-        params = {'decay_steps': decay_steps, 'decay_rate': decay_rate}
-    lr_decay = create_lr_scheduler(lr_scheduler_type=sched_type, lr=lr, **params)
-    logger.info(f"Using {sched_type} decay learning rate with params {params}.")
-    return lr_decay
 
 
 class Loss:
@@ -79,18 +48,41 @@ def _parse_json(example):
     j = json.loads(example.numpy())
     return tf.constant(j['x'], dtype=tf.int32), tf.constant(j['y'], dtype=tf.int32)
 
+feature_description = {
+    'x': tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True, default_value=0),
+    'y': tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True, default_value=0),
+}
+
+
+def _parse_tf_record(example_proto):
+    record = tf.io.parse_single_example(example_proto, feature_description)
+    return record['x'], record['y']
+
 
 def decode_json(example):
     return tf.py_function(_parse_json, [example], [tf.int32, tf.int32])
 
 
-def get_dataset(pattern, num_parallel_reads=1):
-    ds = tf.data.TextLineDataset(glob.glob(pattern), num_parallel_reads=num_parallel_reads)
-    return ds.map(decode_json)
+def get_dataset(directory, file_type, num_parallel_reads=1):
+    """Get a dataset as a tf.data.Dataset.  Input can be a bucket or a local file
+
+    :param directory: Either a bucket or a file
+    :param file_type: Currently supports "json" files or "tfrecords"
+    :param num_parallel_reads: The number of parallel reads
+    :return: a `tf.data.Dataset`
+    """
+    pattern = os.path.join(directory, f'*.{file_type}')
+    files = tf.io.gfile.glob(pattern)
+    logger.debug(files)
+    if file_type == 'json':
+        ds = tf.data.TextLineDataset(files, num_parallel_reads=num_parallel_reads)
+        return ds.map(decode_json)
+    ds = tf.data.TFRecordDataset(files, num_parallel_reads=num_parallel_reads).map(_parse_tf_record)
+    return ds
 
 
-def get_num_samples(data_dir):
-    yml = read_yaml(os.path.join(data_dir, 'md.yml'))
+def get_num_samples(sample_md):
+    yml = read_yaml(sample_md)
     return yml['num_samples']
 
 
@@ -102,7 +94,7 @@ def create_distribute_strategy(strategy_name, endpoint=None):
         tf.config.experimental_connect_to_cluster(resolver)
         # This is the TPU initialization code that has to be at the beginning.
         tf.tpu.experimental.initialize_tpu_system(resolver)
-        print("All devices: ", tf.config.list_logical_devices('TPU'))
+        logger.info("All devices: ", tf.config.list_logical_devices('TPU'))
         strategy = tf.distribute.experimental.TPUStrategy(resolver)
     elif strategy_name == 'mirror':
         num_gpus = get_num_gpus_multiworker()
@@ -118,6 +110,8 @@ def train():
     parser.add_argument("--basedir", type=str)
     parser.add_argument("--train_dir", type=str, required=True, help='Training directory')
     parser.add_argument("--valid_dir", type=str, required=True, help='Validation directory')
+    parser.add_argument("--train_md", type=str, help="Training metadata YAML, defaults to `{train_dir}/md.yml`")
+    parser.add_argument("--valid_md", type=str, help="Validation metadata YAML, defaults to `{valid_dir}/md.yml`")
     parser.add_argument("--dataset_key", default="tlm",
                         help="dataset key for basedir")
     parser.add_argument("--embed_type", type=str, default='default',
@@ -133,7 +127,7 @@ def train():
     parser.add_argument("--distribute", type=str, default="mirror", choices=["mirror", "tpu"])
     parser.add_argument("--tpu_ep", type=str, help="The TPU endpoint if using `distribute=tpu`")
     parser.add_argument("--nctx", type=int, default=128, help="Max input length")
-    parser.add_argument("--pattern", default='*.txt', help="Glob pattern for data")
+    parser.add_argument("--file_type", default='tfrecord', choices=['json', 'tfrecord'], help="Glob pattern for data")
     parser.add_argument("--batch_size", type=int, default=8, help="Batch Size")
     parser.add_argument("--subword_model_file", type=str, help="The BPE model file", required=True)
     parser.add_argument("--subword_vocab_file", type=str, help="The BPE subword vocab", required=True)
@@ -161,7 +155,7 @@ def train():
     SET_TRAIN_FLAG(True)
 
     if args.basedir is None:
-        args.basedir = 'lm-{}-bpe-{}'.format(args.dataset_key, os.getpid())
+        args.basedir = f'lm-{args.dataset_key}-bpe-{os.getpid()}'
     logging.basicConfig(level=logging.INFO)
 
     strategy = create_distribute_strategy(args.distribute, args.tpu_ep)
@@ -178,7 +172,7 @@ def train():
 
     def dataset_train_fn(input_context):
         batch_size = input_context.get_per_replica_batch_size(args.batch_size)
-        ds = get_dataset(os.path.join(args.train_dir, args.pattern), args.num_train_workers).batch(batch_size)
+        ds = get_dataset(args.train_dir, args.file_type, args.num_train_workers).batch(batch_size)
         return ds.shard(
             input_context.num_input_pipelines, input_context.input_pipeline_id
         )
@@ -186,14 +180,16 @@ def train():
 
     def dataset_test_fn(input_context):
         batch_size = input_context.get_per_replica_batch_size(args.batch_size)
-        ds = get_dataset(os.path.join(args.valid_dir, args.pattern), args.num_train_workers).batch(batch_size)
+        ds = get_dataset(args.valid_dir, args.file_type, args.num_train_workers).batch(batch_size)
         return ds.shard(
             input_context.num_input_pipelines, input_context.input_pipeline_id
         )
     valid_loader = strategy.experimental_distribute_datasets_from_function(dataset_test_fn)
 
-    num_train_samples = get_num_samples(args.train_dir)
-    num_valid_samples = get_num_samples(args.valid_dir)
+    train_md = args.train_md if args.train_md else os.path.join(args.train_dir, 'md.yml')
+    num_train_samples = get_num_samples(train_md)
+    valid_md = args.valid_md if args.valid_md else os.path.join(args.valid_dir, 'md.yml')
+    num_valid_samples = get_num_samples(valid_md)
     os.makedirs(args.basedir, exist_ok=True)
     # We want to make sure to save our input vocab into the basedir for reuse later
     write_json(vocabs, os.path.join(args.basedir, 'vocabs.json'))
@@ -225,25 +221,20 @@ def train():
     loss_function = Loss(vocab_size, args.nctx)
 
     logger.info("Loaded model and loss")
-    steps_per_epoch = math.ceil(num_train_samples / args.batch_size)
-    steps_per_valid_epoch = math.ceil(num_valid_samples / args.batch_size)
+    steps_per_epoch = num_train_samples // args.batch_size
+    steps_per_valid_epoch = num_valid_samples // args.batch_size
     update_on = steps_per_epoch // args.saves_per_epoch
     report_on = max(10, update_on) // 10
-    logger.info(f"Steps per epoch per GPU: {steps_per_epoch}. Saving checkpoint every {update_on} steps.")
+    logger.info(f"Steps per epoch: {steps_per_epoch}. Saving checkpoint every {update_on} steps.")
 
-    lr_decay = get_lr_decay(args.lr_scheduler, args.lr, steps_per_epoch, args.epochs, logger,
-                            decay_steps=args.lr_decay_steps, decay_rate=args.lr_decay_rate, alpha=args.lr_alpha)
+    lr_decay = CosineDecaySchedulerTensorFlow(steps_per_epoch)
     linear_warmup = WarmupLinearSchedulerTensorFlow(args.warmup_steps, lr=args.lr)
     lr_sched = CompositeLRSchedulerTensorFlow(linear_warmup, lr_decay, lr=args.lr)
     optimizer = EagerOptimizer(loss_function, global_step=global_step, lr=args.lr, optim=args.optim,
                                learning_rate_decay_fn=lr_sched, weight_decay=args.weight_decay, clip=args.clip)
     checkpoint = tf.train.Checkpoint(optimizer=optimizer.optimizer, model=model)
-    pid = os.getpid()
-    checkpoint_dir = f"./tf-{args.dataset_key}-{pid}"
-    #model_base = os.path.join(args.basedir, 'checkpoint-step')
-
     checkpoint_manager = tf.train.CheckpointManager(checkpoint,
-                                                    directory=checkpoint_dir,
+                                                    directory=args.basedir,
                                                     max_to_keep=5)
 
     if args.restart_from:
@@ -266,6 +257,7 @@ def train():
         return strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_loss, axis=None)
 
     valid_loss_function = Loss(vocab_size, args.nctx)
+
     def _replicated_test_step(inputs):
         """This runs on a single replica"""
         x, y = inputs
@@ -330,7 +322,7 @@ def train():
             metrics['valid_elapsed_min'] = elapsed
             metrics['average_valid_loss'] = valid_token_loss
             metrics['average_valid_word_ppl'] = valid_token_ppl
-            logger.info(metrics)
+            logger.info(json.dumps(metrics, indent=4))
 
 
 if __name__ == "__main__":
