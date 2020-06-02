@@ -64,17 +64,25 @@ def decode_json(example):
 
 
 def get_dataset(directory, file_type, num_parallel_reads=1):
+    """Get a dataset as a tf.data.Dataset.  Input can be a bucket or a local file
+
+    :param directory: Either a bucket or a file
+    :param file_type: Currently supports "json" files or "tfrecords"
+    :param num_parallel_reads: The number of parallel reads
+    :return: a `tf.data.Dataset`
+    """
     pattern = os.path.join(directory, f'*.{file_type}')
     files = tf.io.gfile.glob(pattern)
+    logger.debug(files)
     if file_type == 'json':
         ds = tf.data.TextLineDataset(files, num_parallel_reads=num_parallel_reads)
         return ds.map(decode_json)
-    ds = tf.data.TFRecordDataset(files).map(_parse_tf_record)
+    ds = tf.data.TFRecordDataset(files, num_parallel_reads=num_parallel_reads).map(_parse_tf_record)
     return ds
 
 
-def get_num_samples(data_dir):
-    yml = read_yaml(os.path.join(data_dir, 'md.yml'))
+def get_num_samples(sample_md):
+    yml = read_yaml(sample_md)
     return yml['num_samples']
 
 
@@ -86,7 +94,7 @@ def create_distribute_strategy(strategy_name, endpoint=None):
         tf.config.experimental_connect_to_cluster(resolver)
         # This is the TPU initialization code that has to be at the beginning.
         tf.tpu.experimental.initialize_tpu_system(resolver)
-        print("All devices: ", tf.config.list_logical_devices('TPU'))
+        logger.info("All devices: ", tf.config.list_logical_devices('TPU'))
         strategy = tf.distribute.experimental.TPUStrategy(resolver)
     elif strategy_name == 'mirror':
         num_gpus = get_num_gpus_multiworker()
@@ -102,6 +110,8 @@ def train():
     parser.add_argument("--basedir", type=str)
     parser.add_argument("--train_dir", type=str, required=True, help='Training directory')
     parser.add_argument("--valid_dir", type=str, required=True, help='Validation directory')
+    parser.add_argument("--train_md", type=str, help="Training metadata YAML, defaults to `{train_dir}/md.yml`")
+    parser.add_argument("--valid_md", type=str, help="Validation metadata YAML, defaults to `{valid_dir}/md.yml`")
     parser.add_argument("--dataset_key", default="tlm",
                         help="dataset key for basedir")
     parser.add_argument("--embed_type", type=str, default='default',
@@ -176,8 +186,10 @@ def train():
         )
     valid_loader = strategy.experimental_distribute_datasets_from_function(dataset_test_fn)
 
-    num_train_samples = get_num_samples(args.train_dir)
-    num_valid_samples = get_num_samples(args.valid_dir)
+    train_md = args.train_md if args.train_md else os.path.join(args.train_dir, 'md.yml')
+    num_train_samples = get_num_samples(train_md)
+    valid_md = args.valid_md if args.valid_md else os.path.join(args.valid_dir, 'md.yml')
+    num_valid_samples = get_num_samples(valid_md)
     os.makedirs(args.basedir, exist_ok=True)
     # We want to make sure to save our input vocab into the basedir for reuse later
     write_json(vocabs, os.path.join(args.basedir, 'vocabs.json'))
@@ -310,7 +322,7 @@ def train():
             metrics['valid_elapsed_min'] = elapsed
             metrics['average_valid_loss'] = valid_token_loss
             metrics['average_valid_word_ppl'] = valid_token_ppl
-            logger.info(metrics)
+            logger.info(json.dumps(metrics, indent=4))
 
 
 if __name__ == "__main__":
