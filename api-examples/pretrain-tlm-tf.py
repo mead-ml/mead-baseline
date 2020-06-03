@@ -66,6 +66,7 @@ def decode_json(example):
 def get_dataset(directory, file_type, num_parallel_reads=1):
     """Get a dataset as a tf.data.Dataset.  Input can be a bucket or a local file
 
+
     :param directory: Either a bucket or a file
     :param file_type: Currently supports "json" files or "tfrecords"
     :param num_parallel_reads: The number of parallel reads
@@ -74,6 +75,7 @@ def get_dataset(directory, file_type, num_parallel_reads=1):
     pattern = os.path.join(directory, f'*.{file_type}')
     files = tf.io.gfile.glob(pattern)
     logger.debug(files)
+
     if file_type == 'json':
         ds = tf.data.TextLineDataset(files, num_parallel_reads=num_parallel_reads)
         return ds.map(decode_json)
