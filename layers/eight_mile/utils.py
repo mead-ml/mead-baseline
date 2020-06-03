@@ -11,7 +11,7 @@ from itertools import chain
 from binascii import hexlify
 from functools import partial
 from collections import Counter
-from typing import List, Tuple, Union, Optional, Dict, Any, Set, Pattern
+from typing import List, Tuple, Union, Optional, Dict, Any, Set, Pattern, TextIO
 from functools import partial, update_wrapper, wraps
 import numpy as np
 from six.moves.urllib.request import urlretrieve
@@ -857,6 +857,13 @@ def read_conll(f, doc_pattern=None, delim=None, metadata=False, allow_comments=F
                 f, delim=delim, allow_comments=allow_comments, comment_pattern=comment_pattern
             ):
                 yield x
+
+
+@export
+@str_file(wf="w")
+def write_conll(wf: Union[str, TextIO], sentences: List[List[List[str]]], delim: Optional[str] = None) -> None:
+    delim = " " if delim is None else delim
+    wf.write("\n\n".join(["\n".join([delim.join(row) for row in sentence]) for sentence in sentences]) + "\n\n")
 
 
 @export
