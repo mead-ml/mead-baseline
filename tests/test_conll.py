@@ -11,6 +11,7 @@ from eight_mile.utils import (
     read_conll_sentences,
     read_conll_sentences_md,
     convert_conll_file,
+    write_conll,
 )
 
 
@@ -186,3 +187,22 @@ def test_read_write_with_delim_none():
     convert_conll_file(in_, out_, lambda x: x, delim=None)
     out_.seek(0)
     assert out_.read().strip("\n") == data.strip("\n")
+
+
+def test_write_conll():
+    data = read_conll(TEST_FILE)
+    out_ = StringIO()
+    write_conll(out_, data, delim=" ")
+    out_.seek(0)
+    with open(TEST_FILE) as gold:
+        assert out_.read().strip("\n") == gold.read().strip("\n")
+
+
+def test_write_conll_with_delims():
+    delim = random.choice(["~~", "|", "\t"])
+    data = read_conll(TEST_FILE)
+    out_ = StringIO()
+    write_conll(out_, data, delim=delim)
+    out_.seek(0)
+    with open(TEST_FILE) as gold:
+        assert out_.read().strip("\n") == gold.read().strip("\n").replace(" ", delim)
