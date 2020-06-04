@@ -172,7 +172,11 @@ class Task(object):
             vectorizer_section['mxlen'] = vectorizer_section.get('mxlen', self.config_params.get('preproc', {}).get('mxlen', -1))
             vectorizer_section['mxwlen'] = vectorizer_section.get('mxwlen', self.config_params.get('preproc', {}).get('mxwlen', -1))
             if 'transform' in vectorizer_section:
-                vectorizer_section['transform_fn'] = eval(vectorizer_section['transform'])
+                vectorizer_section['transform_fn'] = vectorizer_section['transform']
+
+            if 'transform_fn' in vectorizer_section and isinstance(vectorizer_section['transform_fn'], str):
+                vectorizer_section['transform_fn'] = eval(vectorizer_section['transform_fn'])
+
             vectorizer = baseline.create_vectorizer(**vectorizer_section)
             self.vectorizers[key] = vectorizer
 

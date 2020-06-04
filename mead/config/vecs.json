@@ -3,19 +3,19 @@
     "label": "bert-base-uncased",
     "type": "wordpiece1d",
     "vocab_file": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-uncased-vocab.txt",
-    "transform": "baseline.lowercase"
+    "transform_fn": "baseline.lowercase"
   },
   {
     "label": "bert-base-uncased-dict1d",
     "type": "wordpiece-dict1d",
     "vocab_file": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-uncased-vocab.txt",
-    "transform": "baseline.lowercase"
+    "transform_fn": "baseline.lowercase"
   },
   {
     "label": "bert-large-uncased",
     "type": "wordpiece1d",
     "vocab_file": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-large-uncased-vocab.txt",
-    "transform": "baseline.lowercase"
+    "transform_fn": "baseline.lowercase"
   },
   {
     "label": "bert-base-cased",

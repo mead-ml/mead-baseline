@@ -1,7 +1,7 @@
 import eight_mile.embeddings
 from eight_mile.embeddings import *
 from eight_mile.utils import exporter, optional_params, listify, idempotent_append, is_sequence
-from baseline.utils import import_user_module, AddonDownloader
+from baseline.utils import import_user_module, AddonDownloader, EmbeddingDownloader, DEFAULT_DATA_CACHE
 import logging
 
 __all__ = []
@@ -42,6 +42,101 @@ def create_embeddings(**kwargs):
     return Constructor(**kwargs)
 
 
+def load_embeddings_overlay(global_embeddings_settings, embeddings_section, vocab, data_download_cache=DEFAULT_DATA_CACHE, name=None):
+    """Creates a set of arbitrary sub-graph, DL-framework-specific embeddings by delegating to wired sub-module.
+
+    As part of this process, we take in an index of embeddings by name, a ``dict`` of ``Counter`` objects (keyed by
+    feature name), containing the number of times each token has been seen, and a `features` list which is a
+    sub-section of the mead config containing the `embeddings` section for each feature.
+    This method's job is to either create a sub-graph from a pretrained model, or to create a new random
+    initialized sub-graph, taking into account the input vocabulary counters.  The embeddings model has control
+    to determine the actual word indices and sub-graph for the embeddings, both of which are returned from this
+    method.  If some sort of feature selection is
+    performed, such as low count removal that would be required via the delegated methods
+
+    :param global_embeddings_settings: The embeddings index passed to mead driver
+    :param vocabs: A set of known ``Counter``s for each vocabulary consisting of a token key and count for each
+    :param features: The `features` sub-section of the mead config
+    :return: Returns a ``tuple`` comprised of a ``dict`` of (`feature name`, `Embedding`) and an updated vocab
+    """
+
+    # Get the label out of the embeddings section in the features block of mead config
+    embed_label = embeddings_section.get('label', embeddings_section.get('labels'))
+    if name is None:
+        name = embed_label
+    # Get the type of embedding out of the embeddings section in the features block of mead config
+    embed_type = embeddings_section.get('type', 'default')
+    is_stacked = is_sequence(embed_label)
+    if is_stacked:
+        if embed_type != 'default':
+            logger.warning("You have requested a stack of pretrained embeddings but didnt request 'default' or representation")
+    # Backwards compat, copy from main block if not present locally
+    embeddings_section['unif'] = embeddings_section.get('unif', 0.1)
+
+    # Backwards compat, copy from main block if not present locally
+    embeddings_section['keep_unused'] = embeddings_section.get('keep_unused', False)
+
+    # Overlay any backend parameters
+
+    # Also, if we are in eager mode, we might have to place the embeddings explicitly on the CPU
+    embeddings_section['cpu_placement'] = bool(embeddings_section.get('cpu_placement', False))
+    if embed_label is not None:
+        # Allow local overrides to uniform initializer
+
+        embed_labels = listify(embed_label)
+
+        embed_files = []
+        for embed_label in embed_labels:
+
+            embeddings_global_config_i = global_embeddings_settings[embed_label]
+            if 'type' in embeddings_global_config_i:
+                embed_type_i = embeddings_global_config_i['type']
+                embed_type = embed_type_i
+                if embed_type_i != 'default' and is_stacked:
+                    raise Exception("Stacking embeddings only works for 'default' pretrained word embeddings")
+
+            embed_file = embeddings_global_config_i.get('file')
+            unzip_file = embeddings_global_config_i.get('unzip', True)
+            embed_dsz = embeddings_global_config_i['dsz']
+            embed_sha1 = embeddings_global_config_i.get('sha1')
+            # Should we grab vocab here too?
+
+            embed_model = embeddings_global_config_i.get('model', {})
+            if 'dsz' not in embed_model and not is_stacked:
+                embed_model['dsz'] = embed_dsz
+
+            embeddings_section = {**embed_model, **embeddings_section}
+            try:
+                # We arent necessarily going to get an `embed_file`. For instance, using the HuggingFace
+                # models in the Hub addon, the `embed_file` should be downloaded using HuggingFace's library,
+                # not by us.  In this case we want it to be None and we dont want to download it
+                if embed_file:
+                    embed_file = EmbeddingDownloader(embed_file, embed_dsz, embed_sha1, data_download_cache, unzip_file=unzip_file).download()
+                    embed_files.append(embed_file)
+                else:
+                    embed_files.append(None)
+            except Exception as e:
+                if is_stacked:
+                    raise e
+                logger.warning(f"We were not able to download {embed_file}, passing to the addon")
+                embed_files.append(embed_file)
+        # If we have stacked embeddings (which only works with `default` model, we need to pass the list
+        # If not, grab the first item
+        embed_file = embed_files if is_stacked else embed_files[0]
+        embedding_bundle = load_embeddings(name, embed_file=embed_file, known_vocab=vocab, embed_type=embed_type,
+                                           data_download_cache=data_download_cache,
+                                           **embeddings_section)
+
+    else:  # if there is no label given, assume we need random initialization vectors
+        dsz = embeddings_section.pop('dsz')
+        embedding_bundle = load_embeddings(name,
+                                           dsz=dsz,
+                                           known_vocab=vocab,
+                                           embed_type=embed_type,
+                                           data_download_cache=data_download_cache,
+                                           **embeddings_section)
+
+    return embedding_bundle
 
 @export
 def load_embeddings(name, **kwargs):
