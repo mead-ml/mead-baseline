@@ -139,7 +139,7 @@ def to_embed_array(tf_embed: tf.keras.layers.Layer, name: str) -> Dict:
     d = {}
 
 
-    weights = tf_embed.embeddings.get_weights()
+    weights = tf_embed.get_weights()
     weight_offset = 0
     if hasattr(tf_embed, 'pos'):
         pos_weights = weights[0]
@@ -185,8 +185,8 @@ def to_encoder_stack_array(
     d = {}
     if isinstance(tf_encoder_stack.ln, tf.keras.layers.LayerNormalization):
         d.update(to_weight_array(tf_encoder_stack.ln, f"{name}/ln"))
-    for i, enc_pyt in enumerate(tf_encoder_stack.encoders):
-        d.update(to_encoder_array(enc_pyt, f"{name}/{i}"))
+    for i, enc_tf in enumerate(tf_encoder_stack.encoders):
+        d.update(to_encoder_array(enc_tf, f"{name}/{i}"))
     return d
 
 
