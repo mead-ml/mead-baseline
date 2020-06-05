@@ -168,7 +168,7 @@ def train():
     # correct it here
     steps_per_epoch = len(train_loader) // (args.batch_size*num_gpus)
     update_on = steps_per_epoch // args.saves_per_epoch
-    report_on = update_on // 10
+    report_on = max(10, update_on) // 10
     logger.info(f"Steps per epoch per GPU: {steps_per_epoch}. Saving checkpoint every {update_on} steps.")
     lr_decay = get_lr_decay(args.lr_scheduler, args.lr, steps_per_epoch, args.epochs, logger,
                             decay_steps=args.lr_decay_steps, decay_rate=args.lr_decay_rate, alpha=args.lr_alpha)
