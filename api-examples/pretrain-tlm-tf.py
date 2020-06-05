@@ -98,6 +98,9 @@ def create_distribute_strategy(strategy_name, endpoint=None):
         tf.tpu.experimental.initialize_tpu_system(resolver)
         logger.info("All devices: ", tf.config.list_logical_devices('TPU'))
         strategy = tf.distribute.experimental.TPUStrategy(resolver)
+    elif strategy_name == "nccl":
+        strategy = tf.distribute.experimental.MultiWorkerMirroredStrategy(
+            communication=tf.distribute.experimental.CollectiveCommunication.NCCL)
     elif strategy_name == 'mirror':
         num_gpus = get_num_gpus_multiworker()
         devices = ['/device:GPU:{}'.format(i) for i in range(num_gpus)]
@@ -126,7 +129,7 @@ def train():
     parser.add_argument("--num_layers", type=int, default=6, help="Number of layers")
     parser.add_argument("--num_train_workers", type=int, default=4, help="Number train workers")
     parser.add_argument("--num_valid_workers", type=int, default=2, help="Number valid workers")
-    parser.add_argument("--distribute", type=str, default="mirror", choices=["mirror", "tpu"])
+    parser.add_argument("--distribute", type=str, default="mirror", choices=["mirror", "tpu", "nccl"])
     parser.add_argument("--tpu_ep", type=str, help="The TPU endpoint if using `distribute=tpu`")
     parser.add_argument("--nctx", type=int, default=128, help="Max input length")
     parser.add_argument("--file_type", default='tfrecord', choices=['json', 'tfrecord'], help="Glob pattern for data")
