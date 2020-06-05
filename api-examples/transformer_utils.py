@@ -373,7 +373,7 @@ def load_data_caching(token_type, reader, dataset, file_key, vocabs, caching, lo
 
 class MultiFileLoader(IterableDataset):
 
-    def __init__(self, directory, pattern, vocabs, vectorizer, nctx, last_turn_only=True):
+    def __init__(self, directory, pattern, vocabs, vectorizer, nctx, last_turn_only=True, distribute=True):
         super().__init__()
         self.vectorizer = vectorizer
         self.pattern = pattern
@@ -384,7 +384,8 @@ class MultiFileLoader(IterableDataset):
         self.rank = 0
         self.world_size = 1
         self.last_turn_only = last_turn_only
-        if torch.distributed.is_initialized():
+        self.distribute = distribute
+        if torch.distributed.is_initialized() and distribute:
             self.rank = torch.distributed.get_rank()
             self.world_size = torch.distributed.get_world_size()
 
@@ -403,11 +404,14 @@ class MultiFileLoader(IterableDataset):
     def __len__(self):
         return self.samples
 
+    def _get_worker_info(self):
+        return torch.utils.data.get_worker_info() if self.distribute else None
+
     def __iter__(self):
         # Each node has the same worker_info, so the unique offsets for each is
         # rank * num_workers + worker_id
         # and the total available workers is world_size * num_workers
-        worker_info = torch.utils.data.get_worker_info()
+        worker_info = self._get_worker_info()
         files = sorted(list(glob.glob(f"{self.directory}/{self.pattern}")))
 
         if worker_info is None:
@@ -534,16 +538,17 @@ class MultiFileDatasetReader:
     def build_vocab(self, _=None):
         return {'x': self.vectorizer.vocab}
 
-    def load(self, directory, vocabs):
+    def load(self, directory, vocabs, distribute=True):
         reader_type = self.reader_type.lower()
         if reader_type == "ntp":
-            return NextTurnPredictionFileLoader(directory, self.pattern, vocabs, self.vectorizer, self.nctx)
+            return NextTurnPredictionFileLoader(directory, self.pattern, vocabs, self.vectorizer, self.nctx, distribute=distribute)
         elif reader_type == "nsp":
-            return NextSequencePredictionFileLoader(directory, self.pattern, vocabs, self.vectorizer, 2*self.nctx)
+            return NextSequencePredictionFileLoader(directory, self.pattern, vocabs, self.vectorizer, 2*self.nctx, distribute=distribute)
         elif reader_type == "lang":
             print("Using files as an LM")
-            return SequencePredictionFileLoader(directory, self.pattern, vocabs, self.vectorizer, self.nctx)
-        return PreprocessedFileLoader(directory, self.pattern, vocabs, self.vectorizer, self.nctx)
+            return SequencePredictionFileLoader(directory, self.pattern, vocabs, self.vectorizer, self.nctx, distribute=distribute)
+        return PreprocessedFileLoader(directory, self.pattern, vocabs, self.vectorizer, self.nctx, distribute=distribute)
+
 
 class TiedEmbeddingsSeq2SeqModel(Seq2SeqModel):
 

@@ -50,7 +50,6 @@ def train():
     parser.add_argument("--num_heads", type=int, default=1, help="Number of heads")
     parser.add_argument("--num_layers", type=int, default=6, help="Number of layers")
     parser.add_argument("--num_train_workers", type=int, default=4, help="Number train workers")
-    parser.add_argument("--num_valid_workers", type=int, default=2, help="Number valid workers")
     parser.add_argument("--nctx", type=int, default=128, help="Max input length")
     parser.add_argument("--pattern", default='*.txt', help="Glob pattern for data")
     parser.add_argument("--batch_size", type=int, default=8, help="Batch Size")
@@ -124,10 +123,10 @@ def train():
     logger.info("Loaded embeddings")
 
     train_set = reader.load(args.train_file, vocabs)
-    valid_set = reader.load(args.valid_file, vocabs)
+    valid_set = reader.load(args.valid_file, vocabs, distribute=False)
 
     train_loader = DataLoader(train_set, batch_size=args.batch_size, num_workers=args.num_train_workers)
-    valid_loader = DataLoader(valid_set, batch_size=args.batch_size, num_workers=args.num_valid_workers)
+    valid_loader = DataLoader(valid_set, batch_size=args.batch_size)
     logger.info("Loaded datasets")
     logger.info("Using embedding type [%s]", args.embed_type)
 
