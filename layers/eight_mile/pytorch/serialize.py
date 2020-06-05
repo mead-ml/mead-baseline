@@ -195,8 +195,9 @@ def from_attn_array(pytorch_attn: nn.Module, d: Dict, name: str):
     from_weight_array(pytorch_attn.w_O, d, f"{name}/w_O")
 
     if hasattr(pytorch_attn, 'rpr_key'):
-        pytorch_attn.rpr_key.weight = torch.nn.Parameter(torch.from_numpy(d[f"{name}/rpr_key"]))
-        pytorch_attn.rpr_value.weight = torch.nn.Parameter(torch.from_numpy(d[f"{name}/rpr_value"]))
+        device = pytorch_attn.rpr_key.weight.device
+        pytorch_attn.rpr_key.weight = torch.nn.Parameter(torch.from_numpy(d[f"{name}/rpr_key"]).to(device=device))
+        pytorch_attn.rpr_value.weight = torch.nn.Parameter(torch.from_numpy(d[f"{name}/rpr_value"]).to(device=device))
 
 
 def to_encoder_array(pytorch_encoder: TransformerEncoder, name: str) -> Dict:
