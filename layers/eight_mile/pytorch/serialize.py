@@ -128,8 +128,9 @@ def from_weight_array(pytorch_layer: nn.Module, d: Dict, name: str):
     """
     if isinstance(pytorch_layer, Dense):
         pytorch_layer = pytorch_layer.layer
-    pytorch_layer.weight = nn.Parameter(torch.from_numpy(d[f"{name}/weights"]), requires_grad=True)
-    pytorch_layer.bias = nn.Parameter(torch.from_numpy(d[f"{name}/bias"]), requires_grad=True)
+    device = pytorch_layer.weight.device
+    pytorch_layer.weight = nn.Parameter(torch.from_numpy(d[f"{name}/weights"]).to(device=device), requires_grad=True)
+    pytorch_layer.bias = nn.Parameter(torch.from_numpy(d[f"{name}/bias"]).to(device=device), requires_grad=True)
 
 
 def to_ffn_array(pytorch_ffn: nn.Sequential, name: str) -> Dict:
@@ -194,8 +195,9 @@ def from_attn_array(pytorch_attn: nn.Module, d: Dict, name: str):
     from_weight_array(pytorch_attn.w_O, d, f"{name}/w_O")
 
     if hasattr(pytorch_attn, 'rpr_key'):
-        pytorch_attn.rpr_key.weight = torch.nn.Parameter(torch.from_numpy(d[f"{name}/rpr_key"]))
-        pytorch_attn.rpr_value.weight = torch.nn.Parameter(torch.from_numpy(d[f"{name}/rpr_value"]))
+        device = pytorch_attn.rpr_key.weight.device
+        pytorch_attn.rpr_key.weight = torch.nn.Parameter(torch.from_numpy(d[f"{name}/rpr_key"]).to(device=device))
+        pytorch_attn.rpr_value.weight = torch.nn.Parameter(torch.from_numpy(d[f"{name}/rpr_value"]).to(device=device))
 
 
 def to_encoder_array(pytorch_encoder: TransformerEncoder, name: str) -> Dict:
@@ -253,9 +255,10 @@ def from_embed_array(pytorch_embed: nn.Module, d: Dict, name: str):
     :param name: name of the layer
     :return: None
     """
-    pytorch_embed.embeddings.weight = torch.nn.Parameter(torch.from_numpy(d[f"{name}/weights"]), requires_grad=True)
+    device = pytorch_embed.embeddings.weight.device
+    pytorch_embed.embeddings.weight = torch.nn.Parameter(torch.from_numpy(d[f"{name}/weights"]).to(device=device), requires_grad=True)
     if hasattr(pytorch_embed, 'pos_embeddings'):
-        pytorch_embed.pos_embeddings.weight = torch.nn.Parameter(torch.from_numpy(d[f"{name}/pos_weights"]),
+        pytorch_embed.pos_embeddings.weight = torch.nn.Parameter(torch.from_numpy(d[f"{name}/pos_weights"]).to(device=device),
                                                                  requires_grad=True)
 
 

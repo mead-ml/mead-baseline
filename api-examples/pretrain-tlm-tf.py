@@ -13,6 +13,7 @@ from eight_mile.utils import Average, get_num_gpus_multiworker, read_yaml
 from eight_mile.optz import *
 from eight_mile.tf.optz import *
 from baseline.tf.lm import SET_TRAIN_FLAG, TransformerLanguageModel, TransformerMaskedLanguageModel
+from eight_mile.tf.serialize import save_tlm_npz
 import tensorflow as tf
 import json
 logger = logging.getLogger(__file__)
@@ -155,14 +156,14 @@ def train():
                         help='Relative attention positional sizes pass 0 if you dont want relative attention',
                         type=int, default=[8], nargs='+')
     parser.add_argument("--strategy", help="Training strategy, defaults to `mirror`", choices=["mirror"])
-
+    parser.add_argument("--npz", help="Should we write out NPZ files?", type=str2bool, default=False)
     args = parser.parse_args()
     SET_TRAIN_FLAG(True)
 
     if args.basedir is None:
         args.basedir = f'lm-{args.dataset_key}-bpe-{os.getpid()}'
     logging.basicConfig(level=logging.INFO)
-
+    logger.info(f"Writing results to {args.basedir}")
     strategy = create_distribute_strategy(args.distribute, args.tpu_ep)
     num_replicas = strategy.num_replicas_in_sync
     logger.info(f"Using {num_replicas} replicas in this job.")
@@ -302,6 +303,9 @@ def train():
                     logging.info('elapsed time this epoch %d min', elapsed)
                     logging.info('elapsed step time %f steps/min', i/elapsed)
                     checkpoint_manager.save()
+                    if args.npz:
+                        npz_checkpoint = os.path.join(args.basedir, f'checkpoint-step-{steps}.npz')
+                        save_tlm_npz(model, npz_checkpoint)
 
             # How much time elapsed in minutes
             elapsed = (time.time() - start)/60

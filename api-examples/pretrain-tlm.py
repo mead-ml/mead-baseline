@@ -14,6 +14,7 @@ from eight_mile.pytorch.layers import save_checkpoint, init_distributed
 from eight_mile.pytorch.optz import *
 from baseline.pytorch.lm import TransformerLanguageModel, TransformerMaskedLanguageModel
 from transformer_utils import MultiFileDatasetReader, on_demand_mlm_masking, get_lr_decay
+from eight_mile.pytorch.serialize import load_tlm_npz
 
 logger = logging.getLogger(__file__)
 
@@ -70,7 +71,8 @@ def train():
     parser.add_argument("--warmup_steps", type=int, default=10000, help="Num warmup steps")
     parser.add_argument("--saves_per_epoch", type=int, default=100, help="The number of checkpoints to save per epoch")
     parser.add_argument("--mlm", type=str2bool, default=True, help="Use Masked Language Model (MLM) objective")
-    parser.add_argument("--preprocessed", type=str2bool, default=False, help="Has the data already been preprocessed?")
+    parser.add_argument("--preprocessed", type=str2bool, default=True, help="Has the data already been preprocessed?")
+    parser.add_argument("--preserve_vocab_indices", type=str2bool, default=False, help="Use the exact same indices stored in the subword model")
     parser.add_argument('--rpr_k',
                         help='Relative attention positional sizes pass 0 if you dont want relative attention',
                         type=int, default=[8], nargs='+')
@@ -111,6 +113,7 @@ def train():
     vocab = reader.build_vocab([args.valid_file])
     # If we are not using chars, then use 'x' for both input and output
     preproc_data = baseline.embeddings.load_embeddings('x', dsz=args.d_model, known_vocab=vocab['x'],
+                                                       preserve_vocab_indices=args.preserve_vocab_indices,
                                                        embed_type=args.embed_type)
     vocabs = preproc_data['vocab']
 
@@ -165,7 +168,7 @@ def train():
     # correct it here
     steps_per_epoch = len(train_loader) // (args.batch_size*num_gpus)
     update_on = steps_per_epoch // args.saves_per_epoch
-    report_on = update_on // 10
+    report_on = max(10, update_on) // 10
     logger.info(f"Steps per epoch per GPU: {steps_per_epoch}. Saving checkpoint every {update_on} steps.")
     lr_decay = get_lr_decay(args.lr_scheduler, args.lr, steps_per_epoch, args.epochs, logger,
                             decay_steps=args.lr_decay_steps, decay_rate=args.lr_decay_rate, alpha=args.lr_alpha)
@@ -175,7 +178,11 @@ def train():
     global_step = 0
     start_epoch = 0
     if args.restart_from:
-        model.load_state_dict(torch.load(args.restart_from))
+
+        if args.restart_from.endswith('npz'):
+            load_tlm_npz(model, args.restart_from)
+        else:
+            model.load_state_dict(torch.load(args.restart_from))
         vec = args.restart_from.split("-")
 
         if args.restart_tt:
