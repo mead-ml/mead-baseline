@@ -130,7 +130,7 @@ def from_encoder_array(tf_encoder: TransformerEncoder, d: Dict, name: str):
 
 def to_embed_array(tf_embed: tf.keras.layers.Layer, name: str) -> Dict:
     """Convert positional embedding to a `weights` array, if it's learned positional embedding,
-    save the pos_weight as well
+    save the pos_weight as well.  This currently only works in eager mode
 
     :param tf_embed: An embedding module
     :param name: A layer name
@@ -139,18 +139,18 @@ def to_embed_array(tf_embed: tf.keras.layers.Layer, name: str) -> Dict:
     d = {}
 
 
-    weights = tf_embed.get_weights()
-    weight_offset = 0
     if hasattr(tf_embed, 'pos'):
-        pos_weights = weights[0]
+        pos_weights = tf_embed.pos.numpy()
         d.update({f"{name}/pos_weights": pos_weights})
-        weight_offset += 1
 
     if hasattr(tf_embed, 'bias'):
-        bias = weights[-1]
+        bias = tf_embed.bias.numpy()
         d.update({f"{name}/bias": bias.squeeze()})
 
-    weights = weights[weight_offset]
+    # Note: we override the Keras function forcing a single value not a list
+    # this function could break if we used get_weights() since we have broken that
+    # however, we'd like to fix that so using the raw value feels like the lesser of 2 evils
+    weights = tf_embed.W.numpy()
     d.update({f"{name}/weights": weights})
     return d
 

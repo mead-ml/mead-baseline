@@ -14,6 +14,7 @@ from eight_mile.pytorch.layers import save_checkpoint, init_distributed
 from eight_mile.pytorch.optz import *
 from baseline.pytorch.lm import TransformerLanguageModel, TransformerMaskedLanguageModel
 from transformer_utils import MultiFileDatasetReader, on_demand_mlm_masking, get_lr_decay
+from eight_mile.pytorch.serialize import load_tlm_npz
 
 logger = logging.getLogger(__file__)
 
@@ -175,7 +176,11 @@ def train():
     global_step = 0
     start_epoch = 0
     if args.restart_from:
-        model.load_state_dict(torch.load(args.restart_from))
+
+        if args.restart_from.endswith('npz'):
+            load_tlm_npz(model, args.restart_from)
+        else:
+            model.load_state_dict(torch.load(args.restart_from))
         vec = args.restart_from.split("-")
 
         if args.restart_tt:

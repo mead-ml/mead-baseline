@@ -163,7 +163,7 @@ def train():
     if args.basedir is None:
         args.basedir = f'lm-{args.dataset_key}-bpe-{os.getpid()}'
     logging.basicConfig(level=logging.INFO)
-
+    logger.info(f"Writing results to {args.basedir}")
     strategy = create_distribute_strategy(args.distribute, args.tpu_ep)
     num_replicas = strategy.num_replicas_in_sync
     logger.info(f"Using {num_replicas} replicas in this job.")
