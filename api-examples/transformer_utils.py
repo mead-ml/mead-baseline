@@ -375,7 +375,7 @@ def load_data_caching(token_type, reader, dataset, file_key, vocabs, caching, lo
 class MultiFileLoader(IterableDataset):
 
     SHUF_BUF_SZ = 4096
-    
+
     def __init__(self, directory, pattern, vocabs, vectorizer, nctx, last_turn_only=True, distribute=True, shuffle=True):
         super().__init__()
         self.vectorizer = vectorizer

@@ -71,7 +71,7 @@ def train():
     parser.add_argument("--saves_per_epoch", type=int, default=100, help="The number of checkpoints to save per epoch")
     parser.add_argument("--mlm", type=str2bool, default=True, help="Use Masked Language Model (MLM) objective")
     parser.add_argument("--preprocessed", type=str2bool, default=True, help="Has the data already been preprocessed?")
-    parser.add_argument("--preserve_vocab_indices", type=str2bool, default=False, help="Use the exact same indices stored in the subword model")
+    parser.add_argument("--preserve_vocab_indices", type=str2bool, default=True, help="Use the exact same indices stored in the subword model")
     parser.add_argument('--rpr_k',
                         help='Relative attention positional sizes pass 0 if you dont want relative attention',
                         type=int, default=[8], nargs='+')
