@@ -3380,7 +3380,7 @@ def init_distributed(local_rank):
         torch.cuda.set_device(local_rank)
         device = torch.device("cuda", local_rank)
     torch.distributed.init_process_group(backend='nccl', init_method='env://')
-    return device
+    return device, local_rank
 
 class SingleHeadReduction(nn.Module):
     """

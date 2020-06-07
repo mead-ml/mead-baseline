@@ -102,7 +102,8 @@ def train():
     if do_on_demand_masking:
         logger.info(f"On-demand masking is turned on")
     if args.distributed:
-        args.device = init_distributed(args.local_rank)
+        args.device, updated_local_rank = init_distributed(args.local_rank)
+        args.local_rank = updated_local_rank
 
     reader_type = "lang" if not args.preprocessed else "preprocessed"
     reader = MultiFileDatasetReader(args.nctx, args.subword_model_file, args.subword_vocab_file, args.pattern,
