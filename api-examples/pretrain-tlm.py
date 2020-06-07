@@ -124,7 +124,7 @@ def train():
     logger.info("Loaded embeddings")
 
     train_set = reader.load(args.train_file, vocabs)
-    valid_set = reader.load(args.valid_file, vocabs, distribute=False)
+    valid_set = reader.load(args.valid_file, vocabs, distribute=False, shuffle=False)
 
     train_loader = DataLoader(train_set, batch_size=args.batch_size, num_workers=args.num_train_workers)
     valid_loader = DataLoader(valid_set, batch_size=args.batch_size)
@@ -249,10 +249,12 @@ def train():
             optimizer.zero_grad()
             if (i + 1) % report_on == 0:
                 logging.info(avg_loss)
+
             if (i + 1) % update_on == 0 and args.local_rank < 1:
                 elapsed = (time.time() - start)/60
                 logging.info('elapsed time this epoch %d min', elapsed)
                 logging.info('elapsed step time %f steps/min', i/elapsed)
+                logging.info('LR: %f',  optimizer.current_lr)
                 save_checkpoint(model, model_base, steps, tick_type='step')
 
         # How much time elapsed in minutes
