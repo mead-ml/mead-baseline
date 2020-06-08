@@ -315,8 +315,8 @@ def fit_eager_distributed(model_params, ts, vs, es=None, **kwargs):
 
     for epoch in range(epochs):
 
-        trainer.train(train_dataset, steps=len(ts)-1, reporting_fns=reporting_fns)
-        test_metrics = trainer.test(valid_dataset, steps=len(vs)-1, reporting_fns=reporting_fns, phase='Valid')
+        trainer.train(train_dataset, steps=len(ts.examples) // ts.batchsz, reporting_fns=reporting_fns)
+        test_metrics = trainer.test(valid_dataset, steps=len(vs.examples) // vs.batchsz, reporting_fns=reporting_fns, phase='Valid')
 
         if do_early_stopping is False:
             trainer.checkpoint()
@@ -342,5 +342,5 @@ def fit_eager_distributed(model_params, ts, vs, es=None, **kwargs):
         test_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(es, src_lengths_key, dst=True))
         test_dataset = test_dataset.batch(test_batchsz, drop_remainder=False)
         test_dataset = test_dataset.prefetch(NUM_PREFETCH)
-        trainer.test(test_dataset, steps=len(es)-1, reporting_fns=reporting_fns, phase='Test')
+        trainer.test(test_dataset, steps=len(es.examples) // es.batchsz, reporting_fns=reporting_fns, phase='Test')
 
