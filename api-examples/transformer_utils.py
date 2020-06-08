@@ -434,6 +434,8 @@ class MultiFileLoader(IterableDataset):
             file = files[file_idx]
             with open(file) as rf:
                 lines = rf.readlines()
+                if self.shuffle:
+                    random.shuffle(lines)
                 for l in lines:
                     response = self.process_line(l)
                     yield response
