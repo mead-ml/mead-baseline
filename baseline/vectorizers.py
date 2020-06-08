@@ -467,6 +467,7 @@ class BPEVectorizer1D(AbstractVectorizer):
                 i -= len(self.emit_end_toks)
                 for j, x in enumerate(self.emit_end_toks):
                     vec1d[i + j] = vocab.get(x)
+                i = self.mxlen - 1
                 break
             vec1d[i] = atom
         valid_length = i + 1
