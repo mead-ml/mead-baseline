@@ -56,6 +56,7 @@ class Seq2SeqTrainerDistributedTf(Trainer):
                                                              max_to_keep=5)
         devices = ['/device:GPU:{}'.format(i) for i in range(self.gpus)]
         self.strategy = tf.distribute.MirroredStrategy(devices)
+        self.bleu_n_grams = int(kwargs.get("bleu_n_grams", 4))
 
     def checkpoint(self):
         """This method saves a checkpoint
@@ -167,7 +168,7 @@ class Seq2SeqTrainerDistributedTf(Trainer):
             top_preds = self.model.predict(features, **kwargs)
             preds.extend(convert_seq2seq_preds(top_preds[:, 0, :], self.tgt_rlut))
             golds.extend(convert_seq2seq_golds(tgt, tgt_lens, self.tgt_rlut))
-        metrics = {'bleu': bleu(preds, golds)[0]}
+        metrics = {'bleu': bleu(preds, golds, self.bleu_n_grams)[0]}
         self.report(
             0, metrics, start, 'Test', 'EPOCH', reporting_fns
         )
