@@ -5,6 +5,7 @@ from eight_mile.pytorch.layers import *
 from eight_mile.optz import create_lr_scheduler
 import baseline.pytorch.embeddings
 import baseline.embeddings
+import random
 from baseline.progress import create_progress_bar
 from torch.utils.data.dataset import IterableDataset, TensorDataset
 from baseline.vectorizers import Token1DVectorizer, BPEVectorizer1D, Char2DVectorizer, WordpieceVectorizer1D
@@ -373,7 +374,7 @@ def load_data_caching(token_type, reader, dataset, file_key, vocabs, caching, lo
 
 class MultiFileLoader(IterableDataset):
 
-    def __init__(self, directory, pattern, vocabs, vectorizer, nctx, last_turn_only=True, distribute=True):
+    def __init__(self, directory, pattern, vocabs, vectorizer, nctx, last_turn_only=True, distribute=True, shuffle=True):
         super().__init__()
         self.vectorizer = vectorizer
         self.pattern = pattern
@@ -383,6 +384,7 @@ class MultiFileLoader(IterableDataset):
         self.samples = 0
         self.rank = 0
         self.world_size = 1
+        self.shuffle = shuffle
         self.last_turn_only = last_turn_only
         self.distribute = distribute
         if torch.distributed.is_initialized() and distribute:
@@ -421,20 +423,22 @@ class MultiFileLoader(IterableDataset):
             num_workers_per_node = worker_info.num_workers
             node_worker_id = worker_info.id
         all_workers = (self.world_size * num_workers_per_node)
-        files_per_worker = len(files) // all_workers
         offset = self.rank * num_workers_per_node + node_worker_id
-        start_idx = offset * files_per_worker
-        end_idx = start_idx + files_per_worker if offset < all_workers - 1 else len(files)
-        print(f'worker {node_worker_id} [{start_idx}:{end_idx}]')
-
         self.vectorizer.mxlen = self.nctx
+        read_file_order = list(range(offset, len(files), all_workers))
+        # If we have multiple files per worker, possibly shuffle the file read order
+        if self.shuffle:
+            read_file_order = np.random.permutation(read_file_order)
 
-        for file in files[start_idx:end_idx]:
+        for file_idx in read_file_order:
+            file = files[file_idx]
             with open(file) as rf:
-                for line in rf:
-                    response = self.process_line(line)
-                    if response:
-                        yield response
+                lines = rf.readlines()
+                if self.shuffle:
+                    random.shuffle(lines)
+                for l in lines:
+                    response = self.process_line(l)
+                    yield response
 
     def process_line(self, line):
         """Read in a line and turn it into an entry
@@ -538,16 +542,16 @@ class MultiFileDatasetReader:
     def build_vocab(self, _=None):
         return {'x': self.vectorizer.vocab}
 
-    def load(self, directory, vocabs, distribute=True):
+    def load(self, directory, vocabs, distribute=True, shuffle=True):
         reader_type = self.reader_type.lower()
         if reader_type == "ntp":
-            return NextTurnPredictionFileLoader(directory, self.pattern, vocabs, self.vectorizer, self.nctx, distribute=distribute)
+            return NextTurnPredictionFileLoader(directory, self.pattern, vocabs, self.vectorizer, self.nctx, distribute=distribute, shuffle=shuffle)
         elif reader_type == "nsp":
-            return NextSequencePredictionFileLoader(directory, self.pattern, vocabs, self.vectorizer, 2*self.nctx, distribute=distribute)
+            return NextSequencePredictionFileLoader(directory, self.pattern, vocabs, self.vectorizer, 2*self.nctx, distribute=distribute, shuffle=shuffle)
         elif reader_type == "lang":
             print("Using files as an LM")
-            return SequencePredictionFileLoader(directory, self.pattern, vocabs, self.vectorizer, self.nctx, distribute=distribute)
-        return PreprocessedFileLoader(directory, self.pattern, vocabs, self.vectorizer, self.nctx, distribute=distribute)
+            return SequencePredictionFileLoader(directory, self.pattern, vocabs, self.vectorizer, self.nctx, distribute=distribute, shuffle=shuffle)
+        return PreprocessedFileLoader(directory, self.pattern, vocabs, self.vectorizer, self.nctx, distribute=distribute, shuffle=shuffle)
 
 
 class TiedEmbeddingsSeq2SeqModel(Seq2SeqModel):
