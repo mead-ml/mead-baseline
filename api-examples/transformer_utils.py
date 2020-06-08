@@ -374,8 +374,6 @@ def load_data_caching(token_type, reader, dataset, file_key, vocabs, caching, lo
 
 class MultiFileLoader(IterableDataset):
 
-    SHUF_BUF_SZ = 4096
-
     def __init__(self, directory, pattern, vocabs, vectorizer, nctx, last_turn_only=True, distribute=True, shuffle=True):
         super().__init__()
         self.vectorizer = vectorizer
@@ -425,14 +423,9 @@ class MultiFileLoader(IterableDataset):
             num_workers_per_node = worker_info.num_workers
             node_worker_id = worker_info.id
         all_workers = (self.world_size * num_workers_per_node)
-        files_per_worker = len(files) // all_workers
         offset = self.rank * num_workers_per_node + node_worker_id
-        start_idx = offset * files_per_worker
-        end_idx = start_idx + files_per_worker if offset < all_workers - 1 else len(files)
-        print(f'worker {node_worker_id} [{start_idx}:{end_idx}]')
-
         self.vectorizer.mxlen = self.nctx
-        read_file_order = np.arange(start_idx, end_idx)
+        read_file_order = list(range(offset, len(files), all_workers))
         # If we have multiple files per worker, possibly shuffle the file read order
         if self.shuffle:
             read_file_order = np.random.permutation(read_file_order)
@@ -440,22 +433,10 @@ class MultiFileLoader(IterableDataset):
         for file_idx in read_file_order:
             file = files[file_idx]
             with open(file) as rf:
-                lines = []
-                for i, line in enumerate(rf):
-                    lines.append(line)
-                    if (i+1) % MultiFileLoader.SHUF_BUF_SZ == 0:
-                        if self.shuffle:
-                            random.shuffle(lines)
-                        for l in lines:
-                            response = self.process_line(l)
-                            yield response
-                        lines = []
-                if lines:
-                    if self.shuffle:
-                        random.shuffle(lines)
-                    for l in lines:
-                        response = self.process_line(l)
-                        yield response
+                lines = rf.readlines()
+                for l in lines:
+                    response = self.process_line(l)
+                    yield response
 
     def process_line(self, line):
         """Read in a line and turn it into an entry
