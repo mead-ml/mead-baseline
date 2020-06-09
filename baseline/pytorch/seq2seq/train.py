@@ -29,6 +29,7 @@ class Seq2SeqTrainerPyTorch(Trainer):
         self._predict = model.predict
         self.tgt_rlut = kwargs['tgt_rlut']
         self.gpus = kwargs.get('gpus', 1)
+        self.bleu_n_grams = int(kwargs.get("bleu_n_grams", 4))
 
         if self.gpus > 0:
             self.crit = model.create_loss().cuda()
@@ -84,7 +85,7 @@ class Seq2SeqTrainerPyTorch(Trainer):
             golds.extend(convert_seq2seq_golds(tgt.cpu().numpy(), tgt_lens, self.tgt_rlut))
 
         metrics = self.calc_metrics(total_loss, total_toks)
-        metrics['bleu'] = bleu(preds, golds)[0]
+        metrics['bleu'] = bleu(preds, golds, self.bleu_n_grams)[0]
         self.report(
             self.valid_epochs, metrics, start,
             phase, 'EPOCH', reporting_fns
@@ -103,7 +104,7 @@ class Seq2SeqTrainerPyTorch(Trainer):
             pred = [p[0] for p in self._predict(batch_dict, numpy_to_tensor=False, **kwargs)]
             preds.extend(convert_seq2seq_preds(pred, self.tgt_rlut))
             golds.extend(convert_seq2seq_golds(tgt, tgt_lens, self.tgt_rlut))
-        metrics = {'bleu': bleu(preds, golds)[0]}
+        metrics = {'bleu': bleu(preds, golds, self.bleu_n_grams)[0]}
         self.report(
             0, metrics, start, 'Test', 'EPOCH', reporting_fns
         )
