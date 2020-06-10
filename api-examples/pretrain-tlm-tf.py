@@ -64,13 +64,14 @@ def decode_json(example):
     return tf.py_function(_parse_json, [example], [tf.int32, tf.int32])
 
 
-def get_dataset(directory, file_type, num_parallel_reads=1):
+def get_dataset(directory, file_type, num_parallel_reads=1, shuffle=True):
     """Get a dataset as a tf.data.Dataset.  Input can be a bucket or a local file
 
 
     :param directory: Either a bucket or a file
     :param file_type: Currently supports "json" files or "tfrecords"
     :param num_parallel_reads: The number of parallel reads
+    :param shuffle: Defaults to True
     :return: a `tf.data.Dataset`
     """
     pattern = os.path.join(directory, f'*.{file_type}')
@@ -79,8 +80,18 @@ def get_dataset(directory, file_type, num_parallel_reads=1):
 
     if file_type == 'json':
         ds = tf.data.TextLineDataset(files, num_parallel_reads=num_parallel_reads)
-        return ds.map(decode_json)
-    ds = tf.data.TFRecordDataset(files, num_parallel_reads=num_parallel_reads).map(_parse_tf_record)
+        if shuffle:
+            ds = ds.shuffle(100)
+        ds = ds.map(decode_json)
+        return ds
+    if not shuffle:
+        ds = tf.data.TFRecordDataset(files, num_parallel_reads=num_parallel_reads)
+    else:
+        ds = tf.data.Dataset.from_tensor_slices(tf.constant(files))
+        ds = ds.shuffle(buffer_size=len(files))
+        ds = ds.interleave(lambda x: tf.data.TFRecordDataset(x), num_parallel_calls=num_parallel_reads)
+        ds = ds.shuffle(buffer_size=100)
+    ds = ds.map(_parse_tf_record)
     return ds
 
 
@@ -129,7 +140,6 @@ def train():
     parser.add_argument("--num_heads", type=int, default=1, help="Number of heads")
     parser.add_argument("--num_layers", type=int, default=6, help="Number of layers")
     parser.add_argument("--num_train_workers", type=int, default=4, help="Number train workers")
-    parser.add_argument("--num_valid_workers", type=int, default=2, help="Number valid workers")
     parser.add_argument("--distribute", type=str, default="mirror", choices=["mirror", "tpu", "nccl"])
     parser.add_argument("--tpu_ep", type=str, help="The TPU endpoint if using `distribute=tpu`")
     parser.add_argument("--nctx", type=int, default=128, help="Max input length")
@@ -186,7 +196,7 @@ def train():
 
     def dataset_test_fn(input_context):
         batch_size = input_context.get_per_replica_batch_size(args.batch_size)
-        ds = get_dataset(args.valid_dir, args.file_type, args.num_train_workers).batch(batch_size)
+        ds = get_dataset(args.valid_dir, args.file_type, args.num_train_workers, shuffle=False).batch(batch_size)
         return ds.shard(
             input_context.num_input_pipelines, input_context.input_pipeline_id
         )
