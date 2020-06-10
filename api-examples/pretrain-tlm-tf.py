@@ -89,7 +89,9 @@ def get_dataset(directory, file_type, num_parallel_reads=1, shuffle=True):
     else:
         ds = tf.data.Dataset.from_tensor_slices(tf.constant(files))
         ds = ds.shuffle(buffer_size=len(files))
-        ds = ds.interleave(lambda x: tf.data.TFRecordDataset(x), num_parallel_calls=num_parallel_reads)
+        ds = ds.interleave(lambda x: tf.data.TFRecordDataset(x),
+                           num_parallel_calls=tf.data.experimental.AUTOTUNE,
+                           cycle_length=num_parallel_reads)
         ds = ds.shuffle(buffer_size=100)
     ds = ds.map(_parse_tf_record)
     return ds
@@ -102,7 +104,7 @@ def get_num_samples(sample_md):
 
 def create_distribute_strategy(strategy_name, endpoint=None):
     if strategy_name == 'tpu':
-        if endpoint is None:
+        if endpoint == 'colab':
             endpoint = 'grpc://' + os.environ['COLAB_TPU_ADDR']
         resolver = tf.distribute.cluster_resolver.TPUClusterResolver(tpu=endpoint)
         tf.config.experimental_connect_to_cluster(resolver)
