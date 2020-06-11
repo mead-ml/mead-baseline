@@ -159,10 +159,6 @@ def train():
     parser.add_argument("--restart", type=str2bool, help="Option allows you to restart from a previous checkpoint")
     parser.add_argument("--restart_tt", type=str, help="Optional param for legacy checkpoints (step|epoch)")
     parser.add_argument("--warmup_steps", type=int, default=10000, help="Num warmup steps")
-    parser.add_argument("--lr_scheduler", type=str, help="The type of learning rate decay scheduler", default='cosine')
-    parser.add_argument("--lr_decay_steps", type=int, help="decay steps of lr scheduler")
-    parser.add_argument("--lr_decay_rate", type=float, help="decay rate of lr scheduler")
-    parser.add_argument("--lr_alpha", type=float, help="parameter alpha for cosine decay scheduler")
     parser.add_argument("--mlm", type=str2bool, default=True, help="Use Masked Language Model (MLM) objective")
     parser.add_argument("--saves_per_epoch", type=int, default=10, help="The number of checkpoints to save per epoch")
     parser.add_argument('--rpr_k',
@@ -250,13 +246,15 @@ def train():
     linear_warmup = WarmupLinearSchedulerTensorFlow(args.warmup_steps, lr=args.lr)
     lr_sched = CompositeLRSchedulerTensorFlow(linear_warmup, lr_decay, lr=args.lr)
     optimizer = EagerOptimizer(loss_function, global_step=global_step, lr=args.lr, optim=args.optim,
-                               learning_rate_decay_fn=lr_sched, weight_decay=args.weight_decay, clip=args.clip)
+                               lr_function=lr_sched, weight_decay=args.weight_decay, clip=args.clip)
     checkpoint = tf.train.Checkpoint(optimizer=optimizer.optimizer, model=model)
     checkpoint_manager = tf.train.CheckpointManager(checkpoint,
                                                     directory=args.basedir,
                                                     max_to_keep=5)
 
     if args.restart:
+        # The global step gets automatically updated here
+        # so we dont have to worry about our LR regimen
         checkpoint.restore(checkpoint_manager.latest_checkpoint)
 
     def _replicated_train_step(inputs):
