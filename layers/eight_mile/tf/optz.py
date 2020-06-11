@@ -670,7 +670,6 @@ def optimizer(loss_fn, **kwargs):
 class EagerOptimizer:
     def __init__(self, loss, optimizer=None, **kwargs):
         self.loss = loss
-        self.global_step = tf.Variable(int(kwargs.get('global_step', 0)))
         if "lr_function" in kwargs:
             lr_function = kwargs["lr_function"]
         else:
@@ -692,7 +691,7 @@ class EagerOptimizer:
                 rho = float(kwargs.get("rho", 0.95))
                 eps = float(kwargs.get("epsilon", 1e-6))
                 logger.info("adadelta(eta=%f, rho=%f, epsilon=%f)", lr, rho, eps)
-                self.optimizer = tf.keras.optimizers.Adadelta(lr, rho, eps)
+                self.optimizer = tf.keras.optimizers.Adadelta(lr_function, rho, eps)
             elif optim == "adam":
                 beta1 = float(kwargs.get("beta1", 0.9))
                 beta2 = float(kwargs.get("beta2", 0.999))
@@ -725,13 +724,16 @@ class EagerOptimizer:
 
         logger.info("clip gradients at %s", self.clip)
 
+    @property
+    def global_step(self):
+        return self.optimizer.iterations
+
     def update(self, model, x, y, num_replicas=1):
         with tf.GradientTape() as tape:
             loss_value = self.loss(model, x, y) / num_replicas
         grads = tape.gradient(loss_value, model.trainable_variables)
         grads, _ = tf.clip_by_global_norm(grads, self.clip)
         self.optimizer.apply_gradients(zip(grads, model.trainable_variables))
-        self.global_step.assign_add(1)
         return loss_value
 
     def update_with_hidden(self, model, h, x, y):
@@ -741,5 +743,4 @@ class EagerOptimizer:
         grads = tape.gradient(loss_value, model.trainable_variables)
         grads, _ = tf.clip_by_global_norm(grads, self.clip)
         self.optimizer.apply_gradients(zip(grads, model.trainable_variables))
-        self.global_step.assign_add(1)
         return loss_value, h
