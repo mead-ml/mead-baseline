@@ -49,6 +49,7 @@ def _parse_json(example):
     j = json.loads(example.numpy())
     return tf.constant(j['x'], dtype=tf.int32), tf.constant(j['y'], dtype=tf.int32)
 
+
 feature_description = {
     'x': tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True, default_value=0),
     'y': tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True, default_value=0),
@@ -136,26 +137,26 @@ def train():
     parser.add_argument("--embed_type", type=str, default='default',
                         choices=["default", "positional", "learned-positional"],
                         help="register label of the embeddings")
-    parser.add_argument("--d_model", type=int, default=410, help="Model dimension (and embedding dsz)")
-    parser.add_argument("--d_ff", type=int, default=2100, help="FFN dimension")
+    parser.add_argument("--d_model", type=int, default=512, help="Model dimension (and embedding dsz)")
+    parser.add_argument("--d_ff", type=int, default=2048, help="FFN dimension")
     parser.add_argument("--d_k", type=int, default=None, help="Dimension per head.  Use if num_heads=1 to reduce dims")
-    parser.add_argument("--num_heads", type=int, default=1, help="Number of heads")
-    parser.add_argument("--num_layers", type=int, default=6, help="Number of layers")
+    parser.add_argument("--num_heads", type=int, default=8, help="Number of heads")
+    parser.add_argument("--num_layers", type=int, default=8, help="Number of layers")
     parser.add_argument("--num_train_workers", type=int, default=4, help="Number train workers")
     parser.add_argument("--distribute", type=str, default="mirror", choices=["mirror", "tpu", "nccl"])
     parser.add_argument("--tpu_ep", type=str, help="The TPU endpoint if using `distribute=tpu`")
-    parser.add_argument("--nctx", type=int, default=128, help="Max input length")
+    parser.add_argument("--nctx", type=int, default=256, help="Max input length")
     parser.add_argument("--file_type", default='tfrecord', choices=['json', 'tfrecord'], help="Glob pattern for data")
-    parser.add_argument("--batch_size", type=int, default=8, help="Batch Size")
+    parser.add_argument("--batch_size", type=int, default=256, help="Batch Size")
     parser.add_argument("--subword_model_file", type=str, help="The BPE model file", required=True)
     parser.add_argument("--subword_vocab_file", type=str, help="The BPE subword vocab", required=True)
     parser.add_argument("--dropout", type=float, default=0.1, help="Dropout")
     parser.add_argument("--optim", default="adam", type=str, help="Optimizer to use (defaults to adam)")
     parser.add_argument("--lr", type=float, default=4.0e-4, help="Learning rate")
-    parser.add_argument("--clip", type=float, default=1, help="Clipping gradient norm")
+    parser.add_argument("--clip", type=float, default=1.0, help="Clipping gradient norm")
     parser.add_argument("--weight_decay", type=float, default=0.0, help="Weight decay")
-    parser.add_argument("--epochs", type=int, default=20, help="Num training epochs")
-    parser.add_argument("--restart_from", type=str, help="Option allows you to restart from a previous checkpoint")
+    parser.add_argument("--epochs", type=int, default=32, help="Num training epochs")
+    parser.add_argument("--restart", type=str2bool, help="Option allows you to restart from a previous checkpoint")
     parser.add_argument("--restart_tt", type=str, help="Optional param for legacy checkpoints (step|epoch)")
     parser.add_argument("--warmup_steps", type=int, default=10000, help="Num warmup steps")
     parser.add_argument("--lr_scheduler", type=str, help="The type of learning rate decay scheduler", default='cosine')
@@ -163,7 +164,7 @@ def train():
     parser.add_argument("--lr_decay_rate", type=float, help="decay rate of lr scheduler")
     parser.add_argument("--lr_alpha", type=float, help="parameter alpha for cosine decay scheduler")
     parser.add_argument("--mlm", type=str2bool, default=True, help="Use Masked Language Model (MLM) objective")
-    parser.add_argument("--saves_per_epoch", type=int, default=100, help="The number of checkpoints to save per epoch")
+    parser.add_argument("--saves_per_epoch", type=int, default=10, help="The number of checkpoints to save per epoch")
     parser.add_argument('--rpr_k',
                         help='Relative attention positional sizes pass 0 if you dont want relative attention',
                         type=int, default=[8], nargs='+')
@@ -255,7 +256,7 @@ def train():
                                                     directory=args.basedir,
                                                     max_to_keep=5)
 
-    if args.restart_from:
+    if args.restart:
         checkpoint.restore(checkpoint_manager.latest_checkpoint)
 
     def _replicated_train_step(inputs):
