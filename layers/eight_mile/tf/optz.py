@@ -241,7 +241,7 @@ class CompositeLRSchedulerTensorFlow2(tf.keras.optimizers.schedules.LearningRate
         def call_warm():
             return warm_tensor
 
-        rest_step = tf.subtract(global_step, tf.compat.v1.constant(self.warm.warmup_steps, dtype=global_step.dtype))
+        rest_step = global_step - self.warm.warmup_steps
         rest_tensor = self.rest(rest_step)
 
         def call_rest():
