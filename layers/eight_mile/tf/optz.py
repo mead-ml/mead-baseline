@@ -230,8 +230,27 @@ class ZarembaDecaySchedulerTensorFlow2(tf.keras.optimizers.schedules.PiecewiseCo
         super().__init__(boundaries, values, kwargs.get("name"))
 
 
-class CompositeLRSchedulerTensorFlow2(CompositeLRScheduler, tf.keras.optimizers.schedules.LearningRateSchedule):
-    pass
+class CompositeLRSchedulerTensorFlow2(tf.keras.optimizers.schedules.LearningRateSchedule):
+    def __init__(self, warm=None, rest=None, **kwargs):
+        self.warm = warm
+        self.rest = rest
+
+    def __call__(self, global_step):
+        warm_tensor = self.warm(global_step)
+
+        def call_warm():
+            return warm_tensor
+
+        rest_step = tf.subtract(global_step, tf.compat.v1.constant(self.warm.warmup_steps, dtype=global_step.dtype))
+        rest_tensor = self.rest(rest_step)
+
+        def call_rest():
+            return rest_tensor
+
+        return tf.identity(tf.cond(global_step < self.warm.warmup_steps, call_warm, call_rest), name="lr")
+
+    def __str__(self):
+        return "LRScheduler({}, {})".format(self.warm, self.rest)
 
 
 class PiecewiseDecaySchedulerTensorFlow2(tf.keras.optimizers.schedules.PiecewiseConstantDecay):
