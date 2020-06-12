@@ -85,12 +85,20 @@ def train():
                         type=int,
                         default=-1,
                         help="Local rank for distributed training (-1 means use the environment variables to find)")
+    parser.add_argument("--tb", help="Turn on tensorboard?", type=str2bool, default=False)
 
     args = parser.parse_args()
 
     if args.basedir is None:
         args.basedir = 'lm-{}-bpe-{}'.format(args.dataset_key, os.getpid())
     logging.basicConfig(level=logging.INFO if args.local_rank in [-1, 0] else logging.WARN)
+
+    tb_writer = None
+    if args.tb:
+        logdir = f"logs/scalars/{os.getpid()}"
+        from torch.utils.tensorboard import SummaryWriter
+        tb_writer = SummaryWriter(logdir + "/metrics")
+        logger.info(f"Set up tensorboard logdir {logdir}")
 
     num_gpus = get_num_gpus_multiworker()
     args.distributed = args.distributed or num_gpus > 1
@@ -172,7 +180,7 @@ def train():
     lr_decay = get_lr_decay(args.lr_scheduler, args.lr, steps_per_epoch, args.epochs, logger,
                             decay_steps=args.lr_decay_steps, decay_rate=args.lr_decay_rate, alpha=args.lr_alpha)
     linear_warmup = WarmupLinearSchedulerPyTorch(args.warmup_steps, lr=args.lr)
-    lr_sched = CompositeLRScheduler(linear_warmup, lr_decay, lr=args.lr)
+    lr_sched = CompositeLRScheduler(linear_warmup, lr_decay, lr=args.lr, logger=tb_writer)
 
     global_step = 0
     start_epoch = 0
@@ -242,6 +250,8 @@ def train():
                 loss = loss_function(shift_logits, shift_labels)
             loss.backward()
             avg_loss.update(loss.item())
+            if tb_writer:
+                tb_writer.add_scalar("train_loss", loss, steps)
 
             torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip)
             optimizer.step()
@@ -286,6 +296,8 @@ def train():
                     shift_labels = labels[1:]
                     loss = loss_function(shift_logits, shift_labels)
                 avg_valid_loss.update(loss.item())
+                if tb_writer:
+                    tb_writer.add_scalar("valid_loss", loss, steps)
 
         valid_token_loss = avg_valid_loss.avg
         valid_token_ppl = math.exp(valid_token_loss)

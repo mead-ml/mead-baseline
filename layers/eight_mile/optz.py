@@ -160,8 +160,13 @@ class CompositeLRScheduler(LearningRateScheduler):
         super().__init__(**kwargs)
         self.warm = warm
         self.rest = rest
+        self.logger = kwargs.get('logger')
 
     def __call__(self, global_step):
         if global_step < self.warm.warmup_steps:
-            return self.warm(global_step)
-        return self.rest(global_step - self.warm.warmup_steps)
+            new_lr = self.warm(global_step)
+        else:
+            new_lr = self.rest(global_step - self.warm.warmup_steps)
+        if self.logger:
+            self.logger.add_scalar('lr', new_lr, global_step)
+        return new_lr
