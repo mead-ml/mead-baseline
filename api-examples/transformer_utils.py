@@ -427,18 +427,20 @@ class MultiFileLoader(IterableDataset):
         self.vectorizer.mxlen = self.nctx
         read_file_order = list(range(offset, len(files), all_workers))
         # If we have multiple files per worker, possibly shuffle the file read order
-        if self.shuffle:
-            read_file_order = np.random.permutation(read_file_order)
 
-        for file_idx in read_file_order:
-            file = files[file_idx]
-            with open(file) as rf:
-                lines = rf.readlines()
-                if self.shuffle:
-                    random.shuffle(lines)
-                for l in lines:
-                    response = self.process_line(l)
-                    yield response
+        while True:
+            if self.shuffle:
+                read_file_order = np.random.permutation(read_file_order)
+
+            for file_idx in read_file_order:
+                file = files[file_idx]
+                with open(file) as rf:
+                    lines = rf.readlines()
+                    if self.shuffle:
+                        random.shuffle(lines)
+                    for l in lines:
+                        response = self.process_line(l)
+                        yield response
 
     def process_line(self, line):
         """Read in a line and turn it into an entry
