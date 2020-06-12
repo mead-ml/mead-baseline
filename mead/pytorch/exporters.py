@@ -83,9 +83,31 @@ class PytorchONNXExporter(Exporter):
         self.transpose = kwargs.get('transpose', False)
         self.tracing = kwargs.get('tracing', True)
         self.default_size = int(kwargs.get('default_size', 100))
+        self.onnx_opset = int(kwargs.get('onnx_opset', 11))
 
     def apply_model_patches(self, model):
         return model
+
+    def create_example_input(self, vocabs, vectorizers):
+        return create_data_dict(vocabs, vectorizers, self.transpose, self.default_size)
+
+    def create_example_output(self, model):
+        return torch.ones((1, len(model.labels)))
+
+    def create_model_inputs(self, model):
+        return [k for k, _ in model.embeddings.items()] + ['lengths']
+
+    def create_model_outputs(self, model):
+        return ['output']
+
+    def create_dynamic_axes(self, model, vectorizers, inputs, outputs):
+        dynamics = {'output': {1: 'sequence'}}
+        for k, _ in model.embeddings.items():
+            if k == 'char':
+                dynamics[k] = {1: 'sequence', 2: 'chars'}
+            else:
+                dynamics[k] = {1: 'sequence'}
+        return dynamics
 
     def _run(self, basename, output_dir, project=None, name=None, model_version=None, use_version=False, zip_results=True, **kwargs):
         logger.warning("Pytorch exporting is experimental and is not guaranteed to work for plugin models.")
@@ -93,26 +115,25 @@ class PytorchONNXExporter(Exporter):
             output_dir,
             project, name,
             model_version,
-            kwargs.get('remote', True),
+            kwargs.get('remote', False),
             use_version=use_version
         )
         logger.info("Saving vectorizers and vocabs to %s", client_output)
         logger.info("Saving serialized model to %s", server_output)
+
         model, vectorizers, vocabs, model_name = self.load_model(basename)
         model = self.apply_model_patches(model)
-        data = create_data_dict(vocabs, vectorizers, transpose=self.transpose, default_size=self.default_size)
 
-        inputs = [k for k, _ in model.embeddings.items()] + ['lengths']
+        data = self.create_example_input(vocabs, vectorizers)
+        example_output = self.create_example_output(model)
 
-        dynamics = {'output': {1: 'sequence'}}
-        for k, _ in model.embeddings.items():
-            if k == 'char':
-                dynamics[k] = {1: 'sequence', 2: 'chars'}
-            else:
-                dynamics[k] = {1: 'sequence'}
+        inputs = self.create_model_inputs(model)
+        outputs = self.create_model_outputs(model)
+
+        dynamics = self.create_dynamic_axes(model, vectorizers, inputs, outputs)
 
         meta = create_metadata(
-            inputs, ['output'],
+            inputs, outputs,
             self.sig_name,
             model_name, model.lengths_key
         )
@@ -121,16 +142,17 @@ class PytorchONNXExporter(Exporter):
             model = torch.jit.script(model)
 
         logger.info("Exporting Model.")
-        print(inputs)
+        logger.info("Model inputs: %s", inputs)
+        logger.info("Model outputs: %s", outputs)
 
         torch.onnx.export(model, data,
                           verbose=True,
                           dynamic_axes=dynamics,
                           f=f'{server_output}/{model_name}.onnx',
                           input_names=inputs,
-                          output_names=['output'],
-                          opset_version=11,
-                          example_outputs=torch.ones((1, len(model.labels))))
+                          output_names=outputs,
+                          opset_version=self.onnx_opset,
+                          example_outputs=example_output)
 
         logger.info("Saving metadata.")
         save_to_bundle(client_output, basename, assets=meta, zip_results=zip_results)
