@@ -11,9 +11,6 @@ from eight_mile.optz import (
     PiecewiseDecayScheduler,
     ZarembaDecayScheduler,
     CosineDecayScheduler,
-    InverseTimeDecayScheduler,
-    ExponentialDecayScheduler,
-    CompositeLRScheduler,
 )
 
 logger = logging.getLogger("mead.layers")
@@ -247,7 +244,9 @@ class CompositeLRSchedulerTensorFlow2(tf.keras.optimizers.schedules.LearningRate
         def call_rest():
             return rest_tensor
 
-        return tf.identity(tf.cond(global_step < self.warm.warmup_steps, call_warm, call_rest), name="lr")
+        new_lr = tf.cond(global_step < self.warm.warmup_steps, call_warm, call_rest)
+        tf.summary.scalar(name='lr', data=new_lr, step=tf.cast(global_step, tf.int64))
+        return new_lr
 
     def __str__(self):
         return "LRScheduler({}, {})".format(self.warm, self.rest)
