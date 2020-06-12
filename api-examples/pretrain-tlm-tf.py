@@ -5,6 +5,8 @@ from argparse import ArgumentParser
 import math
 from typing import Tuple
 import baseline
+#from baseline.tf.tfy import set_tf_eager_debug
+#set_tf_eager_debug(True)
 from eight_mile.utils import str2bool, write_json
 import baseline.tf.embeddings
 import baseline.embeddings
@@ -27,7 +29,6 @@ to train them across multiple workers.
 Sample preprocessed data can be found here: https://www.dropbox.com/s/jir4layu6nzjtqy/wt2.tar.gz
 
 """
-
 
 class Loss:
     def __init__(self, vocab_size, nctx):
@@ -111,17 +112,23 @@ def create_distribute_strategy(strategy_name, endpoint=None):
         tf.config.experimental_connect_to_cluster(resolver)
         # This is the TPU initialization code that has to be at the beginning.
         tf.tpu.experimental.initialize_tpu_system(resolver)
-        logger.info("All devices: ", tf.config.list_logical_devices('TPU'))
+        for tpu in tf.config.list_logical_devices('TPU'):
+            logger.info('Device [%s]', tpu.name)
         strategy = tf.distribute.experimental.TPUStrategy(resolver)
-    elif strategy_name == "nccl":
-        strategy = tf.distribute.experimental.MultiWorkerMirroredStrategy(
-            communication=tf.distribute.experimental.CollectiveCommunication.NCCL)
-    elif strategy_name == 'mirror':
-        num_gpus = get_num_gpus_multiworker()
-        devices = ['/device:GPU:{}'.format(i) for i in range(num_gpus)]
-        strategy = tf.distribute.MirroredStrategy(devices)
     else:
-        raise Exception(f"Unsupported strategy {strategy_name}")
+        if strategy_name == "nccl":
+            strategy = tf.distribute.experimental.MultiWorkerMirroredStrategy(
+                communication=tf.distribute.experimental.CollectiveCommunication.NCCL)
+        elif strategy_name == 'mirror':
+            num_gpus = get_num_gpus_multiworker()
+            devices = ['/device:GPU:{}'.format(i) for i in range(num_gpus)]
+            strategy = tf.distribute.MirroredStrategy(devices)
+        else:
+            raise Exception(f"Unsupported strategy {strategy_name}")
+
+        for tpu in tf.config.list_logical_devices('GPU'):
+            logger.info('Device [%s]', tpu.name)
+
     return strategy
 
 
@@ -166,6 +173,8 @@ def train():
                         type=int, default=[8], nargs='+')
     parser.add_argument("--strategy", help="Training strategy, defaults to `mirror`", choices=["mirror"])
     parser.add_argument("--npz", help="Should we write out NPZ files?", type=str2bool, default=False)
+    parser.add_argument("--tb", help="Turn on tensorboard?", type=str2bool, default=False)
+
     args = parser.parse_args()
     SET_TRAIN_FLAG(True)
 
@@ -173,6 +182,13 @@ def train():
         args.basedir = f'lm-{args.dataset_key}-bpe-{os.getpid()}'
     logging.basicConfig(level=logging.INFO)
     logger.info(f"Writing results to {args.basedir}")
+
+    if args.tb:
+        logdir = f"logs/scalars/{os.getpid()}"
+        file_writer = tf.summary.create_file_writer(logdir + "/metrics")
+        file_writer.set_as_default()
+        logger.info(f"Set up tensorboard logdir {logdir}")
+
     strategy = create_distribute_strategy(args.distribute, args.tpu_ep)
     num_replicas = strategy.num_replicas_in_sync
     logger.info(f"Using {num_replicas} replicas in this job.")
@@ -242,11 +258,10 @@ def train():
     report_on = max(10, update_on) // 10
     logger.info(f"Steps per epoch: {steps_per_epoch}. Saving checkpoint every {update_on} steps.")
 
-    lr_decay = CosineDecaySchedulerTensorFlow(steps_per_epoch)
+    lr_decay = CosineDecaySchedulerTensorFlow(steps_per_epoch, lr=args.lr)
     linear_warmup = WarmupLinearSchedulerTensorFlow(args.warmup_steps, lr=args.lr)
-    lr_sched = CompositeLRSchedulerTensorFlow(linear_warmup, lr_decay, lr=args.lr)
-    optimizer = EagerOptimizer(loss_function, global_step=global_step, lr=args.lr, optim=args.optim,
-                               lr_function=lr_sched, weight_decay=args.weight_decay, clip=args.clip)
+    lr_sched = CompositeLRSchedulerTensorFlow(linear_warmup, lr_decay)
+    optimizer = EagerOptimizer(loss_function, optim=args.optim, lr_function=lr_sched, weight_decay=args.weight_decay, clip=args.clip)
     checkpoint = tf.train.Checkpoint(optimizer=optimizer.optimizer, model=model)
     checkpoint_manager = tf.train.CheckpointManager(checkpoint,
                                                     directory=args.basedir,
@@ -292,7 +307,6 @@ def train():
         return strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_loss, axis=None)
 
     # This is the training loop
-    steps = global_step
     start_epoch = 0
 
     with strategy.scope():
@@ -304,9 +318,9 @@ def train():
             start = time.time()
             train_iter = iter(train_loader)
             for i in range(steps_per_epoch):
-                steps += 1
                 loss = _distributed_train_step(next(train_iter))
                 avg_loss.update(loss.numpy().item())
+                tf.summary.scalar("train_loss", data=loss, step=optimizer.global_step)
                 if (i + 1) % report_on == 0:
                     logging.info(avg_loss)
                 if (i + 1) % update_on == 0:
@@ -315,6 +329,7 @@ def train():
                     logging.info('elapsed step time %f steps/min', i/elapsed)
                     checkpoint_manager.save()
                     if args.npz:
+                        steps = optimizer.global_step.numpy()
                         npz_checkpoint = os.path.join(args.basedir, f'checkpoint-step-{steps}.npz')
                         save_tlm_npz(model, npz_checkpoint)
 
@@ -333,6 +348,7 @@ def train():
             valid_iter = iter(valid_loader)
             for i in range(steps_per_valid_epoch):
                 valid_loss = _distributed_test_step(next(valid_iter))
+                tf.summary.scalar('valid_loss', data=valid_loss, step=optimizer.global_step)
                 avg_valid_loss.update(valid_loss.numpy().item())
 
             valid_token_loss = avg_valid_loss.avg
