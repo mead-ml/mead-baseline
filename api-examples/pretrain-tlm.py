@@ -166,6 +166,7 @@ def train():
     # according to pytorch, len(train_loader) will return len(train_set) when train_set is IterableDataset, so manually
     # correct it here
     steps_per_epoch = len(train_loader) // (args.batch_size*num_gpus)
+    valid_steps = len(valid_loader) // args.batch_size
     update_on = steps_per_epoch // args.saves_per_epoch
     report_on = max(10, update_on) // 10
     logger.info(f"Steps per epoch per GPU: {steps_per_epoch}. Saving checkpoint every {update_on} steps.")
@@ -223,7 +224,8 @@ def train():
         optimizer.zero_grad()
         start = time.time()
         model.train()
-        for i, batch in enumerate(train_loader):
+        for i in range(steps_per_epoch):
+            batch = next(iter(train_loader))
             steps += 1
             x, y = batch
             inputs = x.to(args.device)
@@ -268,35 +270,36 @@ def train():
         avg_valid_loss = Average('average_valid_loss')
         start = time.time()
         model.eval()
-        for batch in valid_loader:
-            with torch.no_grad():
-                x, y = batch
-                inputs = x.to(args.device)
-                labels = y.to(args.device)
-
-                if do_on_demand_masking:
-                    inputs, labels = on_demand_mlm_masking(inputs, labels, mask_value, vocab_size)
-                inputs = {'x': inputs}
-                labels = labels.transpose(0, 1).contiguous()
-                logits = model(inputs, None)[0].transpose(0, 1).contiguous()
-                if args.mlm:
-                    loss = loss_function(logits, labels)
-                else:
-                    shift_logits = logits[:-1]
-                    shift_labels = labels[1:]
-                    loss = loss_function(shift_logits, shift_labels)
-                avg_valid_loss.update(loss.item())
-
-        valid_token_loss = avg_valid_loss.avg
-        valid_token_ppl = math.exp(valid_token_loss)
-
-        elapsed = (time.time() - start)/60
-        metrics['valid_elapsed_min'] = elapsed
-        metrics['average_valid_loss'] = valid_token_loss
-        metrics['average_valid_word_ppl'] = valid_token_ppl
-        logger.info(metrics)
-
         if args.local_rank < 1:
+            for j in range(valid_steps):
+                batch = next(iter(valid_loader))
+                with torch.no_grad():
+                    x, y = batch
+                    inputs = x.to(args.device)
+                    labels = y.to(args.device)
+
+                    if do_on_demand_masking:
+                        inputs, labels = on_demand_mlm_masking(inputs, labels, mask_value, vocab_size)
+                    inputs = {'x': inputs}
+                    labels = labels.transpose(0, 1).contiguous()
+                    logits = model(inputs, None)[0].transpose(0, 1).contiguous()
+                    if args.mlm:
+                        loss = loss_function(logits, labels)
+                    else:
+                        shift_logits = logits[:-1]
+                        shift_labels = labels[1:]
+                        loss = loss_function(shift_logits, shift_labels)
+                    avg_valid_loss.update(loss.item())
+
+            valid_token_loss = avg_valid_loss.avg
+            valid_token_ppl = math.exp(valid_token_loss)
+
+            elapsed = (time.time() - start)/60
+            metrics['valid_elapsed_min'] = elapsed
+            metrics['average_valid_loss'] = valid_token_loss
+            metrics['average_valid_word_ppl'] = valid_token_ppl
+            logger.info(metrics)
+
             save_checkpoint(model, model_base, epoch, save_npz=True)
 
 
