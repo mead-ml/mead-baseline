@@ -310,8 +310,8 @@ def train():
 
     with strategy.scope():
 
-        SET_TRAIN_FLAG(True)
         for epoch in range(start_epoch, args.epochs):
+            SET_TRAIN_FLAG(True)
             avg_loss = Average('average_train_loss')
             metrics = {}
             start = time.time()
