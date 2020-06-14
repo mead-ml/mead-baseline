@@ -341,6 +341,7 @@ def train():
             metrics['train_elapsed_min'] = elapsed
             metrics['average_train_loss'] = train_token_loss
             metrics['train_ppl'] = train_token_ppl
+            metrics['lr'] = lr_sched(tf.cast(optimizer.global_step, tf.float32)).numpy()
             avg_valid_loss = Average('average_valid_loss')
             start = time.time()
             SET_TRAIN_FLAG(False)
@@ -354,6 +355,7 @@ def train():
             valid_token_ppl = math.exp(valid_token_loss)
 
             elapsed = (time.time() - start)/60
+
             metrics['valid_elapsed_min'] = elapsed
             metrics['average_valid_loss'] = valid_token_loss
             metrics['average_valid_word_ppl'] = valid_token_ppl
