@@ -127,6 +127,8 @@ def train():
 
     train_loader = DataLoader(train_set, batch_size=args.batch_size, num_workers=args.num_train_workers)
     valid_loader = DataLoader(valid_set, batch_size=args.batch_size)
+    train_itr = iter(train_loader)
+    valid_itr = iter(valid_loader)
     logger.info("Loaded datasets")
     logger.info("Using embedding type [%s]", args.embed_type)
 
@@ -225,7 +227,7 @@ def train():
         start = time.time()
         model.train()
         for i in range(steps_per_epoch):
-            batch = next(iter(train_loader))
+            batch = next(train_itr)
             steps += 1
             x, y = batch
             inputs = x.to(args.device)
@@ -272,7 +274,7 @@ def train():
         model.eval()
         if args.local_rank < 1:
             for j in range(valid_steps):
-                batch = next(iter(valid_loader))
+                batch = next(valid_itr)
                 with torch.no_grad():
                     x, y = batch
                     inputs = x.to(args.device)
