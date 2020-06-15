@@ -312,6 +312,7 @@ def train():
 
         for epoch in range(start_epoch, args.epochs):
             SET_TRAIN_FLAG(True)
+            logger.info('Starting epoch %d', epoch + 1)
             avg_loss = Average('average_train_loss')
             metrics = {}
             start = time.time()
