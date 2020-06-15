@@ -158,10 +158,10 @@ def train():
     parser.add_argument("--subword_model_file", type=str, help="The BPE model file", required=True)
     parser.add_argument("--subword_vocab_file", type=str, help="The BPE subword vocab", required=True)
     parser.add_argument("--dropout", type=float, default=0.1, help="Dropout")
-    parser.add_argument("--optim", default="adam", type=str, help="Optimizer to use (defaults to adam)")
+    parser.add_argument("--optim", default="adamw", type=str, help="Optimizer to use (defaults to adamw)")
     parser.add_argument("--lr", type=float, default=4.0e-4, help="Learning rate")
     parser.add_argument("--clip", type=float, default=1.0, help="Clipping gradient norm")
-    parser.add_argument("--weight_decay", type=float, default=0.0, help="Weight decay")
+    parser.add_argument("--weight_decay", type=float, default=1.0e-2, help="Weight decay")
     parser.add_argument("--epochs", type=int, default=32, help="Num training epochs")
     parser.add_argument("--restart", type=str2bool, help="Option allows you to restart from a previous checkpoint")
     parser.add_argument("--restart_tt", type=str, help="Optional param for legacy checkpoints (step|epoch)")
@@ -192,7 +192,6 @@ def train():
     strategy = create_distribute_strategy(args.distribute, args.tpu_ep)
     num_replicas = strategy.num_replicas_in_sync
     logger.info(f"Using {num_replicas} replicas in this job.")
-    global_step = 1
     vectorizer = BPEVectorizer1D(model_file=args.subword_model_file, vocab_file=args.subword_vocab_file, mxlen=args.nctx)
     vocab = {'x': vectorizer.vocab}
     preproc_data = baseline.embeddings.load_embeddings('x', dsz=args.d_model, known_vocab=vocab['x'],
@@ -258,10 +257,10 @@ def train():
     report_on = max(10, update_on) // 10
     logger.info(f"Steps per epoch: {steps_per_epoch}. Saving checkpoint every {update_on} steps.")
 
-    lr_decay = CosineDecaySchedulerTensorFlow(steps_per_epoch, lr=args.lr)
+    lr_decay = CosineDecaySchedulerTensorFlow(steps_per_epoch * args.epochs, lr=args.lr)
     linear_warmup = WarmupLinearSchedulerTensorFlow(args.warmup_steps, lr=args.lr)
     lr_sched = CompositeLRSchedulerTensorFlow(linear_warmup, lr_decay)
-    optimizer = EagerOptimizer(loss_function, optim=args.optim, lr_function=lr_sched, weight_decay=args.weight_decay, clip=args.clip)
+    optimizer = EagerOptimizer(loss_function, optim=args.optim, lr_function=lr_sched, weight_decay=args.weight_decay, clip=args.clip, lr=args.lr)
     checkpoint = tf.train.Checkpoint(optimizer=optimizer.optimizer, model=model)
     checkpoint_manager = tf.train.CheckpointManager(checkpoint,
                                                     directory=args.basedir,
@@ -311,8 +310,9 @@ def train():
 
     with strategy.scope():
 
-        SET_TRAIN_FLAG(True)
         for epoch in range(start_epoch, args.epochs):
+            SET_TRAIN_FLAG(True)
+            logger.info('Starting epoch %d', epoch + 1)
             avg_loss = Average('average_train_loss')
             metrics = {}
             start = time.time()
@@ -342,6 +342,8 @@ def train():
             metrics['train_elapsed_min'] = elapsed
             metrics['average_train_loss'] = train_token_loss
             metrics['train_ppl'] = train_token_ppl
+            metrics['lr'] = float(lr_sched(tf.cast(optimizer.global_step, tf.float32)).numpy().item())
+
             avg_valid_loss = Average('average_valid_loss')
             start = time.time()
             SET_TRAIN_FLAG(False)
@@ -355,6 +357,7 @@ def train():
             valid_token_ppl = math.exp(valid_token_loss)
 
             elapsed = (time.time() - start)/60
+
             metrics['valid_elapsed_min'] = elapsed
             metrics['average_valid_loss'] = valid_token_loss
             metrics['average_valid_word_ppl'] = valid_token_ppl

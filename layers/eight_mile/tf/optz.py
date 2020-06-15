@@ -269,7 +269,7 @@ class ExponentialDecaySchedulerTensorFlow2(tf.keras.optimizers.schedules.Exponen
         super().__init__(lr, decay_steps, decay_rate, staircase, kwargs.get("name"))
 
 
-class CosineDecaySchedulerTensorFlow(CosineDecayScheduler):
+class CosineDecaySchedulerTensorFlow(CosineDecayScheduler, tf.keras.optimizers.schedules.LearningRateSchedule):
     def __init__(self, decay_steps=16000, alpha=0.0, **kwargs):
         kwargs['lr'] = kwargs.get("lr", kwargs.get("eta", 0.01))
         super().__init__(decay_steps, alpha, **kwargs)
@@ -719,15 +719,21 @@ class EagerOptimizer:
 
             elif optim == "adamw":
                 import tensorflow_addons as tfa
-
-                wd = float(kwargs.get("weight_decay", 0))
                 beta1 = float(kwargs.get("beta1", 0.9))
                 beta2 = float(kwargs.get("beta2", 0.999))
                 eps = float(kwargs.get("epsilon", 1e-8))
-                logger.info("adamw(eta=%f beta1=%f, beta2=%f, eps=%f, wd=%f)", lr, beta1, beta2, eps, wd)
-                self.optimizer = tfa.optimizers.AdamW(
-                    weight_decay=wd, learning_rate=lr_function, beta_1=beta1, beta_2=beta2, epsilon=eps
-                )
+                wd = float(kwargs.get("weight_decay", 0.0))
+                if wd == 0.0:
+                    logger.info("adam(eta=%f beta1=%f, beta2=%f, eps=%f)", lr, beta1, beta2, eps)
+                    self.optimizer = tf.keras.optimizers.Adam(lr_function, beta1, beta2, eps)
+                else:
+                    def weight_decay_fn():
+                        wd_t = lr_function(tf.cast(self.global_step, tf.float32) / lr) * wd
+                        return wd_t
+                    logger.info("adamw(eta=%f beta1=%f, beta2=%f, eps=%f, wd=%f)", lr, beta1, beta2, eps, wd)
+                    self.optimizer = tfa.optimizers.AdamW(
+                        weight_decay=weight_decay_fn, learning_rate=lr_function, beta_1=beta1, beta_2=beta2, epsilon=eps
+                    )
             elif optim == "rmsprop":
                 # Get mom again with difference default
                 mom = float(kwargs.get("mom", 0.0))
