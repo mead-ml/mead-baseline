@@ -269,7 +269,7 @@ class ExponentialDecaySchedulerTensorFlow2(tf.keras.optimizers.schedules.Exponen
         super().__init__(lr, decay_steps, decay_rate, staircase, kwargs.get("name"))
 
 
-class CosineDecaySchedulerTensorFlow(CosineDecayScheduler):
+class CosineDecaySchedulerTensorFlow(CosineDecayScheduler, tf.keras.optimizers.schedules.LearningRateSchedule):
     def __init__(self, decay_steps=16000, alpha=0.0, **kwargs):
         kwargs['lr'] = kwargs.get("lr", kwargs.get("eta", 0.01))
         super().__init__(decay_steps, alpha, **kwargs)
