@@ -224,8 +224,9 @@ def train():
         optimizer.zero_grad()
         start = time.time()
         model.train()
+        train_itr = iter(train_loader)
         for i in range(steps_per_epoch):
-            batch = next(iter(train_loader))
+            batch = next(train_itr)
             steps += 1
             x, y = batch
             inputs = x.to(args.device)
@@ -271,8 +272,9 @@ def train():
         start = time.time()
         model.eval()
         if args.local_rank < 1:
+            valid_itr = iter(valid_loader)
             for j in range(valid_steps):
-                batch = next(iter(valid_loader))
+                batch = next(valid_itr)
                 with torch.no_grad():
                     x, y = batch
                     inputs = x.to(args.device)
