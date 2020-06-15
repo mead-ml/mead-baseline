@@ -164,7 +164,6 @@ def train():
     parser.add_argument("--weight_decay", type=float, default=1.0e-2, help="Weight decay")
     parser.add_argument("--epochs", type=int, default=32, help="Num training epochs")
     parser.add_argument("--restart", type=str2bool, help="Option allows you to restart from a previous checkpoint")
-    parser.add_argument("--restart_tt", type=str, help="Optional param for legacy checkpoints (step|epoch)")
     parser.add_argument("--warmup_steps", type=int, default=10000, help="Num warmup steps")
     parser.add_argument("--mlm", type=str2bool, default=True, help="Use Masked Language Model (MLM) objective")
     parser.add_argument("--saves_per_epoch", type=int, default=10, help="The number of checkpoints to save per epoch")
@@ -174,9 +173,12 @@ def train():
     parser.add_argument("--strategy", help="Training strategy, defaults to `mirror`", choices=["mirror"])
     parser.add_argument("--npz", help="Should we write out NPZ files?", type=str2bool, default=False)
     parser.add_argument("--tb", help="Turn on tensorboard?", type=str2bool, default=False)
-
+    parser.add_argument("--convert_only", help="Should we just convert this file to NPZ and exit?", type=str2bool, default=False)
     args = parser.parse_args()
     SET_TRAIN_FLAG(True)
+
+    if args.convert_only:
+        args.restart = True
 
     if args.basedir is None:
         args.basedir = f'lm-{args.dataset_key}-bpe-{os.getpid()}'
@@ -321,6 +323,14 @@ def train():
                 loss = _distributed_train_step(next(train_iter))
                 avg_loss.update(loss.numpy().item())
                 tf.summary.scalar("train_loss", data=loss, step=optimizer.global_step)
+
+                if args.convert_only:
+                    logger.warning("Convert only flag specified.  Stopping after one step")
+                    steps = optimizer.global_step.numpy()
+                    npz_checkpoint = os.path.join(args.basedir, f'checkpoint-step-{steps}.npz')
+                    save_tlm_npz(model, npz_checkpoint)
+                    return
+
                 if (i + 1) % report_on == 0:
                     logging.info(avg_loss)
                 if (i + 1) % update_on == 0:
