@@ -17,7 +17,7 @@ logger = logging.getLogger('baseline')
 class TaggerTrainerPyTorch(EpochReportingTrainer):
 
     def __init__(self, model, **kwargs):
-        super(TaggerTrainerPyTorch, self).__init__()
+        super().__init__()
         if type(model) is dict:
             model = create_model_for('tagger', **model)
         self.grad_accum = int(kwargs.get('grad_accum', 1))
@@ -152,6 +152,7 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
             self.nstep_div += bsz
             if (self.optimizer.global_step + 1) % self.nsteps == 0:
                 metrics = self.calc_metrics(self.nstep_agg, self.nstep_div)
+                metrics['lr'] = self.optimizer.current_lr
                 self.report(
                     self.optimizer.global_step + 1, metrics, self.nstep_start,
                     'Train', 'STEP', reporting_fns, self.nsteps
@@ -159,6 +160,8 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
                 self.reset_nstep()
 
         metrics = self.calc_metrics(epoch_loss, epoch_norm)
+        metrics['lr'] = self.optimizer.current_lr
+
         return metrics
 
 

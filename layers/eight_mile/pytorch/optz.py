@@ -218,10 +218,11 @@ class OptimizerManager:
         lr = self.lr_function(self.global_step)
         for p in self.optimizer.param_groups:
             p["lr"] = lr
+
         return lr
 
 
-class EagerOptimizer(object):
+class EagerOptimizer:
     def __init__(self, loss, optimizer=None, **kwargs):
         self.loss = loss
         if optimizer:

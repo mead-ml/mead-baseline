@@ -127,8 +127,8 @@ class TensorBoardReporting(ReportingHook):
     section for tensorboard. Otherwise it defaults to `runs`.
     """
     def __init__(self, **kwargs):
-        super(TensorBoardReporting, self).__init__(**kwargs)
-        from tensorboardX import SummaryWriter
+        super().__init__(**kwargs)
+        self.use_tf = True
         # Base dir is often the dir created to save the model into
         base_dir = kwargs.get('base_dir', '.')
         log_dir = os.path.expanduser(kwargs.get('log_dir', 'runs'))
@@ -139,14 +139,28 @@ class TensorBoardReporting(ReportingHook):
         pid = str(os.getpid())
         run_dir = '{}-{}'.format(run_dir, pid) if run_dir is not None else pid
         log_dir = os.path.join(log_dir, run_dir)
-        flush_secs = int(kwargs.get('flush_secs', 2))
-        self._log = SummaryWriter(log_dir, flush_secs=flush_secs)
+
+        try:
+            from torch.utils.tensorboard import SummaryWriter
+            self._log = SummaryWriter(log_dir)
+            self.use_tf = False
+        except:
+            import tensorflow as tf
+            file_writer = tf.summary.create_file_writer(log_dir)
+            file_writer.set_as_default()
+            self._log_scalar = tf.summary.scalar
+
+    def log_scalar(self, name, value, step):
+        if self.use_tf:
+            self._log_scalar(name, data=value, step=step)
+        else:
+            self._log.add_scalar(name, value, step)
 
     def step(self, metrics, tick, phase, tick_type=None, **kwargs):
         tick_type = ReportingHook._infer_tick_type(phase, tick_type)
         for metric in metrics.keys():
             name = "{}/{}/{}".format(phase, tick_type, metric)
-            self._log.add_scalar(name, metrics[metric], tick)
+            self.log_scalar(name, metrics[metric], tick)
 
 
 @register_reporting(name='visdom')
