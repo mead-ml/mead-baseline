@@ -9,7 +9,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.jit as jit
 import torch.autograd
-
+import glob
 from eight_mile.utils import listify, Offsets, is_sequence
 from eight_mile.utils import transition_mask as transition_mask_np
 
@@ -3335,6 +3335,17 @@ def rm_old_checkpoints(base_path, current_epoch, last_n=10):
                 os.remove(checkpoint_name)
 
 
+def find_latest_checkpoint(checkpoint_dir: str, wildcard="checkpoint") -> str:
+    step_num = 0
+    for f in glob.glob(os.path.join(checkpoint_dir, f"{wildcard}*")):
+        last = f.split("-")[-1]
+        for x in ('.pth', '.npz'):
+            last = last.replace(x, '', -1)
+        this_step_num = int(last)
+        if this_step_num > step_num:
+            checkpoint = f
+            step_num = this_step_num
+    return checkpoint, step_num
 
 def save_checkpoint(model: torch.nn.Module, model_base: str, count: int, tick_type: str = 'epoch', save_npz: bool = False):
     from eight_mile.pytorch.serialize import save_tlm_npz
@@ -3381,6 +3392,7 @@ def init_distributed(local_rank):
         device = torch.device("cuda", local_rank)
     torch.distributed.init_process_group(backend='nccl', init_method='env://')
     return device, local_rank
+
 
 class SingleHeadReduction(nn.Module):
     """

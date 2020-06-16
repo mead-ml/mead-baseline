@@ -95,8 +95,6 @@ def train():
     parser.add_argument("--basedir", type=str)
     parser.add_argument("--train_file", type=str, help='Optional file path to use for train file')
     parser.add_argument("--valid_file", type=str, help='Optional file path to use for valid file')
-    parser.add_argument("--streaming_load", type=str2bool, default=True,
-                        help="whether loading data in a streaming way or loading all data into memory once")
     parser.add_argument("--gen_d_model", type=int, default=256, help="Model dimension (and embedding dsz)")
     parser.add_argument("--discrim_d_model", type=int, default=512, help="Model dimension (and embedding dsz)")
     parser.add_argument("--gen_d_ff", type=int, default=1024, help="FFN dimension")
@@ -176,15 +174,10 @@ def train():
     logger.info(f"Using {num_gpus} GPUs in this job.")
 
     if args.distributed:
-        args.device = init_distributed(args.local_rank)
+        args.device, args.local_rank = init_distributed(args.local_rank)
 
-    if args.streaming_load:
-        reader = MultiFileDatasetReader(args.nctx, args.subword_model_file, args.subword_vocab_file, args.pattern,
-                                        reader_type="lang")
-    else:
-        reader = TensorWordDatasetReader(args.nctx, 'bpe', args.subword_model_file, args.subword_vocab_file)
-
-    # This just return the vocab from the BPE vectorizer
+    reader = MultiFileDatasetReader(args.nctx, args.subword_model_file, args.subword_vocab_file, args.pattern, reader_type="lang")
+    #  just return the vocab from the BPE vectorizer
     vocab = reader.build_vocab([])
     gen_embed = baseline.embeddings.load_embeddings('x', dsz=args.gen_d_model, known_vocab=vocab['x'],
                                                     embed_type=args.embed_type)
@@ -200,24 +193,11 @@ def train():
     discrim_embeddings = {'x': discrim_embed['embeddings']}
     logger.info("Loaded embeddings")
 
-    if args.streaming_load:
-        train_set = reader.load(args.train_file, vocabs)
-        valid_set = reader.load(args.valid_file, vocabs)
-        train_loader = DataLoader(train_set, batch_size=args.batch_size, num_workers=args.num_train_workers)
-        valid_loader = DataLoader(valid_set, batch_size=args.batch_size, num_workers=args.num_valid_workers)
-        train_steps_per_epoch = len(train_loader) // (args.batch_size*num_gpus)
-    else:
-        dataset = {'train_file': args.train_file, 'valid_file': args.valid_file}
-        train_set = load_data_caching('bpe', reader, dataset, 'train_file', {'x': vocabs}, True, logger)
-        valid_set = load_data_caching('bpe', reader, dataset, 'valid_file', {'x': vocabs}, True, logger)
-
-        train_sampler = torch.utils.data.distributed.DistributedSampler(train_set) if args.distributed else None
-        train_loader = DataLoader(train_set, sampler=train_sampler, batch_size=args.batch_size, shuffle=(not args.distributed))
-        valid_loader = DataLoader(valid_set, batch_size=args.batch_size, shuffle=False)
-        train_steps_per_epoch = len(train_loader)
-        valid_steps_per_epoch = len(valid_loader)
-
-
+    train_set = reader.load(args.train_file, vocabs)
+    valid_set = reader.load(args.valid_file, vocabs)
+    train_loader = DataLoader(train_set, batch_size=args.batch_size, num_workers=args.num_train_workers)
+    valid_loader = DataLoader(valid_set, batch_size=args.batch_size, num_workers=args.num_valid_workers)
+    train_steps_per_epoch = len(train_loader) // (args.batch_size*num_gpus)
     logger.info("Loaded datasets")
     logger.info("Using embedding type [%s]", args.embed_type)
 
@@ -270,9 +250,8 @@ def train():
         if not os.path.isdir(args.restart_from):
             raise Exception(f"Cannot restart from {args.restart_from}, directory not found")
         tick_type = args.restart_tt
-        discrim_latest = find_latest_checkpoint(args.restart_from, wildcard=f'checkpoint-discrim-{tick_type}')
-        step_num = int(discrim_latest.split("-")[-1])
-        gen_latest = find_latest_checkpoint(args.restart_from, wildcard=f'checkpoint-gen-{tick_type}')
+        discrim_latest, step_num = find_latest_checkpoint(args.restart_from, wildcard=f'checkpoint-discrim-{tick_type}')
+        gen_latest, _ = find_latest_checkpoint(args.restart_from, wildcard=f'checkpoint-gen-{tick_type}')
         discrim_model.load_state_dict(torch.load(discrim_latest))
         gen_model.load_state_dict(torch.load(gen_latest))
         if tick_type == 'step':
