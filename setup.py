@@ -83,7 +83,7 @@ def main():
         ],
         extras_require={
             'test': ['pytest', 'mock', 'contextdecorator', 'pytest-forked'],
-            'report': ['visdom', 'tensorboardX'],
+            'report': ['visdom', 'tensorboard'],
             'yaml': ['pyyaml'],
             'tf2': ['tensorflow_addons'],
             'grpc': ['grpc'],
