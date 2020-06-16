@@ -3439,3 +3439,50 @@ class SingleHeadReduction(nn.Module):
         x = x.sum(dim=1)  # [B, D]
         x = x * seq_lengths.float().sqrt().unsqueeze(-1)
         return x
+
+
+class TransformerDiscriminator(nn.Module):
+    """A Transformer model that tries to predict if each token is real or fake
+
+
+    This model is based on [ELECTRA: Pre-Training Text Encoders as Discriminators Rather Than Generators,
+    Clark et al. 2019](https://openreview.net/pdf?id=r1xMH1BtvB).
+
+    """
+    def __init__(self, embeddings, d_model, d_ff, dropout, num_heads, num_layers, rpr_k, d_k, **kwargs):
+        super().__init__()
+        self.embeddings = EmbeddingsStack(embeddings, dropout)
+        self.weight_std = kwargs.get('weight_std', 0.02)
+        assert self.embeddings.dsz == d_model
+        self.transformer = TransformerEncoderStack(num_heads, d_model=d_model, pdrop=dropout, scale=True,
+                                                   layers=num_layers, d_ff=d_ff, rpr_k=rpr_k, d_k=d_k)
+        self.proj_to_output = pytorch_linear(d_model, 1)
+
+        self.apply(self.init_layer_weights)
+        self.lengths_feature = kwargs.get('lengths_feature', self.embeddings.keys()[0])
+
+    def init_layer_weights(self, module):
+        if isinstance(module, (nn.Linear, nn.Embedding, nn.LayerNorm)):
+            module.weight.data.normal_(mean=0.0, std=self.weight_std)
+        if isinstance(module, (nn.Linear, nn.LayerNorm)) and module.bias is not None:
+            module.bias.data.zero_()
+
+    def forward(self, features):
+        embedded = self.embeddings(features)
+        x = features[self.lengths_feature]
+        input_mask = torch.zeros(x.shape, device=x.device, dtype=torch.long).masked_fill(x != 0, 1).unsqueeze(1).unsqueeze(1)
+        transformer_out = self.transformer((embedded, input_mask))
+        binary = self.proj_to_output(transformer_out)
+        return torch.sigmoid(binary)
+
+    def create_loss(self):
+        class Loss(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.loss = nn.BCELoss()
+
+            def forward(self, input, target):
+                fake_loss = self.loss(input[target == 0], target[target == 0])
+                real_loss = self.loss(input[target != 0], target[target != 0])
+                return real_loss + fake_loss
+        return Loss()

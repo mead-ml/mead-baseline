@@ -16,16 +16,15 @@ from eight_mile.utils import Average, get_num_gpus_multiworker
 from eight_mile.pytorch.layers import checkpoint_for, rm_old_checkpoints, save_checkpoint, init_distributed
 logger = logging.getLogger(__file__)
 from baseline.pytorch.lm import TransformerMaskedLanguageModel
-from eight_mile.pytorch.layers import TransformerEncoderStack, EmbeddingsStack, subsequent_mask
-from transformer_utils import MultiFileDatasetReader, TransformerDiscriminator, find_latest_checkpoint, \
-    TensorWordDatasetReader, load_data_caching, get_lr_decay
+from eight_mile.pytorch.layers import TransformerDiscriminator
+from transformer_utils import MultiFileDatasetReader, find_latest_checkpoint, \
+    TensorWordDatasetReader, load_data_caching, get_lr_decay, on_demand_mlm_masking
 
 """Pre-train an discriminator Transformer model in PyTorch
 
 This file uses Baseline to train a Transformer-based discriminative model
 model, similar to (https://openreview.net/pdf?id=r1xMH1BtvB)
 """
-LAMBDA = 50
 Row = namedtuple('Row', 'original reconstructed guess')
 
 
@@ -48,31 +47,27 @@ def print_batch(index2word, labels, recon_labels, logits):
         j += 1
 
 
-def create_generator(embeddings, d_model, d_ff, dropout, num_heads, num_layers, rpr_k, d_k):
-    """Produces an MLM generator model
+def gen_vs_discrim(x, y, device, gen_model, gen_loss_fn, discrim_model, discrim_loss_fn, mask_value, vocab_size, index2word, print_output):
+    inputs = x.to(device)
+    # We are going to mask inplace and that will leave us with <PAD> anywhere that isnt MLM
+    labels = y.to(device, copy=True)
+    noised_x, labels, masked_indices = on_demand_mlm_masking(inputs, labels, mask_value, vocab_size)
+    labels = labels.transpose(0, 1).contiguous()
+    logits = gen_model({'x': inputs}, None)[0]
+    gen_loss_step = gen_loss_fn(logits.transpose(0, 1).contiguous(), labels)
 
-    :param embeddings: The pre-inited embeddings
-    :param d_model: The size of the model
-    :param d_ff: The feed-forward layer size
-    :param dropout: The amount of dropout
-    :param num_heads: The number of attention heads
-    :param num_layers: The number of layers
-    :param rpr_k: The relative position sizes
-    :param d_k: The head size if single headed
-    :return:
-    """
-    model = TransformerMaskedLanguageModel.create(embeddings,
-                                                  hsz=d_model,
-                                                  d_ff=d_ff,
-                                                  tie_weights=True,
-                                                  dropout=dropout,
-                                                  gpu=False,
-                                                  num_heads=num_heads,
-                                                  layers=num_layers,
-                                                  rpr_k=rpr_k,
-                                                  d_k=d_k,
-                                                  src_keys=['x'], tgt_key='x')
-    return model
+    # Re-read labels from device, this clears the masked <PAD>
+    labels = y.to(device)
+    # The logits needs to be replaced with either argmax or sampling.  Which?
+    recon_labels = best_from(logits)
+    recon_labels[~masked_indices] = labels[~masked_indices]
+    true_or_fake = (recon_labels == labels).to(torch.float32).view(-1)
+    logits = discrim_model({'x': recon_labels})
+    discrim_loss_step = discrim_loss_fn(logits.view(-1), true_or_fake.view(-1))
+    acc = get_accuracy(logits, true_or_fake, labels)
+    if print_output:
+        print_batch(index2word, labels, recon_labels, logits)
+    return gen_loss_step, discrim_loss_step, acc
 
 
 def best_from(x_preds):
@@ -122,7 +117,7 @@ def train():
 
     parser.add_argument("--num_train_workers", type=int, default=4, help="Number train workers")
     parser.add_argument("--num_valid_workers", type=int, default=2, help="Number valid workers")
-    parser.add_argument("--nctx", type=int, default=64, help="Max context length (for both encoder and decoder)")
+    parser.add_argument("--nctx", type=int, default=256, help="Max context length (for both encoder and decoder)")
     parser.add_argument("--embed_type", type=str, default='default',
                         help="register label of the embeddings, so far support positional or learned-positional")
     parser.add_argument("--pattern", default='*.txt', help="Glob pattern for data")
@@ -137,9 +132,10 @@ def train():
     parser.add_argument("--lr_alpha", type=float, help="parameter alpha for cosine decay scheduler")
     parser.add_argument("--optim", default="adam", type=str, help="Optimizer to use (defaults to adam)")
     parser.add_argument("--lr", type=float, default=4.0e-4, help="Learning rate")
-    parser.add_argument("--clip", type=float, default=0.25, help="Clipping gradient norm")
+    parser.add_argument("--clip", type=float, default=1.0, help="Clipping gradient norm")
+    parser.add_argument("--gen_loss_scale", type=float, default=50.0, help="Scaling for loss function")
     parser.add_argument("--weight_decay", type=float, default=0.0, help="Weight decay")
-    parser.add_argument("--epochs", type=int, default=20, help="Num training epochs")
+    parser.add_argument("--epochs", type=int, default=32, help="Num training epochs")
     parser.add_argument("--restart_from", type=str, help="Option allows you to restart from the latest checkpoint in a directory")
     parser.add_argument("--restart_tt", type=str, choices=['step', 'epoch'],
                         default='step',
@@ -209,7 +205,7 @@ def train():
         valid_set = reader.load(args.valid_file, vocabs)
         train_loader = DataLoader(train_set, batch_size=args.batch_size, num_workers=args.num_train_workers)
         valid_loader = DataLoader(valid_set, batch_size=args.batch_size, num_workers=args.num_valid_workers)
-        steps_per_epoch = len(train_loader) // (args.batch_size*num_gpus)
+        train_steps_per_epoch = len(train_loader) // (args.batch_size*num_gpus)
     else:
         dataset = {'train_file': args.train_file, 'valid_file': args.valid_file}
         train_set = load_data_caching('bpe', reader, dataset, 'train_file', {'x': vocabs}, True, logger)
@@ -218,7 +214,9 @@ def train():
         train_sampler = torch.utils.data.distributed.DistributedSampler(train_set) if args.distributed else None
         train_loader = DataLoader(train_set, sampler=train_sampler, batch_size=args.batch_size, shuffle=(not args.distributed))
         valid_loader = DataLoader(valid_set, batch_size=args.batch_size, shuffle=False)
-        steps_per_epoch = len(train_loader)
+        train_steps_per_epoch = len(train_loader)
+        valid_steps_per_epoch = len(valid_loader)
+
 
     logger.info("Loaded datasets")
     logger.info("Using embedding type [%s]", args.embed_type)
@@ -244,8 +242,10 @@ def train():
     else:
         discrim_rpr_k = args.discrim_rpr_k
 
-    gen_model = create_generator(gen_embeddings, args.gen_d_model, args.gen_d_ff, args.gen_dropout, args.gen_num_heads,
-                                 args.gen_num_layers, gen_rpr_k, args.gen_d_k)
+    gen_model = TransformerMaskedLanguageModel.create(gen_embeddings, hsz=args.gen_d_model, d_ff=args.gen_d_ff,
+                                                      tie_weights=True, dropout=args.gen_dropout,
+                                                      num_heads=args.gen_num_heads, layers=args.gen_num_layers,
+                                                      rpr_k=gen_rpr_k, d_k=args.gen_d_k, src_keys=['x'], tgt_key='x')
     discrim_model = TransformerDiscriminator(discrim_embeddings, args.discrim_d_model, args.discrim_d_ff,
                                              args.discrim_dropout, args.discrim_num_heads, args.discrim_num_layers,
                                              discrim_rpr_k, args.discrim_d_k)
@@ -256,10 +256,10 @@ def train():
     discrim_loss_fn = discrim_model.create_loss()
     logger.info("Loaded model and loss")
 
-    update_on = steps_per_epoch // args.saves_per_epoch
+    update_on = train_steps_per_epoch // args.saves_per_epoch
     report_on = update_on // 10
-    logger.info(f"Steps per epoch per GPU: {steps_per_epoch}. Saving checkpoint every {update_on} steps.")
-    lr_decay = get_lr_decay(args.lr_scheduler, args.lr, steps_per_epoch, args.epochs, logger,
+    logger.info(f"Steps per epoch per GPU: {train_steps_per_epoch}. Saving checkpoint every {update_on} steps.")
+    lr_decay = get_lr_decay(args.lr_scheduler, args.lr, train_steps_per_epoch, args.epochs, logger,
                             decay_steps=args.lr_decay_steps, decay_rate=args.lr_decay_rate, alpha=args.lr_alpha)
     linear_warmup = WarmupLinearSchedulerPyTorch(args.warmup_steps, lr=args.lr)
     lr_sched = CompositeLRScheduler(linear_warmup, lr_decay, lr=args.lr)
@@ -276,11 +276,11 @@ def train():
         discrim_model.load_state_dict(torch.load(discrim_latest))
         gen_model.load_state_dict(torch.load(gen_latest))
         if tick_type == 'step':
-            start_epoch = step_num // steps_per_epoch
+            start_epoch = step_num // train_steps_per_epoch
             global_step = step_num
         else:
             start_epoch = step_num
-            global_step = steps_per_epoch * start_epoch
+            global_step = train_steps_per_epoch * start_epoch
 
     parameters = list(discrim_model.parameters()) + list(gen_model.parameters())
     optz = OptimizerManager(parameters, global_step, optim=args.optim, lr=args.lr, lr_function=lr_sched, weight_decay=args.weight_decay)
@@ -312,49 +312,28 @@ def train():
         metrics = {}
         optz.zero_grad()
         start = time.time()
-        for i, batch in enumerate(train_loader):
+
+        train_iter = iter(train_loader)
+        valid_iter = iter(valid_loader)
+
+        for i in range(train_steps_per_epoch):
             steps += 1
-            x, y = batch
-            noised_x = x.to(args.device)
-            # We are going to mask inplace and that will leave us with <PAD> anywhere that isnt MLM
-            labels = y.to(args.device, copy=True)
-            # Replace 15% of tokens
-            masked_indices = torch.bernoulli(torch.full(labels.shape, 0.15)).type(torch.bool)
-            # Anything not masked is 0 so no loss
-            labels[~masked_indices] = 0
-            # Of the masked items, mask 80% of them with [MASK]
-            indices_replaced = torch.bernoulli(torch.full(labels.shape, 0.8)).type(torch.bool) & masked_indices
-            noised_x[indices_replaced] = mask_value
-            # Replace 10% of them with random words, rest preserved for auto-encoding
-            indices_random = torch.bernoulli(torch.full(labels.shape, 0.5)).type(torch.bool) & masked_indices & ~indices_replaced
-            random_words = torch.randint(vocab_size, labels.shape, dtype=torch.long, device=args.device)
-            noised_x[indices_random] = random_words[indices_random]
-            labels = labels.transpose(0, 1).contiguous()
-            logits = gen_model({'x': noised_x}, None)[0]
-            gen_loss_step = gen_loss_fn(logits.transpose(0, 1).contiguous(), labels)
+            x, y = next(train_iter)
+            do_report = True if (i + 1) % report_on == 0 else False
+            gen_loss_step, discrim_loss_step, acc = gen_vs_discrim(x, y, args.device, gen_model, gen_loss_fn,
+                                                                   discrim_model, discrim_loss_fn, mask_value,
+                                                                   vocab_size, index2word, do_report)
             avg_gen_loss.update(gen_loss_step.item())
-            # Re-read labels from device, this clears the masked <PAD>
-            labels = y.to(args.device)
-
-            # The logits needs to be replaced with either argmax or sampling.  Which?
-            recon_labels = best_from(logits)
-            recon_labels[~masked_indices] = labels[~masked_indices]
-            true_or_fake = (recon_labels == labels).to(torch.float32).view(-1)
-            logits = discrim_model({'x': recon_labels})
-            discrim_loss_step = discrim_loss_fn(logits.view(-1), true_or_fake.view(-1))
-
-            total_loss_step = gen_loss_step + LAMBDA * discrim_loss_step
+            total_loss_step = gen_loss_step + args.gen_loss_scale * discrim_loss_step
             total_loss_step.backward()
             avg_discrim_loss.update(discrim_loss_step.item())
             avg_train_loss.update(total_loss_step.item())
-            avg_discrim_acc.update(get_accuracy(logits, true_or_fake, labels))
+            avg_discrim_acc.update(acc)
             torch.nn.utils.clip_grad_norm_(parameters, args.clip)
             optz.step()
             optz.zero_grad()
-            if (i + 1) % report_on == 0:
+            if do_report:
                 logging.info('Loss g=%f, d=%f total=%f, Per token acc=%f', avg_gen_loss.avg, avg_discrim_loss.avg, avg_train_loss.avg, avg_discrim_acc.avg)
-                if args.print:
-                    print_batch(index2word, labels, recon_labels, logits)
 
             if (i + 1) % update_on == 0 and args.local_rank < 1:
                 elapsed = (time.time() - start)/60
@@ -362,6 +341,7 @@ def train():
                 logging.info('elapsed step time %f steps/min', i/elapsed)
                 save_checkpoint(gen_model, gen_base, steps, tick_type='step')
                 save_checkpoint(discrim_model, discrim_base, steps, tick_type='step')
+
         # How much time elapsed in minutes
         elapsed = (time.time() - start)/60
         # This is the average training token-level loss across all machines
@@ -379,37 +359,14 @@ def train():
         start = time.time()
         gen_model.eval()
         discrim_model.eval()
-        for batch in valid_loader:
+        for i in range(valid_steps_per_epoch):
             with torch.no_grad():
-                x, y = batch
-                noised_x = x.to(args.device)
-                labels = y.to(args.device, copy=True)
-                # Replace 15% of tokens
-                masked_indices = torch.bernoulli(torch.full(labels.shape, 0.15)).type(torch.bool)
-                # Anything not masked is 0 so no loss
-                labels[~masked_indices] = 0
-                # Of the masked items, mask 80% of them with [MASK]
-                indices_replaced = torch.bernoulli(torch.full(labels.shape, 0.8)).type(torch.bool) & masked_indices
-                noised_x[indices_replaced] = mask_value
-                # Replace 10% of them with random work
-                indices_random = torch.bernoulli(torch.full(labels.shape, 0.5)).type(torch.bool) & masked_indices & ~indices_replaced
-                random_words = torch.randint(vocab_size, labels.shape, dtype=torch.long, device=args.device)
-                noised_x[indices_random] = random_words[indices_random]
-                labels = labels.transpose(0, 1).contiguous()
-                logits = gen_model({'x': noised_x}, None)[0]
-
-                gen_loss_step = gen_loss_fn(logits.transpose(0, 1).contiguous(), labels)
+                x, y = next(valid_iter)
+                gen_loss_step, discrim_loss_step, acc = gen_vs_discrim(x, y, mask_value, vocab_size)
                 avg_valid_gen_loss.update(gen_loss_step.item())
-
-                labels = y.to(args.device)
-                recon_labels = best_from(logits)
-                recon_labels[~masked_indices] = labels[~masked_indices]
-                true_or_fake = (recon_labels == labels).to(torch.float32).view(-1)
-                logits = discrim_model({'x': recon_labels})
-                discrim_loss_step = discrim_loss_fn(logits.view(-1), true_or_fake.view(-1))
-                avg_valid_discrim_acc.update(get_accuracy(logits, true_or_fake, labels))
+                avg_valid_discrim_acc.update(acc)
                 avg_valid_discrim_loss.update(discrim_loss_step.item())
-                total_loss_step = gen_loss_step + LAMBDA * discrim_loss_step
+                total_loss_step = gen_loss_step + args.gen_loss_scale * discrim_loss_step
                 avg_valid_loss.update(total_loss_step.item())
         elapsed = (time.time() - start)/60
         metrics['valid_elapsed_min'] = elapsed
