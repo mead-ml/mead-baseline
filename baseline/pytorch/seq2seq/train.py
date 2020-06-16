@@ -139,6 +139,7 @@ class Seq2SeqTrainerPyTorch(Trainer):
 
             if (self.optimizer.global_step + 1) % self.nsteps == 0:
                 metrics = self.calc_metrics(self.nstep_agg, self.nstep_div)
+                metrics['lr'] = self.optimizer.current_lr
                 self.report(
                     self.optimizer.global_step + 1, metrics, self.nstep_start,
                     'Train', 'STEP', reporting_fns, self.nsteps
@@ -146,6 +147,8 @@ class Seq2SeqTrainerPyTorch(Trainer):
                 self.reset_nstep()
 
         metrics = self.calc_metrics(epoch_loss, epoch_toks)
+        metrics['lr'] = self.optimizer.current_lr
+
         self.train_epochs += 1
         self.report(
             self.train_epochs, metrics, start,

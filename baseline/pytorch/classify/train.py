@@ -30,7 +30,7 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
 
         if type(model) is dict:
             model = create_model_for('classify', **model)
-        super(ClassifyTrainerPyTorch, self).__init__()
+        super().__init__()
         if type(model) is dict:
             model = create_model_for('classify', **model)
         self.clip = float(kwargs.get('clip', 5))
@@ -130,6 +130,7 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
 
             if (self.optimizer.global_step + 1) % self.nsteps == 0:
                 metrics = self.calc_metrics(self.nstep_agg, self.nstep_div)
+                metrics['lr'] = self.optimizer.current_lr
                 self.report(
                     self.optimizer.global_step + 1, metrics, self.nstep_start,
                     'Train', 'STEP', reporting_fns, self.nsteps
@@ -137,6 +138,8 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
                 self.reset_nstep()
 
         metrics = cm.get_all_metrics()
+        metrics['lr'] = self.optimizer.current_lr
+
         metrics['avg_loss'] = epoch_loss / float(epoch_div)
         return metrics
 
