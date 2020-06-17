@@ -97,12 +97,15 @@ By now, the practice of pre-training Transformer models on a large amount of dat
 is ubiquitous.  MEAD supports pre-training architectures such as BERT/Roberta via several scripts, all of which
 support multi-worker training.
 
-* [../api-examples/pretrain-transformer-lm.py](pretrain-transformer-lm)*: Train in-core on a corpus, caching the
-features on first use, using either `fastBPE` or `WordPiece` to tokenize the words
+* [../api-examples/pretrain-tlm.py](pretrain-tlm)*: Train with multi-worker configuraion with a large
+(possibly out-of-core) LM dataset, using either `fastBPE` or `WordPiece` to tokenize the words (PyTorch).
+This program supports export of torch checkpoints as well as NPZ checkpoints, and supports reloading from either.
+Supports Kubernetes-based training with PyTorchJob operator
 
-* [../api-examples/pretrain-lm-streaming.py](pretrain-lm-streaming)*: Train out-of-core on very large datasets, treating
-each line of the corpus as a single context.  This variant will zero-pad lines as necessary to ensure that the context
-is filled.  We use a custom iterable dataset
+* [../api-examples/pretrain-tlm-tf.py](pretrain-tlm-tf)*: Train multi-worker on TPUs or GPUs with a large
+(possibly out-of-core) LM dataset, using `fastBPE` tokenize the words.  This program supports export of TF checkpoints
+as well as NPZ checkpoints.  Supports Kubernetes-based training with either TFJob operator, Job or Pod CRDs.
+
 
 * [../api-examples/pretrain-paired.py](pretrain-paired)*: Train either a Transformer encoder-decoder or a Transformer
 dual encoder out-of-core on very large datasets.  The dual-encoder follows [ConveRT, Henderson et al 2019]().
@@ -112,7 +115,8 @@ by a tab delimiter (Next Turn Prediction or NTP).  In the latter case, its presu
 the line into a query and a response.
 
 * [../api-examples/pretrain-discrim.py](pretrain-discrim)*: In this approach, we jointly train a generator and a
-discriminator following [ELECTRA, Clark et al. 2019]().
+discriminator following [ELECTRA: Pre-Training Text Encoders as Discriminators Rather Than Generators,
+    Clark et al. 2019](https://openreview.net/pdf?id=r1xMH1BtvB).
 
 #### Writing your own Pre-training script
 

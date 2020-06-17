@@ -389,7 +389,7 @@ def train():
             inputs = x.to(args.device)
             labels = y.to(args.device)
             if args.mlm:
-                inputs, labels = on_demand_mlm_masking(inputs, labels, mask_value, vocab_size)
+                inputs, labels, _ = on_demand_mlm_masking(inputs, labels, mask_value, vocab_size)
             inputs = {'x': inputs}
             labels = labels.transpose(0, 1).contiguous()
             logits = model(inputs, None)[0].transpose(0, 1).contiguous()
@@ -432,7 +432,7 @@ def train():
                 inputs = x.to(args.device)
                 labels = y.to(args.device)
                 if args.mlm:
-                   inputs, labels = on_demand_mlm_masking(inputs, labels, mask_value, vocab_size)
+                   inputs, labels, _ = on_demand_mlm_masking(inputs, labels, mask_value, vocab_size)
                 inputs = {'x': inputs}
                 labels = labels.transpose(0, 1).contiguous()
                 logits = model(inputs, None)[0].transpose(0, 1).contiguous()

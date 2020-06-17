@@ -66,7 +66,7 @@ model = create_model(embeddings,
                      logger=logger)
 
 if os.path.isdir(args.ckpt):
-    checkpoint = find_latest_checkpoint(args.ckpt)
+    checkpoint, _ = find_latest_checkpoint(args.ckpt)
     logger.warning("Found latest checkpoint %s", checkpoint)
 else:
     checkpoint = args.ckpt

@@ -102,7 +102,7 @@ def run():
 
     if os.path.isdir(args.checkpoint):
         vocab_file = os.path.join(args.checkpoint, 'vocabs.json')
-        checkpoint = find_latest_checkpoint(args.checkpoint)
+        checkpoint, _ = find_latest_checkpoint(args.checkpoint)
         logger.warning("Found latest checkpoint %s", checkpoint)
     else:
         checkpoint = args.checkpoint
