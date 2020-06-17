@@ -198,6 +198,7 @@ def train():
     train_loader = DataLoader(train_set, batch_size=args.batch_size, num_workers=args.num_train_workers)
     valid_loader = DataLoader(valid_set, batch_size=args.batch_size, num_workers=args.num_valid_workers)
     train_steps_per_epoch = len(train_loader) // (args.batch_size*num_gpus)
+    valid_steps_per_epoch = len(valid_loader) // args.batch_size
     logger.info("Loaded datasets")
     logger.info("Using embedding type [%s]", args.embed_type)
 
