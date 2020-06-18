@@ -565,30 +565,6 @@ class TiedEmbeddingsSeq2SeqModel(Seq2SeqModel):
         return LossFn(self, loss)
 
 
-def create_model(embeddings, d_model, d_ff, dropout, num_heads, num_layers, model_type, rpr_k, d_k, reduction_d_k,
-                 stacking_layers, ff_pdrop, logger):
-    if model_type == "encoder-decoder":
-        logger.info("Creating tied encoder decoder model")
-        hps = {"dsz": d_model,
-               "hsz": d_model,
-               "d_ff": d_ff,
-               "dropout": dropout,
-               "num_heads": num_heads,
-               "layers": num_layers,
-               "encoder_type": "transformer",
-               "decoder_type": "transformer",
-               "src_lengths_key": "x_lengths",
-               "d_k": d_k,
-               "rpr_k": rpr_k}
-        model = TiedEmbeddingsSeq2SeqModel(embeddings, **hps)
-    else:
-        model = PairedModel(embeddings, d_model, d_ff, dropout, num_heads, num_layers, rpr_k=rpr_k, d_k=d_k,
-                            reduction_d_k=reduction_d_k, stacking_layers=stacking_layers, ff_pdrop=ff_pdrop)
-
-    logger.info(model)
-    return model
-
-
 def get_lr_decay(sched_type, lr, steps_per_epoch, n_epochs, logger, decay_steps=None, decay_rate=None, alpha=None):
     if sched_type == 'cosine':
         decay_steps = decay_steps if decay_steps else steps_per_epoch * n_epochs

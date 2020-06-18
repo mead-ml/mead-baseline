@@ -2,12 +2,11 @@ import logging
 import time
 import os
 from argparse import ArgumentParser
-import tempfile
 import baseline
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader
 from eight_mile.utils import str2bool, write_json, Average, get_num_gpus_multiworker
-import baseline.pytorch.embeddings
+from baseline.pytorch.embeddings import *
 import baseline.embeddings
 from eight_mile.optz import *
 from eight_mile.pytorch.layers import save_checkpoint, init_distributed
@@ -39,7 +38,7 @@ def train():
     parser.add_argument("--basedir", type=str)
     parser.add_argument("--train_file", type=str, required=True, help='File path to use for train file')
     parser.add_argument("--valid_file", type=str, required=True, help='File path to use for valid file')
-    parser.add_argument("--dataset_key", default="reddit",
+    parser.add_argument("--dataset_key", default="tlm",
                         help="dataset key for basedir")
     parser.add_argument("--embed_type", type=str, default='default',
                         choices=["default", "positional", "learned-positional"],
@@ -51,8 +50,8 @@ def train():
     parser.add_argument("--num_layers", type=int, default=8, help="Number of layers")
     parser.add_argument("--num_train_workers", type=int, default=4, help="Number train workers")
     parser.add_argument("--nctx", type=int, default=256, help="Max input length")
-    parser.add_argument("--pattern", default='*.txt', help="Glob pattern for data")
-    parser.add_argument("--batch_size", type=int, default=8, help="Batch Size")
+    parser.add_argument("--pattern", default='*.json', help="Glob pattern for data")
+    parser.add_argument("--batch_size", type=int, default=256, help="Batch Size")
     parser.add_argument("--subword_model_file", type=str, help="The BPE model file", required=True)
     parser.add_argument("--subword_vocab_file", type=str, help="The BPE subword vocab", required=True)
     parser.add_argument("--dropout", type=float, default=0.1, help="Dropout")
@@ -214,9 +213,8 @@ def train():
         model = DistributedDataParallel(model, device_ids=[args.device], output_device=args.device)
         logger.info("Model located on %s", args.device)
 
-    # This is the training loop
-    steps = global_step
     model_base = os.path.join(args.basedir, 'checkpoint')
+    steps = global_step
 
     for epoch in range(start_epoch, args.epochs):
         avg_loss = Average('average_train_loss')
@@ -268,10 +266,10 @@ def train():
         metrics['train_elapsed_min'] = elapsed
         metrics['average_train_loss'] = train_token_loss
         metrics['train_ppl'] = train_token_ppl
-        avg_valid_loss = Average('average_valid_loss')
-        start = time.time()
-        model.eval()
         if args.local_rank < 1:
+            avg_valid_loss = Average('average_valid_loss')
+            start = time.time()
+            model.eval()
             valid_itr = iter(valid_loader)
             for j in range(valid_steps):
                 batch = next(valid_itr)
@@ -301,7 +299,6 @@ def train():
             metrics['average_valid_loss'] = valid_token_loss
             metrics['average_valid_word_ppl'] = valid_token_ppl
             logger.info(metrics)
-
             save_checkpoint(model, model_base, epoch, save_npz=True)
 
 
