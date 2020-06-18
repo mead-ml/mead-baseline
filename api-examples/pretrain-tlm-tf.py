@@ -104,7 +104,7 @@ def get_dataset(directory, file_type, num_parallel_reads=1, shuffle=True, causal
                            cycle_length=num_parallel_reads)
         ds = ds.shuffle(buffer_size=100)
         parse_fn = _parse_tf_record_causal if causal else _parse_tf_record
-        ds = ds.map(parse_fn)
+    ds = ds.map(parse_fn)
     return ds
 
 
