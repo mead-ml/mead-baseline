@@ -3133,21 +3133,6 @@ def reload_checkpoint(sess: tf.compat.v1.Session, checkpoint: str, blocks_to_ski
     saver.restore(sess, latest)
 
 
-def reload_embeddings(embeddings_dict, basename):
-    embeddings = {}
-    for key, cls in embeddings_dict.items():
-        embed_args = read_json('{}-{}-md.json'.format(basename, key))
-        module = embed_args.pop('module')
-        name = embed_args.pop('name', None)
-        assert name is None or name == key
-        mod = import_user_module(module)
-        embed_args['name'] = key
-        Constructor = getattr(mod, cls)
-        embeddings[key] = Constructor(**embed_args)
-    return embeddings
-
-
-
 def transition_mask(vocab, span_type, s_idx, e_idx, pad_idx=None):
     """Create a CRF Mask.
     Returns a mask with invalid moves as 0 and valid moves as 1.
