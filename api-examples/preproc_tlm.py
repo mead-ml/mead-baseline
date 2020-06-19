@@ -14,7 +14,7 @@ except:
     pass
 
 
-def create_record(chunk, str_lookup, prefix, suffix, mask_value, vocab_size):
+def create_record(chunk, str_lookup, prefix, suffix, mask_value, vocab_size, causal=False):
     """Emit a record
 
     :param chunk: A chunk of integer inputs
@@ -34,6 +34,9 @@ def create_record(chunk, str_lookup, prefix, suffix, mask_value, vocab_size):
         chunk = [suffix] + chunk
         ignore_suffix = True
 
+    if causal:
+        inputs = np.array(chunk)
+        return {'x': inputs, 'x_str': [str_lookup[s] for s in inputs]}
     inputs, labels = mlm_masking(np.array(chunk), mask_value, vocab_size, ignore_prefix, ignore_suffix)
     return {'x': inputs, 'y': labels, 'x_str': [str_lookup[s] for s in inputs], 'y_str': [str_lookup[s] for s in labels]}
 
@@ -199,13 +202,16 @@ parser.add_argument("--suffix", type=str, help="Suffix every line with this toke
 parser.add_argument("--max_file_size", type=int, default=100, help="Shard size, defaults to 100MB")
 parser.add_argument("--stride", type=int, help="Tokens to stride before next read, defaults to `nctx`")
 parser.add_argument("--eos_on_eol", type=baseline.str2bool, default=True)
-parser.add_argument("--cased", type=baseline.str2bool, default=True)
+parser.add_argument("--cased", type=baseline.str2bool, default=False)
+parser.add_argument("--causal", type=baseline.str2bool, default=False)
+
+parser.add_argument()
 args = parser.parse_args()
 if not args.output:
     args.output = f'{args.text}.records'
 
 print(args.output)
-transform = baseline.lowercase
+transform = baseline.lowercase if not cased else lambda x: x
 vectorizer = BPEVectorizer1D(transform_fn=transform, model_file=args.codes, vocab_file=args.vocab, mxlen=1024)
 
 lookup_indices = []
@@ -238,7 +244,7 @@ with open(args.text, encoding='utf-8') as rf:
         output, available = vectorizer.run(to_bpe, vectorizer.vocab)
         while available > 0:
             if len(lookup_indices) == nctx:
-                record = create_record(lookup_indices, indices2word, prefix, suffix, mask_value, vocab_size)
+                record = create_record(lookup_indices, indices2word, prefix, suffix, mask_value, vocab_size, causal=args.causal)
                 fw.write(record)
                 num_samples += 1
                 lookup_indices = []
@@ -247,7 +253,7 @@ with open(args.text, encoding='utf-8') as rf:
                 lookup_indices += output[:needed].tolist()
                 output = output[needed:]
                 available -= needed
-                record = create_record(lookup_indices, indices2word, prefix, suffix, mask_value, vocab_size)
+                record = create_record(lookup_indices, indices2word, prefix, suffix, mask_value, vocab_size, causal=args.causal)
                 fw.write(record)
                 num_samples += 1
                 lookup_indices = []
