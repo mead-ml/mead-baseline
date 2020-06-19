@@ -19,7 +19,7 @@ import collections
 import eight_mile
 import importlib
 from eight_mile.utils import *
-from eight_mile.http import *
+from eight_mile.downloads import *
 import addons
 
 
