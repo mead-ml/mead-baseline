@@ -5,8 +5,6 @@ from argparse import ArgumentParser
 import math
 from typing import Tuple
 import baseline
-#from baseline.tf.tfy import set_tf_eager_debug
-#set_tf_eager_debug(True)
 from eight_mile.utils import str2bool, write_json
 import baseline.tf.embeddings
 import baseline.embeddings

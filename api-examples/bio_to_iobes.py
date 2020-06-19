@@ -1,6 +1,6 @@
 import os
 import argparse
-from baseline.utils import convert_bio_conll_to_iobes
+from eight_mile.utils import convert_bio_conll_to_iobes
 
 
 parser = argparse.ArgumentParser(description='Convert a CONLL file with BIO tagging to IOBES.')

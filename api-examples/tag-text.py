@@ -3,7 +3,7 @@ from __future__ import print_function
 import baseline as bl
 import argparse
 import os
-from baseline.utils import str2bool, read_conll
+from eight_mile.utils import str2bool, read_conll
 
 
 parser = argparse.ArgumentParser(description='Tag text with a model')

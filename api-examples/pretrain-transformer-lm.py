@@ -2,7 +2,6 @@ import logging
 import time
 import os
 from argparse import ArgumentParser
-import tempfile
 import baseline
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader, TensorDataset
@@ -15,7 +14,7 @@ from eight_mile.utils import Average, get_num_gpus_multiworker
 from eight_mile.pytorch.layers import init_distributed, save_checkpoint
 from eight_mile.pytorch.optz import *
 from baseline.pytorch.lm import TransformerLanguageModel, TransformerMaskedLanguageModel
-from baseline.utils import DataDownloader
+from eight_mile.http import DataDownloader
 from transformer_utils import TensorWordDatasetReader, TensorCharDatasetReader, load_data_caching, get_lr_decay
 import numpy as np
 import codecs

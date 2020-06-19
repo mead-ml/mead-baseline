@@ -3,7 +3,7 @@ import argparse
 import baseline.embeddings
 import baseline.tf.embeddings
 import eight_mile.tf.layers as L
-from eight_mile.utils import get_version, revlut, str2bool
+from eight_mile.utils import revlut, str2bool
 from eight_mile.tf.layers import SET_TRAIN_FLAG, set_tf_log_level
 from eight_mile.tf.optz import EagerOptimizer
 import tensorflow as tf
@@ -156,6 +156,7 @@ def loss(model, h, x, y):
     example_loss = -tf.reduce_sum(one_hots * bt_x_v, axis=-1)
     loss = tf.reduce_mean(example_loss)
     return loss, h
+
 
 optimizer = EagerOptimizer(loss, optim="adam", lr=args.lr)
 for epoch in range(args.epochs):

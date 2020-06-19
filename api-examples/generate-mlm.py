@@ -8,7 +8,7 @@ import baseline
 #from eight_mile.pytorch.layers import EmbeddingsStack
 from eight_mile.pytorch.serialize import tlm_load_state_dict
 from baseline.pytorch.lm import TransformerMaskedLanguageModel
-from baseline.utils import str2bool, read_json, Offsets, revlut
+from eight_mile.utils import str2bool, read_json, Offsets, revlut
 from baseline.vectorizers import Token1DVectorizer, BPEVectorizer1D
 from baseline.pytorch.embeddings import *
 from transformer_utils import find_latest_checkpoint

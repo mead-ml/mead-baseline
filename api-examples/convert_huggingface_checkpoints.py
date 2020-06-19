@@ -8,7 +8,7 @@ from baseline.pytorch.lm import TransformerMaskedLanguageModel
 from eight_mile.utils import read_config_stream
 
 from eight_mile.pytorch.embeddings import LookupTableEmbeddings, LearnedPositionalLookupTableEmbeddings
-from baseline.utils import web_downloader
+from eight_mile.http import web_downloader
 # From https://github.com/huggingface/transformers/blob/master/src/transformers/modeling_bert.py
 
 

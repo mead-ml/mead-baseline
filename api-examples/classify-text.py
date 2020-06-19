@@ -1,7 +1,7 @@
 import baseline as bl
 import argparse
 import os
-from baseline.utils import str2bool
+from eight_mile.utils import str2bool
 
 parser = argparse.ArgumentParser(description='Classify text with a model')
 parser.add_argument('--model', help='The path to either the .zip file created by training or to the client bundle '
