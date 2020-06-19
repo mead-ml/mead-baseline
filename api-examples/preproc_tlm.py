@@ -202,7 +202,7 @@ parser.add_argument("--suffix", type=str, help="Suffix every line with this toke
 parser.add_argument("--max_file_size", type=int, default=100, help="Shard size, defaults to 100MB")
 parser.add_argument("--stride", type=int, help="Tokens to stride before next read, defaults to `nctx`")
 parser.add_argument("--eos_on_eol", type=baseline.str2bool, default=True)
-parser.add_argument("--cased", type=baseline.str2bool, default=False)
+parser.add_argument("--cased", type=baseline.str2bool, default=True)
 parser.add_argument("--causal", type=baseline.str2bool, default=False)
 
 args = parser.parse_args()
