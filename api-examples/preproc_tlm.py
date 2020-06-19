@@ -205,13 +205,12 @@ parser.add_argument("--eos_on_eol", type=baseline.str2bool, default=True)
 parser.add_argument("--cased", type=baseline.str2bool, default=False)
 parser.add_argument("--causal", type=baseline.str2bool, default=False)
 
-parser.add_argument()
 args = parser.parse_args()
 if not args.output:
     args.output = f'{args.text}.records'
 
 print(args.output)
-transform = baseline.lowercase if not cased else lambda x: x
+transform = baseline.lowercase if not args.cased else lambda x: x
 vectorizer = BPEVectorizer1D(transform_fn=transform, model_file=args.codes, vocab_file=args.vocab, mxlen=1024)
 
 lookup_indices = []
