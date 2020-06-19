@@ -382,7 +382,7 @@ class MultiFileLoader(IterableDataset):
 
         while True:
             if self.shuffle:
-                read_file_order = np.random.permutation(read_file_order)
+                random.shuffle(read_file_order)
 
             for file_idx in read_file_order:
                 file = files[file_idx]
