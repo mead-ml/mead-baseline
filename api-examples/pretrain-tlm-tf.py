@@ -62,11 +62,16 @@ def _parse_tf_record(example_proto):
     return record['x'], record['y']
 
 
+def _parse_tf_record_causal(example_proto):
+    record = tf.io.parse_single_example(example_proto, feature_description)
+    return record['x'][:-1], record['x'][1:]
+
+
 def decode_json(example):
     return tf.py_function(_parse_json, [example], [tf.int32, tf.int32])
 
 
-def get_dataset(directory, file_type, num_parallel_reads=1, shuffle=True):
+def get_dataset(directory, file_type, num_parallel_reads=1, shuffle=True, causal=False):
     """Get a dataset as a tf.data.Dataset.  Input can be a bucket or a local file
 
 
@@ -74,6 +79,7 @@ def get_dataset(directory, file_type, num_parallel_reads=1, shuffle=True):
     :param file_type: Currently supports "json" files or "tfrecords"
     :param num_parallel_reads: The number of parallel reads
     :param shuffle: Defaults to True
+    :param causal: Use CLM instead of MLM (Defaults to ``False``)
     :return: a `tf.data.Dataset`
     """
     pattern = os.path.join(directory, f'*.{file_type}')
@@ -81,6 +87,8 @@ def get_dataset(directory, file_type, num_parallel_reads=1, shuffle=True):
     logger.debug(files)
 
     if file_type == 'json':
+        if causal:
+            raise Exception("Causal not currently supported with JSON input")
         ds = tf.data.TextLineDataset(files, num_parallel_reads=num_parallel_reads)
         if shuffle:
             ds = ds.shuffle(100)
@@ -95,7 +103,8 @@ def get_dataset(directory, file_type, num_parallel_reads=1, shuffle=True):
                            num_parallel_calls=tf.data.experimental.AUTOTUNE,
                            cycle_length=num_parallel_reads)
         ds = ds.shuffle(buffer_size=100)
-    ds = ds.map(_parse_tf_record)
+    parse_fn = _parse_tf_record_causal if causal else _parse_tf_record
+    ds = ds.map(parse_fn)
     return ds
 
 
@@ -165,7 +174,7 @@ def train():
     parser.add_argument("--epochs", type=int, default=32, help="Num training epochs")
     parser.add_argument("--restart", type=str2bool, help="Option allows you to restart from a previous checkpoint")
     parser.add_argument("--warmup_steps", type=int, default=10000, help="Num warmup steps")
-    parser.add_argument("--mlm", type=str2bool, default=True, help="Use Masked Language Model (MLM) objective")
+    parser.add_argument("--causal", type=str2bool, default=False, help="Use CLM (causal) instead of MLM")
     parser.add_argument("--saves_per_epoch", type=int, default=10, help="The number of checkpoints to save per epoch")
     parser.add_argument('--rpr_k',
                         help='Relative attention positional sizes pass 0 if you dont want relative attention',
@@ -204,7 +213,7 @@ def train():
 
     def dataset_train_fn(input_context):
         batch_size = input_context.get_per_replica_batch_size(args.batch_size)
-        ds = get_dataset(args.train_dir, args.file_type, args.num_train_workers).batch(batch_size)
+        ds = get_dataset(args.train_dir, args.file_type, args.num_train_workers, causal=args.causal).batch(batch_size)
         return ds.shard(
             input_context.num_input_pipelines, input_context.input_pipeline_id
         )
@@ -212,7 +221,7 @@ def train():
 
     def dataset_test_fn(input_context):
         batch_size = input_context.get_per_replica_batch_size(args.batch_size)
-        ds = get_dataset(args.valid_dir, args.file_type, args.num_train_workers, shuffle=False).batch(batch_size)
+        ds = get_dataset(args.valid_dir, args.file_type, args.num_train_workers, shuffle=False, causal=args.causal).batch(batch_size)
         return ds.shard(
             input_context.num_input_pipelines, input_context.input_pipeline_id
         )
@@ -237,7 +246,7 @@ def train():
     else:
         rpr_k = args.rpr_k
 
-    TLM = TransformerMaskedLanguageModel if args.mlm else TransformerLanguageModel
+    TLM = TransformerLanguageModel if args.causal else TransformerMaskedLanguageModel
     model = TLM.create(embeddings,
                        hsz=args.d_model,
                        d_ff=args.d_ff,
