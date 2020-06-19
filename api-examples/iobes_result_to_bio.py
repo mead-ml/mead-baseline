@@ -1,6 +1,6 @@
 import argparse
 from baseline.reader import _norm_ext
-from baseline.utils import convert_iobes_conll_to_bio
+from eight_mile.utils import convert_iobes_conll_to_bio
 
 parser = argparse.ArgumentParser(description="Convert a CONLL file from IOBES to BIO. This defaults to changing the right two most columns and is used to convert the output of IOBES taggers so that conlleval.pl will work on them.")
 parser.add_argument("--file", help="The file to convert", default="conllresults.conll")

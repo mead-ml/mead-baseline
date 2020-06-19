@@ -3,7 +3,9 @@ import tempfile
 import unicodedata
 from typing import Tuple
 import numpy as np
-from baseline.utils import exporter, optional_params, listify, register, Offsets, import_user_module, validate_url, urlretrieve
+from six.moves.urllib.request import urlretrieve
+
+from baseline.utils import exporter, optional_params, listify, register, Offsets, import_user_module, validate_url
 
 
 __all__ = []

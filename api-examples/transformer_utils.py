@@ -6,7 +6,7 @@ from eight_mile.optz import create_lr_scheduler
 import baseline.pytorch.embeddings
 import baseline.embeddings
 import random
-from baseline.progress import create_progress_bar
+from eight_mile.progress import create_progress_bar
 from torch.utils.data.dataset import IterableDataset, TensorDataset
 from baseline.vectorizers import Token1DVectorizer, BPEVectorizer1D, Char2DVectorizer, WordpieceVectorizer1D
 import codecs
@@ -382,7 +382,7 @@ class MultiFileLoader(IterableDataset):
 
         while True:
             if self.shuffle:
-                read_file_order = np.random.permutation(read_file_order)
+                random.shuffle(read_file_order)
 
             for file_idx in read_file_order:
                 file = files[file_idx]

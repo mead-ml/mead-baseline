@@ -7,7 +7,7 @@ from argparse import ArgumentParser
 import baseline
 from transformer_utils import TiedEmbeddingsSeq2SeqModel, find_latest_checkpoint
 
-from baseline.utils import str2bool, read_json, Offsets, revlut
+from eight_mile.utils import str2bool, read_json, Offsets, revlut
 from baseline.vectorizers import Token1DVectorizer, BPEVectorizer1D
 
 logger = logging.getLogger(__file__)
