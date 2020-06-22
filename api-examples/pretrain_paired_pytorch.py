@@ -13,7 +13,6 @@ from eight_mile.pytorch.layers import save_checkpoint, init_distributed
 from eight_mile.pytorch.optz import *
 from transformer_utils import (
     MultiFileDatasetReader,
-    on_demand_mlm_masking,
     get_lr_decay,
     PairedModel,
     TripletLoss,
