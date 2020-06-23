@@ -1,4 +1,4 @@
-# Fine-tuning and Transfer Learning in MEAD
+# Fine-tuning, Pre-Training and Transfer Learning in MEAD
 
 MEAD has supported fine-tuning and transfer learning since its initial release.  The typical recipe for MEAD is
 to define an `*EmbeddingsModel` that can load a pretrained checkpoint inside of an `addon`, which is simply a
@@ -66,7 +66,7 @@ The model block for fine-tuning has the name `fine-tune`:
 
 
 
-#### Using HuggingFace Transformers
+#### Fine-Tuning HuggingFace Transformers
 
 The developers at HuggingFace have been providing faithful PyTorch implementations of nearly all of the popular 
 Transformer models produced by the research community, and have carefully validated each model matches the original
@@ -75,14 +75,14 @@ implementations exactly.
 We provide an addon on mead-hub to use the excellent HuggingFace libraries to fine-tune models like BERT in MEAD.  This
 addon simply overrides
 
-#### Using BERT Official
+#### Fine-Tuning BERT Official
 
 We provide an addon on mead-hub to use either the BERT official code (a copy) or the TF Hub module to fine-tune.
 Since this is based on the official code, no conversion or non-standard checkpoints are required.
 
 
 
-## Pre-training with MEAD
+## Pre-training your own Transformers with MEAD
 
 ### Using the API Examples
 
@@ -97,24 +97,24 @@ By now, the practice of pre-training Transformer models on a large amount of dat
 is ubiquitous.  MEAD supports pre-training architectures such as BERT/Roberta via several scripts, all of which
 support multi-worker training.
 
-* [../api-examples/pretrain-tlm.py](pretrain-tlm)*: Train with multi-worker configuraion with a large
+* [pretrain_tlm_pytorch](../api-examples/pretrain_tlm_pytorch.py)*: Train with multi-worker configuraion with a large
 (possibly out-of-core) LM dataset, using either `fastBPE` or `WordPiece` to tokenize the words (PyTorch).
 This program supports export of torch checkpoints as well as NPZ checkpoints, and supports reloading from either.
 Supports Kubernetes-based training with PyTorchJob operator
 
-* [../api-examples/pretrain-tlm-tf.py](pretrain-tlm-tf)*: Train multi-worker on TPUs or GPUs with a large
-(possibly out-of-core) LM dataset, using `fastBPE` tokenize the words.  This program supports export of TF checkpoints
-as well as NPZ checkpoints.  Supports Kubernetes-based training with either TFJob operator, Job or Pod CRDs.
+* [pretrain_tlm_tf](../api-examples/pretrain_tlm_tf.py)*: Train multi-worker on TPUs or GPUs with a large
+(possibly out-of-core) LM dataset, using [fastBPE](https://github.com/glample/fastBPE) to tokenize the words.  This program supports export of TF checkpoints
+as well as NPZ checkpoints.  Supports training on TPUs as well as Kubernetes-based training with either TFJob operator, Job or Pod CRDs.
+  - There is a [stripped down example Google Colab tutorial](https://colab.research.google.com/github/dpressel/mead-tutorials/blob/master/mead_transformers_tpu.ipynb) based on this program where you can train an MLM on a TPU
 
-
-* [../api-examples/pretrain-paired.py](pretrain-paired)*: Train either a Transformer encoder-decoder or a Transformer
-dual encoder out-of-core on very large datasets.  The dual-encoder follows [ConveRT, Henderson et al 2019]().
+* [pretrain_paired](../api-examples/pretrain_paired.py)*: Train either a Transformer encoder-decoder or a Transformer
+dual encoder out-of-core on very large datasets.  The dual-encoder follows [ConveRT, Henderson et al 2019](https://arxiv.org/pdf/1911.03688.pdf).
 This variant creates 2 context, one for the encoder and one for the
 decoder, either based on splitting a single line in 2 (Next Sequence Prediction or NSP), or by separating the line 
 by a tab delimiter (Next Turn Prediction or NTP).  In the latter case, its presumed that the separator will partition
 the line into a query and a response.
 
-* [../api-examples/pretrain-discrim.py](pretrain-discrim)*: In this approach, we jointly train a generator and a
+* [pretrain_discrim](../api-examples/pretrain_discrim.py)*: In this approach, we jointly train a generator and a
 discriminator following [ELECTRA: Pre-Training Text Encoders as Discriminators Rather Than Generators,
     Clark et al. 2019](https://openreview.net/pdf?id=r1xMH1BtvB).
 
