@@ -63,7 +63,7 @@ def unsort_batch(batch: torch.Tensor, perm_idx: torch.Tensor) -> torch.Tensor:
     diff = len(batch.shape) - len(perm_idx.shape)
     extra_dims = [1] * diff
     perm_idx = perm_idx.view([-1] + extra_dims)
-    return batch.scatter_(0, perm_idx.expand_as(batch), batch)
+    return torch.scatter(torch.zeros_like(batch), 0, perm_idx.expand_as(batch), batch)
 
 
 def infer_lengths(tensor, dim=1):
