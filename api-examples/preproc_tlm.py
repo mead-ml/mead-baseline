@@ -190,8 +190,9 @@ def create_file_writer(fmt, name, fields, max_file_size_mb):
 
 parser = argparse.ArgumentParser(description='Convert text into MLM fixed width contexts')
 
-parser.add_argument('--text', help='The text to classify as a string, or a path to a file with each line as an example',
-                    type=str)
+parser.add_argument('--input_files',
+                    help='The text to classify as a string, or a path to a file with each line as an example', type=str)
+parser.add_argument('--input_pattern', type=str, default='*.txt')
 parser.add_argument('--codes', help='BPE codes')
 parser.add_argument('--vocab', help='BPE vocab')
 parser.add_argument("--nctx", type=int, default=256, help="Max input length")
@@ -208,8 +209,16 @@ parser.add_argument("--causal", type=baseline.str2bool, default=False, help="Gen
 parser.add_argument("--pad_y", type=baseline.str2bool, default=True, help="Replace all non-masked Y values with <PAD>")
 
 args = parser.parse_args()
-if not args.output:
-    args.output = f'{args.text}.records'
+
+if os.path.isdir(args.input_files):
+    import glob
+    input_files = list(glob.glob(os.path.join(args.input_files, args.input_pattern)))
+    if not args.output:
+        args.output = os.path.join(args.input_files, 'records')
+else:
+    input_files = [args.input_files]
+    if not args.output:
+        args.output = f'{args.input_files}.records'
 
 print(args.output)
 transform = baseline.lowercase if not args.cased else lambda x: x
@@ -236,32 +245,34 @@ if args.suffix:
 
 fw = create_file_writer(args.fmt, args.output, args.fields, args.max_file_size)
 num_samples = 0
-with open(args.text, encoding='utf-8') as rf:
-    for line in rf:
-        to_bpe = line.strip().split()
-        if args.eos_on_eol:
-            to_bpe += ['<EOS>']
+for text in input_files:
+    with open(text, encoding='utf-8') as rf:
+        print(f"Reading from {text}...")
+        for line in rf:
+            to_bpe = line.strip().split()
+            if args.eos_on_eol:
+                to_bpe += ['<EOS>']
 
-        output, available = vectorizer.run(to_bpe, vectorizer.vocab)
-        while available > 0:
-            if len(lookup_indices) == nctx:
-                record = create_record(lookup_indices, indices2word, prefix, suffix, mask_value, vocab_size, causal=args.causal, pad_y=args.pad_y)
-                fw.write(record)
-                num_samples += 1
-                lookup_indices = []
-            needed = nctx - len(lookup_indices)
-            if available >= needed:
-                lookup_indices += output[:needed].tolist()
-                output = output[needed:]
-                available -= needed
-                record = create_record(lookup_indices, indices2word, prefix, suffix, mask_value, vocab_size, causal=args.causal, pad_y=args.pad_y)
-                fw.write(record)
-                num_samples += 1
-                lookup_indices = []
-            # The amount available is less than what we need, so read the whole thing
-            else:
-                lookup_indices += output[:available].tolist()
-                available = 0
+            output, available = vectorizer.run(to_bpe, vectorizer.vocab)
+            while available > 0:
+                if len(lookup_indices) == nctx:
+                    record = create_record(lookup_indices, indices2word, prefix, suffix, mask_value, vocab_size, causal=args.causal, pad_y=args.pad_y)
+                    fw.write(record)
+                    num_samples += 1
+                    lookup_indices = []
+                needed = nctx - len(lookup_indices)
+                if available >= needed:
+                    lookup_indices += output[:needed].tolist()
+                    output = output[needed:]
+                    available -= needed
+                    record = create_record(lookup_indices, indices2word, prefix, suffix, mask_value, vocab_size, causal=args.causal, pad_y=args.pad_y)
+                    fw.write(record)
+                    num_samples += 1
+                    lookup_indices = []
+                # The amount available is less than what we need, so read the whole thing
+                else:
+                    lookup_indices += output[:available].tolist()
+                    available = 0
 
 fw.close()
 write_yaml({'num_samples': num_samples}, os.path.join(root_dir, 'md.yml'))
