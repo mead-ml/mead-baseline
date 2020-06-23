@@ -85,6 +85,7 @@ def main():
             'test': ['pytest', 'mock', 'contextdecorator', 'pytest-forked'],
             'report': ['visdom', 'tensorboard'],
             'yaml': ['pyyaml'],
+            'bpe': ['fastBPE'],
             'tf2': ['tensorflow_addons'],
             'grpc': ['grpc'],
             'onnx': ['onnxruntime']

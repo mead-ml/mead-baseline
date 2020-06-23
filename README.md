@@ -28,6 +28,7 @@ If you are using tensorflow 2 as your deep learning backend you will need to hav
 
 `pip install mead-baseline[tf2]`
 
+*Note for TF 2.1 users*: If you are using TF 2.1, you cannot just `pip install tensorflow_addons` (or the command above) -- it will pull a version that is incompatible with TF 2.1.  If you are running TF 2.1, use a pinned version of the addons: `pip install --tensorflow_addons==0.9.1`
 
 ### From the repository
 
