@@ -302,9 +302,10 @@ def train():
         for i in range(train_steps_per_epoch):
             steps += 1
             x, y = next(train_iter)
+            do_report = (i + 1) % report_on == 0 and args.print
             gen_loss_step, discrim_loss_step, acc = gen_vs_discrim(x, y, args.device, gen_model, gen_loss_fn,
                                                                    discrim_model, discrim_loss_fn, mask_value,
-                                                                   vocab_size, index2word, args.print)
+                                                                   vocab_size, index2word, do_report)
             avg_gen_loss.update(gen_loss_step.item())
             total_loss_step = gen_loss_step + args.gen_loss_scale * discrim_loss_step
             total_loss_step.backward()
@@ -345,7 +346,10 @@ def train():
         for i in range(valid_steps_per_epoch):
             with torch.no_grad():
                 x, y = next(valid_iter)
-                gen_loss_step, discrim_loss_step, acc = gen_vs_discrim(x, y, mask_value, vocab_size)
+                do_report = (i + 1) % report_on == 0 and args.print
+                gen_loss_step, discrim_loss_step, acc = gen_vs_discrim(x, y, args.device, gen_model, gen_loss_fn,
+                                                                       discrim_model, discrim_loss_fn, mask_value,
+                                                                       vocab_size, index2word, do_report)
                 avg_valid_gen_loss.update(gen_loss_step.item())
                 avg_valid_discrim_acc.update(acc)
                 avg_valid_discrim_loss.update(discrim_loss_step.item())
