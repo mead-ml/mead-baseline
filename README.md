@@ -46,11 +46,8 @@ This first installs `mead-layers` (8 mile) locally and then `mead-baseline`
 ## A Note About Versions
 
 Deep Learning Frameworks are evolving quickly, and changes are not always
-backwards compatible. We recommend recent versions of each framework. Baseline
-is known to work on most versions of TensorFlow, and is currently being run on
-versions between 1.13 and 2.1 .
-
-The PyTorch backend requires at least version 1.3.0.
+backwards compatible. We recommend recent versions of whichever framework is being used underneath.  We currently run on TF versions between 1.13 and 2.2, and we recommend using at least TF 2.1.
+The PyTorch backend requires at least version 1.3.0, though we recommend using a more recent version.
 
 ## Citing
 
