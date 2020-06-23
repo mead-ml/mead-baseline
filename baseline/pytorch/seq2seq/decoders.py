@@ -153,21 +153,64 @@ class RNNDecoder(torch.nn.Module):
         pred = self.output(output_tbh)
         return pred.transpose(0, 1).contiguous()
 
-    def decode_rnn(self, context_bth, h_i, output_i, dst_bth, src_mask):
-        embed_out_bth = self.tgt_embeddings(dst_bth)
+    def decode_rnn(self, context_bth, h_i, output_i, dst_tb, src_mask):
+        """Decode some steps of the RNN
+
+        This function is used to take steps on an RNN. It produces an output feature for
+        each time step. The number of time steps is controlled by the size of the dst_tbh
+        parameter. It can be used durning training to get the output for an entire sentence
+        via teacher forcing by passing in the lagged targets as dst_tbh or it can be used for
+        decoding by making multiple calls, where each dst_tbh is a single timestep created
+        by selecting a token from the last time step.
+
+        In baseline we call the tokens that we want to produce at time step `t` the `tgt`.
+        The token that was produced at time step `t-1` is called the `dst`. The values of
+        `dst` can either come from a pre-defined tensor in the case of teacher forcing
+        or a from the argmax of the previous output in the case of decoding.
+
+        Note:
+            We have switched the majority of the seq2seq components to be batch first
+            but this is still a hold out in that it is mostly time first. There is a
+            weird mismatch right now because the context is batch first but the dst
+            inputs and the output values are time first. I didn't want to change the whole
+            seq2seq sections that relay on time first becuase it seemed like it would
+            cause breakage and instead decided to explicity document it here.
+
+        :param context_bth: The encoder outputs [B, T, H]
+        :param h_i: The current hidden state of the RNN. Tuple[[L, B, H], [L, B, H]] where
+            L is the number of layers
+        :param output_i: The output features from the previous time step, [B, H]
+        :param dst_tb: The input tokens from the previous time steps. [T, B]
+        :param src_mask: The mask used for calculate valid attention score when looking at
+            encoder outputs. [B, T]
+
+        :Returns:
+            Tuple[Torch.Tensor[T, B, H], Tuple[[L, B, H], [L, B, H]]
+        """
+        # Embed the `dst` values. These are often in the shape of [T, B] during training
+        # where the whole sequence is known up front and the shape of [1, B] during
+        # inference where we are decoding a single step at a time.
+        embed_out_tbh = self.tgt_embeddings(dst_tb)
 
         outputs = []
 
-        for i, embed_i in enumerate(embed_out_bth.split(1)):
+        # Iterate through the `dst` embeddings one at a time. The reason for doing this at inference
+        # time is obvious but we do it at training time too so that we run attention.
+        for i, embed_i in enumerate(embed_out_tbh.split(1)):
             # Input feeding would use previous attentional output in addition to destination embeddings
             embed_i = self.input_i(embed_i, output_i)
+            # Run the RNN for a single step on the current input and the previous hidden state.
+            # Save this hidden state for use next time.
             output_i, h_i = self.decoder_rnn(embed_i, h_i)
+            # Run attention between the RNN output (at this time step) and the encoder output.
             output_i = self.attn(output_i, context_bth, src_mask)
             output_i = self.dropout(output_i)
-            # Attentional outputs
+            # Save our outputs into a list that will be turned into a tensor later
             outputs.append(output_i)
 
+        # Stack all the outputs into a single [T, B, H] tensor
         outputs_tbh = torch.stack(outputs)
+        # Return the hidden state too for use next time.
         return outputs_tbh, h_i
 
     def attn(self, output_t, context, src_mask=None):
@@ -214,6 +257,50 @@ class RNNDecoder(torch.nn.Module):
         if alpha is not None:
             kwargs['length_penalty'] = partial(gnmt_length_penalty, alpha=alpha)
         return RNNDecoder.BeamSearch(parent=self, **kwargs)(encoder_outputs)
+
+    def _greedy_search(self, encoder_output, **kwargs):
+        """Decode a sentence by taking the hightest scoring token at each timestep.
+
+        In the past we have just used a beam size of 1 instead of a greedy search because
+        they took about the same time to run. I have added this function back because it
+        is easier to debug and can help finding where different problems in the output are.
+
+        :param encoder_output: `EncoderOutput` The output of the encoder, it should be
+            in the batch first format.
+        """
+        bsz = encoder_output.output.shape[0]
+        device = encoder_output.output.device
+        mxlen = int(kwargs.get("mxlen", 100))
+        with torch.no_grad():
+            src_mask = encoder_output.src_mask  # [B, T]
+            # h_i = Tuple[[B, H], [B, H]]
+            # dec_out = [B, H]
+            # context = [B, T, H]
+            h_i, dec_out, context = self.arc_policy(encoder_output, self.hsz)
+            # The internal `decode_rnn` actually takes time first so to that.
+            last = torch.full((1, bsz), Offsets.GO, dtype=torch.long, device=device)
+            outputs = [last]
+            for i in range(mxlen - 1):
+                # Take a step with the RNN
+                # dec_out = [1, B, H]
+                # hi = Tuple[[B, H], [B, H]]
+                dec_out, h_i = self.decode_rnn(context, h_i, dec_out, last, src_mask) # [1, B, H]
+                # Project to vocab size
+                probs = self.output(dec_out)  # [1, B, V]
+                # Convert the last step of the decorder output into a format we can consume [B, H]
+                dec_out = dec_out.squeeze(0)
+                # Get the best scoring token for each timestep in the batch
+                selected = torch.argmax(probs, dim=-1)
+                outputs.append(selected)
+                last = selected
+            # Combine all the [1, B] outputs into a [T, B] matrix
+            outputs = torch.cat(outputs, dim=0)
+            # Convert to [B, T]
+            outputs = outputs.transpose(0, 1).contiguous()
+            # Add a fake beam dimension of size 1
+            outputs = outputs.unsqueeze(1)
+            # This is mostly for testing so just return zero for lengths and scores.
+            return outputs, torch.zeros(bsz), torch.zeros(bsz)
 
 
 @register_decoder(name='default')
