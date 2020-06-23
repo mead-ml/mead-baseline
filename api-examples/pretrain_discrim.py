@@ -95,6 +95,7 @@ def train():
     parser.add_argument("--basedir", type=str)
     parser.add_argument("--train_file", type=str, help='Optional file path to use for train file')
     parser.add_argument("--valid_file", type=str, help='Optional file path to use for valid file')
+    parser.add_argument("--preprocessed", type=str2bool, default=True, help="Has the data already been preprocessed?")
     parser.add_argument("--gen_d_model", type=int, default=256, help="Model dimension (and embedding dsz)")
     parser.add_argument("--discrim_d_model", type=int, default=512, help="Model dimension (and embedding dsz)")
     parser.add_argument("--gen_d_ff", type=int, default=1024, help="FFN dimension")
@@ -118,7 +119,7 @@ def train():
     parser.add_argument("--nctx", type=int, default=256, help="Max context length (for both encoder and decoder)")
     parser.add_argument("--embed_type", type=str, default='default',
                         help="register label of the embeddings, so far support positional or learned-positional")
-    parser.add_argument("--pattern", default='*.txt', help="Glob pattern for data")
+    parser.add_argument("--pattern", default='*.json', help="Glob pattern for data")
     parser.add_argument("--batch_size", type=int, default=256, help="Batch Size")
     parser.add_argument("--dataset_key", default="reddit",
                         help="dataset key for basedir")
@@ -176,7 +177,9 @@ def train():
     if args.distributed:
         args.device, args.local_rank = init_distributed(args.local_rank)
 
-    reader = MultiFileDatasetReader(args.nctx, args.subword_model_file, args.subword_vocab_file, args.pattern, reader_type="lang")
+    reader_type = "lang" if not args.preprocessed else "preprocessed"
+    reader = MultiFileDatasetReader(args.nctx, args.subword_model_file, args.subword_vocab_file, args.pattern,
+                                    reader_type=reader_type)
     #  just return the vocab from the BPE vectorizer
     vocab = reader.build_vocab([])
     gen_embed = baseline.embeddings.load_embeddings('x', dsz=args.gen_d_model, known_vocab=vocab['x'],
