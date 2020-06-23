@@ -302,10 +302,9 @@ def train():
         for i in range(train_steps_per_epoch):
             steps += 1
             x, y = next(train_iter)
-            do_report = True if (i + 1) % report_on == 0 else False
             gen_loss_step, discrim_loss_step, acc = gen_vs_discrim(x, y, args.device, gen_model, gen_loss_fn,
                                                                    discrim_model, discrim_loss_fn, mask_value,
-                                                                   vocab_size, index2word, do_report)
+                                                                   vocab_size, index2word, args.print)
             avg_gen_loss.update(gen_loss_step.item())
             total_loss_step = gen_loss_step + args.gen_loss_scale * discrim_loss_step
             total_loss_step.backward()
@@ -315,13 +314,14 @@ def train():
             torch.nn.utils.clip_grad_norm_(parameters, args.clip)
             optz.step()
             optz.zero_grad()
-            if do_report:
+            if (i + 1) % report_on == 0:
                 logging.info('Loss g=%f, d=%f total=%f, Per token acc=%f', avg_gen_loss.avg, avg_discrim_loss.avg, avg_train_loss.avg, avg_discrim_acc.avg)
 
             if (i + 1) % update_on == 0 and args.local_rank < 1:
                 elapsed = (time.time() - start)/60
                 logging.info('elapsed time this epoch %d min', elapsed)
                 logging.info('elapsed step time %f steps/min', i/elapsed)
+                logging.info('LR: %f',  optz.current_lr)
                 save_checkpoint(gen_model, gen_base, steps, tick_type='step')
                 save_checkpoint(discrim_model, discrim_base, steps, tick_type='step')
 
