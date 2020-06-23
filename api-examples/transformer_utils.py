@@ -462,7 +462,10 @@ class PreprocessedFileLoader(MultiFileLoader):
 
     def process_line(self, line):
         obj = json.loads(line)
-        return np.array(obj['x'], dtype=int), np.array(obj['y'], dtype=int)
+        if 'y' in obj.keys():
+            return np.array(obj['x'], dtype=int), np.array(obj['y'], dtype=int)
+        else:
+            return np.array(obj['x'], dtype=int), np.array(obj['x'], dtype=int)
 
 
 class NextSequencePredictionFileLoader(MultiFileLoader):
