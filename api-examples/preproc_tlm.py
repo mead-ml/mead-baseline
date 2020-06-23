@@ -14,7 +14,7 @@ except:
     pass
 
 
-def create_record(chunk, str_lookup, prefix, suffix, mask_value, vocab_size, causal=False):
+def create_record(chunk, str_lookup, prefix, suffix, mask_value, vocab_size, causal=False, pad_y=True):
     """Emit a record
 
     :param chunk: A chunk of integer inputs
@@ -23,6 +23,7 @@ def create_record(chunk, str_lookup, prefix, suffix, mask_value, vocab_size, cau
     :param suffix: A suffix integer token
     :param mask_value: An integer value representing a [MASK]
     :param vocab_size: The total size of the vocab
+    :param pad_y: Should we replace non-[MASK] X values with <PAD> in Y?
     :return: An object with `[xy]_str` and `[xy]` entries
     """
     ignore_prefix = False
@@ -37,7 +38,7 @@ def create_record(chunk, str_lookup, prefix, suffix, mask_value, vocab_size, cau
     if causal:
         inputs = np.array(chunk)
         return {'x': inputs, 'x_str': [str_lookup[s] for s in inputs]}
-    inputs, labels = mlm_masking(np.array(chunk), mask_value, vocab_size, ignore_prefix, ignore_suffix)
+    inputs, labels = mlm_masking(np.array(chunk), mask_value, vocab_size, ignore_prefix, ignore_suffix, pad_y=pad_y)
     return {'x': inputs, 'y': labels, 'x_str': [str_lookup[s] for s in inputs], 'y_str': [str_lookup[s] for s in labels]}
 
 
@@ -203,7 +204,8 @@ parser.add_argument("--max_file_size", type=int, default=100, help="Shard size, 
 parser.add_argument("--stride", type=int, help="Tokens to stride before next read, defaults to `nctx`")
 parser.add_argument("--eos_on_eol", type=baseline.str2bool, default=True)
 parser.add_argument("--cased", type=baseline.str2bool, default=True)
-parser.add_argument("--causal", type=baseline.str2bool, default=False)
+parser.add_argument("--causal", type=baseline.str2bool, default=False, help="Generate for CLM, not MLM (X value only)")
+parser.add_argument("--pad_y", type=baseline.str2bool, default=True, help="Replace all non-masked Y values with <PAD>")
 
 args = parser.parse_args()
 if not args.output:
@@ -243,7 +245,7 @@ with open(args.text, encoding='utf-8') as rf:
         output, available = vectorizer.run(to_bpe, vectorizer.vocab)
         while available > 0:
             if len(lookup_indices) == nctx:
-                record = create_record(lookup_indices, indices2word, prefix, suffix, mask_value, vocab_size, causal=args.causal)
+                record = create_record(lookup_indices, indices2word, prefix, suffix, mask_value, vocab_size, causal=args.causal, pad_y=args.pad_y)
                 fw.write(record)
                 num_samples += 1
                 lookup_indices = []
@@ -252,7 +254,7 @@ with open(args.text, encoding='utf-8') as rf:
                 lookup_indices += output[:needed].tolist()
                 output = output[needed:]
                 available -= needed
-                record = create_record(lookup_indices, indices2word, prefix, suffix, mask_value, vocab_size, causal=args.causal)
+                record = create_record(lookup_indices, indices2word, prefix, suffix, mask_value, vocab_size, causal=args.causal, pad_y=args.pad_y)
                 fw.write(record)
                 num_samples += 1
                 lookup_indices = []
