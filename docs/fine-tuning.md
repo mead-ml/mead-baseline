@@ -35,7 +35,7 @@ most implementations.
 operations, which is the default in `8-mile`.  To support either variant, we offer a boolean to tell the 
 blocks where to put the transform.
 
-- *Relative attention* - The [Shaw et al., 2018]() paper defines a modification to Multi-headed attention to support
+- *Relative position representations* - The [Shaw et al., 2018](https://arxiv.org/pdf/1803.02155.pdf) paper defines a modification to Multi-headed attention to support
 relative positional embeddings.  This work demonstrates that RA is often more effective than positional global embeddings,
 and can be used in place of them.  Following this, models may define the usual `LookupTableEmbeddings` instead of the
 positional flavors
