@@ -1794,7 +1794,7 @@ class BahdanauAttention(VectorSequenceAttention):
         u = self.E_a(keys_bth).view(B, T, H)
         z = torch.tanh(q + u)
         a = self.v(z.view(-1, self.hsz)).view(B, T)
-        a.masked_fill(keys_mask == MASK_FALSE, -1e9)
+        a = a.masked_fill(keys_mask == MASK_FALSE, -1e9)
         a = F.softmax(a, dim=-1)
         return a
 
