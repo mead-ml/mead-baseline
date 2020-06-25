@@ -500,11 +500,19 @@ class MultiTFRecordLoader(torch.utils.data.IterableDataset):
     """Using module tfrecord to read tfrecord file into PyTorch datasets"""
 
     def __init__(self, directory, distribute=True, shuffle=True):
+        super().__init__()
+        self.distribute = distribute
+        self.shuffle = shuffle
+
         if os.path.exists(f"{directory}/md.yml"):
             f = read_yaml(f"{directory}/md.yml")
             self.samples = f['num_samples']
         else:
             raise Exception("No md.yml found for number of samples.")
+
+        if torch.distributed.is_initialized() and distribute:
+            self.rank = torch.distributed.get_rank()
+            self.world_size = torch.distributed.get_world_size()
 
         # create index first
         files = list(glob.glob(os.path.join(directory, '*.tfrecord')))
@@ -512,19 +520,34 @@ class MultiTFRecordLoader(torch.utils.data.IterableDataset):
             idx_file = '.'.join(f.split('.')[:-1]) + '.index'
             tfrecord.tools.tfrecord2idx.create_index(f, idx_file)
 
-        file_names = [f.split('/')[-1].replace('.tfrecord', '') for f in files]
+        self.file_names = [f.split('/')[-1].replace('.tfrecord', '') for f in files]
         prob = 1. / len(file_names)
-        data_pattern = os.path.join(directory, "{}.tfrecord")
-        index_pattern = os.path.join(directory, "{}.index")
+        self.data_pattern = os.path.join(directory, "{}.tfrecord")
+        self.index_pattern = os.path.join(directory, "{}.index")
         splits = {n: prob for n in file_names}
-        self.itr = tfrecord.reader.multi_tfrecord_loader(data_pattern, index_pattern, splits)
 
     def __len__(self):
         return self.samples
 
     def __iter__(self):
+        worker_info = torch.utils.data.get_worker_info() if self.distribute else None
+        if worker_info is None:
+            num_workers_per_node = 1
+            node_worker_id = 0
+        else:
+            num_workers_per_node = worker_info.num_workers
+            node_worker_id = worker_info.id
+        all_workers = (self.world_size * num_workers_per_node)
+        offset = self.rank * num_workers_per_node + node_worker_id
+        read_file_order = list(range(offset, len(self.file_names), all_workers))
+
+        files_to_read = [self.file_names[j] for j in read_file_order]
+        prob = 1./len(files_to_read)
+        splits = {f: prob for f in files_to_read}
+        itr = tfrecord.reader.multi_tfrecord_loader(self.data_pattern, self.index_pattern, splits)
+
         while True:
-            d = next(self.itr)
+            d = next(itr)
             if 'y' in d.keys():
                 yield d['x'], d['y']
             else:
