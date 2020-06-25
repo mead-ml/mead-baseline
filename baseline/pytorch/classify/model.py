@@ -112,6 +112,7 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
         return probs
 
     def predict(self, batch_dict: Dict[str, TensorDef], raw: bool = False, dense: bool = False, **kwargs):
+        self.eval()
         probs = self.predict_batch(batch_dict, **kwargs)
         if raw and not dense:
             logger.warning(
