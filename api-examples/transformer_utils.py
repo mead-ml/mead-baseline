@@ -13,7 +13,7 @@ import codecs
 from collections import Counter
 import glob
 import json
-
+import tfrecord
 
 
 
@@ -496,6 +496,41 @@ class NextSequencePredictionFileLoader(MultiFileLoader):
         return query, vec
 
 
+class MultiTFRecordLoader(torch.utils.data.IterableDataset):
+    """Using module tfrecord to read tfrecord file into PyTorch datasets"""
+
+    def __init__(self, directory, distribute=True, shuffle=True):
+        if os.path.exists(f"{directory}/md.yml"):
+            f = read_yaml(f"{directory}/md.yml")
+            self.samples = f['num_samples']
+        else:
+            raise Exception("No md.yml found for number of samples.")
+
+        # create index first
+        files = list(glob.glob(os.path.join(directory, '*.tfrecord')))
+        for f in files:
+            idx_file = '.'.join(f.split('.')[:-1]) + '.index'
+            tfrecord.tools.tfrecord2idx.create_index(f, idx_file)
+
+        file_names = [f.split('/')[-1].replace('.tfrecord', '') for f in files]
+        prob = 1. / len(file_names)
+        data_pattern = os.path.join(directory, "{}.tfrecord")
+        index_pattern = os.path.join(directory, "{}.index")
+        splits = {n: prob for n in file_names}
+        self.itr = tfrecord.reader.multi_tfrecord_loader(data_pattern, index_pattern, splits)
+
+    def __len__(self):
+        return self.samples
+
+    def __iter__(self):
+        while True:
+            d = next(self.itr)
+            if 'y' in d.keys():
+                yield d['x'], d['y']
+            else:
+                yield d['x'], d['x']
+
+
 class MultiFileDatasetReader:
     """Provide a base-class to do operations that are independent of token representation
     """
@@ -518,6 +553,9 @@ class MultiFileDatasetReader:
         elif reader_type == "lang":
             print("Using files as an LM")
             return SequencePredictionFileLoader(directory, self.pattern, vocabs, self.vectorizer, self.nctx, distribute=distribute, shuffle=shuffle)
+        elif reader_type == 'tfrecord':
+            print("Reading data in .tfrecord fomat using the tfrecord module")
+            return MultiTFRecordLoader(directory, distribute=distribute, shuffle=shuffle)
         return PreprocessedFileLoader(directory, self.pattern, vocabs, self.vectorizer, self.nctx, distribute=distribute, shuffle=shuffle)
 
 

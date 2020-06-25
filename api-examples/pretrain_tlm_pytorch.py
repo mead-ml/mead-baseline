@@ -103,7 +103,12 @@ def train():
         args.device, updated_local_rank = init_distributed(args.local_rank)
         args.local_rank = updated_local_rank
 
-    reader_type = "lang" if not args.preprocessed else "preprocessed"
+    if args.pattern == '*.tfrecord':
+        reader_type = 'tfrecord'
+    elif args.preprocessed:
+        reader_type = 'preprocessed'
+    else:
+        reader_type = 'lang'
     reader = MultiFileDatasetReader(args.nctx, args.subword_model_file, args.subword_vocab_file, args.pattern,
                                     reader_type=reader_type)
 
