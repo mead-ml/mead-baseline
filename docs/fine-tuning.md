@@ -1,31 +1,26 @@
-# Fine-tuning, Pre-Training and Transfer Learning in MEAD
+# Fine-Tuning, Pre-Training and Transfer Learning in MEAD
 
-MEAD has supported fine-tuning and transfer learning since its initial release.  The typical recipe for MEAD is
-to define an `*EmbeddingsModel` that can load a pretrained checkpoint inside of an `addon`, which is simply a
-custom extension to MEAD with a `@register_embeddings` directive.
+MEAD has extensive support for fine-tuning and transfer learning and language moodel-base self-supervised pre-training.
+Support for Transformer-based pre-training is built into the core library, and you can find examples of this in
+the [sample mead config files](../mead/config) or in the [mead-tutorials](https://github.com/dpressel/mead-tutorials)
 
-In many cases, the user wants to try out some new model where the checkpoint has been posted online, and just
-encode the words in a sequence with that model, and then either fine-tune (by adding a single layer to the logits/labels
-output) or by using a previously defined model architecture with a custom embedding.
+Fine-tuning models are typically applied as an Embedding model in MEAD which contains the entire sub-graph of the upstream model
+except for its training head.  For simple fine-tuning of classifiers, use a `FineTuneModel` to add a classification head.
+For simple fine-tuning of taggers, you can use a `PassThruModel` model to add a single tagger head, and there are
+examples of how to configure these in the [sample mead configs](../mead/config)
+ 
+For additional embeddings for fine-tuning, see also the embeddings provided at [mead-hub](https://github.com/mead-ml/hub)
 
-For most cases, this is quite simple.  We provide embeddings for several well-known models including *BERT*
-and *ELMo*.
+## Fine-Tuning Transformers
 
+#### Using the Library
 
-## Fine-tuning Transformers
+We provide Transformer contextual Embeddings built on our core layers (called 8-mile), which supports a broad variety of
+Transformers.  For example, BERT, a bidirectionally trained transformer can be loaded into these Embeddings and trained as part of a downstream task.
 
-#### Natively
-
-We provide a Transformer-embedding built on our core layers (called 8-mile), which supports a broad variety of
-Transformers.
-
-Since BERT is actually just a normal transformer with an MLM objective
-(and possibly NSP objective) and since MEAD has built-in layers for building your own Transformer,
-BERT is actually a special case where no `addon` is required to load the model at all and the model can be fine-tuned
-with only the core library.
-
-It is important to realize that there are several Transformer variants.  The original code places `LayerNorm` layers
-after each transform, and uses sinusoidal (fixed) positional embeddings.  
+There are several common Transformer variants.  The original Transformer paper places `LayerNorm` layers
+after each transform, and uses sinusoidal (fixed) positional embeddings, but subsequent research has found that
+optimal placement is at the beginning of each block.
 
 - *Embeddings* - Most versions of Transformers since GPT use learned positional embeddings, rather than using the
 sinusoidal embeddings.  If sinusoidal embeddings are used, there are differences between the definition in the paper and
@@ -39,7 +34,6 @@ blocks where to put the transform.
 relative positional embeddings.  This work demonstrates that RA is often more effective than positional global embeddings,
 and can be used in place of them.  Following this, models may define the usual `LookupTableEmbeddings` instead of the
 positional flavors
-  - *ConveRT relative attention* - TODO
 
 - *BERT flavored Transformer*:  BERT follows the original T2T implementation but substitutes learned positional embeddings
 instead of sinusoidal ones.  To set up your MEAD config to construct the proper Transformer model, the config `features`
@@ -72,29 +66,28 @@ The developers at HuggingFace have been providing faithful PyTorch implementatio
 Transformer models produced by the research community, and have carefully validated each model matches the original
 implementations exactly.
 
-We provide an addon on mead-hub to use the excellent HuggingFace libraries to fine-tune models like BERT in MEAD.  This
-addon simply overrides
+While we provide native support for Transformer models, if you prefer or need to use the HuggingFace libraries to fine-tune models in MEAD, its fairly easy to do [in an addon](https://github.com/mead-ml/hub/blob/master/v1/addons/embed_bert_pytorch.py).
 
 #### Fine-Tuning BERT Official
 
-We provide an addon on mead-hub to use either the BERT official code (a copy) or the TF Hub module to fine-tune.
+We provide an [addon on mead-hub](https://github.com/mead-ml/hub/blob/master/v1/addons/embed_bert_tf.py) to use either the BERT official code (a copy) or the TF Hub module to fine-tune.
 Since this is based on the official code, no conversion or non-standard checkpoints are required.
 
 
-
-## Pre-training your own Transformers with MEAD
+## Pre-Training your own Transformers with MEAD
 
 ### Using the API Examples
 
 MEAD has a rich set of pre-training solutions provided in the API examples, with support for a wide-variety of
-Transformer-based pre-training.  For pre-training, which often requires training multi-GPU, multi-worker, we found
-it easiest to use the PyTorch DistributedDataParallel facilities to train, and to have the programs export a
+Transformer-based pre-training.  For pre-training, which often requires training multi-GPU, multi-worker, we support 
+PyTorch DistributedDataParallel facilities to train and TF2.0 autofunction-based distribution and each program exports to a
 framework-independent NPZ file that can be loaded by either TensorFlow or PyTorch MEAD layers.
 
-#### Pre-training Transformer-based Language Models with MEAD
+
+#### Pre-Training Transformer-based Language Models with MEAD
 
 By now, the practice of pre-training Transformer models on a large amount of data to be used for downstream fine-tuning
-is ubiquitous.  MEAD supports pre-training architectures such as BERT/Roberta via several scripts, all of which
+is ubiquitous.  MEAD supports pre-training architectures such as BERT/RoBERTa via several scripts, all of which
 support multi-worker training.
 
 * [pretrain_tlm_pytorch](../api-examples/pretrain_tlm_pytorch.py): Train with multi-worker configuration with a large
@@ -118,11 +111,11 @@ the line into a query and a response.
 discriminator following [ELECTRA: Pre-Training Text Encoders as Discriminators Rather Than Generators,
     Clark et al. 2019](https://openreview.net/pdf?id=r1xMH1BtvB).
 
-#### Writing your own Pre-training script
+#### Writing your own Pre-Training script
 
 Its pretty easy to tweak the above examples to create your own new training regime with Transformers.  Copy one
 of the other training examples that is closest to what you are trying to do, and modify the `create_loss()` and or
-the model architecture accordingly, and kick it off on your machine (or a kubernetes cluster) and make sure you
+the model architecture accordingly, and kick it off on your machine (or a Kubernetes cluster) and make sure you
 follow the structure of the other examples.  If you can use the existing baseline models 
 `TransformerMaskedLanguageModel` or `TransformerLanguageModel`, this will make things the easiest.  If not, you can
 create a similar class to one of those and change the portions you need (or subclass them).
@@ -136,3 +129,6 @@ create a similar class to one of those and change the portions you need (or subc
 
 ### Transformer Checkpoint conversion
 
+The checkpoints are written to NPZ format using the 8-mile library, which writes each layer from its native format into
+an NPZ and can hydrate a model from those checkpoints as well.  The checkpoints are roughly the same size as a PyTorch
+checkpoint.
