@@ -501,6 +501,8 @@ class MultiTFRecordLoader(torch.utils.data.IterableDataset):
 
     def __init__(self, directory, distribute=True, shuffle=True):
         super().__init__()
+        self.rank = 0
+        self.world_size = 1
         self.distribute = distribute
         self.shuffle = shuffle
 
@@ -520,11 +522,9 @@ class MultiTFRecordLoader(torch.utils.data.IterableDataset):
             idx_file = '.'.join(f.split('.')[:-1]) + '.index'
             tfrecord.tools.tfrecord2idx.create_index(f, idx_file)
 
-        self.file_names = [f.split('/')[-1].replace('.tfrecord', '') for f in files]
-        prob = 1. / len(file_names)
+        self.file_names = sorted([f.split('/')[-1].replace('.tfrecord', '') for f in files])
         self.data_pattern = os.path.join(directory, "{}.tfrecord")
         self.index_pattern = os.path.join(directory, "{}.index")
-        splits = {n: prob for n in file_names}
 
     def __len__(self):
         return self.samples
@@ -540,18 +540,17 @@ class MultiTFRecordLoader(torch.utils.data.IterableDataset):
         all_workers = (self.world_size * num_workers_per_node)
         offset = self.rank * num_workers_per_node + node_worker_id
         read_file_order = list(range(offset, len(self.file_names), all_workers))
-
         files_to_read = [self.file_names[j] for j in read_file_order]
         prob = 1./len(files_to_read)
         splits = {f: prob for f in files_to_read}
         itr = tfrecord.reader.multi_tfrecord_loader(self.data_pattern, self.index_pattern, splits)
-
+        itr = tfrecord.iterator_utils.shuffle_iterator(itr, 1)
         while True:
             d = next(itr)
             if 'y' in d.keys():
-                yield d['x'], d['y']
+                yield np.array(d['x'], dtype=int), np.array(d['y'], dtype=int)
             else:
-                yield d['x'], d['x']
+                yield np.array(d['x'], dtype=int), np.array(d['x'], dtype=int)
 
 
 class MultiFileDatasetReader:
