@@ -379,7 +379,14 @@ class MultiFileLoader(IterableDataset):
         self.vectorizer.mxlen = self.nctx
         read_file_order = list(range(offset, len(files), all_workers))
         # If we have multiple files per worker, possibly shuffle the file read order
-
+        if not read_file_order:
+            if offset > 0:
+                # This is probably wrong
+                logger.warning(f"There are no files to read for worker {node_worker_id}, offset {offset}!" +
+                               " This might mean that you are passing an incorrect training or validation directory")
+            else:
+                # This is definitely wrong
+                raise Exception(f"No files of pattern {self.pattern} were found in {self.directory}!")
         while True:
             if self.shuffle:
                 random.shuffle(read_file_order)
