@@ -3461,15 +3461,32 @@ class TransformerDiscriminator(nn.Module):
     Clark et al. 2019](https://openreview.net/pdf?id=r1xMH1BtvB).
 
     """
-    def __init__(self, embeddings, d_model, d_ff, dropout, num_heads, num_layers, rpr_k, d_k, **kwargs):
+
+    def __init__(
+            self,
+            embeddings,
+            num_heads: int,
+            d_model: int,
+            dropout: bool,
+            layers: int = 1,
+            activation: str = "relu",
+            d_ff: Optional[int] = None,
+            d_k: Optional[int] = None,
+            rpr_k: Optional[Union[int, List[int]]] = None,
+            layer_norms_after: bool = False,
+            layer_norm_eps: float = 1.0e-6,
+            **kwargs,
+    ):
         super().__init__()
         self.embeddings = EmbeddingsStack(embeddings, dropout)
         self.weight_std = kwargs.get('weight_std', 0.02)
         assert self.embeddings.dsz == d_model
-        self.transformer = TransformerEncoderStack(num_heads, d_model=d_model, pdrop=dropout, scale=True,
-                                                   layers=num_layers, d_ff=d_ff, rpr_k=rpr_k, d_k=d_k)
+        self.transformer = TransformerEncoderStack(
+            num_heads, d_model=d_model, pdrop=dropout, scale=True,
+            layers=layers, activation=activation, d_ff=d_ff, rpr_k=rpr_k, d_k=d_k,
+            layer_norms_after=layer_norms_after, layer_norm_eps=layer_norm_eps
+        )
         self.proj_to_output = pytorch_linear(d_model, 1)
-
         self.apply(self.init_layer_weights)
         self.lengths_feature = kwargs.get('lengths_feature', self.embeddings.keys()[0])
 
@@ -3488,16 +3505,8 @@ class TransformerDiscriminator(nn.Module):
         return torch.sigmoid(binary)
 
     def create_loss(self):
-        class Loss(nn.Module):
-            def __init__(self):
-                super().__init__()
-                self.loss = nn.BCELoss()
+        return nn.BCELoss()
 
-            def forward(self, input, target):
-                fake_loss = self.loss(input[target == 0], target[target == 0])
-                real_loss = self.loss(input[target != 0], target[target != 0])
-                return real_loss + fake_loss
-        return Loss()
 
 
 class SequenceCriterion(nn.Module):

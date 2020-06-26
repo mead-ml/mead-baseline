@@ -115,11 +115,11 @@ def train():
                         type=int, default=[8], nargs='+')
 
     parser.add_argument("--num_train_workers", type=int, default=4, help="Number train workers")
-    parser.add_argument("--num_valid_workers", type=int, default=2, help="Number valid workers")
     parser.add_argument("--nctx", type=int, default=256, help="Max context length (for both encoder and decoder)")
     parser.add_argument("--embed_type", type=str, default='default',
-                        help="register label of the embeddings, so far support positional or learned-positional")
-    parser.add_argument("--pattern", default='*.json', help="Glob pattern for data")
+                        choices=["default", "positional", "learned-positional"],
+                        help="register label of the embeddings")
+    parser.add_argument("--pattern", default='*.json', help="Glob pattern for files, defaults to *.json if preprocessed, *.txt otherwise")
     parser.add_argument("--batch_size", type=int, default=256, help="Batch Size")
     parser.add_argument("--dataset_key", default="reddit",
                         help="dataset key for basedir")
@@ -177,7 +177,11 @@ def train():
     if args.distributed:
         args.device, args.local_rank = init_distributed(args.local_rank)
 
-    reader_type = "lang" if not args.preprocessed else "preprocessed"
+    if not args.preprocessed:
+        reader_type = "lang"
+        args.pattern = "*.txt"
+    else:
+        reader_type = "preprocessed"
     reader = MultiFileDatasetReader(args.nctx, args.subword_model_file, args.subword_vocab_file, args.pattern,
                                     reader_type=reader_type)
     #  just return the vocab from the BPE vectorizer
@@ -199,7 +203,7 @@ def train():
     train_set = reader.load(args.train_file, vocabs)
     valid_set = reader.load(args.valid_file, vocabs)
     train_loader = DataLoader(train_set, batch_size=args.batch_size, num_workers=args.num_train_workers)
-    valid_loader = DataLoader(valid_set, batch_size=args.batch_size, num_workers=args.num_valid_workers)
+    valid_loader = DataLoader(valid_set, batch_size=args.batch_size)
     train_steps_per_epoch = len(train_loader) // (args.batch_size*num_gpus)
     valid_steps_per_epoch = len(valid_loader) // args.batch_size
     logger.info("Loaded datasets")
@@ -230,9 +234,11 @@ def train():
                                                       tie_weights=True, dropout=args.gen_dropout,
                                                       num_heads=args.gen_num_heads, layers=args.gen_num_layers,
                                                       rpr_k=gen_rpr_k, d_k=args.gen_d_k, src_keys=['x'], tgt_key='x')
-    discrim_model = TransformerDiscriminator(discrim_embeddings, args.discrim_d_model, args.discrim_d_ff,
-                                             args.discrim_dropout, args.discrim_num_heads, args.discrim_num_layers,
-                                             discrim_rpr_k, args.discrim_d_k)
+    discrim_model = TransformerDiscriminator(discrim_embeddings, d_model=args.discrim_d_model, d_ff=args.discrim_d_ff,
+                                             dropout=args.discrim_dropout, num_heads=args.discrim_num_heads,
+                                             layers=args.discrim_num_layers,
+                                             activation='gelu', layer_norm_eps=1.0e-12,
+                                             rpr_k=discrim_rpr_k, d_k=args.discrim_d_k)
     gen_model.to(args.device)
     gen_loss_fn = gen_model.create_loss()
 
@@ -295,7 +301,7 @@ def train():
         metrics = {}
         optz.zero_grad()
         start = time.time()
-
+        print(f'Starting epoch {epoch + 1}')
         train_iter = iter(train_loader)
         valid_iter = iter(valid_loader)
 
@@ -336,34 +342,33 @@ def train():
         metrics['average_train_discrim_per_token_accuracy'] = avg_discrim_acc.avg
         metrics['average_train_loss'] = avg_train_loss.avg
 
-        avg_valid_gen_loss = Average('average_valid_gen_loss')
-        avg_valid_discrim_loss = Average('average_valid_discrim_loss')
-        avg_valid_discrim_acc = Average('average_valid_discrim_acc')
-        avg_valid_loss = Average('average_valid_loss')
-        start = time.time()
-        gen_model.eval()
-        discrim_model.eval()
-        for i in range(valid_steps_per_epoch):
-            with torch.no_grad():
-                x, y = next(valid_iter)
-                do_report = (i + 1) % report_on == 0 and args.print
-                gen_loss_step, discrim_loss_step, acc = gen_vs_discrim(x, y, args.device, gen_model, gen_loss_fn,
-                                                                       discrim_model, discrim_loss_fn, mask_value,
-                                                                       vocab_size, index2word, do_report)
-                avg_valid_gen_loss.update(gen_loss_step.item())
-                avg_valid_discrim_acc.update(acc)
-                avg_valid_discrim_loss.update(discrim_loss_step.item())
-                total_loss_step = gen_loss_step + args.gen_loss_scale * discrim_loss_step
-                avg_valid_loss.update(total_loss_step.item())
-        elapsed = (time.time() - start)/60
-        metrics['valid_elapsed_min'] = elapsed
-        metrics['average_valid_gen_loss'] = avg_valid_gen_loss.avg
-        metrics['average_valid_discrim_loss'] = avg_valid_discrim_loss.avg
-        metrics['average_valid_discrim_per_token_accuracy'] = avg_valid_discrim_acc.avg
-        metrics['average_valid_loss'] = avg_valid_loss.avg
-        logger.info(metrics)
-
         if args.local_rank < 1:
+            avg_valid_gen_loss = Average('average_valid_gen_loss')
+            avg_valid_discrim_loss = Average('average_valid_discrim_loss')
+            avg_valid_discrim_acc = Average('average_valid_discrim_acc')
+            avg_valid_loss = Average('average_valid_loss')
+            start = time.time()
+            gen_model.eval()
+            discrim_model.eval()
+            for i in range(valid_steps_per_epoch):
+                with torch.no_grad():
+                    x, y = next(valid_iter)
+                    do_report = (i + 1) % report_on == 0 and args.print
+                    gen_loss_step, discrim_loss_step, acc = gen_vs_discrim(x, y, args.device, gen_model, gen_loss_fn,
+                                                                           discrim_model, discrim_loss_fn, mask_value,
+                                                                           vocab_size, index2word, do_report)
+                    avg_valid_gen_loss.update(gen_loss_step.item())
+                    avg_valid_discrim_acc.update(acc)
+                    avg_valid_discrim_loss.update(discrim_loss_step.item())
+                    total_loss_step = gen_loss_step + args.gen_loss_scale * discrim_loss_step
+                    avg_valid_loss.update(total_loss_step.item())
+            elapsed = (time.time() - start)/60
+            metrics['valid_elapsed_min'] = elapsed
+            metrics['average_valid_gen_loss'] = avg_valid_gen_loss.avg
+            metrics['average_valid_discrim_loss'] = avg_valid_discrim_loss.avg
+            metrics['average_valid_discrim_per_token_accuracy'] = avg_valid_discrim_acc.avg
+            metrics['average_valid_loss'] = avg_valid_loss.avg
+            logger.info(metrics)
             save_checkpoint(discrim_model, discrim_base, epoch, tick_type='epoch', save_npz=True)
             save_checkpoint(gen_model, gen_base, epoch, tick_type='epoch', save_npz=True)
 
