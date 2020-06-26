@@ -25,6 +25,7 @@ import addons
 
 __all__ = []
 __all__.extend(eight_mile.utils.__all__)
+__all__.extend(eight_mile.downloads.__all__)
 logger = logging.getLogger('baseline')
 # These are inputs to models that shouldn't be saved out
 MAGIC_VARS = ['sess', 'tgt', 'y', 'lengths', 'gpus']
