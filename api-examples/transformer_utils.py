@@ -362,7 +362,7 @@ class MultiFileLoader(IterableDataset):
     def _get_worker_info(self):
         return torch.utils.data.get_worker_info() if self.distribute else None
 
-    def __iter__(self):
+    def _init_read_order(self):
         # Each node has the same worker_info, so the unique offsets for each is
         # rank * num_workers + worker_id
         # and the total available workers is world_size * num_workers
@@ -379,7 +379,6 @@ class MultiFileLoader(IterableDataset):
         offset = self.rank * num_workers_per_node + node_worker_id
         self.vectorizer.mxlen = self.nctx
         read_file_order = list(range(offset, len(files), all_workers))
-        # If we have multiple files per worker, possibly shuffle the file read order
         if not read_file_order:
             if offset > 0:
                 # This is probably wrong
@@ -388,10 +387,14 @@ class MultiFileLoader(IterableDataset):
             else:
                 # This is definitely wrong
                 raise Exception(f"No files of pattern {self.pattern} were found in {self.directory}!")
+        return files, read_file_order, node_worker_id
+
+    def __iter__(self):
+        files, read_file_order, _ = self._init_read_order()
+        # If we have multiple files per worker, possibly shuffle the file read order
         while True:
             if self.shuffle:
                 random.shuffle(read_file_order)
-
             for file_idx in read_file_order:
                 file = files[file_idx]
                 with open(file) as rf:
@@ -496,62 +499,39 @@ class NextSequencePredictionFileLoader(MultiFileLoader):
         return query, vec
 
 
-class MultiTFRecordLoader(torch.utils.data.IterableDataset):
+class MultiTFRecordLoader(MultiFileLoader):
     """Using module tfrecord to read tfrecord file into PyTorch datasets"""
 
-    def __init__(self, directory, distribute=True, shuffle=True):
-        super().__init__()
-        self.rank = 0
-        self.world_size = 1
-        self.distribute = distribute
-        self.shuffle = shuffle
-
-        if os.path.exists(f"{directory}/md.yml"):
-            f = read_yaml(f"{directory}/md.yml")
-            self.samples = f['num_samples']
-        else:
-            raise Exception("No md.yml found for number of samples.")
-
-        if torch.distributed.is_initialized() and distribute:
-            self.rank = torch.distributed.get_rank()
-            self.world_size = torch.distributed.get_world_size()
-
+    def __init__(self, directory, pattern, vocabs, vectorizer, nctx, last_turn_only=True, distribute=True, shuffle=True):
+        super().__init__(directory, pattern, vocabs, vectorizer, nctx, last_turn_only, distribute, shuffle)
         # create index first
         files = list(glob.glob(os.path.join(directory, '*.tfrecord')))
         for f in files:
             idx_file = '.'.join(f.split('.')[:-1]) + '.index'
             tfrecord.tools.tfrecord2idx.create_index(f, idx_file)
 
-        self.file_names = sorted([f.split('/')[-1].replace('.tfrecord', '') for f in files])
-        self.data_pattern = os.path.join(directory, "{}.tfrecord")
-        self.index_pattern = os.path.join(directory, "{}.index")
-
-    def __len__(self):
-        return self.samples
-
     def __iter__(self):
-        worker_info = torch.utils.data.get_worker_info() if self.distribute else None
-        if worker_info is None:
-            num_workers_per_node = 1
-            node_worker_id = 0
-        else:
-            num_workers_per_node = worker_info.num_workers
-            node_worker_id = worker_info.id
-        all_workers = (self.world_size * num_workers_per_node)
-        offset = self.rank * num_workers_per_node + node_worker_id
-        read_file_order = list(range(offset, len(self.file_names), all_workers))
-        files_to_read = [self.file_names[j] for j in read_file_order]
-        prob = 1./len(files_to_read)
-        splits = {f: prob for f in files_to_read}
-        itr = tfrecord.reader.multi_tfrecord_loader(self.data_pattern, self.index_pattern, splits)
-        itr = tfrecord.iterator_utils.shuffle_iterator(itr, 1)
+        files, read_file_order, node_worker_id = self._init_read_order()
+        # If we have multiple files per worker, possibly shuffle the file read order
         while True:
-            d = next(itr)
-            if 'y' in d.keys():
-                yield np.array(d['x'], dtype=int), np.array(d['y'], dtype=int)
-            else:
-                yield np.array(d['x'], dtype=int), np.array(d['x'], dtype=int)
-
+            if self.shuffle:
+                random.shuffle(read_file_order)
+            for file_idx in read_file_order:
+                file = files[file_idx]
+                idx_file = '.'.join(file.split('.')[:-1]) + '.index'
+                # shard = (worker_id, num_workers), but we already assigned this file to one certain worker,
+                # so shard = (0, 1)
+                itr = tfrecord.reader.tfrecord_loader(file, idx_file, shard=(0, 1))
+                if self.shuffle:
+                    np.random.seed(node_worker_id)
+                    # not sure about the optimal choice of shuffle_queue_size here:
+                    itr = tfrecord.iterator_utils.shuffle_iterator(itr, queue_size=128)
+                for d in itr:
+                    if 'y' in d.keys():
+                        # d['x'] is in np.int32, but pytorch require np.int64
+                        yield np.array(d['x'], dtype=int), np.array(d['y'], dtype=int)
+                    else:
+                        yield np.array(d['x'], dtype=int), np.array(d['x'], dtype=int)
 
 class MultiFileDatasetReader:
     """Provide a base-class to do operations that are independent of token representation
@@ -577,7 +557,7 @@ class MultiFileDatasetReader:
             return SequencePredictionFileLoader(directory, self.pattern, vocabs, self.vectorizer, self.nctx, distribute=distribute, shuffle=shuffle)
         elif reader_type == 'tfrecord':
             print("Reading data in .tfrecord fomat using the tfrecord module")
-            return MultiTFRecordLoader(directory, distribute=distribute, shuffle=shuffle)
+            return MultiTFRecordLoader(directory, self.pattern, vocabs, self.vectorizer, self.nctx, distribute=distribute, shuffle=shuffle)
         return PreprocessedFileLoader(directory, self.pattern, vocabs, self.vectorizer, self.nctx, distribute=distribute, shuffle=shuffle)
 
 
