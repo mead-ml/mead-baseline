@@ -78,6 +78,7 @@ class LanguageModelBase(nn.Module, LanguageModel):
         """
 
     def predict(self, batch_dict, **kwargs):
+        self.eval()
         numpy_to_tensor = bool(kwargs.get('numpy_to_tensor', True))
         batch_dict = self.make_input(batch_dict, numpy_to_tensor=numpy_to_tensor)
         hidden = batch_dict.get('h')
