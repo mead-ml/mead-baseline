@@ -3488,7 +3488,7 @@ class TransformerDiscriminator(nn.Module):
         )
         self.proj_to_output = pytorch_linear(d_model, 1)
         self.apply(self.init_layer_weights)
-        self.lengths_feature = kwargs.get('lengths_feature', self.embeddings.keys()[0])
+        self.lengths_feature = kwargs.get('lengths_feature', list(self.embeddings.keys())[0])
 
     def init_layer_weights(self, module):
         if isinstance(module, (nn.Linear, nn.Embedding, nn.LayerNorm)):
