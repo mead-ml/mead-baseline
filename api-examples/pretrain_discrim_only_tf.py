@@ -186,7 +186,6 @@ def train():
                                                        preserve_vocab_indices=True,
                                                        embed_type=args.embed_type)
     vocabs = preproc_data['vocab']
-    ####@vocab_size = max(vocabs.values())
 
     def dataset_train_fn(input_context):
         batch_size = input_context.get_per_replica_batch_size(args.batch_size)
