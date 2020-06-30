@@ -2668,9 +2668,7 @@ class TransformerDiscriminator(tf.keras.Model):
 
         def loss_fn(model, features, labels):
             logits = model(features)
-            losses = tf.keras.losses.binary_crossentropy(
-                labels, logits, from_logits=True
-            )
+            losses = tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.cast(labels, tf.float32), logits=logits)
             return tf.reduce_mean(losses)
         return loss_fn
 
