@@ -2619,6 +2619,60 @@ class TransformerEncoderStackWithTimeMask(TransformerEncoderStack):
         return super().call((x, mask))
 
 
+class TransformerDiscriminator(tf.keras.Model):
+    """A Transformer model that tries to predict if each token is real or fake
+
+
+    This model is based on [ELECTRA: Pre-Training Text Encoders as Discriminators Rather Than Generators,
+    Clark et al. 2019](https://openreview.net/pdf?id=r1xMH1BtvB).
+
+    """
+    def __init__(
+        self,
+        embeddings,
+        num_heads: int,
+        d_model: int,
+        dropout: bool,
+        layers: int = 1,
+        activation: str = "relu",
+        d_ff: Optional[int] = None,
+        d_k: Optional[int] = None,
+        rpr_k: Optional[Union[int, List[int]]] = None,
+        layer_norms_after: bool = False,
+        layer_norm_eps: float = 1.0e-6,
+        name: Optional[str] = None,
+        **kwargs,
+    ):
+        super().__init__(name=name)
+        self.embeddings = EmbeddingsStack(embeddings, dropout)
+        self.transformer = TransformerEncoderStack(
+            num_heads, d_model=d_model, pdrop=dropout, scale=True,
+            layers=layers, activation=activation, d_ff=d_ff, rpr_k=rpr_k, d_k=d_k,
+            layer_norms_after=layer_norms_after, layer_norm_eps=layer_norm_eps
+        )
+
+        self.proj_to_output = tf.keras.layers.Dense(1)
+
+        self.lengths_feature = kwargs.get('lengths_feature', list(self.embeddings.keys())[0])
+
+    def call(self, features):
+        embedded = self.embeddings(features)
+        x = features[self.lengths_feature]
+        input_mask = tf.expand_dims(tf.expand_dims(tf.cast(x != 0, tf.int32), 1), 1)
+        #input_mask = tf.expand_dims(tf.expand_dims(tf.ones_like(x, dtype=tf.uint8), 1), 1)
+        transformer_out = self.transformer((embedded, input_mask))
+        binary = tf.squeeze(self.proj_to_output(transformer_out), -1)
+        return tf.sigmoid(binary)
+
+    def create_loss(self):
+
+        def loss_fn(model, features, labels):
+            logits = model(features)
+            losses = tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.cast(labels, tf.float32), logits=logits)
+            return tf.reduce_mean(losses)
+        return loss_fn
+
+
 class TransformerDecoderStack(tf.keras.layers.Layer):
     def __init__(
         self,
