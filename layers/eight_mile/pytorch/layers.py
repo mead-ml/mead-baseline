@@ -519,8 +519,13 @@ class ParallelConv(nn.Module):
 
         self.output_dim = sum(outsz_filts)
         for i, fsz in enumerate(filtsz):
-            pad = fsz // 2
-            conv = nn.Sequential(nn.Conv1d(insz, outsz_filts[i], fsz, padding=pad), get_activation(activation))
+            end_pad = fsz // 2
+            start_pad = end_pad - 1 if fsz % 2 == 0 else end_pad
+            conv = nn.Sequential(
+                nn.ConstantPad1d((start_pad, end_pad), 0.0),
+                nn.Conv1d(insz, outsz_filts[i], fsz),
+                get_activation(activation)
+            )
             convs.append(conv)
             # Add the module so its managed correctly
         self.convs = nn.ModuleList(convs)
