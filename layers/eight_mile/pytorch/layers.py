@@ -315,8 +315,8 @@ class Conv1DSame(nn.Module):
         :param bias: Is bias on?
         """
         super().__init__()
-        start_pad = kernel_size // 2
-        end_pad = start_pad - 1 if kernel_size % 2 == 0 else start_pad
+        end_pad = kernel_size // 2
+        start_pad = end_pad - 1 if kernel_size % 2 == 0 else end_pad
         self.conv = nn.Sequential(
             nn.ConstantPad1d((start_pad, end_pad), 0.),
             nn.Conv1d(in_channels, out_channels, kernel_size, bias=bias)
@@ -519,11 +519,13 @@ class ParallelConv(nn.Module):
 
         self.output_dim = sum(outsz_filts)
         for i, fsz in enumerate(filtsz):
-            end_pad = fsz // 2
-            start_pad = end_pad - 1 if fsz % 2 == 0 else end_pad
+            if fsz % 2 == 0:
+                conv = Conv1DSame(insz, outsz_filts[i], fsz)
+            else:
+                pad = fsz // 2
+                conv = nn.Conv1d(insz, outsz_filts[i], fsz, padding=pad)
             conv = nn.Sequential(
-                nn.ConstantPad1d((start_pad, end_pad), 0.0),
-                nn.Conv1d(insz, outsz_filts[i], fsz),
+                conv,
                 get_activation(activation)
             )
             convs.append(conv)
