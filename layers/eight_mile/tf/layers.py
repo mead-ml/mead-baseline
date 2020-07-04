@@ -2662,7 +2662,7 @@ class TransformerDiscriminator(tf.keras.Model):
         #input_mask = tf.expand_dims(tf.expand_dims(tf.ones_like(x, dtype=tf.uint8), 1), 1)
         transformer_out = self.transformer((embedded, input_mask))
         binary = tf.squeeze(self.proj_to_output(transformer_out), -1)
-        return tf.sigmoid(binary)
+        return binary
 
     def create_loss(self):
 
