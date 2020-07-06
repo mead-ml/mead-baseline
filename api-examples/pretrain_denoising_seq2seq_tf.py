@@ -4,8 +4,8 @@ import time
 import os
 from argparse import ArgumentParser
 import baseline
-#import baseline.tf
-#baseline.tf.set_tf_eager_debug(True)
+import baseline.tf
+baseline.tf.set_tf_eager_debug(True)
 
 from eight_mile.utils import str2bool, write_json, Average, read_yaml, get_num_gpus_multiworker
 from baseline.tf.embeddings import *
@@ -28,6 +28,7 @@ class TiedEmbeddingsSeq2SeqModel(Seq2SeqModel):
         super().__init__(tied_embeddings, tied_embeddings['x'], **kwargs)
 
 
+
 class Loss:
     def __init__(self, vocab_size, nctx):
         self.vocab_size = vocab_size
@@ -37,7 +38,9 @@ class Loss:
         features['src_len'] = tf.repeat(tf.shape(features['x'])[-1], tf.shape(features['x'])[0])
         features['dst'] = labels
         logits = model(features)
+        labels = labels[:, 1:]
         loss_mask = tf.cast(labels != 0, tf.float32)
+        logits = logits[:, :-1, :]
         losses = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=labels)
         losses = losses * loss_mask
         losses = tf.reduce_sum(losses)
