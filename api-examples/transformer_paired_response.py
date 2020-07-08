@@ -1,12 +1,13 @@
 import numpy as np
 import torch
 import logging
+from eight_mile.utils import listify
 import os
 import glob
 from argparse import ArgumentParser
 import baseline
 from transformer_utils import TiedEmbeddingsSeq2SeqModel, find_latest_checkpoint
-
+from eight_mile.pytorch.serialize import load_transformer_seq2seq_npz
 from eight_mile.utils import str2bool, read_json, Offsets, revlut
 from baseline.vectorizers import Token1DVectorizer, BPEVectorizer1D
 
@@ -45,6 +46,7 @@ def decode_sentence(model, vectorizer, query, word2index, index2word, device, ma
 def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, d_k, activation, checkpoint_name):
     if len(rpr_k) == 0 or rpr_k[0] < 1:
         rpr_k = None
+    rpr_k = listify(rpr_k)
     logger.info("Creating tied encoder decoder model")
     hps = {"dsz": d_model,
            "hsz": d_model,
@@ -59,7 +61,10 @@ def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, d_k, a
            "activation": activation,
            "rpr_k": rpr_k}
     model = TiedEmbeddingsSeq2SeqModel(embeddings, **hps)
-    model.load_state_dict(torch.load(checkpoint_name))
+    if checkpoint_name.endswith('npz'):
+        load_transformer_seq2seq_npz(model, checkpoint_name)
+    else:
+        model.load_state_dict(torch.load(checkpoint_name))
     model.eval()
     print(model)
     return model
@@ -78,15 +83,15 @@ def run():
     parser.add_argument("--d_ff", type=int, default=2048, help="FFN dimension")
     parser.add_argument("--d_k", type=int, default=None, help="Dimension per head.  Use if num_heads=1 to reduce dims")
     parser.add_argument("--num_heads", type=int, default=8, help="Number of heads")
-    parser.add_argument("--num_layers", type=int, default=6, help="Number of layers")
-    parser.add_argument("--nctx", type=int, default=64, help="Max context length (for both encoder and decoder)")
-    parser.add_argument("--embed_type", type=str, default='learned-positional',
+    parser.add_argument("--num_layers", type=int, default=8, help="Number of layers")
+    parser.add_argument("--nctx", type=int, default=256, help="Max context length (for both encoder and decoder)")
+    parser.add_argument("--embed_type", type=str, default='default',
                         help="register label of the embeddings, so far support positional or learned-positional")
     parser.add_argument("--subword_model_file", type=str, required=True)
     parser.add_argument("--subword_vocab_file", type=str, required=True)
     parser.add_argument("--activation", type=str, default='relu')
     parser.add_argument('--rpr_k', help='Relative attention positional sizes pass 0 if you dont want relative attention',
-                        type=int, default=[3, 5, 48, 48, 48, 48], nargs='+')
+                        type=int, default=[48]*8, nargs='+')
 
     parser.add_argument("--device", type=str,
                         default="cuda" if torch.cuda.is_available() else "cpu",
@@ -101,11 +106,14 @@ def run():
     vocab_file = args.vocab
 
     if os.path.isdir(args.checkpoint):
-        vocab_file = os.path.join(args.checkpoint, 'vocabs.json')
+        if not vocab_file:
+            vocab_file = os.path.join(args.checkpoint, 'vocabs.json')
         checkpoint, _ = find_latest_checkpoint(args.checkpoint)
         logger.warning("Found latest checkpoint %s", checkpoint)
     else:
         checkpoint = args.checkpoint
+        if not vocab_file:
+            vocab_file = os.path.join(os.path.dirname(checkpoint), 'vocabs.json')
 
 
     vocab = read_json(vocab_file)
