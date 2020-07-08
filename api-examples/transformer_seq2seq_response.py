@@ -15,13 +15,20 @@ logger = logging.getLogger(__file__)
 
 
 def decode_sentence(model, vectorizer, query, word2index, index2word, device, max_response_length, sample=True):
+    UNK = word2index.get('<UNK>')
+    MASK = word2index.get('[MASK]')
     vec, length = vectorizer.run(query, word2index)
+
+    for i in range(length):
+        if vec[i] == UNK:
+            vec[i] = MASK
+
     toks = torch.from_numpy(vec).unsqueeze(0).to(device=device)
     length = torch.from_numpy(np.array(length)).unsqueeze(0).to(device=device)
     EOU = word2index.get('<EOU>')
     response = []
     with torch.no_grad():
-        dst = [Offsets.GO]
+        dst = [Offsets.PAD]
         for i in range(max_response_length):
             dst_tensor = torch.zeros_like(toks).squeeze()
             dst_tensor[:len(dst)] = torch.from_numpy(np.array(dst)).to(device=device)
@@ -63,6 +70,7 @@ def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, d_k, a
     model = TiedEmbeddingsSeq2SeqModel(embeddings, **hps)
     if checkpoint_name.endswith('npz'):
         load_transformer_seq2seq_npz(model, checkpoint_name)
+        model.decoder.preds.weight = torch.nn.Parameter(model.decoder.tgt_embeddings.embeddings.weight)
     else:
         model.load_state_dict(torch.load(checkpoint_name))
     model.eval()
@@ -92,7 +100,7 @@ def run():
     parser.add_argument("--activation", type=str, default='relu')
     parser.add_argument('--rpr_k', help='Relative attention positional sizes pass 0 if you dont want relative attention',
                         type=int, default=[48]*8, nargs='+')
-
+    parser.add_argument("--use_cls", type=str2bool, default=True)
     parser.add_argument("--device", type=str,
                         default="cuda" if torch.cuda.is_available() else "cpu",
                         help="Device (cuda or cpu)")
@@ -120,12 +128,15 @@ def run():
     # If we are not using chars, then use 'x' for both input and output
     preproc_data = baseline.embeddings.load_embeddings('x', dsz=args.d_model, counts=False, known_vocab=vocab, embed_type=args.embed_type)
     embeddings = preproc_data['embeddings']
-
+    vocab = preproc_data['vocab']
     model = create_model(embeddings, d_model=args.d_model, d_ff=args.d_ff, num_heads=args.num_heads, num_layers=args.num_layers,
                          rpr_k=args.rpr_k, d_k=args.d_k, checkpoint_name=checkpoint, activation=args.activation)
     model.to(args.device)
 
-    vectorizer = BPEVectorizer1D(model_file=args.subword_model_file, vocab_file=args.subword_vocab_file, mxlen=args.nctx)
+    cls = None if not args.use_cls else '[CLS]'
+    vectorizer = BPEVectorizer1D(model_file=args.subword_model_file, vocab_file=args.subword_vocab_file,
+                                 mxlen=args.nctx, emit_begin_tok=cls)
+
     index2word = revlut(vocab)
     print('[Query]', args.query)
     print('[Response]', ' '.join(decode_sentence(model, vectorizer, args.query.split(), vocab, index2word, args.device, max_response_length=args.nctx, sample=args.sample)))
