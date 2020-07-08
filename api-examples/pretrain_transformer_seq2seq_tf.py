@@ -14,7 +14,7 @@ from baseline.vectorizers import BPEVectorizer1D
 from eight_mile.optz import *
 from eight_mile.tf.optz import *
 from baseline.tf.seq2seq.model import Seq2SeqModel
-from eight_mile.tf.serialize import save_tlm_npz
+from eight_mile.tf.serialize import save_transformer_seq2seq_npz
 
 logger = logging.getLogger(__file__)
 
@@ -331,7 +331,7 @@ def train():
                     logger.warning("Convert only flag specified.  Stopping after one step")
                     steps = optimizer.global_step.numpy()
                     npz_checkpoint = os.path.join(args.basedir, f'checkpoint-step-{steps}.npz')
-                    save_tlm_npz(model, npz_checkpoint)
+                    save_transformer_seq2seq_npz(model, npz_checkpoint)
                     return
 
                 if (i + 1) % report_on == 0:
@@ -344,7 +344,7 @@ def train():
                     if args.npz:
                         steps = optimizer.global_step.numpy()
                         npz_checkpoint = os.path.join(args.basedir, f'checkpoint-step-{steps}.npz')
-                        save_tlm_npz(model, npz_checkpoint)
+                        save_transformer_seq2seq_npz(model, npz_checkpoint)
 
             # How much time elapsed in minutes
             elapsed = (time.time() - start) / 60

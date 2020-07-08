@@ -2473,8 +2473,8 @@ class TransformerEncoder(tf.keras.layers.Layer):
 class TransformerDecoder(tf.keras.layers.Layer):
     def __init__(
         self,
-        d_model: int,
         num_heads: int,
+        d_model: int,
         pdrop: float,
         scale: bool = True,
         activation_type: str = "relu",
@@ -2676,12 +2676,12 @@ class TransformerDiscriminator(tf.keras.Model):
 class TransformerDecoderStack(tf.keras.layers.Layer):
     def __init__(
         self,
-        d_model: int,
         num_heads: int,
+        d_model: int,
         pdrop: float,
         scale: bool = True,
         layers: int = 1,
-        activation: str = "relu",
+        activation_type: str = "relu",
         d_ff: Optional[int] = None,
         d_k: Optional[int] = None,
         rpr_k: Optional[Union[int, List[int]]] = None,
@@ -2693,10 +2693,16 @@ class TransformerDecoderStack(tf.keras.layers.Layer):
     ):
         super().__init__(name=name)
         self.decoders = []
-        self.ln = tf.identity if layer_norms_after else tf.keras.layers.LayerNormalization(epsilon=1e-6)
+        self.ln = tf.identity if layer_norms_after else tf.keras.layers.LayerNormalization(epsilon=layer_norm_eps)
+
+        if not is_sequence(rpr_k):
+            rpr_k = [rpr_k] * layers
+
         for i in range(layers):
             self.decoders.append(
-                TransformerDecoder(d_model, num_heads, pdrop, scale, activation, d_ff, ffn_pdrop=ffn_pdrop)
+                TransformerDecoder(num_heads, d_model, pdrop, scale, activation_type, d_ff,
+                                   d_k=d_k, rpr_k=rpr_k[i], ffn_pdrop=ffn_pdrop,
+                                   layer_norms_after=layer_norms_after, layer_norm_eps=layer_norm_eps)
             )
 
     def call(self, inputs):

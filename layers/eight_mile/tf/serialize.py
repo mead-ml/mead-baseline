@@ -1,6 +1,6 @@
 import numpy as np
 from typing import Dict, List
-from eight_mile.tf.layers import TransformerEncoderStack, TransformerEncoder, MultiHeadedAttention, FFN
+from eight_mile.tf.layers import TransformerEncoderStack, TransformerEncoder, TransformerDecoderStack, TransformerDecoder, MultiHeadedAttention, FFN
 from eight_mile.tf.embeddings import LookupTableEmbeddings, LearnedPositionalLookupTableEmbeddingsWithBias, LearnedPositionalLookupTableEmbeddings
 
 import tensorflow as tf
@@ -128,6 +128,23 @@ def from_encoder_array(tf_encoder: TransformerEncoder, d: Dict, name: str):
     from_ffn_array(tf_encoder.ffn, d, f"{name}/ffn")
 
 
+def to_decoder_array(tf_decoder: TransformerDecoder, name: str) -> Dict:
+    """Convert a `TransformerDeccoder` layer to an set of numpy arrays
+
+    :param tf_decoder: A `TransformerDecoder` layer
+    :param name: The layer name
+    :return: A Dict of arrays by key
+    """
+    d = {}
+    d.update(to_weight_array(tf_decoder.ln1, f"{name}/ln1"))
+    d.update(to_weight_array(tf_decoder.ln2, f"{name}/ln2"))
+    d.update(to_weight_array(tf_decoder.ln2, f"{name}/ln3"))
+    d.update(to_attn_array(tf_decoder.self_attn, f"{name}/self_attn"))
+    d.update(to_attn_array(tf_decoder.src_attn, f"{name}/src_attn"))
+    d.update(to_ffn_array(tf_decoder.ffn, f"{name}/ffn"))
+    return d
+
+
 def to_embed_array(tf_embed: tf.keras.layers.Layer, name: str) -> Dict:
     """Convert positional embedding to a `weights` array, if it's learned positional embedding,
     save the pos_weight as well.
@@ -205,6 +222,24 @@ def from_encoder_stack_array(tf_encoder_stack: TransformerEncoderStack, d: Dict,
         from_encoder_array(enc_tf, d, f"{name}/{i}")
 
 
+
+def to_decoder_stack_array(
+    tf_decoder_stack: TransformerDecoderStack, name: str = "TransformerDecoderStack"
+) -> Dict:
+    """Convert a `TransformerEncoderStack` to a set of weigths
+
+    :param tf_encoder_stack: A transformer encoder stack
+    :param name: A name
+    :return: A Dict containing a set of weights
+    """
+    d = {}
+    if isinstance(tf_decoder_stack.ln, tf.keras.layers.LayerNormalization):
+        d.update(to_weight_array(tf_decoder_stack.ln, f"{name}/ln"))
+    for i, dec_tf in enumerate(tf_decoder_stack.decoders):
+        d.update(to_decoder_array(dec_tf, f"{name}/{i}"))
+    return d
+
+
 def to_tlm_array(tf_tlm: tf.keras.layers.Layer, embeddings_keys: List[str] = None, name: str = "TLM") -> Dict:
     """Convert a Transformer LM-type module to a set of weights in a Dict
 
@@ -256,7 +291,7 @@ def from_tlm_array(tf_tlm: tf.keras.layers.Layer, d: Dict, embeddings_keys: List
 def save_tlm_npz(tf_tlm: tf.keras.layers.Layer, npz: str, embeddings_keys: List[str] = None, name: str = "TLM", verbose: bool = False):
     """Save a TLM to an NPZ file
 
-    :param pytorch_tlm: A Transformer LM-type module
+    :param tf_tlm: A Transformer LM-type module
     :param npz: A file to save
     :param embeddings_keys: A key to get embeddings from.  Defaults to `None`, in which case, all embeddings are written
     :param name: A name for this TLM
@@ -267,6 +302,37 @@ def save_tlm_npz(tf_tlm: tf.keras.layers.Layer, npz: str, embeddings_keys: List[
     if verbose:
         print(d.keys())
     np.savez(npz, **d)
+
+def save_transformer_seq2seq_npz(tf_seq2seq: tf.keras.layers.Layer, npz: str, src_embeddings_keys: List[str] = None,
+                                 tgt_embedding_key: str = 'y', name: str = "Seq2Seq", verbose: bool = False):
+    """Save a Transformer seq2seq file out
+
+    The will be in tf_seq2seq.encoder.transformer, and the usual conversions work for that (via `to_tlm_array()`).
+    The decoder requires a new converter for the portion containing attention weights between the encoder and the decoder
+
+    :param tf_seq2seq: A Transformer Seq2Seq module
+    """
+    #enc = to_tlm_array(tf_seq2seq.encoder, embeddings_keys, name=f'{name}/Encoder')
+
+    enc = {}
+    transformer = tf_seq2seq.encoder.transformer
+    enc.update(to_encoder_stack_array(transformer, name=f"{name}/TransformerEncoderStack"))
+    enc_keys_to_write = src_embeddings_keys if src_embeddings_keys else list(tf_seq2seq.src_embeddings.keys())
+
+    for embeddings_key in enc_keys_to_write:
+        enc.update(to_embed_array(tf_seq2seq.src_embeddings[embeddings_key], name=f"{name}/SrcEmbeddings/{embeddings_key}"))
+
+    dec = {}
+    transformer_decoder = tf_seq2seq.decoder.transformer_decoder
+
+
+    dec.update(to_decoder_stack_array(transformer_decoder, name=f"{name}/TransformerDecoderStack"))
+    dec.update(to_embed_array(tf_seq2seq.tgt_embedding, name=f"{name}/TgtEmbedding/{tgt_embedding_key}"))
+
+    if verbose:
+        print(enc.keys())
+        print(dec.keys())
+    np.savez(npz, **enc, **dec)
 
 
 def load_tlm_npz(tf_tlm: tf.keras.layers.Layer, npz: str, embeddings_key: str = 'x', name: str = "TLM"):
