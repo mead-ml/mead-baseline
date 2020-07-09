@@ -14,9 +14,10 @@ from baseline.vectorizers import Token1DVectorizer, BPEVectorizer1D
 logger = logging.getLogger(__file__)
 
 
-def decode_sentence(model, vectorizer, query, word2index, index2word, device, max_response_length, sample=True):
+def decode_sentence(model, vectorizer, query, word2index, index2word, device, max_response_length, sou_token, sample=True):
     UNK = word2index.get('<UNK>')
     MASK = word2index.get('[MASK]')
+    GO = word2index.get(sou_token)
     vec, length = vectorizer.run(query, word2index)
 
     for i in range(length):
@@ -28,7 +29,7 @@ def decode_sentence(model, vectorizer, query, word2index, index2word, device, ma
     EOU = word2index.get('<EOU>')
     response = []
     with torch.no_grad():
-        dst = [Offsets.PAD]
+        dst = [GO]
         for i in range(max_response_length):
             dst_tensor = torch.zeros_like(toks).squeeze()
             dst_tensor[:len(dst)] = torch.from_numpy(np.array(dst)).to(device=device)
@@ -101,6 +102,7 @@ def run():
     parser.add_argument('--rpr_k', help='Relative attention positional sizes pass 0 if you dont want relative attention',
                         type=int, default=[48]*8, nargs='+')
     parser.add_argument("--use_cls", type=str2bool, default=True)
+    parser.add_argument("--go_token", default="<GO>")
     parser.add_argument("--device", type=str,
                         default="cuda" if torch.cuda.is_available() else "cpu",
                         help="Device (cuda or cpu)")
@@ -139,6 +141,7 @@ def run():
 
     index2word = revlut(vocab)
     print('[Query]', args.query)
-    print('[Response]', ' '.join(decode_sentence(model, vectorizer, args.query.split(), vocab, index2word, args.device, max_response_length=args.nctx, sample=args.sample)))
+    print('[Response]', ' '.join(decode_sentence(model, vectorizer, args.query.split(), vocab, index2word, args.device,
+                                                 max_response_length=args.nctx, sou_token=args.go_token, sample=args.sample)))
 
 run()
