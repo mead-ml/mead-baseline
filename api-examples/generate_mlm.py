@@ -23,8 +23,8 @@ def decode_sentence(model, vectorizer, query, word2index, index2word, device, sa
         if vec[i] == UNK:
             vec[i] = MASK
 
-    detok = [index2word[v] for v in vec if v != 0]
-    print('[De-tok] ' + ' '.join(detok))
+    bpe = [index2word[v] for v in vec if v != 0]
+    print('[BPE] ' + ' '.join(bpe))
     toks = torch.from_numpy(vec).unsqueeze(0).to(device=device)
 
     length = torch.from_numpy(np.array(length)).unsqueeze(0).to(device=device)
@@ -141,6 +141,8 @@ def run():
     vectorizer = BPEVectorizer1D(model_file=args.subword_model_file, vocab_file=args.subword_vocab_file, mxlen=args.nctx, emit_begin_tok=cls)
     index2word = revlut(vocab)
     print('[Query]', args.query)
-    print('[Response]', ' '.join(decode_sentence(model, vectorizer, args.query.split(), vocab, index2word, args.device, sample=args.sample, y_only=args.y_only)))
+    bpe_out = decode_sentence(model, vectorizer, args.query.split(), vocab, index2word, args.device, sample=args.sample, y_only=args.y_only)
+
+    print('[Response]', ' '.join(bpe_out))
 
 run()
