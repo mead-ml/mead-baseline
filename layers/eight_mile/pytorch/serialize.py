@@ -429,7 +429,7 @@ def from_decoder_stack_array(
         from_decoder_array(dec_pyt, d, f"{name}/{i}")
 
 
-def from_tlm_array(pytorch_tlm: nn.Module, d: Dict, embeddings_keys: List[str] = None, name: str = "TLM"):
+def from_tlm_array(pytorch_tlm: nn.Module, d: Dict, embeddings_keys: List[str] = None, name: str = "TLM", lm_head=False):
     """Restore a TLM-like model (possibly a `nn.Module` for fine-tuning)
 
     We just populate the `TransformerEncoderStack` and the embeddings from weights, all other values remain
@@ -439,6 +439,7 @@ def from_tlm_array(pytorch_tlm: nn.Module, d: Dict, embeddings_keys: List[str] =
     :param d: A Dict of weights to restore for each layer
     :param embeddings_keys: Name of embeddings to restore, defaults to `None`, in which case all embeddings are restored
     :param name: A name for this primitive
+    :param lm_head: Should we reload the LM head? We assume weights are tied and first embedding key is also target
     :return:
     """
     transformer = pytorch_tlm.transformer if hasattr(pytorch_tlm, 'transformer') else pytorch_tlm.generator
@@ -455,8 +456,12 @@ def from_tlm_array(pytorch_tlm: nn.Module, d: Dict, embeddings_keys: List[str] =
     if hasattr(pytorch_tlm.embeddings.reduction, 'ln'):
         from_weight_array(pytorch_tlm.embeddings.reduction.ln, d, f"{name}/Embeddings/reduction/ln")
 
+    if lm_head:
+        tgt_key = keys_to_restore[0]
+        pytorch_tlm.output_layer.weight = nn.Parameter(pytorch_tlm.embeddings[tgt_key].embeddings.weight)
 
-def load_tlm_npz(pytorch_tlm: nn.Module, npz: str, embeddings_keys: List[str] = None, name: str = "TLM"):
+
+def load_tlm_npz(pytorch_tlm: nn.Module, npz: str, embeddings_keys: List[str] = None, name: str = "TLM", lm_head=False):
     """Restore a TLM-like model (possibly a `nn.Module` for fine-tuning
 
     We just populate the `TransformerEncoderStack` and the embeddings from weights, all other values remain
@@ -466,10 +471,11 @@ def load_tlm_npz(pytorch_tlm: nn.Module, npz: str, embeddings_keys: List[str] = 
     :param npz: A file to restore the weights from
     :param embeddings_key: Name of embeddings to restore, defaults to `None` in which case we restore all embeddings
     :param name: A name for this primitive
+    :param lm_head: Should we reload the LM head? We assume weights are tied and first embedding key is also target
     :return:
     """
     d = np.load(npz)
-    from_tlm_array(pytorch_tlm, d, embeddings_keys, name)
+    from_tlm_array(pytorch_tlm, d, embeddings_keys, name, lm_head)
 
 
 def load_transformer_seq2seq_npz(pytorch_seq2seq: nn.Module, npz: str, src_embeddings_keys: List[str] = None,

@@ -54,8 +54,13 @@ def decode_sentence(model, vectorizer, query, word2index, index2word, device, sa
 
 
 def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, d_k, checkpoint_name, activation):
+    rpr_k = listify(rpr_k)
+
     if len(rpr_k) == 0 or rpr_k[0] < 1:
         rpr_k = None
+    elif len(rpr_k) == 1:
+        rpr_k = rpr_k[0]
+
     logger.info("Creating tied encoder decoder model")
     model = TransformerMaskedLanguageModel.create({'x': embeddings},
                                                   hsz=d_model,
@@ -70,8 +75,7 @@ def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, d_k, c
                                                   activation=activation,
                                                   src_keys=['x'], tgt_key='x')
     if checkpoint_name.endswith('npz'):
-        load_tlm_npz(model, checkpoint_name)
-        model.output_layer.weight = nn.Parameter(model.embeddings['x'].embeddings.weight)
+        load_tlm_npz(model, checkpoint_name, lm_head=True)
     else:
         tlm_load_state_dict(model, checkpoint_name)
     #model.load_state_dict(torch.load(checkpoint_name))
@@ -100,9 +104,9 @@ def run():
     parser.add_argument("--subword_model_file", type=str, required=True)
     parser.add_argument("--subword_vocab_file", type=str, required=True)
     parser.add_argument("--use_cls", type=str2bool, default=False)
-    parser.add_argument("--activation", type=str, default='relu')
+    parser.add_argument("--activation", type=str, default='gelu')
     parser.add_argument('--rpr_k', help='Relative attention positional sizes pass 0 if you dont want relative attention',
-                        type=int, default=[3, 5, 48, 48, 48, 48], nargs='+')
+                        type=int, default=[8], nargs='+')
 
     parser.add_argument("--device", type=str,
                         default="cuda" if torch.cuda.is_available() else "cpu",
