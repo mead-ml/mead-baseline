@@ -65,7 +65,7 @@ def train():
     parser.add_argument("--weight_decay", type=float, default=1.0e-2, help="Weight decay")
     parser.add_argument("--epochs", type=int, default=32, help="Num training epochs")
     parser.add_argument("--restart_from", type=str, help="Option allows you to restart from a previous checkpoint")
-    parser.add_argument("--restart_tt", type=str, help="Optional param for legacy checkpoints (step|epoch)")
+    parser.add_argument("--restart_tt", type=str, help="Optional param for legacy checkpoints", choices=['step', 'epoch', 'ignore'])
     parser.add_argument("--warmup_steps", type=int, default=10000, help="Num warmup steps")
     parser.add_argument("--saves_per_epoch", type=int, default=10, help="The number of checkpoints to save per epoch")
     parser.add_argument("--mlm", type=str2bool, default=True, help="Use Masked Language Model (MLM) objective")
@@ -193,9 +193,11 @@ def train():
             start_epoch = step_num
             global_step = start_epoch * steps_per_epoch
 
-        else:
+        elif tick_type == 'step':
             start_epoch = step_num // steps_per_epoch
             global_step = step_num
+        else:
+            logger.warning(f"The previous tick was {step_num} but command-line specifies to ignore, setting to 0")
 
         logger.info("Restarting from a previous checkpoint %s.\n\tStarting at global_step=%d, epoch=%d",
                     args.restart_from, global_step, start_epoch+1)

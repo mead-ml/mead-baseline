@@ -15,7 +15,7 @@ from transformer_utils import find_latest_checkpoint
 logger = logging.getLogger(__file__)
 
 
-def decode_sentence(model, vectorizer, query, word2index, index2word, device, sample=True):
+def decode_sentence(model, vectorizer, query, word2index, index2word, device, sample=True, y_only=False):
     vec, length = vectorizer.run(query, word2index)
     UNK = word2index.get('<UNK>')
     MASK = word2index.get('[MASK]')
@@ -32,11 +32,10 @@ def decode_sentence(model, vectorizer, query, word2index, index2word, device, sa
     with torch.no_grad():
         predictions, _ = model({'x': toks}, None)
         predictions = predictions.squeeze(0)
-        #predictions = model({'x': toks, 'src_len': length, 'h': None}).squeeze(0)
         words = []
         for i in range(length):
 
-            if vec[i] == MASK:
+            if vec[i] == MASK or y_only:
                 if not sample:
                     output = torch.argmax(predictions[i], -1).item()
                     word = index2word[output]
@@ -107,7 +106,7 @@ def run():
     parser.add_argument("--activation", type=str, default='gelu')
     parser.add_argument('--rpr_k', help='Relative attention positional sizes pass 0 if you dont want relative attention',
                         type=int, default=[8], nargs='+')
-
+    parser.add_argument("--y_only", type=str2bool, default=False)
     parser.add_argument("--device", type=str,
                         default="cuda" if torch.cuda.is_available() else "cpu",
                         help="Device (cuda or cpu)")
@@ -142,6 +141,6 @@ def run():
     vectorizer = BPEVectorizer1D(model_file=args.subword_model_file, vocab_file=args.subword_vocab_file, mxlen=args.nctx, emit_begin_tok=cls)
     index2word = revlut(vocab)
     print('[Query]', args.query)
-    print('[Response]', ' '.join(decode_sentence(model, vectorizer, args.query.split(), vocab, index2word, args.device, sample=args.sample)))
+    print('[Response]', ' '.join(decode_sentence(model, vectorizer, args.query.split(), vocab, index2word, args.device, sample=args.sample, y_only=args.y_only)))
 
 run()
