@@ -479,13 +479,19 @@ def load_tlm_npz(pytorch_tlm: nn.Module, npz: str, embeddings_keys: List[str] = 
 
 
 def load_transformer_seq2seq_npz(pytorch_seq2seq: nn.Module, npz: str, src_embeddings_keys: List[str] = None,
-                                 tgt_embedding_key: str = 'y', name: str = "Seq2Seq"):
+                                 tgt_embedding_key: str = 'y', name: str = "Seq2Seq", decode_head=False):
     """Save a Transformer seq2seq file out
 
     The will be in pytorch_seq2seq.encoder.transformer, and the usual conversions work for that (via `to_tlm_array()`).
     The decoder requires a new converter for the portion containing attention weights between the encoder and the decoder
 
     :param pytorch_seq2seq: A Transformer Seq2Seq module
+    :param npz: The file name
+    :param src_embeddings_keys: An optional list of the src embeddings keys to load, otherwise use what we find
+    :param tgt_embedding_key: An optional tgt embedding, otherwise assume 'y' (TODO: bad assumption?)
+    :param name: An optional name of the model in the NPZ, otherwise assume `Seq2Seq`
+    :param decode_head: If we want to use this model for fine-tuning, we need to reconstruct its decoder head, which
+      we assume to be tied to the target embeddings weight stored (which may also be the encoder LUT weights)
     """
 
     d = np.load(npz)
@@ -502,6 +508,9 @@ def load_transformer_seq2seq_npz(pytorch_seq2seq: nn.Module, npz: str, src_embed
 
     from_decoder_stack_array(transformer_decoder, d,  name=f"{name}/TransformerDecoderStack")
     from_embed_array(pytorch_seq2seq.decoder.tgt_embeddings, d, name=f"{name}/TgtEmbedding/{tgt_embedding_key}")
+
+    if decode_head:
+        pytorch_seq2seq.decoder.preds.weight = torch.nn.Parameter(pytorch_seq2seq.decoder.tgt_embeddings.embeddings.weight)
 
 
 def load_tlm_transformers_bin(pytorch_tlm: nn.Module, bin_file: str, replace_layers=BERT_HF_LAYER_MAP, replace_embeds=BERT_HF_EMBED_MAP):
