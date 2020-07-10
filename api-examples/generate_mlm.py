@@ -6,7 +6,7 @@ import glob
 from argparse import ArgumentParser
 import baseline
 #from eight_mile.pytorch.layers import EmbeddingsStack
-from eight_mile.pytorch.serialize import tlm_load_state_dict
+from eight_mile.pytorch.serialize import tlm_load_state_dict, load_tlm_npz
 from baseline.pytorch.lm import TransformerMaskedLanguageModel
 from eight_mile.utils import str2bool, read_json, Offsets, revlut
 from baseline.vectorizers import Token1DVectorizer, BPEVectorizer1D
@@ -54,8 +54,13 @@ def decode_sentence(model, vectorizer, query, word2index, index2word, device, sa
 
 
 def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, d_k, checkpoint_name, activation):
+    rpr_k = listify(rpr_k)
+
     if len(rpr_k) == 0 or rpr_k[0] < 1:
         rpr_k = None
+    elif len(rpr_k) == 1:
+        rpr_k = rpr_k[0]
+
     logger.info("Creating tied encoder decoder model")
     model = TransformerMaskedLanguageModel.create({'x': embeddings},
                                                   hsz=d_model,
@@ -69,7 +74,10 @@ def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, d_k, c
                                                   d_k=d_k,
                                                   activation=activation,
                                                   src_keys=['x'], tgt_key='x')
-    tlm_load_state_dict(model, checkpoint_name)
+    if checkpoint_name.endswith('npz'):
+        load_tlm_npz(model, checkpoint_name, lm_head=True)
+    else:
+        tlm_load_state_dict(model, checkpoint_name)
     #model.load_state_dict(torch.load(checkpoint_name))
     model.eval()
     print(model)
@@ -91,13 +99,14 @@ def run():
     parser.add_argument("--num_heads", type=int, default=8, help="Number of heads")
     parser.add_argument("--num_layers", type=int, default=8, help="Number of layers")
     parser.add_argument("--nctx", type=int, default=128, help="Max context length (for both encoder and decoder)")
-    parser.add_argument("--embed_type", type=str, default='positional',
+    parser.add_argument("--embed_type", type=str, default='default',
                         help="register label of the embeddings, so far support positional or learned-positional")
     parser.add_argument("--subword_model_file", type=str, required=True)
     parser.add_argument("--subword_vocab_file", type=str, required=True)
-    parser.add_argument("--activation", type=str, default='relu')
+    parser.add_argument("--use_cls", type=str2bool, default=False)
+    parser.add_argument("--activation", type=str, default='gelu')
     parser.add_argument('--rpr_k', help='Relative attention positional sizes pass 0 if you dont want relative attention',
-                        type=int, default=[3, 5, 48, 48, 48, 48], nargs='+')
+                        type=int, default=[8], nargs='+')
 
     parser.add_argument("--device", type=str,
                         default="cuda" if torch.cuda.is_available() else "cpu",
@@ -117,8 +126,10 @@ def run():
         logger.warning("Found latest checkpoint %s", checkpoint)
     else:
         checkpoint = args.checkpoint
+        vocab_file = os.path.join(os.path.dirname(checkpoint), 'vocabs.json')
 
     vocab = read_json(vocab_file)
+
     # If we are not using chars, then use 'x' for both input and output
     preproc_data = baseline.embeddings.load_embeddings('x', dsz=args.d_model, counts=False, known_vocab=vocab, embed_type=args.embed_type)
     embeddings = preproc_data['embeddings']
@@ -127,7 +138,8 @@ def run():
                          rpr_k=args.rpr_k, d_k=args.d_k, checkpoint_name=checkpoint, activation=args.activation)
     model.to(args.device)
 
-    vectorizer = BPEVectorizer1D(model_file=args.subword_model_file, vocab_file=args.subword_vocab_file, mxlen=args.nctx)
+    cls = None if not args.use_cls else '[CLS]'
+    vectorizer = BPEVectorizer1D(model_file=args.subword_model_file, vocab_file=args.subword_vocab_file, mxlen=args.nctx, emit_begin_tok=cls)
     index2word = revlut(vocab)
     print('[Query]', args.query)
     print('[Response]', ' '.join(decode_sentence(model, vectorizer, args.query.split(), vocab, index2word, args.device, sample=args.sample)))

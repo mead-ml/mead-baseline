@@ -303,6 +303,7 @@ def save_tlm_npz(tf_tlm: tf.keras.layers.Layer, npz: str, embeddings_keys: List[
         print(d.keys())
     np.savez(npz, **d)
 
+
 def save_transformer_seq2seq_npz(tf_seq2seq: tf.keras.layers.Layer, npz: str, src_embeddings_keys: List[str] = None,
                                  tgt_embedding_key: str = 'y', name: str = "Seq2Seq", verbose: bool = False):
     """Save a Transformer seq2seq file out
@@ -324,7 +325,6 @@ def save_transformer_seq2seq_npz(tf_seq2seq: tf.keras.layers.Layer, npz: str, sr
 
     dec = {}
     transformer_decoder = tf_seq2seq.decoder.transformer_decoder
-
 
     dec.update(to_decoder_stack_array(transformer_decoder, name=f"{name}/TransformerDecoderStack"))
     dec.update(to_embed_array(tf_seq2seq.tgt_embedding, name=f"{name}/TgtEmbedding/{tgt_embedding_key}"))
