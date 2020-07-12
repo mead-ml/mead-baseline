@@ -103,7 +103,7 @@ def run():
     parser.add_argument("--subword_model_file", type=str, required=True)
     parser.add_argument("--subword_vocab_file", type=str, required=True)
     parser.add_argument("--use_cls", type=str2bool, default=False)
-    parser.add_argument("--use_eou", type=str2bool, default=True)
+    parser.add_argument('--end_token', default='<EOU>')
     parser.add_argument("--activation", type=str, default='gelu')
     parser.add_argument('--rpr_k', help='Relative attention positional sizes pass 0 if you dont want relative attention',
                         type=int, default=[8], nargs='+')
@@ -125,8 +125,8 @@ def run():
         checkpoint = args.checkpoint
 
     cls = None if not args.use_cls else '[CLS]'
-    eou = None if not args.use_eou else '<EOU>'
-    vectorizer = BPEVectorizer1D(model_file=args.subword_model_file, vocab_file=args.subword_vocab_file, mxlen=args.nctx, emit_begin_tok=cls, emit_end_tok=eou)
+    end = args.end_token
+    vectorizer = BPEVectorizer1D(model_file=args.subword_model_file, vocab_file=args.subword_vocab_file, mxlen=args.nctx, emit_begin_tok=cls, emit_end_tok=end)
     vocab = vectorizer.vocab.copy()
     # If we are not using chars, then use 'x' for both input and output
     preproc_data = baseline.embeddings.load_embeddings('x', dsz=args.d_model, counts=False, known_vocab=vocab, embed_type=args.embed_type, preserve_vocab_indices=True)
