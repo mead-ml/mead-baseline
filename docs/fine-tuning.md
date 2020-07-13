@@ -127,8 +127,49 @@ create a similar class to one of those and change the portions you need (or subc
   `*PositionalEmbeddingsModel` or `LookupTableEmbeddingsModel` for your embeddings where possible to avoid having to
   create custom serializers/converters
 
+### Testing out your Pre-Trained model
+
+If you have pre-trained an MLM (like BERT) or an Encoder-Decoder (like T5), you might want to see what
+kinds of reconstructions it makes given some data.  For MLMs, use [generate_mlm](../api-examples/generate_mlm.py) to
+test out the model on various masked utterances:
+
+```
+$ python generate_mlm.py --sample true --rpr_k 48 --nctx 128 --subword_model_file codes.30k --subword_vocab_file vocab.30k --query " which do you <unk> , coke or <unk> . i prefer <unk> !" --checkpoint checkpoint-step-1208324.npz
+[Query] which do you <unk> , coke or <unk> . i prefer <unk> !
+[BPE] which do you [MASK] , coke or [MASK] . i prefer [MASK] ! <EOU>
+[Response] which do you prefer , coke or pepsi . i prefer coke ! <EOU>
+
+```
+
+To explore results from an encoder-decoder:
+
+```
+$ python transformer_seq2seq_response.py --subword_model_file codes.30k --subword_vocab_file vocab.30k --checkpoint checkpoint-step-483329.npz --device cpu --query "so <unk> vs coke what do you <unk> ." --sample true --go_token "<PAD>"
+
+[Query] so <unk> vs coke what do you <unk> . <EOU>
+[Response] so pepsi vs coke what do you think . <EOU>
+
+
+```
+
 ### Transformer Checkpoint conversion
 
 The checkpoints are written to NPZ format using the 8-mile library, which writes each layer from its native format into
 an NPZ and can hydrate a model from those checkpoints as well.  The checkpoints are roughly the same size as a PyTorch
 checkpoint.
+
+Please note that the checkpoints that are written during pre-training or export are headless as they are typically used
+for downstream processing.  However, for models with tied embeddings (most models), it is possible to restore
+the original language model or encoder-decoder, by properly resetting the `WeightTieDense` module. 
+For Masked Language models, use:
+
+```python
+load_tlm_npz(model, checkpoint_name, lm_head=True)
+```
+
+For Encoder-Decoder models, use:
+
+```python
+load_transformer_seq2seq_npz(model, checkpoint_name, decode_head=True)
+```
+
