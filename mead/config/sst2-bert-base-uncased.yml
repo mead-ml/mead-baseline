@@ -1,6 +1,6 @@
 backend: pytorch
 basedir: ./sst2-bert-base-uncased
-batchsz: 12
+batchsz: 32
 dataset: SST2
 features:
 - embeddings:
@@ -22,9 +22,10 @@ model:
 task: classify
 train:
   early_stopping_metric: acc
-  epochs: 5
-  eta: 4.0e-5
+  epochs: 20
+  eta: 1.0e-5
   optim: adamw
-  weight_decay: 1.0e-3
-
+  weight_decay: 1.0e-5
+  lr_scheduler_type: cosine
+  decay_steps: 48100
 unif: 0.1
