@@ -1,0 +1,57 @@
+import math
+from typing import List, Tuple, Union, Optional
+import torch
+from torch import nn
+import torch.nn.functional as F
+from eight_mile.pytorch.layers import SeqScaledDotProductRelativeAttention, SeqScaledWindowedRelativeAttention
+
+
+def make_rpr(rpr_key_emb, rpr_value_emb, rpr_k, seq_len):
+    seq = torch.arange(seq_len)
+    window_len = 2 * rpr_k
+    edges = seq.view(1, -1) - seq.view(-1, 1) + rpr_k
+    edges = torch.clamp(edges, 0, window_len)
+    return rpr_key_emb(edges), rpr_value_emb(edges)
+
+
+def unfold_rpr(rpr_key_emb, rpr_value_emb, rpr_k):
+    window_len = 2 * rpr_k + 1
+    window = torch.arange(window_len)
+    return rpr_key_emb(window), rpr_value_emb(window)
+
+
+num_heads = 4
+d_model = 64
+rpr_k = 11
+batchsize = 2
+nctx = 25600
+d_k = d_model // num_heads
+
+old = SeqScaledDotProductRelativeAttention(pdrop=0.)
+new = SeqScaledWindowedRelativeAttention(pdrop=0.)
+
+rpr_key_emb = torch.nn.Embedding(2 * rpr_k + 1, d_k)
+rpr_value_emb = torch.nn.Embedding(2 * rpr_k + 1, d_k)
+
+Q = torch.randn(batchsize, num_heads, nctx, d_k)
+K = torch.randn(batchsize, num_heads, nctx, d_k)
+V = torch.randn(batchsize, num_heads, nctx, d_k)
+seq_mask = torch.ones(batchsize, 1, 1, nctx)
+
+# manually create a ra_mask to prevent attention beyond rpr_k
+ones = torch.ones(nctx, nctx)
+ra_mask = torch.triu(ones, diagonal=-rpr_k) - torch.triu(ones, diagonal=rpr_k + 1)
+mask = seq_mask * ra_mask.unsqueeze(0).unsqueeze(0)
+rpr_key_old, rpr_value_old = make_rpr(rpr_key_emb, rpr_value_emb, rpr_k, nctx)
+old.eval()
+out_old = old((Q, K, V, rpr_key_old, rpr_value_old, mask))
+print(out_old.shape)
+
+# using the windowed relative attention with the original sequence mask
+rpr_key_new, rpr_value_new = unfold_rpr(rpr_key_emb, rpr_value_emb, rpr_k)
+new.eval()
+out_new = new((Q, K, V, rpr_key_new, rpr_value_new, seq_mask))
+print(out_new.shape)
+
+print((out_old - out_new).abs().max())
+print(((out_old - out_new)/out_old.abs()).max())
