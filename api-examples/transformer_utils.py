@@ -156,7 +156,7 @@ class PairedModel(nn.Module):
                  rpr_k=None,
                  reduction_d_k=64,
                  ff_pdrop=0.1,
-                 ra_masking=False):
+                 windowed_ra=False):
         super().__init__()
         if stacking_layers is None:
             stacking_layers = [d_model] * 3
@@ -165,7 +165,7 @@ class PairedModel(nn.Module):
         stacking_layers = listify(stacking_layers)
         transformer = TransformerEncoderStack(num_heads=num_heads, d_model=d_model,
                                               pdrop=dropout, layers=num_layers, activation='gelu', d_ff=d_ff,
-                                              d_k=d_k, rpr_k=rpr_k, ra_masking=ra_masking)
+                                              d_k=d_k, rpr_k=rpr_k, windowed_ra=windowed_ra)
         self.attention_layer = TwoHeadConcat(d_model, dropout, scale=False, d_k=reduction_d_k)
         self.transformer_layers = transformer
         self.embedding_layers = embeddings

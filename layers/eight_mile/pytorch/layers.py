@@ -2678,7 +2678,7 @@ class SeqDotProductRelativeAttention(SequenceSequenceRelativeAttention):
         return F.softmax(scores, dim=-1)
 
 
-class SeqScaledMaskedRelativeAttention(SequenceSequenceRelativeAttention):
+class SeqScaledWindowedRelativeAttention(SequenceSequenceRelativeAttention):
     """This class implements masked relative attention, i.e. preventing attention beyond rpr_k. For efficiency,
     _attention and _update are implemented in a different way."""
     def __init__(self, pdrop: float = 0.1, **kwargs):
@@ -2686,14 +2686,20 @@ class SeqScaledMaskedRelativeAttention(SequenceSequenceRelativeAttention):
 
     def _unfold_mask(self, mask, batchsz, rpr_k):
         """Transform mask into the unfolded format."""
-        window_len = 2 * rpr_k + 1
+        window_sz = 2 * rpr_k + 1
         T = mask.shape[3]
-        mask = mask.expand(batchsz, 1, T, T)  # expand sequence/subsequent mask into a uniform dim
-        mask = F.pad(mask, [rpr_k, rpr_k])  # pad both sides with rpr_k, [B, 1, T, T + 2*rpr_k]
-        seq = torch.arange(T + 2 * rpr_k)
-        indices = seq.unfold(0, window_len, 1)  # indices of a sliding window, [T, W]
-        indices = indices.unsqueeze(0).unsqueeze(0).expand(batchsz, 1, T, window_len).to(mask.device)
-        return torch.gather(mask, -1, indices)  # [B, 1, T, W]):
+        if mask.shape[2] > 1:  # mask is a subsequent mask [1, 1, T, T]
+            logger.warning("Using subsequent mask with long sequence may cause OOM error.")
+            mask = mask.expand(batchsz, 1, T, T)  # expand sequence/subsequent mask into a uniform dim
+            mask = F.pad(mask, [rpr_k, rpr_k])  # pad both sides with rpr_k, [B, 1, T, T + 2*rpr_k]
+            seq = torch.arange(T + 2 * rpr_k)
+            indices = seq.unfold(0, window_sz, 1)  # indices of a sliding window, [T, W]
+            indices = indices.unsqueeze(0).unsqueeze(0).expand(batchsz, 1, T, window_sz).to(mask.device)
+            return torch.gather(mask, -1, indices)  # [B, 1, T, W]):
+        else:  # mask is a sequence mask [B, 1, 1, T]
+            mask = F.pad(mask, [rpr_k, rpr_k])  # [B, 1, 1, T + 2*rpr_k]
+            unfolded = mask.unfold(-1, window_sz, 1)  # [B, 1, 1, T, W]
+            return unfolded.squeeze(1)  # [B, 1, T, W]
 
     def _attention(
             self, query: torch.Tensor, key: torch.Tensor, rpr_key: torch.Tensor, mask: Optional[torch.Tensor] = None
@@ -2704,7 +2710,7 @@ class SeqScaledMaskedRelativeAttention(SequenceSequenceRelativeAttention):
         :param query: a query for alignment. Can come from self in case of self-attn or decoder in case of E/D
         :param key: a set of keys from encoder or self
         :param mask: masking (for destination) to prevent seeing what we shouldnt
-        :param rpr_key: tensor of the rpr_key embeddings [window_sz, d_k]
+        :param rpr_key: tensor of the rpr_key embeddings [W, d_k]
         :return: A tensor that is [B, H, T, 1, W] to be matmul with values
         """
         B, H, T, d_k = query.shape
@@ -2840,7 +2846,7 @@ class MultiHeadedRelativeAttention(nn.Module):
         num_heads: int,
         d_model: int,
         rpr_k: int,
-        ra_masking: bool = False,
+        windowed_ra: bool = False,
         dropout: float = 0.1,
         scale: bool = False,
         d_k: Optional[int] = None,
@@ -2850,7 +2856,7 @@ class MultiHeadedRelativeAttention(nn.Module):
         :param num_heads: The number of heads
         :param d_model: The model hidden size
         :param rpr_k: distance within which relative positional embedding will be considered
-        :param ra_masking: whether prevent attention beyond rpr_k
+        :param windowed_ra: whether prevent attention beyond rpr_k
         :param dropout (``float``): The amount of dropout to use
         :param scale: Should we scale the dot product attention
         :param d_k: The low-order project per head.  This is normally `d_model // num_heads` unless set explicitly
@@ -2867,15 +2873,15 @@ class MultiHeadedRelativeAttention(nn.Module):
         self.rpr_k = rpr_k
         self.rpr_key = nn.Embedding(2 * rpr_k + 1, self.d_k)
         self.rpr_value = nn.Embedding(2 * rpr_k + 1, self.d_k)
-        self.ra_masking = ra_masking
+        self.windowed_ra = windowed_ra
         self.h = num_heads
         self.w_Q = Dense(d_model, self.d_k * self.h)
         self.w_K = Dense(d_model, self.d_k * self.h)
         self.w_V = Dense(d_model, self.d_k * self.h)
         self.w_O = Dense(self.d_k * self.h, d_model)
         if scale:
-            if ra_masking:
-                self.attn_fn = SeqScaledMaskedRelativeAttention(dropout)
+            if windowed_ra:
+                self.attn_fn = SeqScaledWindowedRelativeAttention(dropout)
             else:
                 self.attn_fn = SeqScaledDotProductRelativeAttention(dropout)
         else:
@@ -2891,7 +2897,7 @@ class MultiHeadedRelativeAttention(nn.Module):
         edges = torch.clamp(edges, 0, window_len)
         return self.rpr_key(edges), self.rpr_value(edges)
 
-    def get_rpr(self, device):
+    def make_windowed_rpr(self, device):
         window_len = 2 * self.rpr_k + 1
         window = torch.arange(window_len).to(device)
         return self.rpr_key(window), self.rpr_value(window)
@@ -2914,8 +2920,8 @@ class MultiHeadedRelativeAttention(nn.Module):
         key = self.w_K(key).view(batchsz, -1, self.h, self.d_k).transpose(1, 2)
         value = self.w_V(value).view(batchsz, -1, self.h, self.d_k).transpose(1, 2)
 
-        if self.ra_masking:
-            rpr_key, rpr_value = self.get_rpr(query.device)
+        if self.windowed_ra:
+            rpr_key, rpr_value = self.make_windowed_rpr(query.device)
         else:
             rpr_key, rpr_value = self.make_rpr(seq_len, query.device)
         x = self.attn_fn((query, key, value, rpr_key, rpr_value, mask))
@@ -2936,7 +2942,7 @@ class TransformerEncoder(nn.Module):
         d_ff: Optional[int] = None,
         d_k: Optional[int] = None,
         rpr_k: Optional[int] = None,
-        ra_masking: Optional[bool] = False,
+        windowed_ra: Optional[bool] = False,
         ffn_pdrop: Optional[float] = 0.0,
         layer_norms_after: bool = False,
         layer_norm_eps: float = 1.0e-6
@@ -2947,7 +2953,7 @@ class TransformerEncoder(nn.Module):
         self.d_model = d_model
         self.d_ff = d_ff if d_ff is not None else 4 * d_model
         if rpr_k is not None:
-            self.self_attn = MultiHeadedRelativeAttention(num_heads, d_model, rpr_k, ra_masking, pdrop, scale, d_k=d_k)
+            self.self_attn = MultiHeadedRelativeAttention(num_heads, d_model, rpr_k, windowed_ra, pdrop, scale, d_k=d_k)
         else:
             self.self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale=scale, d_k=d_k)
         self.ffn = nn.Sequential(
@@ -3049,7 +3055,7 @@ class TransformerEncoderStack(nn.Module):
         d_ff: Optional[int] = None,
         d_k: Optional[int] = None,
         rpr_k: Optional[Union[int, List[int]]] = None,
-        ra_masking: Optional[bool] = False,
+        windowed_ra: Optional[bool] = False,
         ffn_pdrop: Optional[float] = 0.0,
         layer_norms_after: bool = False,
         layer_norm_eps: float = 1.0e-6,
@@ -3067,7 +3073,7 @@ class TransformerEncoderStack(nn.Module):
             self.encoders.append(
                 TransformerEncoder(
                     num_heads, d_model, pdrop, scale, activation, d_ff, d_k,
-                    rpr_k=rpr_k[i], ra_masking=ra_masking, ffn_pdrop=ffn_pdrop,
+                    rpr_k=rpr_k[i], windowed_ra=windowed_ra, ffn_pdrop=ffn_pdrop,
                     layer_norms_after=layer_norms_after, layer_norm_eps=layer_norm_eps
                 )
             )

@@ -31,7 +31,7 @@ This file uses Baseline to train a Transformer model using fastBPE with query-re
   
 """
 def create_model(embeddings, d_model, d_ff, dropout, num_heads, num_layers, model_type, rpr_k, d_k, reduction_d_k,
-                 stacking_layers, ff_pdrop, ra_masking, logger):
+                 stacking_layers, ff_pdrop, windowed_ra, logger):
     if model_type == "encoder-decoder":
         logger.info("Creating tied encoder decoder model")
         hps = {"dsz": d_model,
@@ -49,7 +49,7 @@ def create_model(embeddings, d_model, d_ff, dropout, num_heads, num_layers, mode
     else:
         model = PairedModel(embeddings, d_model, d_ff, dropout, num_heads, num_layers, rpr_k=rpr_k, d_k=d_k,
                             reduction_d_k=reduction_d_k, stacking_layers=stacking_layers, ff_pdrop=ff_pdrop,
-                            ra_masking=ra_masking)
+                            windowed_ra=windowed_ra)
 
     logger.info(model)
     return model
@@ -71,7 +71,7 @@ def train():
 
     parser.add_argument("--num_heads", type=int, default=8, help="Number of heads")
     parser.add_argument("--num_layers", type=int, default=8, help="Number of layers")
-    parser.add_argument("--ra_masking", type=str2bool, default=False, help="whether prevent attention beyond rpr_k")
+    parser.add_argument("--windowed_ra", type=str2bool, default=False, help="whether prevent attention beyond rpr_k")
     parser.add_argument("--num_train_workers", type=int, default=4, help="Number train workers")
     parser.add_argument("--nctx", type=int, default=256, help="Max input length")
     parser.add_argument("--pattern", default='*.json', help="Glob pattern for data")
@@ -165,7 +165,7 @@ def train():
     model = create_model(embeddings, d_model=args.d_model, d_ff=args.d_ff, dropout=args.dropout,
                          num_heads=args.num_heads, num_layers=args.num_layers,
                          model_type=args.model_type, rpr_k=rpr_k, d_k=args.d_k, reduction_d_k=args.reduction_d_k,
-                         stacking_layers=args.stacking_layers, ff_pdrop=args.ff_pdrop, ra_masking=args.ra_masking,
+                         stacking_layers=args.stacking_layers, ff_pdrop=args.ff_pdrop, windowed_ra=args.windowed_ra,
                          logger=logger)
 
     model.to(args.device)
