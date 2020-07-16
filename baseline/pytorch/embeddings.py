@@ -1,7 +1,7 @@
 from baseline.embeddings import register_embeddings, create_embeddings
 from eight_mile.pytorch.embeddings import *
 from eight_mile.pytorch.serialize import load_tlm_npz, tlm_load_state_dict
-from eight_mile.utils import read_json, mime_type
+from eight_mile.utils import read_config_stream, mime_type
 from baseline.vectorizers import load_bert_vocab
 
 
@@ -96,7 +96,7 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
         # reference here
         vocab_file = kwargs.get('vocab_file')
         if vocab_file and vocab_file.endswith('.json'):
-            self.vocab = read_json(kwargs.get('vocab_file'))
+            self.vocab = read_config_stream(kwargs.get('vocab_file'))
         else:
             self.vocab = load_bert_vocab(kwargs.get('vocab_file'))
         self.cls_index = self.vocab['[CLS]']
