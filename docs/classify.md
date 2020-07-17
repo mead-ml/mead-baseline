@@ -63,6 +63,7 @@ We run each experiment 10 times and list the performance, configuration, and met
 | [sst2-lstm.json](../python/mead/config/sst2-lstm.json)           | SST2      | LSTM 2 Embeddings    |    acc | 88.57 | 0.443 | 87.59 | 89.24 |
 | [sst2-lstm-840b.json](../python/mead/config/sst2-lstm-840b.json) | SST2      | LSTM 1 Embedding     |    acc | 88.39 | 0.45  | 87.42 | 89.07 |
 | [sst2.json](../python/mead/config/sst2.json)                     | SST2      | CNN-3,4,5            |    acc | 87.32 | 0.31  | 86.60 | 87.58 |
+| [sst2-bert-base-uncased.yml](../python/mead/config/sst2-bert-base-uncased.yml)                     | SST2      | BERT-Base Fine-tuned |    acc | 93.45 | -     | -     | 94.07 |
 | [trec-cnn.yml](../python/mead/config/trec-cnn.yml)               | TREC-QA   | CNN-3                |    acc | 92.33 | 0.56  | 91.2  | 93.2  |
 | [ag-news-lstm.json](../python/mead/config/ag-news-lstm.json)     | AGNEWS    | LSTM 2 Embeddings    |    acc | 92.60 | 0.20  | 92.3  | 92.86 |
 | [ag-news.json](../python/mead/config/ag-news.json)               | AGNEWS    | CNN-3,4,5            |    acc | 92.51 | 0.199 | 92.07 | 92.83 |
