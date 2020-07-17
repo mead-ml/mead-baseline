@@ -50,7 +50,7 @@ These models are just defined as a final layer on top of some pre-trained, poole
 For example, we can fine-tune BERT using
 
 ```
-mead-train --config config/sst2-bert-base-uncased.yml --vecs hub:v1:vecs
+mead-train --config config/sst2-bert-base-uncased.yml
 ```
 
 
