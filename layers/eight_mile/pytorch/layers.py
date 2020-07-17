@@ -2679,7 +2679,7 @@ class SeqDotProductRelativeAttention(SequenceSequenceRelativeAttention):
 
 
 class SeqScaledWindowedRelativeAttention(SequenceSequenceRelativeAttention):
-    """This class implements masked relative attention, i.e. preventing attention beyond rpr_k. For efficiency,
+    """This class implements windowed relative attention, i.e. preventing attention beyond rpr_k. For efficiency,
     _attention and _update are implemented in a different way."""
     def __init__(self, pdrop: float = 0.1, **kwargs):
         super().__init__(pdrop=pdrop, **kwargs)
@@ -2688,7 +2688,7 @@ class SeqScaledWindowedRelativeAttention(SequenceSequenceRelativeAttention):
         """Transform mask into the unfolded format."""
         window_sz = 2 * rpr_k + 1
         T = mask.shape[3]
-        if mask.shape[2] > 1:  # mask is a subsequent mask [1, 1, T, T]
+        if mask.shape[2] > 1:  # mask is from a subsequent mask, with [1, 1, T, T] or [B, 1, T, T]
             logger.warning("Using subsequent mask with long sequence may cause OOM error.")
             mask = mask.expand(batchsz, 1, T, T)  # expand sequence/subsequent mask into a uniform dim
             mask = F.pad(mask, [rpr_k, rpr_k])  # pad both sides with rpr_k, [B, 1, T, T + 2*rpr_k]
