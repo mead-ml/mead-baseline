@@ -90,12 +90,32 @@ def extractor(filepath, cache_dir, extractor_func):
 
 
 @export
-def open_file_or_url(file, mode='r'):
+def get_file_or_url(file, cache=None):
+    """
+    Return itself if its a file, else downloaded.  If cache, use that
+    :param file: The file name
+    :param cache: A cache location, If `None`, just download
+    :return: The proper filename
+    """
+    if cache:
+        file = SingleFileDownloader(file, cache).download()
+    else:
+        file, _ = urlretrieve(file)
     if validate_url(file):
         logger.info(f'Downloading {file}')
-        file, _ = urlretrieve(file)
-        logger.debug(f'Local location {file}')
-    return open(file, mode)
+    return file
+
+
+@export
+def open_file_or_url(file, mode='r', cache=None):
+    """
+    Return handle to a file, if a url, download first. If cache, use that
+    :param file: The file name
+    :param model: The open mode
+    :param cache: A cache location, If `None`, just download
+    :return: The handle
+    """
+    return open(get_file_or_url(file, cache), mode)
 
 
 @export
