@@ -90,12 +90,12 @@ def extractor(filepath, cache_dir, extractor_func):
 
 
 @export
-def open_file_or_url(file, mode='r', buffering=None, encoding=None):
+def open_file_or_url(file, mode='r'):
     if validate_url(file):
         logger.info(f'Downloading {file}')
         file, _ = urlretrieve(file)
         logger.debug(f'Local location {file}')
-    return open(file, mode, buffering, encoding)
+    return open(file, mode)
 
 
 @export
