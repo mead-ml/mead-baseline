@@ -90,6 +90,15 @@ def extractor(filepath, cache_dir, extractor_func):
 
 
 @export
+def open_file_or_url(file, mode='r', buffering=None, encoding=None):
+    if validate_url(file):
+        logger.info(f'Downloading {file}')
+        file, _ = urlretrieve(file)
+        logger.debug(f'Local location {file}')
+    return open(file, mode, buffering, encoding)
+
+
+@export
 def web_downloader(url, path_to_save=None):
     # Use a class to simulate the nonlocal keyword in 2.7
     class Context: pg = None

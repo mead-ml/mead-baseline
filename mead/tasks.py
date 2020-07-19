@@ -171,10 +171,6 @@ class Task(object):
                 vectorizer_section['file'] = vec_file
             vectorizer_section['mxlen'] = vectorizer_section.get('mxlen', self.config_params.get('preproc', {}).get('mxlen', -1))
             vectorizer_section['mxwlen'] = vectorizer_section.get('mxwlen', self.config_params.get('preproc', {}).get('mxwlen', -1))
-            if 'model_file' in vectorizer_section:
-                vectorizer_section['model_file'] = SingleFileDownloader(vectorizer_section['model_file'], self.data_download_cache).download()
-            if 'vocab_file' in vectorizer_section:
-                vectorizer_section['vocab_file'] = SingleFileDownloader(vectorizer_section['vocab_file'], self.data_download_cache).download()
             if 'transform' in vectorizer_section:
                 vectorizer_section['transform_fn'] = eval(vectorizer_section['transform'])
             vectorizer = baseline.create_vectorizer(**vectorizer_section)

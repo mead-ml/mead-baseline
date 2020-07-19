@@ -275,10 +275,6 @@ class SeqPredictReader(object):
         label_vectorizer_spec = kwargs.get('label_vectorizer', None)
         if label_vectorizer_spec:
             cache = label_vectorizer_spec.get("data_download_cache", os.path.expanduser("~/.bl-data"))
-            if 'model_file' in label_vectorizer_spec:
-                label_vectorizer_spec['model_file'] = SingleFileDownloader(label_vectorizer_spec['model_file'], cache).download()
-            if 'vocab_file' in label_vectorizer_spec:
-                label_vectorizer_spec['vocab_file'] = SingleFileDownloader(label_vectorizer_spec['vocab_file'], cache).download()
             self.label_vectorizer = create_vectorizer(**label_vectorizer_spec)
         else:
             self.label_vectorizer = Dict1DVectorizer(fields='y', mxlen=mxlen)
