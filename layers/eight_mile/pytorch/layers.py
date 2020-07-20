@@ -2846,10 +2846,10 @@ class MultiHeadedRelativeAttention(nn.Module):
         num_heads: int,
         d_model: int,
         rpr_k: int,
-        windowed_ra: bool = False,
         dropout: float = 0.1,
         scale: bool = False,
         d_k: Optional[int] = None,
+        windowed_ra: bool = False,
     ):
         """Constructor for multi-headed attention
 
@@ -2942,10 +2942,10 @@ class TransformerEncoder(nn.Module):
         d_ff: Optional[int] = None,
         d_k: Optional[int] = None,
         rpr_k: Optional[int] = None,
-        windowed_ra: Optional[bool] = False,
         ffn_pdrop: Optional[float] = 0.0,
         layer_norms_after: bool = False,
-        layer_norm_eps: float = 1.0e-6
+        layer_norm_eps: float = 1.0e-6,
+        windowed_ra: Optional[bool] = False
     ):
         super().__init__()
         # to properly execute BERT models, we have to follow T2T and do layer norms after
@@ -2953,7 +2953,8 @@ class TransformerEncoder(nn.Module):
         self.d_model = d_model
         self.d_ff = d_ff if d_ff is not None else 4 * d_model
         if rpr_k is not None:
-            self.self_attn = MultiHeadedRelativeAttention(num_heads, d_model, rpr_k, windowed_ra, pdrop, scale, d_k=d_k)
+            self.self_attn = MultiHeadedRelativeAttention(num_heads, d_model, rpr_k, pdrop, scale, d_k=d_k,
+                                                          windowed_ra=windowed_ra)
         else:
             self.self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale=scale, d_k=d_k)
         self.ffn = nn.Sequential(
@@ -3055,10 +3056,10 @@ class TransformerEncoderStack(nn.Module):
         d_ff: Optional[int] = None,
         d_k: Optional[int] = None,
         rpr_k: Optional[Union[int, List[int]]] = None,
-        windowed_ra: Optional[bool] = False,
         ffn_pdrop: Optional[float] = 0.0,
         layer_norms_after: bool = False,
         layer_norm_eps: float = 1.0e-6,
+        windowed_ra: Optional[bool] = False,
         **kwargs,
     ):
         super().__init__()
@@ -3073,8 +3074,8 @@ class TransformerEncoderStack(nn.Module):
             self.encoders.append(
                 TransformerEncoder(
                     num_heads, d_model, pdrop, scale, activation, d_ff, d_k,
-                    rpr_k=rpr_k[i], windowed_ra=windowed_ra, ffn_pdrop=ffn_pdrop,
-                    layer_norms_after=layer_norms_after, layer_norm_eps=layer_norm_eps
+                    rpr_k=rpr_k[i], ffn_pdrop=ffn_pdrop, layer_norms_after=layer_norms_after,
+                    layer_norm_eps=layer_norm_eps, windowed_ra=windowed_ra
                 )
             )
 

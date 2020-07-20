@@ -2403,10 +2403,10 @@ class MultiHeadedRelativeAttention(tf.keras.layers.Layer):
         num_heads: int,
         d_model: int,
         rpr_k: int,
-        windowed_ra: bool = False,
         dropout: float = 0.1,
         scale: bool = False,
         d_k: Optional[int] = None,
+        windowed_ra: bool = False,
         name=None,
     ):
         """Constructor for multi-headed attention
@@ -2503,6 +2503,7 @@ class TransformerEncoder(tf.keras.layers.Layer):
         ffn_pdrop: Optional[float] = 0.0,
         layer_norms_after: bool = False,
         layer_norm_eps: float = 1.0e-6,
+        windowed_ra: bool = False,
         name: Optional[str] = None
     ):
         super().__init__(name=name)
@@ -2510,7 +2511,8 @@ class TransformerEncoder(tf.keras.layers.Layer):
         self.d_model = d_model
         self.d_ff = d_ff if d_ff is not None else 4 * d_model
         if rpr_k is not None:
-            self.self_attn = MultiHeadedRelativeAttention(num_heads, d_model, rpr_k, pdrop, scale, d_k=d_k)
+            self.self_attn = MultiHeadedRelativeAttention(num_heads, d_model, rpr_k, pdrop, scale, d_k=d_k,
+                                                          windowed_ra=windowed_ra)
         else:
             self.self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale=scale, d_k=d_k)
 
@@ -2601,6 +2603,7 @@ class TransformerEncoderStack(tf.keras.layers.Layer):
         ffn_pdrop: Optional[float] = 0.0,
         layer_norms_after: bool = False,
         layer_norm_eps: float = 1.0e-6,
+        windowed_ra: bool = False,
         name=None,
         **kwargs,
     ):
@@ -2617,7 +2620,7 @@ class TransformerEncoderStack(tf.keras.layers.Layer):
                 TransformerEncoder(
                     num_heads, d_model, pdrop, scale, activation, d_ff, d_k,
                     rpr_k=rpr_k[i], ffn_pdrop=ffn_pdrop,
-                    layer_norms_after=layer_norms_after, layer_norm_eps=layer_norm_eps,
+                    layer_norms_after=layer_norms_after, layer_norm_eps=layer_norm_eps, windowed_ra=windowed_ra,
                     name=name,
                 )
             )
