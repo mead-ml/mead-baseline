@@ -1,5 +1,6 @@
 import numpy as np
-import torch
+import pytest
+torch = pytest.importorskip("torch")
 from eight_mile.pytorch.layers import SeqScaledDotProductRelativeAttention, SeqScaledWindowedRelativeAttention, sequence_mask
 
 
