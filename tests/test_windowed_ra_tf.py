@@ -1,7 +1,7 @@
 import pytest
 import os
 import numpy as np
-import tensorflow as tf
+tf = pytest.importorskip("tensorflow")
 from eight_mile.utils import get_version
 from eight_mile.tf.layers import SeqScaledDotProductRelativeAttention, SeqScaledWindowedRelativeAttention, SET_TRAIN_FLAG, masked_fill
 
