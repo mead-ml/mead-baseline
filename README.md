@@ -1,10 +1,10 @@
 # MEAD Baseline
 
 MEAD Baseline is a library for reproducible deep learning research and fast model
-development for NLP. The library provides easily extensible abstractions and
-implementations for data loading, model development, training and export of deep
-learning architectures. It also provides implementations for high-performance,
-deep learning models for various NLP tasks, against which newly developed models
+development for NLP. It provides easily extensible abstractions and
+implementations for data loading, model development, training and export to production. 
+
+It also provides implementations of high-performance deep learning models for various NLP tasks, against which newly developed models
 can be compared. Deep learning experiments are hard to reproduce, MEAD
 provides functionalities to track them. The goal is to allow a researcher to
 focus on model development, delegating the repetitive tasks to the library.
@@ -41,11 +41,11 @@ cd ../
 pip install -e .
 ```
 
-This first installs `mead-layers` (8 mile) locally and then `mead-baseline`
+This first installs `mead-layers` AKA 8 mile, a tiny layers API containing PyTorch and TensorFlow primitives, locally and then `mead-baseline`
 
 ## A Note About Versions
 
-Deep Learning Frameworks are evolving quickly, and changes are not always
+Deep Learning Frameworks are evolving quickly and changes are not always
 backwards compatible. We recommend recent versions of whichever framework is being used underneath.  We currently run on TF versions between 1.13 and 2.2, and we recommend using at least TF 2.1.
 The PyTorch backend requires at least version 1.3.0, though we recommend using a more recent version.
 
