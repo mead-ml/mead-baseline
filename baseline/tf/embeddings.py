@@ -227,26 +227,20 @@ class TransformerLMEmbeddings(TensorFlowEmbeddings):
         layer_norms_after = kwargs.get('layer_norms_after', False)
         layer_norm_eps = kwargs.get('layer_norm_eps', 1e-12)
         activation = kwargs.get('activation', 'gelu')
+        windowed_ra = kwargs.get('windowed_ra', False)
         self.transformer = TransformerEncoderStack(num_heads, d_model=self.d_model, pdrop=pdrop, scale=True,
                                                    layers=num_layers, d_ff=d_ff, rpr_k=rpr_k, d_k=d_k,
-                                                   activation=activation,
-                                                   layer_norms_after=layer_norms_after, layer_norm_eps=layer_norm_eps)
+                                                   activation=activation, layer_norms_after=layer_norms_after,
+                                                   layer_norm_eps=layer_norm_eps, windowed_ra=windowed_ra)
         self.mlm = kwargs.get('mlm', False)
         self.finetune = kwargs.get('finetune', True)
-
-    def _model_mask(self, nctx):
-        """This function creates the mask that controls which token to be attended to depending on the model. A causal
-        LM should have a subsequent mask; and a masked LM should have no mask."""
-        if self.mlm:
-            return tf.fill([1, 1, nctx, nctx], 1.)
-        else:
-            return subsequent_mask(nctx)
 
     def encode(self, x):
         # the following line masks out the attention to padding tokens
         input_mask = tf.expand_dims(tf.expand_dims(tf.cast(tf.not_equal(x, 0), tf.float32), 1), 1)
-        # the following line builds mask depending on whether it is a causal lm or masked lm
-        input_mask = tf.multiply(input_mask, self._model_mask(x.shape[1]))
+        # A causal LM should have a subsequent mask; and a masked LM should have no mask
+        if not self.mlm:
+            input_mask = tf.multiply(input_mask, subsequent_mask(x.shape[1]))
         embedding = self.embed(x)
         embedding = self.proj_to_dsz(embedding)
         transformer_out = self.transformer((embedding, input_mask))

@@ -200,9 +200,11 @@ class TransformerLanguageModel(AbstractGeneratorLanguageModel):
         activation = kwargs.get('activation', 'gelu')
         layer_norm_eps = kwargs.get('layer_norm_eps', 1e-12)
         layer_norms_after = kwargs.get('layer_norms_after', False)
+        windowed_ra = kwargs.get('windowed_ra', False)
         return TransformerEncoderStack(num_heads, d_model=d_model, pdrop=pdrop, scale=scale,
                                        layers=layers, d_ff=d_ff, rpr_k=rpr_k, d_k=d_k,
-                                       activation=activation, layer_norm_eps=layer_norm_eps, layer_norms_after=layer_norms_after)
+                                       activation=activation, layer_norm_eps=layer_norm_eps,
+                                       layer_norms_after=layer_norms_after, windowed_ra=windowed_ra)
 
     def create_layers(self, embeddings, **kwargs):
         super().create_layers(embeddings, **kwargs)
@@ -223,6 +225,4 @@ class TransformerLanguageModel(AbstractGeneratorLanguageModel):
 class TransformerMaskedLanguageModel(TransformerLanguageModel):
 
     def create_mask(self, bth):
-        T = bth.shape[1]
-        mask = torch.ones((1, 1, T, T)).type_as(bth)
-        return mask
+        return None

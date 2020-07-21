@@ -2245,6 +2245,73 @@ class SeqDotProductRelativeAttention(SequenceSequenceRelativeAttention):
         return tf.nn.softmax(scores, name="rel_attention_weights")
 
 
+def unfold_tensor(tensor, dim, window_sz):
+    """Unfold a tensor by applying a sliding window on a certain dimension with step 1 and padding of 0's. The window
+    dimension is added as the last dimension
+
+    :param tensor: the 4-d tensor to be unfolded, with shape [d_1, d_2, ..., T, ..., d_4]
+    :param dim: the dimension along which unfolding is applied
+    :param window_sz: sliding window size, need to be an odd number
+
+    :return: the unfolded tensor with shape [d_1, d_2, ..., T, ..., d_4, window_sz]
+    """
+    ksizes = [1] * len(tensor.shape)
+    ksizes[dim] = window_sz
+    ksizes = ksizes + [1]
+    strides = [1] * (len(tensor.shape) + 1)
+    return tf.extract_volume_patches(tf.expand_dims(tensor, -1), ksizes=ksizes, strides=strides, padding="SAME")
+
+
+class SeqScaledWindowedRelativeAttention(SequenceSequenceRelativeAttention):
+    """This class implements windowed relative attention, i.e. preventing attention beyond rpr_k. For efficiency,
+    _attention and _update are implemented in a different way."""
+    def __init__(self, pdrop: float = 0.1, name: str = "scaled_windowed_rel_attention", **kwargs):
+        super().__init__(pdrop=pdrop, name=name, **kwargs)
+
+    def _unfold_mask(self, mask, batchsz, rpr_k):
+        """Transform mask into the unfolded format."""
+        window_sz = 2 * rpr_k + 1
+        if mask.shape[2] > 1:  # mask is from a subsequent mask, with [1, 1, T, T] or [B, 1, T, T]
+            raise Exception("Windowed relative attention cannot be used with mask of size TxT.")
+        else:  # mask is a sequence mask [B, 1, 1, T]
+            mask = unfold_tensor(mask, dim=-1, window_sz=window_sz)  # [B, 1, 1, T, W]
+            return tf.squeeze(mask, axis=1)  # [B, 1, T, W]
+
+    def _attention(
+            self, query, key, rpr_key, mask = None):
+        """Implementation of attention considering RA masking: using tf.extract_volume_patches() to create an extra
+        dimension representing the sliding window. Then when applying matmul, Q, K, V share the same T dimension.
+        :param query: a query for alignment. Can come from self in case of self-attn or decoder in case of E/D
+        :param key: a set of keys from encoder or self
+        :param mask: masking (for destination) to prevent seeing what we shouldn't
+        :param rpr_key: tensor of the rpr_key embeddings [W, d_k]
+        :return: A tensor that is [B, H, T, 1, W] to be matmul with values
+        """
+        B, H, T, d_k = get_shape_as_list(query)
+        window_sz = rpr_key.shape[0]
+        rpr_k = (window_sz - 1) // 2
+        query = tf.expand_dims(query, -2)  # [B, H, T, 1, d_k]
+        key = unfold_tensor(key, dim=2, window_sz=window_sz)  # [B, H, T, d_k, W]
+        rpr_key = tf.expand_dims(tf.expand_dims(tf.expand_dims(tf.transpose(rpr_key), 0), 0), 0)  # [1, 1, 1, d_k, W]
+
+        scores_qk = tf.matmul(query, key)  # [B, H, T, 1, W]
+        scores_qrk = tf.matmul(query, rpr_key)  # [B, H, T, 1, W]
+        scores = (scores_qk + scores_qrk) / math.sqrt(d_k)
+        if mask is not None:
+            mask = tf.expand_dims(self._unfold_mask(mask, B, rpr_k), -2)  # [B, 1, T, 1, W]
+            scores = masked_fill(scores, tf.equal(mask, 0), -1e9)
+        return tf.nn.softmax(scores, name="rel_attention_weights")
+
+    def _update(self, a, value, rpr_value):
+        # a has dim [B, H, T, 1, W]
+        window_sz = a.shape[-1]
+        value = unfold_tensor(value, dim=2, window_sz=window_sz)  # [B, H, T, d_k, W]
+        rpr_value = tf.expand_dims(tf.expand_dims(tf.expand_dims(rpr_value, 0), 0), 0)  # [1, 1, 1, W, d_k]
+        updated_values = tf.matmul(a, value, transpose_b=True)  # [B, H, T, 1, d_k]
+        update_rpr_values = tf.matmul(a, rpr_value)  # [B, H, T, 1, d_k]
+        return tf.squeeze(updated_values + update_rpr_values)  # [B, H, T, d_k]
+
+
 class SeqDotProductAttention(SequenceSequenceAttention):
     def __init__(self, pdrop: float = 0.1, name: str = "dot_product_attention", **kwargs):
         super().__init__(pdrop, name=name, **kwargs)
@@ -2352,6 +2419,7 @@ class MultiHeadedRelativeAttention(tf.keras.layers.Layer):
         dropout: float = 0.1,
         scale: bool = False,
         d_k: Optional[int] = None,
+        windowed_ra: bool = False,
         name=None,
     ):
         """Constructor for multi-headed attention
@@ -2374,14 +2442,17 @@ class MultiHeadedRelativeAttention(tf.keras.layers.Layer):
         self.rpr_k = rpr_k
         self.rpr_key = tf.keras.layers.Embedding(2 * rpr_k + 1, self.d_k)
         self.rpr_value = tf.keras.layers.Embedding(2 * rpr_k + 1, self.d_k)
-
+        self.windowed_ra = windowed_ra
         self.h = num_heads
         self.w_Q = tf.keras.layers.Dense(units=self.d_k * self.h, name="query_projection")
         self.w_K = tf.keras.layers.Dense(units=self.d_k * self.h, name="key_projection")
         self.w_V = tf.keras.layers.Dense(units=self.d_k * self.h, name="value_projection")
         self.w_O = tf.keras.layers.Dense(units=self.d_k * self.h, name="output_projection")
         if scale:
-            self.attn_fn = SeqScaledDotProductRelativeAttention(dropout)
+            if windowed_ra:
+                self.attn_fn = SeqScaledWindowedRelativeAttention(dropout)
+            else:
+                self.attn_fn = SeqScaledDotProductRelativeAttention(dropout)
         else:
             self.attn_fn = SeqDotProductRelativeAttention(dropout)
         self.attn = None
@@ -2394,6 +2465,11 @@ class MultiHeadedRelativeAttention(tf.keras.layers.Layer):
         edges = tf.reshape(seq, [1, -1]) - tf.reshape(seq, [-1, 1]) + self.rpr_k
         edges = tf.clip_by_value(edges, 0, window_len)
         return self.rpr_key(edges), self.rpr_value(edges)
+
+    def make_windowed_rpr(self):
+        window_sz = 2 * self.rpr_k + 1
+        window = tf.range(window_sz)
+        return self.rpr_key(window), self.rpr_value(window)
 
     def call(self, qkvm):
         """Low-order projections of query, key and value into multiple heads, then attention application and dropout
@@ -2414,7 +2490,10 @@ class MultiHeadedRelativeAttention(tf.keras.layers.Layer):
         key = tf.transpose(tf.reshape(self.w_K(key), [batchsz, -1, self.h, self.d_k]), [0, 2, 1, 3])
         value = tf.transpose(tf.reshape(self.w_V(value), [batchsz, -1, self.h, self.d_k]), [0, 2, 1, 3])
 
-        rpr_key, rpr_value = self.make_rpr(seq_len)
+        if self.windowed_ra:
+            rpr_key, rpr_value = self.make_windowed_rpr()
+        else:
+            rpr_key, rpr_value = self.make_rpr(seq_len)
         x = self.attn_fn((query, key, value, rpr_key, rpr_value, mask))
         self.attn = self.attn_fn.attn
         # (B, H, T, D) -> (B, T, H, D) -> (B, T, H*D)
@@ -2437,6 +2516,7 @@ class TransformerEncoder(tf.keras.layers.Layer):
         ffn_pdrop: Optional[float] = 0.0,
         layer_norms_after: bool = False,
         layer_norm_eps: float = 1.0e-6,
+        windowed_ra: bool = False,
         name: Optional[str] = None
     ):
         super().__init__(name=name)
@@ -2444,7 +2524,8 @@ class TransformerEncoder(tf.keras.layers.Layer):
         self.d_model = d_model
         self.d_ff = d_ff if d_ff is not None else 4 * d_model
         if rpr_k is not None:
-            self.self_attn = MultiHeadedRelativeAttention(num_heads, d_model, rpr_k, pdrop, scale, d_k=d_k)
+            self.self_attn = MultiHeadedRelativeAttention(num_heads, d_model, rpr_k, pdrop, scale, d_k=d_k,
+                                                          windowed_ra=windowed_ra)
         else:
             self.self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale=scale, d_k=d_k)
 
@@ -2535,6 +2616,7 @@ class TransformerEncoderStack(tf.keras.layers.Layer):
         ffn_pdrop: Optional[float] = 0.0,
         layer_norms_after: bool = False,
         layer_norm_eps: float = 1.0e-6,
+        windowed_ra: bool = False,
         name=None,
         **kwargs,
     ):
@@ -2551,7 +2633,7 @@ class TransformerEncoderStack(tf.keras.layers.Layer):
                 TransformerEncoder(
                     num_heads, d_model, pdrop, scale, activation, d_ff, d_k,
                     rpr_k=rpr_k[i], ffn_pdrop=ffn_pdrop,
-                    layer_norms_after=layer_norms_after, layer_norm_eps=layer_norm_eps,
+                    layer_norms_after=layer_norms_after, layer_norm_eps=layer_norm_eps, windowed_ra=windowed_ra,
                     name=name,
                 )
             )

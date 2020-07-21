@@ -73,6 +73,7 @@ def train():
     parser.add_argument('--rpr_k',
                         help='Relative attention positional sizes pass 0 if you dont want relative attention',
                         type=int, default=[8], nargs='+')
+    parser.add_argument("--windowed_ra", type=str2bool, default=False, help="whether prevent attention beyond rpr_k")
     parser.add_argument("--device", type=str,
                         default="cuda" if torch.cuda.is_available() else "cpu",
                         help="Device (cuda or cpu)")
@@ -155,6 +156,7 @@ def train():
                        layers=args.num_layers,
                        rpr_k=rpr_k,
                        d_k=args.d_k,
+                       windowed_ra=args.windowed_ra,
                        src_keys=['x'], tgt_key='x')
     model.to(args.device)
     loss_function = model.create_loss()
