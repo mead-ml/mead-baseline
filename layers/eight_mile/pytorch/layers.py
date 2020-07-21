@@ -2678,6 +2678,24 @@ class SeqDotProductRelativeAttention(SequenceSequenceRelativeAttention):
         return F.softmax(scores, dim=-1)
 
 
+def unfold_tensor(tensor, dim, window_sz):
+    """Unfold a tensor by applying a sliding window on a certain dimension with step 1 and padding of 0's. The window
+    dimension is added as the last dimension
+
+    :param tensor: the tensor to be unfolded, with shape [d_1, d_2, ..., T, ..., d_n]
+    :param dim: the dimension along which unfolding is applied
+    :param window_sz: sliding window size, need to be an odd number
+
+    :return: the unfolded tensor with shape [d_1, d_2, ..., T, ..., d_n, window_sz]
+    """
+    half_window = (window_sz - 1) // 2
+    if dim < 0:
+        dim = len(tensor.shape) + dim
+    # torch.nn.functional.pad apply backwardly from the last dimension
+    padding = [0, 0] * (len(tensor.shape) - dim - 1) + [half_window, half_window]
+    return F.pad(tensor, padding).unfold(dim, window_sz, 1)
+
+
 class SeqScaledWindowedRelativeAttention(SequenceSequenceRelativeAttention):
     """This class implements windowed relative attention, i.e. preventing attention beyond rpr_k. For efficiency,
     _attention and _update are implemented in a different way."""
@@ -2697,8 +2715,7 @@ class SeqScaledWindowedRelativeAttention(SequenceSequenceRelativeAttention):
             indices = indices.unsqueeze(0).unsqueeze(0).expand(batchsz, 1, T, window_sz).to(mask.device)
             return torch.gather(mask, -1, indices)  # [B, 1, T, W]):
         else:  # mask is a sequence mask [B, 1, 1, T]
-            mask = F.pad(mask, [rpr_k, rpr_k])  # [B, 1, 1, T + 2*rpr_k]
-            unfolded = mask.unfold(-1, window_sz, 1)  # [B, 1, 1, T, W]
+            unfolded = unfold_tensor(mask, dim=-1, window_sz=window_sz)  # [B, 1, 1, T, W]
             return unfolded.squeeze(1)  # [B, 1, T, W]
 
     def _attention(
@@ -2717,7 +2734,7 @@ class SeqScaledWindowedRelativeAttention(SequenceSequenceRelativeAttention):
         window_sz = rpr_key.shape[0]
         rpr_k = (window_sz - 1) // 2
         query = query.unsqueeze(-2)  # [B, H, T, 1, d_k]
-        key = F.pad(key, [0, 0, rpr_k, rpr_k]).unfold(2, window_sz, 1)  # [B, H, T, d_k, W]
+        key = unfold_tensor(key, dim=2, window_sz=window_sz)  # [B, H, T, d_k, W]
         rpr_key = rpr_key.transpose(0, 1).unsqueeze(0).unsqueeze(0).unsqueeze(0)  # [1, 1, 1, d_k, W]
 
         scores_qk = torch.matmul(query, key)  # [B, H, T, 1, W]
@@ -2732,7 +2749,7 @@ class SeqScaledWindowedRelativeAttention(SequenceSequenceRelativeAttention):
         # a has dim [B, H, T, 1, W]
         window_sz = a.shape[-1]
         rpr_k = (window_sz - 1) // 2
-        value = F.pad(value, [0, 0, rpr_k, rpr_k]).unfold(2, window_sz, 1).transpose(-1, -2)  # [B, H, T, W, d_k]
+        value = unfold_tensor(value, dim=2, window_sz=window_sz).transpose(-1, -2)  # [B, H, T, W, d_k]
         rpr_value = rpr_value.unsqueeze(0).unsqueeze(0).unsqueeze(0)  # [1, 1, 1, W, d_k]
         updated_values = torch.matmul(a, value)  # [B, H, T, 1, d_k]
         update_rpr_values = torch.matmul(a, rpr_value)  # [B, H, T, 1, d_k]

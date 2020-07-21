@@ -2245,6 +2245,23 @@ class SeqDotProductRelativeAttention(SequenceSequenceRelativeAttention):
         return tf.nn.softmax(scores, name="rel_attention_weights")
 
 
+def unfold_tensor(tensor, dim, window_sz):
+    """Unfold a tensor by applying a sliding window on a certain dimension with step 1 and padding of 0's. The window
+    dimension is added as the last dimension
+
+    :param tensor: the 4-d tensor to be unfolded, with shape [d_1, d_2, ..., T, ..., d_4]
+    :param dim: the dimension along which unfolding is applied
+    :param window_sz: sliding window size, need to be an odd number
+
+    :return: the unfolded tensor with shape [d_1, d_2, ..., T, ..., d_4, window_sz]
+    """
+    ksizes = [1] * len(tensor.shape)
+    ksizes[dim] = window_sz
+    ksizes = ksizes + [1]
+    strides = [1] * (len(tensor.shape) + 1)
+    return tf.extract_volume_patches(tf.expand_dims(tensor, -1), ksizes=ksizes, strides=strides, padding="SAME")
+
+
 class SeqScaledWindowedRelativeAttention(SequenceSequenceRelativeAttention):
     """This class implements windowed relative attention, i.e. preventing attention beyond rpr_k. For efficiency,
     _attention and _update are implemented in a different way."""
@@ -2254,11 +2271,10 @@ class SeqScaledWindowedRelativeAttention(SequenceSequenceRelativeAttention):
     def _unfold_mask(self, mask, batchsz, rpr_k):
         """Transform mask into the unfolded format."""
         window_sz = 2 * rpr_k + 1
-        T = mask.shape[3]
         if mask.shape[2] > 1:  # mask is from a subsequent mask, with [1, 1, T, T] or [B, 1, T, T]
             raise Exception("Windowed relative attention cannot be used with mask of size TxT.")
         else:  # mask is a sequence mask [B, 1, 1, T]
-            mask = tf.extract_volume_patches(tf.expand_dims(mask, -1), [1, 1, 1, window_sz, 1], [1, 1, 1, 1, 1], "SAME")  # [B, 1, 1, T, W]
+            mask = unfold_tensor(mask, dim=-1, window_sz=window_sz)  # [B, 1, 1, T, W]
             return tf.squeeze(mask, axis=1)  # [B, 1, T, W]
 
     def _attention(
@@ -2275,9 +2291,7 @@ class SeqScaledWindowedRelativeAttention(SequenceSequenceRelativeAttention):
         window_sz = rpr_key.shape[0]
         rpr_k = (window_sz - 1) // 2
         query = tf.expand_dims(query, -2)  # [B, H, T, 1, d_k]
-        # using tf.extract_volume_patches() to add the dim W at last, to key
-        # key.shape: [B, H, T, d_k] -> [B, H, T, d_k, 1] -> [B, H, T, d_k, W]
-        key = tf.extract_volume_patches(tf.expand_dims(key, -1), [1, 1, window_sz, 1, 1], [1, 1, 1, 1, 1], "SAME")
+        key = unfold_tensor(key, dim=2, window_sz=window_sz)  # [B, H, T, d_k, W]
         rpr_key = tf.expand_dims(tf.expand_dims(tf.expand_dims(tf.transpose(rpr_key), 0), 0), 0)  # [1, 1, 1, d_k, W]
 
         scores_qk = tf.matmul(query, key)  # [B, H, T, 1, W]
@@ -2291,8 +2305,7 @@ class SeqScaledWindowedRelativeAttention(SequenceSequenceRelativeAttention):
     def _update(self, a, value, rpr_value):
         # a has dim [B, H, T, 1, W]
         window_sz = a.shape[-1]
-        rpr_k = (window_sz - 1) // 2
-        value = tf.extract_volume_patches(tf.expand_dims(value, -1), [1, 1, window_sz, 1, 1], [1, 1, 1, 1, 1], "SAME")  # [B, H, T, d_k, W]
+        value = unfold_tensor(value, dim=2, window_sz=window_sz)  # [B, H, T, d_k, W]
         rpr_value = tf.expand_dims(tf.expand_dims(tf.expand_dims(rpr_value, 0), 0), 0)  # [1, 1, 1, W, d_k]
         updated_values = tf.matmul(a, value, transpose_b=True)  # [B, H, T, 1, d_k]
         update_rpr_values = tf.matmul(a, rpr_value)  # [B, H, T, 1, d_k]
