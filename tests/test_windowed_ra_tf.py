@@ -29,6 +29,7 @@ def unfold_rpr(rpr_key_emb, rpr_value_emb, rpr_k):
     return rpr_key_emb(window), rpr_value_emb(window)
 
 
+@pytest.mark.skipif(get_version(tf) < 2, reason="needs tf2")
 def test_windowed_ra():
     num_heads = 4
     d_model = 64
