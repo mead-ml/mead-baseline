@@ -384,6 +384,10 @@ class SavableFastBPE:
         self.vocab = open(vocab_path, 'rb').read()
         self.bpe = fastBPE(codes_path, vocab_path)
 
+    @property
+    def subword_start(self):
+        return "@@"
+
     def __getstate__(self):
         return {'codes': self.codes, 'vocab': self.vocab}
 
@@ -749,6 +753,10 @@ class WordpieceTokenizer:
         self.vocab = vocab
         self.unk_token = unk_token
         self.max_input_chars_per_word = max_input_chars_per_word
+
+    @property
+    def subword_start(self):
+        return "##"
 
     def tokenize(self, text):
         """Tokenizes a piece of text into its word pieces.
