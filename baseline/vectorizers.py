@@ -936,9 +936,14 @@ class WordpieceDict1DVectorizer(WordpieceVectorizer1D):
     def iterable(self, tokens):
         yield '[CLS]'
         for t in tokens:
-            tok = t[self.field]
-            for subtok in self.tokenizer.tokenize(tok):
-                yield subtok
+            tok = t[self.field] if isinstance(t, dict) else t
+            if tok == '<unk>':
+                yield '[UNK]'
+            elif tok == '<EOS>':
+                yield '[SEP]'
+            else:
+                for subtok in self.tokenizer.tokenize(self.transform_fn(tok)):
+                    yield subtok
         yield '[SEP]'
 
 
