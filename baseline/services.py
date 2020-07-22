@@ -488,14 +488,17 @@ class TaggerService(Service):
         outputs = []
         for i, outcome in enumerate(predicted):
             output = []
-            for j, token in enumerate(tokens_batch[i]):
+            j = 0
+            for token in tokens_batch[i]:
                 new_token = dict()
                 new_token.update(token)
-                if self.return_labels:
-                    new_token[label_field] = outcome[j]
-                else:
-                    new_token[label_field] = self.label_vocab[outcome[j].item()]
+                label = outcome[j] if self.return_labels else self.label_vocab[outcome[j].item()]
+                while label == Offsets.VALUES[Offsets.PAD] and j < len(outcome) - 1:
+                    j += 1
+                    label = outcome[j] if self.return_labels else self.label_vocab[outcome[j].item()]
+                new_token[label_field] = label
                 output += [new_token]
+                j += 1
             outputs += [output]
         return outputs
 

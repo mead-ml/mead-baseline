@@ -83,7 +83,7 @@ class PytorchONNXExporter(Exporter):
         self.transpose = kwargs.get('transpose', False)
         self.tracing = kwargs.get('tracing', True)
         self.default_size = int(kwargs.get('default_size', 100))
-        self.onnx_opset = int(kwargs.get('onnx_opset', 11))
+        self.onnx_opset = int(kwargs.get('onnx_opset', 12))
 
     def apply_model_patches(self, model):
         return model
