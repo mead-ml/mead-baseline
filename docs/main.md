@@ -4,7 +4,7 @@ The workflow for developing a deep learning model using baseline is as follows:
 
 1. Map the problem to one of the existing tasks using a `<task, dataset>`
    tuple, eg., NER on CoNLL 2003 dataset is a `<tagger, conll-iobes>`.
-2. Use the existing implementations in Baseline or extend the base model class
+2. Use the existing implementations or extend the base model class
    to create a new architecture.
 3. Define a configuration file in MEAD and run an experiment.
 4. Use `xpctl` to compare the result with the previous experiments, commit the
