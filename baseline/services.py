@@ -492,8 +492,6 @@ class TaggerService(Service):
         outputs = []
         # Pick a random non-lengths key from the vectorized input, if one input was BPE'd they all had to be to stay aligned
         key = [k for k in vectorized_examples if not k.endswith("_lengths")][0]
-        # Get the subword start signal from the vectorizer's tokenizer. If there is none we return None
-        subword_start = getattr(getattr(self.vectorizers[key], "tokenizer", None), "subword_start", None)
         # For each item in a batch
         for i, outcome in enumerate(predicted):
             output = []
@@ -501,14 +499,10 @@ class TaggerService(Service):
             vectorized_example = vectorized_examples[key][i]
             # Convert back into strings, these will now be broken into subwords
             tokenized_text = [self.rev_vocab[key][t] for t in vectorized_example]
-            new_outcome = []
-            # Loop through all the tokens and collect the labels for the start of subwords
-            for j, t in enumerate(tokenized_text):
-                # If the subword start is None we are a normal vectorizer and want to collect everything
-                # If we start with the subword start we are part of a broken token and our label doesn't matter
-                # If we are the special tags from pre-training our labels don't matter
-                if subword_start is None or (not t.startswith(subword_start) and t not in ("[CLS]", "[SEP]", "[PAD]")):
-                    new_outcome.append(outcome[j] if self.return_labels else self.label_vocab[outcome[j].item()])
+            new_outcome = [
+                outcome[j] if self.return_labels else self.label_vocab[outcome[j].item()]
+                for j in self.vectorizers[key].valid_label_indices(tokenized_text)
+            ]
             # Loop through the (now aligned) og tokens and the labels
             for token, label in zip(tokens_batch[i], new_outcome):
                 new_token = deepcopy(token)
