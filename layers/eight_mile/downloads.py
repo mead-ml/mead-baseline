@@ -97,12 +97,13 @@ def get_file_or_url(file, cache=None):
     :param cache: A cache location, If `None`, just download
     :return: The proper filename
     """
-    if cache:
-        file = SingleFileDownloader(file, cache).download()
-    else:
-        file, _ = urlretrieve(file)
+
     if validate_url(file):
         logger.info(f'Downloading {file}')
+        if cache:
+            file = SingleFileDownloader(file, cache).download()
+        else:
+            file, _ = urlretrieve(file)
     return file
 
 
