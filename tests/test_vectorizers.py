@@ -244,6 +244,7 @@ def add_specials(tokens: List[str], specials: Set[str], start_prob: float = 0.5,
 
 
 def test_bpe_label_indices():
+    pytest.importorskip("fastBPE")
     num_tokens = random.randint(1, 100)
     tokens = [random_string() for _ in range(num_tokens)]
     bpe = BPEVectorizer1D(model_file=os.path.join(TEST_DATA, "codes.30k"), vocab_file=os.path.join(TEST_DATA, "vocab.30k"))
@@ -255,6 +256,7 @@ def test_bpe_label_indices():
 
 
 def test_bpe_label_indices_generator():
+    pytest.importorskip("fastBPE")
     num_tokens = random.randint(1, 100)
     tokens = [random_string() for _ in range(num_tokens)]
     bpe = BPEVectorizer1D(model_file=os.path.join(TEST_DATA, "codes.30k"), vocab_file=os.path.join(TEST_DATA, "vocab.30k"))
