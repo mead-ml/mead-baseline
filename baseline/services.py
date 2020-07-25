@@ -1,6 +1,7 @@
 import os
 import pickle
 import logging
+from copy import deepcopy
 from typing import Optional, List
 from collections import defaultdict
 import numpy as np
@@ -393,6 +394,7 @@ class TaggerService(Service):
             self.return_labels = False  # keeping the default tagger behavior
         if not self.return_labels:
             self.label_vocab = revlut(self.get_labels())
+        self.rev_vocab = {k: revlut(v) for k, v in self.vocabs.items()}
 
     @classmethod
     def task_name(cls):
@@ -481,25 +483,34 @@ class TaggerService(Service):
             examples = unfeaturized_examples
 
         outcomes = self.model.predict(examples)
-        return self.format_output(outcomes, tokens_batch=tokens_batch, label_field=label_field)
+        return self.format_output(outcomes, tokens_batch=tokens_batch, label_field=label_field, vectorized_examples=examples)
 
-    def format_output(self, predicted, tokens_batch=None, label_field='label', **kwargs):
+    def format_output(self, predicted, tokens_batch=None, label_field='label', vectorized_examples=None, **kwargs):
+        """This code got very messy dealing with BPE/WP outputs."""
         assert tokens_batch is not None
+        assert vectorized_examples is not None
         outputs = []
+        # Pick a random non-lengths key from the vectorized input, if one input was BPE'd they all had to be to stay aligned
+        key = [k for k in vectorized_examples if not k.endswith("_lengths")][0]
+        # For each item in a batch
         for i, outcome in enumerate(predicted):
             output = []
-            j = 0
-            for token in tokens_batch[i]:
-                new_token = dict()
-                new_token.update(token)
-                label = outcome[j] if self.return_labels else self.label_vocab[outcome[j].item()]
-                while label == Offsets.VALUES[Offsets.PAD] and j < len(outcome) - 1:
-                    j += 1
-                    label = outcome[j] if self.return_labels else self.label_vocab[outcome[j].item()]
+            # Extract the vectorized example for this batch element and the key we are choosing
+            vectorized_example = vectorized_examples[key][i]
+            # Convert back into strings, these will now be broken into subwords
+            tokenized_text = [self.rev_vocab[key][t] for t in vectorized_example]
+            new_outcome = [
+                outcome[j] if self.return_labels else self.label_vocab[outcome[j].item()]
+                for j in self.vectorizers[key].valid_label_indices(tokenized_text)
+            ]
+            # Loop through the (now aligned) og tokens and the labels
+            for token, label in zip(tokens_batch[i], new_outcome):
+                new_token = deepcopy(token)
+                # Our labels now have <PAD> in their vocab, if we see one just hide it with an "O"
+                label = "O" if label == Offsets.VALUES[Offsets.PAD] else label
                 new_token[label_field] = label
-                output += [new_token]
-                j += 1
-            outputs += [output]
+                output.append(new_token)
+            outputs.append(output)
         return outputs
 
 
@@ -522,7 +533,19 @@ class ONNXTaggerService(TaggerService):
         # Process each example in the batch by itself to hide the one at a time nature
         examples = [self.vectorize([tokens]) for tokens in tokens_batch]
         outcomes_list = np.concatenate([self.model.run(None, example)[0] for example in examples], axis=0)
-        return self.format_output(outcomes_list, tokens_batch, label_field=kwargs.get('label', 'label'))
+        return self.format_output(outcomes_list, tokens_batch, label_field=kwargs.get('label', 'label'), vectorized_examples=examples)
+
+    def format_output(self, *args, **kwargs):
+        """Because the ONNX service is hiding it's one at a time nature it is a List[Dict[str]] instead of a Dict[str, List]
+           So flip it so it can be processed by the normal format_output.
+        """
+        vectorized_examples = kwargs['vectorized_examples']
+        new_vec = defaultdict(list)
+        for key in vectorized_examples[0]:
+            for ve in vectorized_examples:
+                new_vec[key].append(ve[key][0])
+        kwargs['vectorized_examples'] = new_vec
+        return super().format_output(*args, **kwargs)
 
     def vectorize(self, tokens_batch):
         """Turn the input into that batch dict for prediction.

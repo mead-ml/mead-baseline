@@ -1,8 +1,26 @@
+import os
 import string
 import pytest
+import random
 import numpy as np
+from typing import Optional, List, Set, Tuple
+from itertools import chain
 from baseline.utils import Offsets
-from baseline.vectorizers import Char1DVectorizer, Char2DVectorizer, TextNGramVectorizer, DictTextNGramVectorizer
+from baseline.vectorizers import (
+    Token1DVectorizer,
+    Char1DVectorizer,
+    Char2DVectorizer,
+    TextNGramVectorizer,
+    DictTextNGramVectorizer,
+    BPEVectorizer1D,
+    WordpieceVectorizer1D,
+)
+
+TEST_DATA = os.path.join(os.path.realpath(os.path.dirname(__file__)), "test_data")
+
+def random_string(length: Optional[int] = None, min_: int = 3, max_: int = 6) -> str:
+    length = length if length is not None else random.randint(min_, max_ - 1)
+    return "".join(random.choice(string.ascii_letters) for _ in range(length))
 
 
 @pytest.fixture
@@ -125,3 +143,147 @@ def test_text_ngrams():
 
     a, length = v.run(tokens, vocab)
     assert np.allclose(a[:length], np.arange(0, len(tokens)))
+
+
+def test_default_label_indices():
+    num_tokens = random.randint(1, 100)
+    tokens = [random_string() for _ in range(num_tokens)]
+    vec = Token1DVectorizer()
+    assert vec.valid_label_indices(tokens) == [i for i in range(num_tokens)]
+
+
+def test_default_label_indices_generator():
+    num_tokens = random.randint(1, 100)
+    tokens = (random_string() for _ in range(num_tokens))
+    vec = Token1DVectorizer()
+    assert vec.valid_label_indices(tokens) == [i for i in range(num_tokens)]
+
+
+def bpe_tokens(
+    tokens: List[str],
+    break_p: float = 0.4,
+    specials: Set[str] = None,
+    sentinal: str = "@@"
+) -> Tuple[List[str], List[int]]:
+    specials = set() if specials is None else specials
+    indices = []
+    new_tokens = []
+    i = 0
+    for token in tokens:
+        if token in specials:
+            i += 1
+            new_tokens.append(token)
+            continue
+        indices.append(i)
+        subword = []
+        for c in token:
+            if random.random() > break_p:
+                subword.append(c)
+            else:
+                if subword:
+                    new_tokens.append("".join(chain(subword, [sentinal])))
+                    i += 1
+                subword = [c]
+        if subword:
+            new_tokens.append("".join(subword))
+        i += 1
+    return new_tokens, indices
+
+
+def break_wp(word: str, break_p: float = 0.4, sentinel: str = "##") -> List[str]:
+    subwords = []
+    subword = []
+    for c in word:
+        if random.random() > break_p:
+            subword.append(c)
+        else:
+            if subword:
+                subwords.append("".join(subword))
+            subword = [c]
+    if subword:
+        subwords.append("".join(subword))
+    subwords = [s if i == 0 else sentinel + s for i, s in enumerate(subwords)]
+    return subwords
+
+
+def wp_tokens(
+    tokens: List[str],
+    break_p: float=0.4,
+    specials: Set[str] = None,
+    sentinel: str = "##"
+) -> Tuple[List[str], List[int]]:
+    specials = set() if specials is None else specials
+    indices = []
+    new_tokens = []
+    i = 0
+    prev = False
+    for token in tokens:
+        if token in specials:
+            i += 1
+            new_tokens.append(token)
+            continue
+        indices.append(i)
+        subwords = break_wp(token, break_p, sentinel)
+        print(subwords)
+        new_tokens.extend(subwords)
+        i += len(subwords)
+    return new_tokens, indices
+
+
+def add_specials(tokens: List[str], specials: Set[str], start_prob: float = 0.5, insert_prob: float = 0.2) -> List[str]:
+    specials: List[str] = list(specials)
+    if random.random() < 0.5:
+        tokens.insert(0, specials[0])
+    i = 1
+    while i < len(tokens):
+        if random.random() < 0.2:
+            tokens.insert(i, random.choice(specials))
+            i += 1
+        i += 1
+    return tokens
+
+
+def test_bpe_label_indices():
+    pytest.importorskip("fastBPE")
+    num_tokens = random.randint(1, 100)
+    tokens = [random_string() for _ in range(num_tokens)]
+    bpe = BPEVectorizer1D(model_file=os.path.join(TEST_DATA, "codes.30k"), vocab_file=os.path.join(TEST_DATA, "vocab.30k"))
+    tokens = add_specials(tokens, bpe.special_tokens)
+    bpe_toks, gold_indices = bpe_tokens(tokens, specials=bpe.special_tokens)
+    indices = bpe.valid_label_indices(bpe_toks)
+    assert len(indices) == num_tokens
+    assert indices == gold_indices
+
+
+def test_bpe_label_indices_generator():
+    pytest.importorskip("fastBPE")
+    num_tokens = random.randint(1, 100)
+    tokens = [random_string() for _ in range(num_tokens)]
+    bpe = BPEVectorizer1D(model_file=os.path.join(TEST_DATA, "codes.30k"), vocab_file=os.path.join(TEST_DATA, "vocab.30k"))
+    tokens = add_specials(tokens, bpe.special_tokens)
+    bpe_toks, gold_indices = bpe_tokens(tokens, specials=bpe.special_tokens)
+    indices = bpe.valid_label_indices((t for t in bpe_toks))
+    assert len(indices) == num_tokens
+    assert indices == gold_indices
+
+
+def test_wp_label_indices():
+    num_tokens = random.randint(1, 10)
+    tokens = [random_string() for _ in range(num_tokens)]
+    wp = WordpieceVectorizer1D(vocab_file=os.path.join(TEST_DATA, "bert-base-uncased-vocab.txt"))
+    tokens = add_specials(tokens, wp.special_tokens)
+    wp_toks, gold_indices = wp_tokens(tokens, specials=wp.special_tokens, sentinel=wp.subword_sentinel)
+    indices = wp.valid_label_indices(wp_toks)
+    assert len(indices) == num_tokens
+    assert indices == gold_indices
+
+
+def test_wp_label_indices_generator():
+    num_tokens = random.randint(1, 10)
+    tokens = [random_string() for _ in range(num_tokens)]
+    wp = WordpieceVectorizer1D(vocab_file=os.path.join(TEST_DATA, "bert-base-uncased-vocab.txt"))
+    tokens = add_specials(tokens, wp.special_tokens)
+    wp_toks, gold_indices = wp_tokens(tokens, specials=wp.special_tokens, sentinel=wp.subword_sentinel)
+    indices = wp.valid_label_indices((t for t in wp_toks))
+    assert len(indices) == num_tokens
+    assert indices == gold_indices
