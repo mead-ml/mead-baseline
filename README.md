@@ -2,7 +2,7 @@
 
 MEAD Baseline is a library for reproducible deep learning research and fast model
 development for NLP. It provides easily extensible abstractions and
-implementations for data loading, model development, training and export to production. 
+implementations for data loading, model development, training, experiment tracking and export to production. 
 
 It also provides implementations of high-performance deep learning models for various NLP tasks, against which newly developed models
 can be compared. Deep learning experiments are hard to reproduce, MEAD
