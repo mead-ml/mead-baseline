@@ -1,6 +1,6 @@
 ## Workflow
 
-The workflow for developing a deep learning model using baseline is as follows:
+The workflow for developing a deep learning model using MEAD is as follows:
 
 1. Map the problem to one of the existing tasks using a `<task, dataset>`
    tuple, eg., NER on CoNLL 2003 dataset is a `<tagger, conll-iobes>`.
@@ -8,7 +8,7 @@ The workflow for developing a deep learning model using baseline is as follows:
    to create a new architecture.
 3. Define a configuration file in MEAD and run an experiment.
 4. Use `xpctl` to compare the result with the previous experiments, commit the
-   results to the leaderboard database and the model files to a persistent
+   results to the metrics database and the model files to a persistent
    storage if desired.
 
 Additionally, the base models provided by the library can be
