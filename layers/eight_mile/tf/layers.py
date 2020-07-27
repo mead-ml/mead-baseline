@@ -2311,7 +2311,7 @@ class SeqScaledWindowedRelativeAttention(SequenceSequenceRelativeAttention):
         rpr_value = tf.expand_dims(tf.expand_dims(tf.expand_dims(rpr_value, 0), 0), 0)  # [1, 1, 1, W, d_k]
         updated_values = tf.matmul(a, value)  # [B, H, T, 1, d_k]
         update_rpr_values = tf.matmul(a, rpr_value)  # [B, H, T, 1, d_k]
-        return tf.squeeze(updated_values + update_rpr_values)  # [B, H, T, d_k]
+        return tf.squeeze(updated_values + update_rpr_values, axis=3)  # [B, H, T, d_k]
 
 
 class SeqDotProductAttention(SequenceSequenceAttention):

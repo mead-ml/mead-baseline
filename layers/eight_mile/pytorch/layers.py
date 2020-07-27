@@ -2752,7 +2752,7 @@ class SeqScaledWindowedRelativeAttention(SequenceSequenceRelativeAttention):
         rpr_value = rpr_value.unsqueeze(0).unsqueeze(0).unsqueeze(0)  # [1, 1, 1, W, d_k]
         updated_values = torch.matmul(a, value)  # [B, H, T, 1, d_k]
         update_rpr_values = torch.matmul(a, rpr_value)  # [B, H, T, 1, d_k]
-        return (updated_values + update_rpr_values).squeeze()  # [B, H, T, d_k]
+        return (updated_values + update_rpr_values).squeeze(3)  # [B, H, T, d_k]
 
 
 class SeqBahdanauAttention(SequenceSequenceAttention):
