@@ -110,8 +110,8 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
     def dsz(self):
         return self.embeddings.output_dim
 
-    def embed(self, input):
-        return self.embeddings({'x': input})
+    def embed(self, input, token_type):
+        return self.embeddings({'x': input, 'tt': token_type})
 
     def init_embed(self, **kwargs):
         # If you are using BERT, you probably want to use either
@@ -122,10 +122,10 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
 
         embeddings = {'x': x_embedding}
         # This is for BERT support when we are using 2 features
-        #token_type_vsz = kwargs.get('token_type_vsz')
-        #if token_type_vsz:
-        #    tt_embedding = LookupTableEmbeddings(vsz=token_type_vsz, dsz=self.dsz)
-        #    embeddings['tt'] = tt_embedding
+        token_type_vsz = kwargs.get('token_type_vsz')
+        if token_type_vsz:
+            tt_embedding = LookupTableEmbeddings(vsz=token_type_vsz, dsz=self.d_model)
+            embeddings['tt'] = tt_embedding
         # For bert, make sure this is `sum-layer-norm`
         reduction = kwargs.get('embeddings_reduction', kwargs.get('reduction', 'concat'))
         embeddings_dropout = kwargs.get('embeddings_dropout', 0.1)
@@ -151,13 +151,13 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
         self.mlm = kwargs.get('mlm', False)
         self.finetune = kwargs.get('finetune', True)
 
-    def forward(self, x):
+    def forward(self, x, token_type=None):
         # the following line masks out the attention to padding tokens
         input_mask = torch.zeros(x.shape, device=x.device, dtype=torch.long).masked_fill(x != 0, 1).unsqueeze(1).unsqueeze(1)
         # A causal LM should have a subsequent mask; and a masked LM should have no mask
         if not self.mlm:
             input_mask = input_mask & subsequent_mask(x.shape[1]).type_as(input_mask)
-        embedding = self.embed(x)
+        embedding = self.embed(x, token_type)
         embedding = self.proj_to_dsz(embedding)
         transformer_out = self.transformer((embedding, input_mask))
         z = self.get_output(x, transformer_out)
