@@ -2748,7 +2748,6 @@ class SeqScaledWindowedRelativeAttention(SequenceSequenceRelativeAttention):
     def _update(self, a: torch.Tensor, value: torch.Tensor, rpr_value: torch.Tensor) -> torch.Tensor:
         # a has dim [B, H, T, 1, W]
         window_sz = a.shape[-1]
-        rpr_k = (window_sz - 1) // 2
         value = unfold_tensor(value, dim=2, window_sz=window_sz).transpose(-1, -2)  # [B, H, T, W, d_k]
         rpr_value = rpr_value.unsqueeze(0).unsqueeze(0).unsqueeze(0)  # [1, 1, 1, W, d_k]
         updated_values = torch.matmul(a, value)  # [B, H, T, 1, d_k]
