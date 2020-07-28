@@ -1998,8 +1998,8 @@ def script_viterbi(
     fill_value: float = -1e4
     alphas = torch.full((num_tags,), fill_value, dtype=unary.dtype, device=unary.device)
     broadcast_idx = torch.full((num_tags,), start_idx, dtype=torch.long)
-    alphas.scatter_(0, broadcast_idx, torch.zeros((num_tags,)))
-    alphas.unsqueeze_(0)
+    alphas = alphas.scatter(0, broadcast_idx, torch.zeros((num_tags,)))
+    alphas = alphas.unsqueeze(0)
     backpointers: torch.Tensor = torch.zeros(num_tags, dtype=torch.long).unsqueeze(0)
     for i in range(seq_len):
         unary_t = unary[i, :]
