@@ -96,6 +96,7 @@ def main():
                 'mead-export = mead.export:main',
                 'mead-clean = mead.clean:main',
                 'mead-eval = mead.eval:main',
+                'mead-hash = mead.hash_config:main',
                 'bleu = baseline.bleu:main',
                 'conlleval = baseline.conlleval:main',
             ]

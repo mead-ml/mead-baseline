@@ -4,7 +4,7 @@ import shutil
 import logging
 import logging.config
 import hashlib
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Callable
 from datetime import datetime
 import argparse
 from copy import deepcopy
@@ -305,27 +305,42 @@ def parse_extra_args(base_args, extra_args):
 
 
 @export
-def order_json(data):
+def order_json(data, sort_fn: Callable[[List[str]], List[str]] = sorted):
     """Sort json to a consistent order.
+
     When you hash json that has the some content but is different orders you get
     different fingerprints.
-    In:  hashlib.sha1(json.dumps({'a': 12, 'b':14}).encode('utf-8')).hexdigest()
-    Out: '647aa7508f72ece3f8b9df986a206d95fd9a2caf'
-    In:  hashlib.sha1(json.dumps({'b': 14, 'a':12}).encode('utf-8')).hexdigest()
-    Out: 'a22215982dc0e53617be08de7ba9f1a80d232b23'
-    This function sorts json by key so that hashes are consistent.
+
+    .. code:: python
+        >>> hashlib.sha1(json.dumps({'a': 12, 'b':14}).encode('utf-8')).hexdigest()
+        ... '647aa7508f72ece3f8b9df986a206d95fd9a2caf'
+        >>> hashlib.sha1(json.dumps({'b': 14, 'a':12}).encode('utf-8')).hexdigest()
+        ... 'a22215982dc0e53617be08de7ba9f1a80d232b23'
+
     Note:
-        In our configs we only have lists where the order doesn't matter so we
-        can sort them for consistency. This would have to change if we add a
-        config field that needs order we will need to refactor this.
-    :param data: dict, The json data.
+        According to json.org `An object is an unordered set of name/value pairs`. This
+        means that the maps (dicts in python) should not contain semantic meaning in the
+        order of the key value pairs. This means we are allowed to sort these maps without
+        breaking something a user is doing in their custom config
+
+        Similarly `An array is an ordered collection of values` this means that we should
+        not sort the lists because that might break the way that a user is using a custom
+        list in the json.
+
+    :param data: The json data.
+    :param sort_fn: A function that sorts the keys of the dictionary.
     :returns:
         collections.OrderedDict: The data in a consistent order (keys sorted alphabetically).
     """
     new = OrderedDict()
-    for (key, value) in sorted(data.items(), key=lambda x: x[0]):
+    for key in sort_fn(data.keys()):
+        value = data[key]
+        # If the value is another map recursively sort that
         if isinstance(value, dict):
             value = order_json(value)
+        # If the value is a list, recursively sort any maps that are in it.
+        elif isinstance(value, list):
+            value = [order_json(v) if isinstance(v, dict) else v for v in value]
         new[key] = value
     return new
 
@@ -372,16 +387,61 @@ def remove_extra_keys(config, keys=KEYS):
     return c
 
 
+UNORDERED_LIST_KEYS = {
+    ('modules',),
+}
+
+
+@export
+def sort_list_keys(config, sort_fn=sorted, keys=UNORDERED_LIST_KEYS):
+    """Sort the list values associated with given keys.
+
+    Note:
+        According to json.org, `An array is an ordered collection of values`.
+        This means that we/a user is allowed to encode a semantic meaning to
+        the order of a list in the config.
+
+        We personally have several unordered lists in our configs, notably
+        the modules list. This function lets us sort those kind of configs
+        so that we get a consistent hash.
+
+    :param config: The configuration
+    :param sort_fn: The sorting function to call on the value
+    :param keys: The keys that should be sorted
+
+    :returns: A copy of the config where all the values associated with
+        keys are sorted.
+    """
+    c = deepcopy(config)
+    for key in keys:
+        x = c
+        for k in key[:-1]:
+            x = x.get(k)
+            if x is None:
+                break
+        else:
+            if key[-1] in x:
+                x[key[-1]] = sort_fn(x[key[-1]])
+    return c
+
+
 @export
 def hash_config(config):
     """Hash a json config with sha1.
+
     :param config: dict, The config to hash.
     :returns:
         str, The sha1 hash.
     """
+    # Remove keys that not relevant to reproducing the model itself.
     stripped_config = remove_extra_keys(config)
+    # Sort the unordered maps of the configs based on the lexical values of the keys.
     sorted_config = order_json(stripped_config)
-    json_bytes = json.dumps(sorted_config).encode('utf-8')
+    # Sort the list values of specific keys.
+    ordered_list_config = sort_list_keys(sorted_config)
+    # Convert the config into a json serialized string
+    json_bytes = json.dumps(ordered_list_config).encode('utf-8')
+    # Hash the resulting config.
     return hashlib.sha1(json_bytes).hexdigest()
 
 
