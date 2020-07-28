@@ -398,7 +398,7 @@ def sort_list_keys(config, sort_fn=sorted, keys=UNORDERED_LIST_KEYS):
 
     Note:
         According to json.org, `An array is an ordered collection of values`.
-        This means that we a user is allowed to encode a semantic meaning to
+        This means that we/a user is allowed to encode a semantic meaning to
         the order of a list in the config.
 
         We personally have several unordered lists in our configs, notably
