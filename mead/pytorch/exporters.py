@@ -3,7 +3,12 @@ import logging
 import torch
 import torch.nn as nn
 import baseline as bl
-from eight_mile.pytorch.layers import CRF, ViterbiBatchSize1
+from eight_mile.pytorch.layers import (
+    CRF,
+    ViterbiBatchSize1,
+    TaggerGreedyDecoder,
+    ViterbiLogSoftmaxNormBatchSize1
+)
 from baseline.utils import (
     exporter,
     Offsets,
@@ -190,4 +195,9 @@ class TaggerPytorchONNXExporter(PytorchONNXExporter):
             if isinstance(model.decoder, CRF):
                 model.decoder.viterbi = ViterbiBatchSize1(model.decoder.viterbi.start_idx,
                                                           model.decoder.viterbi.end_idx)
+            elif isinstance(model.decoder, TaggerGreedyDecoder):
+                model.decoder.viterbi = ViterbiLogSoftmaxNormBatchSize1(
+                    model.decoder.viterbi.start_idx,
+                    model.decoder.viterbi.end_idx
+                )
         return model

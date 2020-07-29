@@ -2103,6 +2103,53 @@ class Viterbi(nn.Module):
         return best_path, path_score
 
 
+@torch.jit.script
+def script_viterbi_log_softmax_norm(
+    unary: torch.Tensor, trans: torch.Tensor, start_idx: int, end_idx: int
+) -> Tuple[torch.Tensor, torch.Tensor]:
+
+    seq_len: int = unary.size(0)
+    num_tags: int = unary.size(1)
+    fill_value: float = -1e4
+    alphas = torch.full((num_tags,), fill_value, dtype=unary.dtype, device=unary.device)
+    broadcast_idx = torch.full((num_tags,), start_idx, dtype=torch.long)
+    alphas = alphas.scatter(0, broadcast_idx, torch.zeros((num_tags,)))
+    alphas = alphas.unsqueeze(0)
+    alphas = torch.log(F.softmax(alphas, dim=-1))
+    backpointers: torch.Tensor = torch.zeros(num_tags, dtype=torch.long).unsqueeze(0)
+    for i in range(seq_len):
+        unary_t = unary[i, :]
+        next_tag_var = alphas + trans
+        viterbi, best_tag_ids = torch.max(next_tag_var, 1)
+        backpointers = torch.cat([backpointers, best_tag_ids.unsqueeze(0)], 0)
+        alphas = (viterbi + unary_t).unsqueeze(0)
+
+    terminal_vars = alphas.squeeze(0) + trans[end_idx, :]
+    path_score, best_tag_id = torch.max(terminal_vars, 0)
+    best_path = best_tag_id.unsqueeze(0)
+
+    for i in range(unary.size(0)):
+        t = seq_len - i - 1
+        best_tag_id = backpointers[t + 1, best_tag_id]
+        best_path = torch.cat([best_path, best_tag_id.unsqueeze(0)], -1)
+
+    new_path_vec = best_path.flip(0)
+    return new_path_vec[1:], path_score
+
+
+class ViterbiLogSoftmaxNormBatchSize1(nn.Module):
+    def __init__(self, start_idx: int, end_idx: int):
+        super().__init__()
+        self.start_idx = start_idx
+        self.end_idx = end_idx
+
+    def forward(self, unary: torch.Tensor, trans: torch.Tensor, _: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        unary = unary.squeeze(1)
+        trans = trans.squeeze(0)
+        path, score = script_viterbi_log_softmax_norm(unary, trans, self.start_idx, self.end_idx)
+        return path.unsqueeze(1), score
+
+
 class ViterbiLogSoftmaxNorm(Viterbi):
     def forward(
         self, unary: torch.Tensor, trans: torch.Tensor, lengths: torch.Tensor
