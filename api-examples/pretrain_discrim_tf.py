@@ -41,6 +41,14 @@ on handling preprocessed MLM data, and with no dynamic masking.  The assumptions
 
 
 def create_keras_optimizer(**kwargs):
+    """Get an optimizer from kwargs
+
+    Since this model requires training 2 different models, the usual EagerOptimizer object doesnt really
+    fit our needs.  This function extracts the core logic (except for AdamW which is currently not supported)
+
+    :param kwargs:
+    :return:
+    """
     if "lr_function" in kwargs:
         lr_function = kwargs["lr_function"]
     else:
@@ -82,6 +90,7 @@ def create_keras_optimizer(**kwargs):
     logger.info("clip gradients at %s", clip)
     return optimizer, clip
 
+
 def mlm_loss(logits, labels):
     loss_mask = tf.cast(labels != 0, tf.float32)
     losses = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=labels)
@@ -96,14 +105,12 @@ def discrim_loss_fn(logits, labels):
     losses = tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.cast(labels, tf.float32), logits=logits)
     return tf.reduce_mean(losses)
 
+
 def gen_vs_discrim(noised_x, labels, gen_model, discrim_model, mask_value):
     masked_indices = (noised_x == mask_value)
 
     logits = gen_model({'x': noised_x}, None)[0]
     gen_loss_step = mlm_loss(logits, labels)
-
-    # Re-read labels from device, this clears the masked <PAD>
-    # The logits needs to be replaced with either argmax or sampling.  Which?
     true_or_fake = 1 - tf.cast(masked_indices, tf.int64)
     recon_labels = best_from(logits) * tf.cast(masked_indices, tf.int64) + noised_x * true_or_fake
     # FIXME: the ELECTRA paper doesnt penalize when the MLM gets the right token
@@ -112,7 +119,6 @@ def gen_vs_discrim(noised_x, labels, gen_model, discrim_model, mask_value):
     discrim_loss_step = discrim_loss_fn(logits, true_or_fake)
     acc = get_accuracy(logits, true_or_fake)
     return gen_loss_step, discrim_loss_step, acc
-
 
 
 def best_from(x_preds):
@@ -130,6 +136,7 @@ def get_accuracy(preds, true_or_fake):
     num = tf.reduce_sum(tf.cast(nz_true_or_fake == preds_true, tf.int32))
     denom = nz_true_or_fake.shape.num_elements()
     return (num / denom)
+
 
 def _parse_json(example):
     j = json.loads(example.numpy())
@@ -159,7 +166,6 @@ def get_dataset(directory, file_type, num_parallel_reads=1, shuffle=True):
     :param file_type: Currently supports "json" files or "tfrecords"
     :param num_parallel_reads: The number of parallel reads
     :param shuffle: Defaults to True
-    :param causal: Use CLM instead of MLM (Defaults to ``False``)
     :return: a `tf.data.Dataset`
     """
     pattern = os.path.join(directory, f'*.{file_type}')
@@ -280,6 +286,7 @@ def train():
 
     if args.convert_only:
         args.restart = True
+        args.npz = True
 
     if args.basedir is None:
         args.basedir = f'discrim-{args.dataset_key}-bpe-{os.getpid()}'
@@ -368,10 +375,6 @@ def train():
                                              num_heads=args.discrim_num_heads, layers=args.discrim_num_layers,
                                              rpr_k=discrim_rpr_k, d_k=args.discrim_d_k)
 
-    discrim_loss = discrim_model.create_loss()
-
-
-
     logger.info("Loaded model and loss")
     steps_per_epoch = num_train_samples // args.batch_size
     steps_per_valid_epoch = num_valid_samples // args.batch_size
@@ -394,7 +397,6 @@ def train():
     discrim_checkpoint_manager = tf.train.CheckpointManager(discrim_checkpoint,
                                                             directory=os.path.join(args.basedir, 'discrim'),
                                                             max_to_keep=5)
-
 
     gen_checkpoint = tf.train.Checkpoint(optimizer=optimizer, model=discrim_model)
     gen_checkpoint_manager = tf.train.CheckpointManager(gen_checkpoint,
@@ -488,12 +490,14 @@ def train():
                 tf.summary.scalar("train_discrim_loss", data=discrim_loss, step=optimizer.iterations)
                 tf.summary.scalar("train_acc", data=acc, step=optimizer.iterations)
 
-                #if args.convert_only:
-                #    logger.warning("Convert only flag specified.  Stopping after one step")
-                #    steps = optimizer.global_step.numpy()
-                #    npz_checkpoint = os.path.join(args.basedir, f'checkpoint-step-{steps}.npz')
-                #    save_tlm_npz(model, npz_checkpoint)
-                #    return
+                if args.convert_only:
+                    logger.warning("Convert only flag specified.  Stopping after one step")
+                    steps = optimizer.iterations.numpy()
+                    npz_checkpoint = os.path.join(args.basedir, f'discrim-step-{steps}.npz')
+                    save_tlm_npz(discrim_model, npz_checkpoint)
+                    npz_checkpoint = os.path.join(args.basedir, f'gen-step-{steps}.npz')
+                    save_tlm_npz(gen_model, npz_checkpoint)
+                    return
 
                 if (i + 1) % report_on == 0:
                     logging.info(avg_loss)
@@ -507,10 +511,12 @@ def train():
                     gen_checkpoint_manager.save()
                     discrim_checkpoint_manager.save()
 
-                    #if args.npz:
-                    #    steps = optimizer.global_step.numpy()
-                    #    npz_checkpoint = os.path.join(args.basedir, f'checkpoint-step-{steps}.npz')
-                    #    save_tlm_npz(model, npz_checkpoint)
+                    if args.npz:
+                        steps = optimizer.iterations.numpy()
+                        npz_checkpoint = os.path.join(args.basedir, f'discrim-step-{steps}.npz')
+                        save_tlm_npz(discrim_model, npz_checkpoint)
+                        npz_checkpoint = os.path.join(args.basedir, f'gen-step-{steps}.npz')
+                        save_tlm_npz(gen_model, npz_checkpoint)
 
             # How much time elapsed in minutes
             elapsed = (time.time() - start)/60
