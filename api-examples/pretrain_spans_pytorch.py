@@ -13,13 +13,24 @@ from eight_mile.pytorch.layers import save_checkpoint, init_distributed
 from eight_mile.pytorch.optz import *
 from baseline.pytorch.lm import TransformerLanguageModel, TransformerMaskedLanguageModel
 from transformer_utils import MultiFileDatasetReader, on_demand_mlm_masking, get_lr_decay
-from eight_mile.pytorch.serialize import load_tlm_npz
+from eight_mile.pytorch.serialize import *
 import json
 from transformer_utils import MultiFileLoader
 logger = logging.getLogger(__file__)
 
 ALPHA = BETA = 1.0
 
+def save_span_tlm_npz(model, npz_checkpoint, name='TLM'):
+    d = to_tlm_array(model, ['x'], name)
+    d.update(to_weight_array(model.proj_to_span, f"{name}/proj_to_span"))
+    print(d.keys())
+    np.savez(npz_checkpoint, **d)
+
+
+def load_span_tlm_npz(pytorch_tlm: nn.Module, npz: str, embeddings_keys: List[str] = None, name: str = "TLM", lm_head=False):
+    d = np.load(npz)
+    from_tlm_array(pytorch_tlm, d, embeddings_keys, name, lm_head)
+    from_weight_array(pytorch_tlm.proj_to_span, d, name=f"{name}/proj_to_span")
 
 
 class PreprocessedSpanFileLoader(MultiFileLoader):
@@ -237,7 +248,7 @@ def train():
     if args.restart_from:
 
         if args.restart_from.endswith('npz'):
-            load_tlm_npz(model, args.restart_from, lm_head=True)
+            load_span_tlm_npz(model, args.restart_from, lm_head=True)
         else:
             model.load_state_dict(torch.load(args.restart_from))
         vec = args.restart_from.split("-")

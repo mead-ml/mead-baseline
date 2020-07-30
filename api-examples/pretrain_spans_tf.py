@@ -13,7 +13,7 @@ from eight_mile.utils import Average, get_num_gpus_multiworker, read_yaml
 from eight_mile.optz import *
 from eight_mile.tf.optz import *
 from eight_mile.tf.layers import *
-from eight_mile.tf.serialize import save_tlm_npz
+from eight_mile.tf.serialize import *
 import tensorflow as tf
 import json
 #from baseline.tf import set_tf_eager_debug
@@ -23,7 +23,14 @@ logger = logging.getLogger(__file__)
 ALPHA = BETA = 1.0
 
 
+
+
 # BIOES
+def save_span_tlm_npz(model, npz_checkpoint, name='TLM'):
+    d = to_tlm_array(model, ['x'], name)
+    d.update(to_weight_array(model.proj_to_span, f"{name}/proj_to_span"))
+    print(d.keys())
+    np.savez(npz_checkpoint, **d)
 
 class TransformerSpanModel(tf.keras.Model):
 
@@ -196,7 +203,7 @@ def train():
     parser.add_argument("--saves_per_epoch", type=int, default=10, help="The number of checkpoints to save per epoch")
     parser.add_argument('--rpr_k',
                         help='Relative attention positional sizes pass 0 if you dont want relative attention',
-                        type=int, default=[8], nargs='+')
+                        type=int, default=[48], nargs='+')
     parser.add_argument('--windowed_ra', type=str2bool, default=False, help="whether prevent attention beyond rpr_k")
     parser.add_argument("--strategy", help="Training strategy, defaults to `mirror`", choices=["mirror"])
     parser.add_argument("--npz", help="Should we write out NPZ files?", type=str2bool, default=False)
@@ -354,7 +361,7 @@ def train():
                     logger.warning("Convert only flag specified.  Stopping after one step")
                     steps = optimizer.global_step.numpy()
                     npz_checkpoint = os.path.join(args.basedir, f'checkpoint-step-{steps}.npz')
-                    save_tlm_npz(model, npz_checkpoint)
+                    save_span_tlm_npz(model, npz_checkpoint)
                     return
 
                 if (i + 1) % report_on == 0:
@@ -367,7 +374,7 @@ def train():
                     if args.npz:
                         steps = optimizer.global_step.numpy()
                         npz_checkpoint = os.path.join(args.basedir, f'checkpoint-step-{steps}.npz')
-                        save_tlm_npz(model, npz_checkpoint)
+                        save_span_tlm_npz(model, npz_checkpoint)
 
             # How much time elapsed in minutes
             elapsed = (time.time() - start)/60
