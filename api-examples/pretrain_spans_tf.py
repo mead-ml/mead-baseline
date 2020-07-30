@@ -16,6 +16,8 @@ from eight_mile.tf.layers import *
 from eight_mile.tf.serialize import save_tlm_npz
 import tensorflow as tf
 import json
+#from baseline.tf import set_tf_eager_debug
+#set_tf_eager_debug(True)
 logger = logging.getLogger(__file__)
 
 ALPHA = BETA = 1.0
@@ -77,7 +79,7 @@ def masked_loss(logits, labels):
     losses = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=labels)
     losses = losses * loss_mask
     losses = tf.reduce_sum(losses)
-    non_zero = tf.reduce_sum(loss_mask)
+    non_zero = tf.reduce_sum(loss_mask) + 1
     losses /= non_zero
     return losses
 
@@ -87,14 +89,14 @@ def masked_loss(logits, labels):
 feature_description = {
     'x': tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True, default_value=0),
     'y': tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True, default_value=0),
-    #'y_span': tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True, default_value=0),
+    'y_span': tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True, default_value=0),
 
 }
 
 
 def _parse_tf_record(example_proto):
     record = tf.io.parse_single_example(example_proto, feature_description)
-    return record['x'], record['y'], record['y']
+    return record['x'], record['y'], record['y_span']
 
 
 def get_dataset(directory, file_type, num_parallel_reads=1, shuffle=True):
