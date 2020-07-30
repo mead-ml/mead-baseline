@@ -24,6 +24,13 @@ from transformer_utils import MultiFileDatasetReader, find_latest_checkpoint, \
 
 This file uses Baseline to train a Transformer-based discriminative model
 model, similar to (https://openreview.net/pdf?id=r1xMH1BtvB)
+
+If the data has been previously preprocessed, lets assume that its been processed to MLM format, where
+`x` is the noised version and `y` is padded everywhere that there is no noising.  This means we should not run
+`on_demand_masking()` where normally we would.
+
+If the data is in the default format (`lang`), we assume that it produces identical values for `x` and `y`
+and during the `on_demand_masking()` we mask x and preserve y values where x is masked, setting the rest to <PAD>
 """
 Row = namedtuple('Row', 'original reconstructed guess')
 
@@ -47,26 +54,35 @@ def print_batch(index2word, labels, recon_labels, logits):
         j += 1
 
 
-def gen_vs_discrim(x, y, device, gen_model, gen_loss_fn, discrim_model, discrim_loss_fn, mask_value, vocab_size, index2word, print_output):
+def gen_vs_discrim(x, y, device, gen_model, gen_loss_fn, discrim_model, discrim_loss_fn, mask_value, vocab_size, index2word, print_output, do_on_demand_masking):
     inputs = x.to(device)
     # We are going to mask inplace and that will leave us with <PAD> anywhere that isnt MLM
+    # If x and y have been preprocessed, then x has already been noised any y is reconstructed in the masked regions only
+    # , so nothing to do
+    # If it hasnt been preprocessed, then we need to do that on demand
     labels = y.to(device, copy=True)
-    noised_x, labels, masked_indices = on_demand_mlm_masking(inputs, labels, mask_value, vocab_size)
-    labels = labels.transpose(0, 1).contiguous()
-    logits = gen_model({'x': inputs}, None)[0]
-    gen_loss_step = gen_loss_fn(logits.transpose(0, 1).contiguous(), labels)
+    if do_on_demand_masking:
+        noised_x, labels, masked_indices = on_demand_mlm_masking(inputs, labels, mask_value, vocab_size)
+    else:
+        noised_x = inputs
+        masked_indices = (noised_x == mask_value)
+
+    logits = gen_model({'x': noised_x}, None)[0]
+    gen_loss_step = gen_loss_fn(logits.transpose(0, 1).contiguous(), labels.transpose(0, 1).contiguous())
 
     # Re-read labels from device, this clears the masked <PAD>
-    labels = y.to(device)
+    #labels = y.to(device)
     # The logits needs to be replaced with either argmax or sampling.  Which?
     recon_labels = best_from(logits)
-    recon_labels[~masked_indices] = labels[~masked_indices]
-    true_or_fake = (recon_labels == labels).to(torch.float32).view(-1)
+    recon_labels[~masked_indices] = noised_x[~masked_indices]
+    true_or_fake = ~masked_indices
+    true_or_fake[recon_labels == labels] = True
+    true_or_fake = true_or_fake.to(torch.float32).view(-1).to(noised_x.device)
     logits = discrim_model({'x': recon_labels})
     discrim_loss_step = discrim_loss_fn(logits.view(-1), true_or_fake.view(-1))
-    acc = get_accuracy(logits, true_or_fake, labels)
+    acc = get_accuracy(logits, true_or_fake)
     if print_output:
-        print_batch(index2word, labels, recon_labels, logits)
+        print_batch(index2word, y, recon_labels, logits)
     return gen_loss_step, discrim_loss_step, acc
 
 
@@ -75,14 +91,12 @@ def best_from(x_preds):
     B, T, V = x_preds.shape
     sample_dist = x_preds.exp().view(B * T, V)
     output = torch.multinomial(sample_dist, num_samples=1).view(B, T)
-    #output = output.squeeze(0).item()
     return output
 
 
-def get_accuracy(preds, true_or_fake, logits):
-    flat_logits = logits.reshape(-1)
-    nz_preds = preds.view(-1)[flat_logits != 0]
-    nz_true_or_fake = true_or_fake.view(-1)[flat_logits != 0]
+def get_accuracy(preds, true_or_fake):
+    nz_preds = preds.view(-1)
+    nz_true_or_fake = true_or_fake.view(-1)
 
     preds_true = (nz_preds > 0.5).squeeze().to(nz_true_or_fake.dtype)
     num = torch.sum((nz_true_or_fake == preds_true).to(torch.float32))
@@ -96,21 +110,23 @@ def train():
     parser.add_argument("--train_file", type=str, help='Optional file path to use for train file')
     parser.add_argument("--valid_file", type=str, help='Optional file path to use for valid file')
     parser.add_argument("--preprocessed", type=str2bool, default=True, help="Has the data already been preprocessed?")
+
     parser.add_argument("--gen_d_model", type=int, default=256, help="Model dimension (and embedding dsz)")
-    parser.add_argument("--discrim_d_model", type=int, default=512, help="Model dimension (and embedding dsz)")
     parser.add_argument("--gen_d_ff", type=int, default=1024, help="FFN dimension")
-    parser.add_argument("--discrim_d_ff", type=int, default=2048, help="FFN dimension")
     parser.add_argument("--gen_d_k", type=int, default=None, help="Dimension per head.  Use if num_heads=1 to reduce dims")
-    parser.add_argument("--discrim_d_k", type=int, default=None, help="Dimension per head.  Use if num_heads=1 to reduce dims")
     parser.add_argument("--gen_num_heads", type=int, default=8, help="Number of heads")
-    parser.add_argument("--discrim_num_heads", type=int, default=8, help="Number of heads")
     parser.add_argument("--gen_num_layers", type=int, default=8, help="Number of layers")
-    parser.add_argument("--discrim_num_layers", type=int, default=8, help="Number of layers")
     parser.add_argument("--gen_dropout", type=float, default=0.1, help="Dropout")
-    parser.add_argument("--discrim_dropout", type=float, default=0.1, help="Dropout")
-    parser.add_argument('--gen_rpr_k', help='Relative attention positional sizes pass 0 if you dont want relative attention',
+    parser.add_argument('--gen_rpr_k',
+                        help='Relative attention positional sizes pass 0 if you dont want relative attention',
                         type=int, default=[8], nargs='+')
 
+    parser.add_argument("--discrim_d_model", type=int, default=512, help="Model dimension (and embedding dsz)")
+    parser.add_argument("--discrim_d_ff", type=int, default=2048, help="FFN dimension")
+    parser.add_argument("--discrim_d_k", type=int, default=None, help="Dimension per head.  Use if num_heads=1 to reduce dims")
+    parser.add_argument("--discrim_num_heads", type=int, default=8, help="Number of heads")
+    parser.add_argument("--discrim_num_layers", type=int, default=8, help="Number of layers")
+    parser.add_argument("--discrim_dropout", type=float, default=0.1, help="Dropout")
     parser.add_argument('--discrim_rpr_k', help='Relative attention positional sizes pass 0 if you dont want relative attention',
                         type=int, default=[8], nargs='+')
 
@@ -291,6 +307,10 @@ def train():
     model_base = os.path.join(args.basedir, 'checkpoint')
     discrim_base = f'{model_base}-discrim'
     gen_base = f'{model_base}-gen'
+    do_on_demand_masking = not args.preprocessed
+    if do_on_demand_masking:
+        logger.info(f"On-demand masking is turned on")
+
     for epoch in range(start_epoch, args.epochs):
         gen_model.train()
         discrim_model.train()
@@ -311,7 +331,7 @@ def train():
             do_report = (i + 1) % report_on == 0 and args.print
             gen_loss_step, discrim_loss_step, acc = gen_vs_discrim(x, y, args.device, gen_model, gen_loss_fn,
                                                                    discrim_model, discrim_loss_fn, mask_value,
-                                                                   vocab_size, index2word, do_report)
+                                                                   vocab_size, index2word, do_report, do_on_demand_masking)
             avg_gen_loss.update(gen_loss_step.item())
             total_loss_step = gen_loss_step + args.gen_loss_scale * discrim_loss_step
             total_loss_step.backward()
@@ -356,7 +376,7 @@ def train():
                     do_report = (i + 1) % report_on == 0 and args.print
                     gen_loss_step, discrim_loss_step, acc = gen_vs_discrim(x, y, args.device, gen_model, gen_loss_fn,
                                                                            discrim_model, discrim_loss_fn, mask_value,
-                                                                           vocab_size, index2word, do_report)
+                                                                           vocab_size, index2word, do_report, do_on_demand_masking)
                     avg_valid_gen_loss.update(gen_loss_step.item())
                     avg_valid_discrim_acc.update(acc)
                     avg_valid_discrim_loss.update(discrim_loss_step.item())
