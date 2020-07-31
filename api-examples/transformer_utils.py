@@ -13,8 +13,6 @@ import codecs
 from collections import Counter
 import glob
 import json
-import tfrecord
-
 
 
 class TripletLoss(nn.Module):
@@ -501,6 +499,7 @@ class NextSequencePredictionFileLoader(MultiFileLoader):
 
 class MultiTFRecordLoader(MultiFileLoader):
     """Using module tfrecord to read tfrecord file into PyTorch datasets"""
+    import tfrecord
 
     def __init__(self, directory, pattern, vocabs, vectorizer, nctx, last_turn_only=True, distribute=True, shuffle=True):
         super().__init__(directory, pattern, vocabs, vectorizer, nctx, last_turn_only, distribute, shuffle)
@@ -508,7 +507,7 @@ class MultiTFRecordLoader(MultiFileLoader):
         files = list(glob.glob(os.path.join(directory, '*.tfrecord')))
         for f in files:
             idx_file = '.'.join(f.split('.')[:-1]) + '.index'
-            tfrecord.tools.tfrecord2idx.create_index(f, idx_file)
+            self.tfrecord.tools.tfrecord2idx.create_index(f, idx_file)
 
     def __iter__(self):
         files, read_file_order, node_worker_id = self._init_read_order()
@@ -521,11 +520,11 @@ class MultiTFRecordLoader(MultiFileLoader):
                 idx_file = '.'.join(file.split('.')[:-1]) + '.index'
                 # shard = (worker_id, num_workers), but we already assigned this file to one certain worker,
                 # so shard = (0, 1)
-                itr = tfrecord.reader.tfrecord_loader(file, idx_file, shard=(0, 1))
+                itr = self.tfrecord.reader.tfrecord_loader(file, idx_file, shard=(0, 1))
                 if self.shuffle:
                     np.random.seed(node_worker_id)
                     # not sure about the optimal choice of shuffle_queue_size here:
-                    itr = tfrecord.iterator_utils.shuffle_iterator(itr, queue_size=128)
+                    itr = self.tfrecord.iterator_utils.shuffle_iterator(itr, queue_size=128)
                 for d in itr:
                     if 'y' in d.keys():
                         # d['x'] is in np.int32, but pytorch require np.int64
@@ -556,7 +555,7 @@ class MultiFileDatasetReader:
             print("Using files as an LM")
             return SequencePredictionFileLoader(directory, self.pattern, vocabs, self.vectorizer, self.nctx, distribute=distribute, shuffle=shuffle)
         elif reader_type == 'tfrecord':
-            print("Reading data in .tfrecord fomat using the tfrecord module")
+            print("Reading data in .tfrecord format using the tfrecord module")
             return MultiTFRecordLoader(directory, self.pattern, vocabs, self.vectorizer, self.nctx, distribute=distribute, shuffle=shuffle)
         return PreprocessedFileLoader(directory, self.pattern, vocabs, self.vectorizer, self.nctx, distribute=distribute, shuffle=shuffle)
 
