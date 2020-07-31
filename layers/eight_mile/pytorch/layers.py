@@ -714,23 +714,34 @@ class Dense(nn.Module):
 
 class WeightTieDense(nn.Module):
     """Do weight tying from the input parameter
+
+    This module never copies the weight pointer, it lazily accesses to allow the tied variable to reset its parameters
+    after initialization.  This is helpful for cases where we have LMs and are reloading them after they have been
+    initially created
     """
 
     def __init__(self, tie: nn.Module, bias=False):
         super().__init__()
         self.tie = tie
-        self.weight, self.transform = self._get_weight(tie)
+        self.transform = self._get_transform(tie)
         if bias:
-            bias = torch.nn.Parameter(torch.zeros(self.transform(self.weight).shape[0]))
+            bias = torch.nn.Parameter(torch.zeros(self.transform(self.weight.shape[0])))
         else:
             bias = None
         self.register_parameter("bias", bias)
 
-    def _get_weight(self, tie: nn.Module):
+    def _get_transform(self, tie: nn.Module):
         emb = getattr(tie, "embeddings", None)
         if emb is not None:
-            return getattr(emb, "weight"), self._identity
-        return getattr(tie, "weight"), self._transpose
+            return self._identity
+        return self._transpose
+
+    @property
+    def weight(self):
+        emb = getattr(self.tie, "embeddings", None)
+        if emb is not None:
+            return getattr(emb, "weight")
+        return getattr(self.tie, "weight")
 
     def _identity(self, x: torch.Tensor) -> torch.Tensor:
         return x

@@ -74,7 +74,7 @@ def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, d_k, c
                                                   activation=activation,
                                                   src_keys=['x'], tgt_key='x')
     if checkpoint_name.endswith('npz'):
-        load_tlm_npz(model, checkpoint_name, lm_head=True)
+        load_tlm_npz(model, checkpoint_name)
         #model.output_layer = WeightTieDense(model.embeddings['x'])
     else:
         tlm_load_state_dict(model, checkpoint_name)

@@ -181,7 +181,7 @@ def train():
     if args.restart_from:
 
         if args.restart_from.endswith('npz'):
-            load_tlm_npz(model, args.restart_from, lm_head=True)
+            load_tlm_npz(model, args.restart_from)
         else:
             model.load_state_dict(torch.load(args.restart_from))
         vec = args.restart_from.split("-")
