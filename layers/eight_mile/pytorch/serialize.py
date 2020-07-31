@@ -289,7 +289,7 @@ def from_embed_array(pytorch_embed: nn.Module, d: Dict, name: str):
     :return: None
     """
     device = pytorch_embed.embeddings.weight.device
-    pytorch_embed.embeddings.weight = torch.nn.Parameter(torch.from_numpy(d[f"{name}/weights"]).to(device=device), requires_grad=True)
+    pytorch_embed.embeddings.weight = torch.nn.Parameter(torch.from_numpy(d[f"{name}/weights"]).to(device=device))
     if hasattr(pytorch_embed, 'pos_embeddings'):
         pytorch_embed.pos_embeddings.weight = torch.nn.Parameter(torch.from_numpy(d[f"{name}/pos_weights"]).to(device=device),
                                                                  requires_grad=True)
@@ -456,10 +456,10 @@ def from_tlm_array(pytorch_tlm: nn.Module, d: Dict, embeddings_keys: List[str] =
     if hasattr(pytorch_tlm.embeddings.reduction, 'ln'):
         from_weight_array(pytorch_tlm.embeddings.reduction.ln, d, f"{name}/Embeddings/reduction/ln")
 
-    if lm_head:
-        tgt_key = keys_to_restore[0]
-        pytorch_tlm.output_layer.weight = nn.Parameter(pytorch_tlm.embeddings[tgt_key].embeddings.weight)
-
+    #if lm_head:
+    #    tgt_key = keys_to_restore[0]
+    #    pytorch_tlm.output_layer.weight = nn.Parameter(pytorch_tlm.embeddings[tgt_key].embeddings.weight)
+    #    print(pytorch_tlm)
 
 def load_tlm_npz(pytorch_tlm: nn.Module, npz: str, embeddings_keys: List[str] = None, name: str = "TLM", lm_head=False):
     """Restore a TLM-like model (possibly a `nn.Module` for fine-tuning

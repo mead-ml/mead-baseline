@@ -27,7 +27,7 @@ def save_span_tlm_npz(model, npz_checkpoint, name='TLM'):
     np.savez(npz_checkpoint, **d)
 
 
-def load_span_tlm_npz(pytorch_tlm: nn.Module, npz: str, embeddings_keys: List[str] = None, name: str = "TLM", lm_head=False):
+def load_span_tlm_npz(pytorch_tlm: nn.Module, npz: str, embeddings_keys: List[str] = None, name: str = "TLM", lm_head=True):
     d = np.load(npz)
     from_tlm_array(pytorch_tlm, d, embeddings_keys, name, lm_head)
     from_weight_array(pytorch_tlm.proj_to_span, d, name=f"{name}/proj_to_span")
@@ -144,7 +144,7 @@ def train():
     parser.add_argument("--mlm", type=str2bool, default=True, help="Use Masked Language Model (MLM) objective")
     parser.add_argument('--rpr_k',
                         help='Relative attention positional sizes pass 0 if you dont want relative attention',
-                        type=int, default=[8], nargs='+')
+                        type=int, default=[48], nargs='+')
     parser.add_argument("--windowed_ra", type=str2bool, default=False, help="whether prevent attention beyond rpr_k")
     parser.add_argument("--device", type=str,
                         default="cuda" if torch.cuda.is_available() else "cpu",

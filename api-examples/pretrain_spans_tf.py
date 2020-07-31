@@ -60,7 +60,7 @@ class TransformerSpanModel(tf.keras.Model):
 
         self.lengths_feature = kwargs.get('lengths_feature', list(self.embeddings.keys())[0])
         self.output_layer = WeightTieDense(embeddings[self.lengths_feature])
-        self.proj_to_span = tf.keras.layers.Dense(5)
+        self.proj_to_span = tf.keras.layers.Dense(6)
 
 
     def call(self, features):
