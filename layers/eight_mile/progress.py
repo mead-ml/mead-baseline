@@ -1,15 +1,22 @@
 import re
 import sys
 import six
-from eight_mile.utils import exporter
+from eight_mile.utils import exporter, register, optional_params
 
 
 __all__ = []
 export = exporter(__all__)
+MEAD_LAYERS_PROGRESS = {}
 
 
 @export
-class Progress:
+@optional_params
+def register_progress(cls, name=None):
+    return register(cls, MEAD_LAYERS_PROGRESS, name, 'progress')
+
+
+@export
+class Progress(object):
     """Progress hook
 
     Provide interface for progress updates
@@ -44,6 +51,7 @@ class Progress:
 
 
 @export
+@register_progress('jupyter')
 class ProgressBarJupyter(Progress):
     """Simple Jupyter progress bar
 
@@ -52,7 +60,7 @@ class ProgressBarJupyter(Progress):
     """
 
     def __init__(self, total):
-        super().__init__()
+        super(ProgressBarJupyter, self).__init__()
         from ipywidgets import FloatProgress
         from IPython.display import display
 
@@ -71,6 +79,7 @@ class ProgressBarJupyter(Progress):
 # Modifed from here
 # http://stackoverflow.com/questions/3160699/python-progress-bar#3160819
 @export
+@register_progress('default')
 class ProgressBarTerminal(Progress):
     """Simple terminal-based progress bar
 
@@ -124,3 +133,32 @@ class ProgressBarTerminal(Progress):
         self.current = self.total
         self.update(step=0)
         self.print_("")
+
+
+@register_progress('tqdm')
+class ProgressBarTQDM(Progress):
+    """Simple TQDM progress bar
+
+    Writes a progress bar to an ipython widget
+
+    """
+
+    def __init__(self, total):
+        super().__init__()
+        from tqdm import tqdm
+
+        self.progress = tqdm(total=total)
+
+    def update(self, step=1):
+        self.progress.update(step)
+
+    def done(self):
+        """Close the widget
+        """
+        self.progress.close()
+
+
+@export
+def create_progress_bar(steps, name='default', **kwargs):
+    return MEAD_LAYERS_PROGRESS[name](steps, **kwargs)
+
