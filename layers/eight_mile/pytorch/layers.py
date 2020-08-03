@@ -3422,7 +3422,7 @@ class BeamSearchBase:
                 # Get the log_probs of the best scoring beams
                 log_probs = probs.view(bsz, -1).gather(1, best_idx).view(bsz, self.K)
 
-                best_beams = best_idx / V  # Get which beam it came from
+                best_beams = best_idx // V  # Get which beam it came from
                 best_idx = best_idx % V  # Get the index of the word regardless of which beam it is.
 
                 # Best Beam index is relative within the batch (only [0, K)).
