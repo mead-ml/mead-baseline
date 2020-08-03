@@ -19,7 +19,7 @@ DEFAULT_VECTORIZERS_LOC = 'config/vecs.json'
 parser = argparse.ArgumentParser(description='Encode a sentence as an embedding')
 parser.add_argument('--subword_model_file', help='Subword model file')
 parser.add_argument('--nctx', default=256, type=int)
-parser.add_argument('--batchsz', default=32, type=int)
+parser.add_argument('--batchsz', default=20, type=int)
 parser.add_argument('--vec_id', default='bert-base-uncased', help='Reference to a specific embedding type')
 parser.add_argument('--embed_id', default='bert-base-uncased-pooled', help='What type of embeddings to use')
 parser.add_argument('--file', required=True)
@@ -29,7 +29,7 @@ parser.add_argument('--pool', help='Should a reduction be applied on the embeddi
 parser.add_argument('--max_len1d', type=int, default=100)
 parser.add_argument('--embeddings', help='index of embeddings: local file, remote URL or mead-ml/hub ref', type=convert_path)
 parser.add_argument('--vecs', help='index of vectorizers: local file, remote URL or hub mead-ml/ref', type=convert_path)
-
+parser.add_argument('--cuda', type=baseline.str2bool, default=True)
 args = parser.parse_args()
 
 args.embeddings = convert_path(DEFAULT_EMBEDDINGS_LOC) if args.embeddings is None else args.embeddings
@@ -53,7 +53,9 @@ embeddings_params = embeddings_set[args.embed_id]
 embeddings = load_embeddings_overlay(embeddings_set, embeddings_params, vectorizer.vocab)
 
 vocabs = {'x': embeddings['vocab']}
-embedder = embeddings['embeddings'].cuda()
+embedder = embeddings['embeddings'].cpu()
+if args.cuda:
+    embedder = embedder.cuda()
 
 
 def chunks(lst, n):
@@ -65,17 +67,18 @@ df = pd.read_csv(args.file)[args.column]
 batches = []
 as_list = df.tolist()
 num_batches = math.ceil(len(as_list) / args.batchsz)
-
+pg = baseline.create_progress_bar(num_batches, name='tqdm')
 for i, batch in enumerate(chunks(as_list, args.batchsz)):
+    pg.update()
     with torch.no_grad():
         vecs = []
         for line in batch:
             vec, l = vectorizer.run(line.split(), vocabs['x'])
             vecs.append(vec)
-        vecs = np.stack(vecs)
-        embedding = embedder(torch.tensor(vecs).cuda())
+        vecs = torch.tensor(np.stack(vecs))
+        if args.cuda:
+            vecs = vecs.cuda()
+        embedding = embedder(vecs)
         batches += embedding.cpu().numpy().tolist()
-        if i % 10 == 0:
-            print(f"{i+1} / {num_batches}")
 
 np.savez(args.output, embeddings=batches, text=as_list)

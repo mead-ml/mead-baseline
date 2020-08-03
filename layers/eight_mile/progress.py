@@ -9,7 +9,7 @@ export = exporter(__all__)
 
 
 @export
-class Progress(object):
+class Progress:
     """Progress hook
 
     Provide interface for progress updates
@@ -52,7 +52,7 @@ class ProgressBarJupyter(Progress):
     """
 
     def __init__(self, total):
-        super(ProgressBarJupyter, self).__init__()
+        super().__init__()
         from ipywidgets import FloatProgress
         from IPython.display import display
 

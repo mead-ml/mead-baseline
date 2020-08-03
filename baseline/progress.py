@@ -26,3 +26,26 @@ class ProgressBarJupyterBaseline(ProgressBarJupyter): pass
 
 @register_progress('default')
 class ProgressBarTerminalBaseline(ProgressBarTerminal): pass
+
+
+@register_progress('tqdm')
+class ProgressBarTQDM(Progress):
+    """Simple TQDM progress bar
+
+    Writes a progress bar to an ipython widget
+
+    """
+
+    def __init__(self, total):
+        super().__init__()
+        from tqdm import tqdm
+
+        self.progress = tqdm(total=total)
+
+    def update(self, step=1):
+        self.progress.update(step)
+
+    def done(self):
+        """Close the widget
+        """
+        self.progress.close()
