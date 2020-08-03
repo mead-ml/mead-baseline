@@ -1,7 +1,7 @@
 from baseline.embeddings import register_embeddings, create_embeddings
 from eight_mile.pytorch.embeddings import *
 from eight_mile.pytorch.serialize import load_tlm_npz, tlm_load_state_dict
-from eight_mile.utils import read_json, mime_type
+from eight_mile.utils import read_config_stream, mime_type
 from baseline.vectorizers import load_bert_vocab
 
 
@@ -96,7 +96,7 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
         # reference here
         vocab_file = kwargs.get('vocab_file')
         if vocab_file and vocab_file.endswith('.json'):
-            self.vocab = read_json(kwargs.get('vocab_file'))
+            self.vocab = read_config_stream(kwargs.get('vocab_file'))
         else:
             self.vocab = load_bert_vocab(kwargs.get('vocab_file'))
         self.cls_index = self.vocab['[CLS]']
@@ -110,8 +110,8 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
     def dsz(self):
         return self.embeddings.output_dim
 
-    def embed(self, input):
-        return self.embeddings({'x': input})
+    def embed(self, input, token_type):
+        return self.embeddings({'x': input, 'tt': token_type})
 
     def init_embed(self, **kwargs):
         # If you are using BERT, you probably want to use either
@@ -122,10 +122,10 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
 
         embeddings = {'x': x_embedding}
         # This is for BERT support when we are using 2 features
-        #token_type_vsz = kwargs.get('token_type_vsz')
-        #if token_type_vsz:
-        #    tt_embedding = LookupTableEmbeddings(vsz=token_type_vsz, dsz=self.dsz)
-        #    embeddings['tt'] = tt_embedding
+        token_type_vsz = kwargs.get('token_type_vsz')
+        if token_type_vsz:
+            tt_embedding = LookupTableEmbeddings(vsz=token_type_vsz, dsz=self.d_model)
+            embeddings['tt'] = tt_embedding
         # For bert, make sure this is `sum-layer-norm`
         reduction = kwargs.get('embeddings_reduction', kwargs.get('reduction', 'concat'))
         embeddings_dropout = kwargs.get('embeddings_dropout', 0.1)
@@ -142,28 +142,22 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
         layer_norms_after = kwargs.get('layer_norms_after', False)
         layer_norm_eps = kwargs.get('layer_norm_eps', 1e-12)
         activation = kwargs.get('activation', 'gelu')
+        windowed_ra = kwargs.get('windowed_ra', False)
         self.transformer = TransformerEncoderStack(num_heads, d_model=self.d_model, pdrop=pdrop, scale=True,
                                                    layers=num_layers, d_ff=d_ff, rpr_k=rpr_k, d_k=d_k,
-                                                   activation=activation,
-                                                   ffn_pdrop=ff_pdrop,
-                                                   layer_norms_after=layer_norms_after, layer_norm_eps=layer_norm_eps)
+                                                   activation=activation, ffn_pdrop=ff_pdrop,
+                                                   layer_norms_after=layer_norms_after, layer_norm_eps=layer_norm_eps,
+                                                   windowed_ra=windowed_ra)
         self.mlm = kwargs.get('mlm', False)
         self.finetune = kwargs.get('finetune', True)
 
-    def _model_mask(self, nctx):
-        """This function creates the mask that controls which token to be attended to depending on the model. A causal
-        LM should have a subsequent mask; and a masked LM should have no mask."""
-        if self.mlm:
-            return torch.ones((1, 1, nctx, nctx), dtype=torch.long)
-        else:
-            return subsequent_mask(nctx)
-
-    def forward(self, x):
+    def forward(self, x, token_type=None):
         # the following line masks out the attention to padding tokens
         input_mask = torch.zeros(x.shape, device=x.device, dtype=torch.long).masked_fill(x != 0, 1).unsqueeze(1).unsqueeze(1)
-        # the following line builds mask depending on whether it is a causal lm or masked lm
-        input_mask = input_mask & self._model_mask(x.shape[1]).type_as(input_mask)
-        embedding = self.embed(x)
+        # A causal LM should have a subsequent mask; and a masked LM should have no mask
+        if not self.mlm:
+            input_mask = input_mask & subsequent_mask(x.shape[1]).type_as(input_mask)
+        embedding = self.embed(x, token_type)
         embedding = self.proj_to_dsz(embedding)
         transformer_out = self.transformer((embedding, input_mask))
         z = self.get_output(x, transformer_out)

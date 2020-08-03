@@ -54,6 +54,7 @@ class Seq2SeqTrainerEagerTf(Trainer):
         self.nsteps = kwargs.get('nsteps', 500)
         self._checkpoint = tf.train.Checkpoint(optimizer=self.optimizer.optimizer, model=self.model)
         checkpoint_dir = '{}-{}'.format("./tf-seq2seq", os.getpid())
+        self.bleu_n_grams = int(kwargs.get("bleu_n_grams", 4))
 
         self.checkpoint_manager = tf.train.CheckpointManager(self._checkpoint,
                                                              directory=checkpoint_dir,
@@ -161,7 +162,7 @@ class Seq2SeqTrainerEagerTf(Trainer):
             top_preds = self.model.predict(features, make_input=False, **kwargs)
             preds.extend(convert_seq2seq_preds(top_preds[:, 0, :], self.tgt_rlut))
             golds.extend(convert_seq2seq_golds(tgt, tgt_lens, self.tgt_rlut))
-        metrics = {'bleu': bleu(preds, golds)[0]}
+        metrics = {'bleu': bleu(preds, golds, self.bleu_n_grams)[0]}
         self.report(
             0, metrics, start, 'Test', 'EPOCH', reporting_fns
         )
@@ -205,7 +206,7 @@ class Seq2SeqTrainerEagerTf(Trainer):
             golds.extend(convert_seq2seq_golds(tgt, features['tgt_len'], self.tgt_rlut))
 
         metrics = self.calc_metrics(total_loss, total_toks)
-        metrics['bleu'] = bleu(preds, golds)[0]
+        metrics['bleu'] = bleu(preds, golds, self.bleu_n_grams)[0]
         self.report(
             self.valid_epochs, metrics, start,
             phase, 'EPOCH', reporting_fns

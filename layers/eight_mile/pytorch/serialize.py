@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 from typing import Dict, List
-from eight_mile.pytorch.layers import Dense, TransformerEncoderStack, TransformerEncoder, EmbeddingsStack
+from eight_mile.pytorch.layers import Dense, TransformerEncoderStack, TransformerEncoder, TransformerDecoderStack, TransformerDecoder, EmbeddingsStack
 from eight_mile.pytorch.embeddings import LookupTableEmbeddings, LearnedPositionalLookupTableEmbeddingsWithBias
 
 # BERT HuggingFace Tokenizers checkpoints can be converted into MEAD Baseline Transformer checkpoints
@@ -128,8 +128,9 @@ def from_weight_array(pytorch_layer: nn.Module, d: Dict, name: str):
     """
     if isinstance(pytorch_layer, Dense):
         pytorch_layer = pytorch_layer.layer
-    pytorch_layer.weight = nn.Parameter(torch.from_numpy(d[f"{name}/weights"]), requires_grad=True)
-    pytorch_layer.bias = nn.Parameter(torch.from_numpy(d[f"{name}/bias"]), requires_grad=True)
+    device = pytorch_layer.weight.device
+    pytorch_layer.weight = nn.Parameter(torch.from_numpy(d[f"{name}/weights"]).to(device=device), requires_grad=True)
+    pytorch_layer.bias = nn.Parameter(torch.from_numpy(d[f"{name}/bias"]).to(device=device), requires_grad=True)
 
 
 def to_ffn_array(pytorch_ffn: nn.Sequential, name: str) -> Dict:
@@ -194,8 +195,9 @@ def from_attn_array(pytorch_attn: nn.Module, d: Dict, name: str):
     from_weight_array(pytorch_attn.w_O, d, f"{name}/w_O")
 
     if hasattr(pytorch_attn, 'rpr_key'):
-        pytorch_attn.rpr_key.weight = torch.nn.Parameter(torch.from_numpy(d[f"{name}/rpr_key"]))
-        pytorch_attn.rpr_value.weight = torch.nn.Parameter(torch.from_numpy(d[f"{name}/rpr_value"]))
+        device = pytorch_attn.rpr_key.weight.device
+        pytorch_attn.rpr_key.weight = torch.nn.Parameter(torch.from_numpy(d[f"{name}/rpr_key"]).to(device=device))
+        pytorch_attn.rpr_value.weight = torch.nn.Parameter(torch.from_numpy(d[f"{name}/rpr_value"]).to(device=device))
 
 
 def to_encoder_array(pytorch_encoder: TransformerEncoder, name: str) -> Dict:
@@ -227,6 +229,39 @@ def from_encoder_array(pytorch_encoder: TransformerEncoder, d: Dict, name: str):
     from_ffn_array(pytorch_encoder.ffn, d, f"{name}/ffn")
 
 
+def from_decoder_array(pytorch_decoder: TransformerDecoder, d: Dict, name: str):
+    """Restore a `TransformerDecoder` layer from a set of numpy arrays
+
+    :param pytorch_decoder: A `TransformerDecoder` layer
+    :param d: A Dict of arrays by key
+    :param name: The layer name
+    :return: None
+    """
+    from_weight_array(pytorch_decoder.ln1, d, f"{name}/ln1")
+    from_weight_array(pytorch_decoder.ln2, d, f"{name}/ln2")
+    from_weight_array(pytorch_decoder.ln2, d, f"{name}/ln3")
+    from_attn_array(pytorch_decoder.src_attn, d, f"{name}/src_attn")
+    from_attn_array(pytorch_decoder.self_attn, d, f"{name}/self_attn")
+    from_ffn_array(pytorch_decoder.ffn, d, f"{name}/ffn")
+
+
+def to_decoder_array(pytorch_decoder: TransformerDecoder, name: str) -> Dict:
+    """Convert a `TransformerDeccoder` layer to an set of numpy arrays
+
+    :param pytorch_decoder: A `TransformerDecoder` layer
+    :param name: The layer name
+    :return: A Dict of arrays by key
+    """
+    d = {}
+    d.update(to_weight_array(pytorch_decoder.ln1, f"{name}/ln1"))
+    d.update(to_weight_array(pytorch_decoder.ln2, f"{name}/ln2"))
+    d.update(to_weight_array(pytorch_decoder.ln2, f"{name}/ln3"))
+    d.update(to_attn_array(pytorch_decoder.self_attn, f"{name}/self_attn"))
+    d.update(to_attn_array(pytorch_decoder.src_attn, f"{name}/src_attn"))
+    d.update(to_ffn_array(pytorch_decoder.ffn, f"{name}/ffn"))
+    return d
+
+
 def to_embed_array(pytorch_embed: nn.Module, name: str) -> Dict:
     """Convert positional embedding to a `weights` array, if it's learned positional embedding,
     save the pos_weight as well
@@ -253,9 +288,10 @@ def from_embed_array(pytorch_embed: nn.Module, d: Dict, name: str):
     :param name: name of the layer
     :return: None
     """
-    pytorch_embed.embeddings.weight = torch.nn.Parameter(torch.from_numpy(d[f"{name}/weights"]), requires_grad=True)
+    device = pytorch_embed.embeddings.weight.device
+    pytorch_embed.embeddings.weight = torch.nn.Parameter(torch.from_numpy(d[f"{name}/weights"]).to(device=device), requires_grad=True)
     if hasattr(pytorch_embed, 'pos_embeddings'):
-        pytorch_embed.pos_embeddings.weight = torch.nn.Parameter(torch.from_numpy(d[f"{name}/pos_weights"]),
+        pytorch_embed.pos_embeddings.weight = torch.nn.Parameter(torch.from_numpy(d[f"{name}/pos_weights"]).to(device=device),
                                                                  requires_grad=True)
 
 
@@ -296,6 +332,37 @@ def save_tlm_npz(pytorch_tlm: nn.Module, npz: str, embeddings_keys: List[str] = 
     np.savez(npz, **d)
 
 
+def save_transformer_seq2seq_npz(pytorch_seq2seq: nn.Module, npz: str, src_embeddings_keys: List[str] = None,
+                                 tgt_embedding_key: str = 'y', name: str = "Seq2Seq", verbose: bool = False):
+    """Save a Transformer seq2seq file out
+
+    The will be in pytorch_seq2seq.encoder.transformer, and the usual conversions work for that (via `to_tlm_array()`).
+    The decoder requires a new converter for the portion containing attention weights between the encoder and the decoder
+
+    :param pytorch_seq2seq: A Transformer Seq2Seq module
+    """
+    #enc = to_tlm_array(tf_seq2seq.encoder, embeddings_keys, name=f'{name}/Encoder')
+
+    enc = {}
+    transformer = pytorch_seq2seq.encoder.transformer
+    enc.update(to_encoder_stack_array(transformer, name=f"{name}/TransformerEncoderStack"))
+    enc_keys_to_write = src_embeddings_keys if src_embeddings_keys else list(pytorch_seq2seq.src_embeddings.keys())
+
+    for embeddings_key in enc_keys_to_write:
+        enc.update(to_embed_array(pytorch_seq2seq.src_embeddings[embeddings_key], name=f"{name}/SrcEmbeddings/{embeddings_key}"))
+
+    dec = {}
+    transformer_decoder = pytorch_seq2seq.decoder.transformer_decoder
+
+    dec.update(to_decoder_stack_array(transformer_decoder, name=f"{name}/TransformerDecoderStack"))
+    dec.update(to_embed_array(pytorch_seq2seq.tgt_embedding, name=f"{name}/TgtEmbedding/{tgt_embedding_key}"))
+
+    if verbose:
+        print(enc.keys())
+        print(dec.keys())
+    np.savez(npz, **enc, **dec)
+
+
 def to_encoder_stack_array(
     pytorch_encoder_stack: TransformerEncoderStack, name: str = "TransformerEncoderStack"
 ) -> Dict:
@@ -329,7 +396,40 @@ def from_encoder_stack_array(
         from_encoder_array(enc_pyt, d, f"{name}/{i}")
 
 
-def from_tlm_array(pytorch_tlm: nn.Module, d: Dict, embeddings_keys: List[str] = None, name: str = "TLM"):
+def to_decoder_stack_array(
+    pytorch_decoder_stack: TransformerDecoderStack, name: str = "TransformerDecoderStack"
+) -> Dict:
+    """Convert a `TransformerDecoderStack` to a set of weights
+
+    :param pytorch_decoder_stack: A transformer decoder stack
+    :param name: A name
+    :return: A Dict containing a set of weights
+    """
+    d = {}
+    if isinstance(pytorch_decoder_stack.ln, nn.LayerNorm):
+        d.update(to_weight_array(pytorch_decoder_stack.ln, f"{name}/ln"))
+    for i, dec_pytorch in enumerate(pytorch_decoder_stack.decoders):
+        d.update(to_decoder_array(dec_pytorch, f"{name}/{i}"))
+    return d
+
+
+def from_decoder_stack_array(
+    pytorch_decoder_stack: TransformerDecoderStack, d: Dict, name: str = "TransformerDecoderStack"
+):
+    """Restore weights from a `TransformerDecoderStack`
+
+    :param pytorch_decoder_stack: A transformer decoder stack
+    :param d: A Dict containing sets of arrays
+    :param name: A name for this primitive
+    :return: None
+    """
+    if isinstance(pytorch_decoder_stack.ln, nn.LayerNorm):
+        from_weight_array(pytorch_decoder_stack.ln, d, f"{name}/ln")
+    for i, dec_pyt in enumerate(pytorch_decoder_stack.decoders):
+        from_decoder_array(dec_pyt, d, f"{name}/{i}")
+
+
+def from_tlm_array(pytorch_tlm: nn.Module, d: Dict, embeddings_keys: List[str] = None, name: str = "TLM", lm_head=False):
     """Restore a TLM-like model (possibly a `nn.Module` for fine-tuning)
 
     We just populate the `TransformerEncoderStack` and the embeddings from weights, all other values remain
@@ -339,6 +439,7 @@ def from_tlm_array(pytorch_tlm: nn.Module, d: Dict, embeddings_keys: List[str] =
     :param d: A Dict of weights to restore for each layer
     :param embeddings_keys: Name of embeddings to restore, defaults to `None`, in which case all embeddings are restored
     :param name: A name for this primitive
+    :param lm_head: Should we reload the LM head? We assume weights are tied and first embedding key is also target
     :return:
     """
     transformer = pytorch_tlm.transformer if hasattr(pytorch_tlm, 'transformer') else pytorch_tlm.generator
@@ -355,9 +456,12 @@ def from_tlm_array(pytorch_tlm: nn.Module, d: Dict, embeddings_keys: List[str] =
     if hasattr(pytorch_tlm.embeddings.reduction, 'ln'):
         from_weight_array(pytorch_tlm.embeddings.reduction.ln, d, f"{name}/Embeddings/reduction/ln")
 
+    if lm_head:
+        tgt_key = keys_to_restore[0]
+        pytorch_tlm.output_layer.weight = nn.Parameter(pytorch_tlm.embeddings[tgt_key].embeddings.weight)
 
 
-def load_tlm_npz(pytorch_tlm: nn.Module, npz: str, embeddings_keys: List[str] = None, name: str = "TLM"):
+def load_tlm_npz(pytorch_tlm: nn.Module, npz: str, embeddings_keys: List[str] = None, name: str = "TLM", lm_head=False):
     """Restore a TLM-like model (possibly a `nn.Module` for fine-tuning
 
     We just populate the `TransformerEncoderStack` and the embeddings from weights, all other values remain
@@ -367,10 +471,46 @@ def load_tlm_npz(pytorch_tlm: nn.Module, npz: str, embeddings_keys: List[str] = 
     :param npz: A file to restore the weights from
     :param embeddings_key: Name of embeddings to restore, defaults to `None` in which case we restore all embeddings
     :param name: A name for this primitive
+    :param lm_head: Should we reload the LM head? We assume weights are tied and first embedding key is also target
     :return:
     """
     d = np.load(npz)
-    from_tlm_array(pytorch_tlm, d, embeddings_keys, name)
+    from_tlm_array(pytorch_tlm, d, embeddings_keys, name, lm_head)
+
+
+def load_transformer_seq2seq_npz(pytorch_seq2seq: nn.Module, npz: str, src_embeddings_keys: List[str] = None,
+                                 tgt_embedding_key: str = 'y', name: str = "Seq2Seq", decode_head=False):
+    """Save a Transformer seq2seq file out
+
+    The will be in pytorch_seq2seq.encoder.transformer, and the usual conversions work for that (via `to_tlm_array()`).
+    The decoder requires a new converter for the portion containing attention weights between the encoder and the decoder
+
+    :param pytorch_seq2seq: A Transformer Seq2Seq module
+    :param npz: The file name
+    :param src_embeddings_keys: An optional list of the src embeddings keys to load, otherwise use what we find
+    :param tgt_embedding_key: An optional tgt embedding, otherwise assume 'y' (TODO: bad assumption?)
+    :param name: An optional name of the model in the NPZ, otherwise assume `Seq2Seq`
+    :param decode_head: If we want to use this model for fine-tuning, we need to reconstruct its decoder head, which
+      we assume to be tied to the target embeddings weight stored (which may also be the encoder LUT weights)
+    """
+
+    d = np.load(npz)
+
+    transformer = pytorch_seq2seq.encoder.transformer
+    from_encoder_stack_array(transformer, d, name=f"{name}/TransformerEncoderStack")
+
+    enc_keys_to_restore = src_embeddings_keys if src_embeddings_keys else list(pytorch_seq2seq.src_embeddings.keys())
+
+    for embeddings_key in enc_keys_to_restore:
+        from_embed_array(pytorch_seq2seq.src_embeddings[embeddings_key], d, f"{name}/SrcEmbeddings/{embeddings_key}")
+
+    transformer_decoder = pytorch_seq2seq.decoder.transformer_decoder
+
+    from_decoder_stack_array(transformer_decoder, d,  name=f"{name}/TransformerDecoderStack")
+    from_embed_array(pytorch_seq2seq.decoder.tgt_embeddings, d, name=f"{name}/TgtEmbedding/{tgt_embedding_key}")
+
+    if decode_head:
+        pytorch_seq2seq.decoder.preds.weight = torch.nn.Parameter(pytorch_seq2seq.decoder.tgt_embeddings.embeddings.weight)
 
 
 def load_tlm_transformers_bin(pytorch_tlm: nn.Module, bin_file: str, replace_layers=BERT_HF_LAYER_MAP, replace_embeds=BERT_HF_EMBED_MAP):

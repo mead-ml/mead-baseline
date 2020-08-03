@@ -83,8 +83,9 @@ def main():
         ],
         extras_require={
             'test': ['pytest', 'mock', 'contextdecorator', 'pytest-forked'],
-            'report': ['visdom', 'tensorboardX'],
+            'report': ['visdom', 'tensorboard'],
             'yaml': ['pyyaml'],
+            'bpe': ['fastBPE'],
             'tf2': ['tensorflow_addons'],
             'grpc': ['grpc'],
             'onnx': ['onnxruntime']
@@ -95,6 +96,7 @@ def main():
                 'mead-export = mead.export:main',
                 'mead-clean = mead.clean:main',
                 'mead-eval = mead.eval:main',
+                'mead-hash = mead.hash_config:main',
                 'bleu = baseline.bleu:main',
                 'conlleval = baseline.conlleval:main',
             ]

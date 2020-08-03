@@ -1,6 +1,6 @@
 import os
 import argparse
-from baseline.utils import convert_iob_conll_to_bio
+from eight_mile.utils import convert_iob_conll_to_bio
 
 
 parser = argparse.ArgumentParser(description='Convert a CONLL file tagged with IOB to BIO.')

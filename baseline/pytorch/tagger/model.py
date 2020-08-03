@@ -145,6 +145,7 @@ class TaggerModelBase(nn.Module, TaggerModel):
         * *numpy_to_tensor* (``bool``) Should we convert input from numpy to `torch.Tensor` Defaults to `True`
         :return: A batch-sized tensor of predictions
         """
+        self.eval()
         numpy_to_tensor = bool(kwargs.get('numpy_to_tensor', True))
         inputs, perm_idx = self.make_input(batch_dict, perm=True, numpy_to_tensor=numpy_to_tensor)
         outputs = self(inputs)

@@ -401,10 +401,11 @@ class TransformerLanguageModel(AbstractGeneratorModel):
         activation = kwargs.get('activation', 'gelu')
         layer_norm_eps = kwargs.get('layer_norm_eps', 1e-12)
         layer_norms_after = kwargs.get('layer_norms_after', False)
+        windowed_ra = kwargs.get('windowed_ra', False)
         return TransformerEncoderStack(num_heads, d_model=d_model, pdrop=pdrop, scale=scale,
                                        layers=layers, d_ff=d_ff, rpr_k=rpr_k, d_k=d_k,
                                        activation=activation, layer_norm_eps=layer_norm_eps,
-                                       layer_norms_after=layer_norms_after)
+                                       layer_norms_after=layer_norms_after, windowed_ra=windowed_ra)
 
     def create_mask(self, bth):
         max_seqlen = get_shape_as_list(bth)[1]
@@ -420,6 +421,5 @@ class TransformerLanguageModel(AbstractGeneratorModel):
 class TransformerMaskedLanguageModel(TransformerLanguageModel):
 
     def create_mask(self, bth):
-        nctx = get_shape_as_list(bth)[1]
-        return tf.fill([1, 1, nctx, nctx], 1.)
+        return None
 

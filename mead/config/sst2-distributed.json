@@ -23,7 +23,8 @@
   "backend": "tensorflow",
   "dataset": "SST2",
   "loader": {
-    "reader_type": "default"
+    "reader_type": "default",
+    "truncate": true
   },
   "unif": 0.25,
   "model": {
@@ -39,8 +40,10 @@
   },
   "train": {
     "fit_func": "distributed",
-    "epochs": 2,
-    "optim": "adam",
+    "epochs": 5,
+    "optim": "adamw",
+    "lr_scheduler_type": "cosine",
+    "decay_steps": 7700,
     "eta": 0.001,
     "model_zip": true,
     "early_stopping_metric": "acc",

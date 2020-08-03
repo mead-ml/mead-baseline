@@ -1,9 +1,11 @@
 import collections
 import tempfile
 import unicodedata
-from typing import Tuple
+from typing import Tuple, List, Iterable, Set
 import numpy as np
-from baseline.utils import exporter, optional_params, listify, register, Offsets, import_user_module, validate_url, urlretrieve
+from six.moves.urllib.request import urlretrieve
+
+from baseline.utils import exporter, optional_params, listify, register, Offsets, import_user_module, validate_url
 
 
 __all__ = []
@@ -23,6 +25,9 @@ class Vectorizer(object):
         pass
 
     def get_dims(self) -> Tuple[int]:
+        pass
+
+    def valid_label_indices(self, tokens: Iterable) -> List[int]:
         pass
 
     def iterable(self, tokens):
@@ -66,6 +71,12 @@ class AbstractVectorizer(Vectorizer):
                 if value == -1:
                     break
             yield value
+
+    def valid_label_indices(self, tokens: Iterable) -> List[int]:
+        try:
+            return list(range(len(tokens)))
+        except TypeError:
+            return [i for i, _ in enumerate(tokens)]
 
 
 @export
@@ -176,6 +187,12 @@ class AbstractCharVectorizer(AbstractVectorizer):
             for ch in token:
                 yield vocab.get(ch, OOV)
             yield EOW
+
+    def valid_label_indices(self, tokens: Iterable) -> List[int]:
+        try:
+            return list(range(len(tokens)))
+        except TypeError:
+            return [i for i, _ in enumerate(tokens)]
 
 
 @export
@@ -382,10 +399,15 @@ class SavableFastBPE:
         self.vocab = open(vocab_path, 'rb').read()
         self.bpe = fastBPE(codes_path, vocab_path)
 
+    @property
+    def subword_sentinel(self):
+        return "@@"
+
     def __getstate__(self):
         return {'codes': self.codes, 'vocab': self.vocab}
 
     def __setstate__(self, state):
+        from fastBPE import fastBPE
         with tempfile.NamedTemporaryFile() as codes, tempfile.NamedTemporaryFile() as vocab:
             codes.write(state['codes'])
             vocab.write(state['vocab'])
@@ -395,6 +417,7 @@ class SavableFastBPE:
         return self.bpe.apply(sentences)
 
 
+# TODO: Most of our classes have the `Vectorizer` part of the name at the end
 @export
 @register_vectorizer(name='bpe1d')
 class BPEVectorizer1D(AbstractVectorizer):
@@ -417,6 +440,31 @@ class BPEVectorizer1D(AbstractVectorizer):
         self.vocab = {k: i for i, k in enumerate(self.read_vocab(self.vocab_file))}
         self.emit_begin_toks = listify(kwargs.get('emit_begin_tok', []))
         self.emit_end_toks = listify(kwargs.get('emit_end_tok', []))
+        self._special_tokens = {"[CLS]", "<unk>", "<EOS>"}
+
+    @property
+    def special_tokens(self) -> Set[str]:
+        return self._special_tokens
+
+    @property
+    def subword_sentinel(self):
+        return getattr(self.tokenizer, "subword_sentinel", "@@")
+
+    def valid_label_indices(self, tokens: Iterable) -> List[int]:
+        indices = []
+        in_subword = False
+        for i, token in enumerate(tokens):
+            if token in self.special_tokens:
+                in_subword = False
+                continue
+            if not in_subword:
+                indices.append(i)
+                if token.endswith(self.subword_sentinel):
+                    in_subword = True
+            else:
+                if not token.endswith(self.subword_sentinel):
+                    in_subword = False
+        return indices
 
     def read_vocab(self, s):
         vocab = [] + Offsets.VALUES + ['[CLS]', '[MASK]']
@@ -467,6 +515,7 @@ class BPEVectorizer1D(AbstractVectorizer):
                 i -= len(self.emit_end_toks)
                 for j, x in enumerate(self.emit_end_toks):
                     vec1d[i + j] = vocab.get(x)
+                i = self.mxlen - 1
                 break
             vec1d[i] = atom
         valid_length = i + 1
@@ -746,6 +795,10 @@ class WordpieceTokenizer:
         self.unk_token = unk_token
         self.max_input_chars_per_word = max_input_chars_per_word
 
+    @property
+    def subword_sentinel(self):
+        return "##"
+
     def tokenize(self, text):
         """Tokenizes a piece of text into its word pieces.
 
@@ -840,6 +893,7 @@ def _is_punctuation(char):
     return False
 
 
+# TODO: Most of our classes have the `Vectorizer` part of the name at the end
 @register_vectorizer(name='wordpiece1d')
 class WordpieceVectorizer1D(AbstractVectorizer):
 
@@ -849,6 +903,18 @@ class WordpieceVectorizer1D(AbstractVectorizer):
         self.tokenizer = WordpieceTokenizer(load_bert_vocab(kwargs.get('vocab_file')))
         self.mxlen = kwargs.get('mxlen', -1)
         self.dtype = kwargs.get('dtype', 'int')
+        self._special_tokens = {"[CLS]", "<unk>", "<EOS>"}
+
+    @property
+    def subword_sentinel(self):
+        return getattr(self.tokenizer, "subword_sentinel", "##")
+
+    @property
+    def special_tokens(self) -> Set[str]:
+        return self._special_tokens
+
+    def valid_label_indices(self, tokens: Iterable) -> List[int]:
+        return [i for i, t in enumerate(tokens) if not t.startswith(self.subword_sentinel) and t not in self.special_tokens]
 
     def iterable(self, tokens):
         yield '[CLS]'
@@ -936,9 +1002,14 @@ class WordpieceDict1DVectorizer(WordpieceVectorizer1D):
     def iterable(self, tokens):
         yield '[CLS]'
         for t in tokens:
-            tok = t[self.field]
-            for subtok in self.tokenizer.tokenize(tok):
-                yield subtok
+            tok = t[self.field] if isinstance(t, dict) else t
+            if tok == '<unk>':
+                yield '[UNK]'
+            elif tok == '<EOS>':
+                yield '[SEP]'
+            else:
+                for subtok in self.tokenizer.tokenize(self.transform_fn(tok)):
+                    yield subtok
         yield '[SEP]'
 
 

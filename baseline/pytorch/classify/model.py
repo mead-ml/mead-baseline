@@ -112,6 +112,7 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
         return probs
 
     def predict(self, batch_dict: Dict[str, TensorDef], raw: bool = False, dense: bool = False, **kwargs):
+        self.eval()
         probs = self.predict_batch(batch_dict, **kwargs)
         if raw and not dense:
             logger.warning(
@@ -360,7 +361,8 @@ class FineTuneModelClassifier(ClassifierModelBase):
         :param kwargs:
         :return:
         """
-        return Dense(input_dim, len(self.labels), activation=kwargs.get('output_activation', 'log_softmax'))
+        return WithDropout(Dense(input_dim, len(self.labels), activation=kwargs.get('output_activation', 'log_softmax'),
+                                 unif=kwargs.get('output_unif', 0.0)), pdrop=kwargs.get('output_dropout', 0.0))
 
     def create_layers(self, embeddings: Dict[str, TensorDef], **kwargs):
         self.embeddings = self.init_embed(embeddings, **kwargs)

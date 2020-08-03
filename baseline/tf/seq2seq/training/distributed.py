@@ -56,6 +56,7 @@ class Seq2SeqTrainerDistributedTf(Trainer):
                                                              max_to_keep=5)
         devices = ['/device:GPU:{}'.format(i) for i in range(self.gpus)]
         self.strategy = tf.distribute.MirroredStrategy(devices)
+        self.bleu_n_grams = int(kwargs.get("bleu_n_grams", 4))
 
     def checkpoint(self):
         """This method saves a checkpoint
@@ -125,9 +126,9 @@ class Seq2SeqTrainerDistributedTf(Trainer):
                     epoch_div.assign_add(step_toks)
                     nstep_div.assign_add(step_toks)
 
-                    step = self.optimizer.global_step.numpy() + 1
+                    step = self.optimizer.global_step.numpy().item() + 1
                     if step % self.nsteps == 0:
-                        metrics = self.calc_metrics(nstep_loss.numpy(), nstep_div.numpy())
+                        metrics = self.calc_metrics(nstep_loss.numpy().item(), nstep_div.numpy().item())
                         self.report(
                             step, metrics, self.nstep_start,
                             'Train', 'STEP', reporting_fns, self.nsteps
@@ -148,7 +149,7 @@ class Seq2SeqTrainerDistributedTf(Trainer):
 
     def calc_metrics(self, agg, norm):
         metrics = super().calc_metrics(agg, norm)
-        metrics['perplexity'] = np.exp(metrics['avg_loss'])
+        metrics['perplexity'] = np.exp(metrics['avg_loss']).item()
         return metrics
 
 
@@ -161,13 +162,14 @@ class Seq2SeqTrainerDistributedTf(Trainer):
         preds = []
         golds = []
         start = time.time()
+        kwargs['make_input'] = False
 
         for features, tgt in es:
             tgt_lens = features.pop('tgt_len')
             top_preds = self.model.predict(features, **kwargs)
             preds.extend(convert_seq2seq_preds(top_preds[:, 0, :], self.tgt_rlut))
             golds.extend(convert_seq2seq_golds(tgt, tgt_lens, self.tgt_rlut))
-        metrics = {'bleu': bleu(preds, golds)[0]}
+        metrics = {'bleu': bleu(preds, golds, self.bleu_n_grams)[0]}
         self.report(
             0, metrics, start, 'Test', 'EPOCH', reporting_fns
         )
@@ -192,7 +194,7 @@ class Seq2SeqTrainerDistributedTf(Trainer):
 
         def _replicated_valid_step(inputs):
             features, tgt = inputs
-            top_preds = self.model.predict(features, beam=1)
+            top_preds = self.model.predict(features, beam=1, make_input=False)
             per_replica_loss = loss(self.model, features, tgt)
             per_replica_toks = self._num_toks(features['tgt_len'])
             per_replica_report_loss = per_replica_loss * tf.cast(per_replica_toks, tf.float32)
@@ -314,8 +316,8 @@ def fit_eager_distributed(model_params, ts, vs, es=None, **kwargs):
 
     for epoch in range(epochs):
 
-        trainer.train(train_dataset, steps=len(ts), reporting_fns=reporting_fns)
-        test_metrics = trainer.test(valid_dataset, steps=len(vs), reporting_fns=reporting_fns, phase='Valid')
+        trainer.train(train_dataset, steps=len(ts.examples) // ts.batchsz, reporting_fns=reporting_fns)
+        test_metrics = trainer.test(valid_dataset, steps=len(vs.examples) // vs.batchsz, reporting_fns=reporting_fns, phase='Valid')
 
         if do_early_stopping is False:
             trainer.checkpoint()
@@ -341,5 +343,5 @@ def fit_eager_distributed(model_params, ts, vs, es=None, **kwargs):
         test_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(es, src_lengths_key, dst=True))
         test_dataset = test_dataset.batch(test_batchsz, drop_remainder=False)
         test_dataset = test_dataset.prefetch(NUM_PREFETCH)
-        trainer.test(test_dataset, steps=len(es), reporting_fns=reporting_fns, phase='Test')
+        trainer.test(test_dataset, steps=len(es.examples) // es.batchsz, reporting_fns=reporting_fns, phase='Test')
 

@@ -45,7 +45,15 @@ class TransformerEncoderWrapper(tf.keras.layers.Layer):
         if hsz is None:
             hsz = dsz
         self.proj = tf.keras.layers.Dense(hsz) if hsz != dsz else self._identity
-        self.transformer = TransformerEncoderStack(num_heads=num_heads, d_model=hsz, pdrop=dropout, scale=True, layers=layers, name=scope)
+        d_ff = int(kwargs.get('d_ff', 4 * hsz))
+        rpr_k = kwargs.get('rpr_k')
+        d_k = kwargs.get('d_k')
+        activation = kwargs.get('activation', 'relu')
+        scale = bool(kwargs.get('scale', True))
+        self.transformer = TransformerEncoderStack(num_heads, d_model=hsz, d_ff=d_ff,
+                                                   pdrop=dropout, scale=scale, layers=layers,
+                                                   rpr_k=rpr_k, d_k=d_k, activation=activation, scope=scope)
+
 
     def _identity(self, x):
         return x

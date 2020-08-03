@@ -1,10 +1,10 @@
 # MEAD Baseline
 
 MEAD Baseline is a library for reproducible deep learning research and fast model
-development for NLP. The library provides easily extensible abstractions and
-implementations for data loading, model development, training and export of deep
-learning architectures. It also provides implementations for high-performance,
-deep learning models for various NLP tasks, against which newly developed models
+development for NLP. It provides easily extensible abstractions and
+implementations for data loading, model development, training, experiment tracking and export to production. 
+
+It also provides implementations of high-performance deep learning models for various NLP tasks, against which newly developed models
 can be compared. Deep learning experiments are hard to reproduce, MEAD
 provides functionalities to track them. The goal is to allow a researcher to
 focus on model development, delegating the repetitive tasks to the library.
@@ -24,10 +24,11 @@ Baseline can be installed as a Python package.
 `pip install mead-baseline`
 
 If you are using tensorflow 2 as your deep learning backend you will need to have
-`tensorflow_addons` already installed or have it get installed with mead via
+`tensorflow_addons` already installed or have it get installed directly with: 
 
 `pip install mead-baseline[tf2]`
 
+*Note for TF 2.1 users*: If you are using TF 2.1, you cannot just `pip install tensorflow_addons` (or the command above) -- it will pull a version that is dependent on a more recent version with breaking changes.  If you are running TF 2.1, use a pinned version of the addons: `pip install tensorflow_addons==0.9.1`
 
 ### From the repository
 
@@ -40,16 +41,13 @@ cd ../
 pip install -e .
 ```
 
-This first installs `mead-layers` (8 mile) locally and then `mead-baseline`
+This first installs `mead-layers` AKA 8 mile, a tiny layers API containing PyTorch and TensorFlow primitives, locally and then `mead-baseline`
 
 ## A Note About Versions
 
-Deep Learning Frameworks are evolving quickly, and changes are not always
-backwards compatible. We recommend recent versions of each framework. Baseline
-is known to work on most versions of TensorFlow, and is currently being run on
-versions between 1.13 and 2.1 .
-
-The PyTorch backend requires at least version 1.3.0.
+Deep Learning Frameworks are evolving quickly and changes are not always
+backwards compatible. We recommend recent versions of whichever framework is being used underneath.  We currently run on TF versions between 1.13 and 2.2, and we recommend using at least TF 2.1.
+The PyTorch backend requires at least version 1.3.0, though we recommend using a more recent version.
 
 ## Citing
 

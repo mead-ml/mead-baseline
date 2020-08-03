@@ -1,10 +1,11 @@
 import six
 import os
 import time
+from itertools import zip_longest
 import numpy as np
 import tensorflow as tf
 import logging
-from eight_mile.utils import listify, revlut, to_spans, write_sentence_conll, per_entity_f1, span_f1, conlleval_output
+from eight_mile.utils import listify, revlut, to_spans, write_sentence_conll, per_entity_f1, span_f1, conlleval_output, Offsets
 from eight_mile.tf.layers import TRAIN_FLAG, SET_TRAIN_FLAG, reload_checkpoint, get_shape_as_list, autograph_options
 from eight_mile.tf.optz import EagerOptimizer
 from baseline.progress import create_progress_bar
@@ -42,7 +43,7 @@ class TaggerEvaluatorEagerTf:
             print('Setting span type {}'.format(self.span_type))
         self.verbose = verbose
 
-    def process_batch(self, batch, truth):
+    def process_batch(self, batch, truth, handle=None, txts=None, ids=None):
         guess = self.model(batch)
         sentence_lengths = batch['lengths']
 
@@ -59,11 +60,21 @@ class TaggerEvaluatorEagerTf:
             sentence = guess[b][:length].numpy()
             # truth[b] is padded, cutting at :length gives us back true length
             gold = truth[b][:length].numpy()
-            correct_labels += np.sum(np.equal(sentence, gold))
-            total_labels += length
 
-            gold_chunks.append(set(to_spans(gold, self.idx2label, self.span_type, self.verbose)))
-            pred_chunks.append(set(to_spans(sentence, self.idx2label, self.span_type, self.verbose)))
+            valid_guess = sentence[gold != Offsets.PAD]
+            valid_gold = gold[gold != Offsets.PAD]
+            valid_sentence_length = np.sum(gold != Offsets.PAD)
+
+            correct_labels += np.sum(np.equal(valid_guess, valid_gold))
+            total_labels += valid_sentence_length
+
+            gold_chunks.append(set(to_spans(valid_gold, self.idx2label, self.span_type, self.verbose)))
+            pred_chunks.append(set(to_spans(valid_guess, self.idx2label, self.span_type, self.verbose)))
+
+            if not (handle is None or txts is None):
+                example_id = ids[b]
+                example_txt = txts[example_id]
+                write_sentence_conll(handle, valid_guess, valid_gold, example_txt, self.idx2label)
 
         return correct_labels, total_labels, gold_chunks, pred_chunks
 
@@ -84,25 +95,32 @@ class TaggerEvaluatorEagerTf:
         gold_spans = []
         pred_spans = []
 
-        pg = create_progress_bar(steps)
-        metrics = {}
-        for features, y in pg(ts):
-            correct, count, golds, guesses = self.process_batch(features, y)
-            total_correct += correct
-            total_sum += count
-            gold_spans.extend(golds)
-            pred_spans.extend(guesses)
+        handle = None
+        if kwargs.get("conll_output") is not None and kwargs.get('txts') is not None:
+            handle = open(kwargs.get("conll_output"), "w")
 
-        total_acc = total_correct / float(total_sum)
-        # Only show the fscore if requested
-        metrics['f1'] = span_f1(gold_spans, pred_spans)
-        metrics['acc'] = total_acc
-        if self.verbose:
-            conll_metrics = per_entity_f1(gold_spans, pred_spans)
-            conll_metrics['acc'] = total_acc * 100
-            conll_metrics['tokens'] = total_sum
-            logger.info(conlleval_output(conll_metrics))
+        try:
+            pg = create_progress_bar(steps)
+            metrics = {}
+            for (features, y), batch in pg(zip_longest(ts, kwargs.get('batches', []), fillvalue={})):
+                correct, count, golds, guesses = self.process_batch(features, y, handle=handle, txts=kwargs.get("txts"), ids=batch.get("ids"))
+                total_correct += correct
+                total_sum += count
+                gold_spans.extend(golds)
+                pred_spans.extend(guesses)
 
+            total_acc = total_correct / float(total_sum)
+            # Only show the fscore if requested
+            metrics['f1'] = span_f1(gold_spans, pred_spans)
+            metrics['acc'] = total_acc
+            if self.verbose:
+                conll_metrics = per_entity_f1(gold_spans, pred_spans)
+                conll_metrics['acc'] = total_acc * 100
+                conll_metrics['tokens'] = total_sum
+                logger.info(conlleval_output(conll_metrics))
+        finally:
+            if handle is not None:
+                handle.close()
 
         return metrics
 
@@ -344,7 +362,7 @@ def fit_eager(model_params, ts, vs, es=None, **kwargs):
         test_dataset = test_dataset.prefetch(NUM_PREFETCH)
         evaluator = TaggerEvaluatorEagerTf(trainer.model, span_type, verbose)
         start = time.time()
-        test_metrics = evaluator.test(test_dataset, conll_output=conll_output, txts=txts, steps=len(es))
+        test_metrics = evaluator.test(test_dataset, conll_output=conll_output, txts=txts, batches=es, steps=len(es))
         duration = time.time() - start
         for reporting in reporting_fns:
             reporting(test_metrics, 0, 'Test')

@@ -9,7 +9,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.jit as jit
 import torch.autograd
-
+import glob
 from eight_mile.utils import listify, Offsets, is_sequence
 from eight_mile.utils import transition_mask as transition_mask_np
 
@@ -63,7 +63,7 @@ def unsort_batch(batch: torch.Tensor, perm_idx: torch.Tensor) -> torch.Tensor:
     diff = len(batch.shape) - len(perm_idx.shape)
     extra_dims = [1] * diff
     perm_idx = perm_idx.view([-1] + extra_dims)
-    return batch.scatter_(0, perm_idx.expand_as(batch), batch)
+    return torch.scatter(torch.zeros_like(batch), 0, perm_idx.expand_as(batch), batch)
 
 
 def infer_lengths(tensor, dim=1):
@@ -315,8 +315,8 @@ class Conv1DSame(nn.Module):
         :param bias: Is bias on?
         """
         super().__init__()
-        start_pad = kernel_size // 2
-        end_pad = start_pad - 1 if kernel_size % 2 == 0 else start_pad
+        end_pad = kernel_size // 2
+        start_pad = end_pad - 1 if kernel_size % 2 == 0 else end_pad
         self.conv = nn.Sequential(
             nn.ConstantPad1d((start_pad, end_pad), 0.),
             nn.Conv1d(in_channels, out_channels, kernel_size, bias=bias)
@@ -519,8 +519,15 @@ class ParallelConv(nn.Module):
 
         self.output_dim = sum(outsz_filts)
         for i, fsz in enumerate(filtsz):
-            pad = fsz // 2
-            conv = nn.Sequential(nn.Conv1d(insz, outsz_filts[i], fsz, padding=pad), get_activation(activation))
+            if fsz % 2 == 0:
+                conv = Conv1DSame(insz, outsz_filts[i], fsz)
+            else:
+                pad = fsz // 2
+                conv = nn.Conv1d(insz, outsz_filts[i], fsz, padding=pad)
+            conv = nn.Sequential(
+                conv,
+                get_activation(activation)
+            )
             convs.append(conv)
             # Add the module so its managed correctly
         self.convs = nn.ModuleList(convs)
@@ -1794,7 +1801,7 @@ class BahdanauAttention(VectorSequenceAttention):
         u = self.E_a(keys_bth).view(B, T, H)
         z = torch.tanh(q + u)
         a = self.v(z.view(-1, self.hsz)).view(B, T)
-        a.masked_fill(keys_mask == MASK_FALSE, -1e9)
+        a = a.masked_fill(keys_mask == MASK_FALSE, -1e9)
         a = F.softmax(a, dim=-1)
         return a
 
@@ -1991,8 +1998,8 @@ def script_viterbi(
     fill_value: float = -1e4
     alphas = torch.full((num_tags,), fill_value, dtype=unary.dtype, device=unary.device)
     broadcast_idx = torch.full((num_tags,), start_idx, dtype=torch.long)
-    alphas.scatter_(0, broadcast_idx, torch.zeros((num_tags,)))
-    alphas.unsqueeze_(0)
+    alphas = alphas.scatter(0, broadcast_idx, torch.zeros((num_tags,)))
+    alphas = alphas.unsqueeze(0)
     backpointers: torch.Tensor = torch.zeros(num_tags, dtype=torch.long).unsqueeze(0)
     for i in range(seq_len):
         unary_t = unary[i, :]
@@ -2094,6 +2101,53 @@ class Viterbi(nn.Module):
         seq_mask = sequence_mask(lengths, seq_len).to(best_path.device).transpose(0, 1)
         best_path = best_path.masked_fill(seq_mask == MASK_FALSE, 0)
         return best_path, path_score
+
+
+@torch.jit.script
+def script_viterbi_log_softmax_norm(
+    unary: torch.Tensor, trans: torch.Tensor, start_idx: int, end_idx: int
+) -> Tuple[torch.Tensor, torch.Tensor]:
+
+    seq_len: int = unary.size(0)
+    num_tags: int = unary.size(1)
+    fill_value: float = -1e4
+    alphas = torch.full((num_tags,), fill_value, dtype=unary.dtype, device=unary.device)
+    broadcast_idx = torch.full((num_tags,), start_idx, dtype=torch.long)
+    alphas = alphas.scatter(0, broadcast_idx, torch.zeros((num_tags,)))
+    alphas = alphas.unsqueeze(0)
+    alphas = torch.log(F.softmax(alphas, dim=-1))
+    backpointers: torch.Tensor = torch.zeros(num_tags, dtype=torch.long).unsqueeze(0)
+    for i in range(seq_len):
+        unary_t = unary[i, :]
+        next_tag_var = alphas + trans
+        viterbi, best_tag_ids = torch.max(next_tag_var, 1)
+        backpointers = torch.cat([backpointers, best_tag_ids.unsqueeze(0)], 0)
+        alphas = (viterbi + unary_t).unsqueeze(0)
+
+    terminal_vars = alphas.squeeze(0) + trans[end_idx, :]
+    path_score, best_tag_id = torch.max(terminal_vars, 0)
+    best_path = best_tag_id.unsqueeze(0)
+
+    for i in range(unary.size(0)):
+        t = seq_len - i - 1
+        best_tag_id = backpointers[t + 1, best_tag_id]
+        best_path = torch.cat([best_path, best_tag_id.unsqueeze(0)], -1)
+
+    new_path_vec = best_path.flip(0)
+    return new_path_vec[1:], path_score
+
+
+class ViterbiLogSoftmaxNormBatchSize1(nn.Module):
+    def __init__(self, start_idx: int, end_idx: int):
+        super().__init__()
+        self.start_idx = start_idx
+        self.end_idx = end_idx
+
+    def forward(self, unary: torch.Tensor, trans: torch.Tensor, _: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        unary = unary.squeeze(1)
+        trans = trans.squeeze(0)
+        path, score = script_viterbi_log_softmax_norm(unary, trans, self.start_idx, self.end_idx)
+        return path.unsqueeze(1), score
 
 
 class ViterbiLogSoftmaxNorm(Viterbi):
@@ -2671,6 +2725,83 @@ class SeqDotProductRelativeAttention(SequenceSequenceRelativeAttention):
         return F.softmax(scores, dim=-1)
 
 
+def unfold_tensor(tensor, dim, window_sz):
+    """Unfold a tensor by applying a sliding window on a certain dimension with step 1 and padding of 0's. The window
+    dimension is added as the last dimension
+
+    :param tensor: the tensor to be unfolded, with shape [d_1, d_2, ..., T, ..., d_n]
+    :param dim: the dimension along which unfolding is applied
+    :param window_sz: sliding window size, need to be an odd number
+
+    :return: the unfolded tensor with shape [d_1, d_2, ..., T, ..., d_n, window_sz]
+    """
+    half_window = (window_sz - 1) // 2
+    if dim < 0:
+        dim = len(tensor.shape) + dim
+    # torch.nn.functional.pad apply backwardly from the last dimension
+    padding = [0, 0] * (len(tensor.shape) - dim - 1) + [half_window, half_window]
+    return F.pad(tensor, padding).unfold(dim, window_sz, 1)
+
+
+class SeqScaledWindowedRelativeAttention(SequenceSequenceRelativeAttention):
+    """This class implements windowed relative attention, i.e. preventing attention beyond rpr_k. For efficiency,
+    _attention and _update are implemented in a different way."""
+    def __init__(self, pdrop: float = 0.1, **kwargs):
+        super().__init__(pdrop=pdrop, **kwargs)
+
+    def _unfold_mask(self, mask, batchsz, rpr_k):
+        """Transform mask into the unfolded format."""
+        window_sz = 2 * rpr_k + 1
+        T = mask.shape[3]
+        if mask.shape[2] > 1:  # mask is from a subsequent mask, with [1, 1, T, T] or [B, 1, T, T]
+            logger.warning("Using subsequent mask with long sequence may cause OOM error.")
+            mask = mask.expand(batchsz, 1, T, T)  # expand sequence/subsequent mask into a uniform dim
+            mask = F.pad(mask, [rpr_k, rpr_k])  # pad both sides with rpr_k, [B, 1, T, T + 2*rpr_k]
+            seq = torch.arange(T + 2 * rpr_k)
+            indices = seq.unfold(0, window_sz, 1)  # indices of a sliding window, [T, W]
+            indices = indices.unsqueeze(0).unsqueeze(0).expand(batchsz, 1, T, window_sz).to(mask.device)
+            return torch.gather(mask, -1, indices)  # [B, 1, T, W]):
+        else:  # mask is a sequence mask [B, 1, 1, T]
+            unfolded = unfold_tensor(mask, dim=-1, window_sz=window_sz)  # [B, 1, 1, T, W]
+            return unfolded.squeeze(1)  # [B, 1, T, W]
+
+    def _attention(
+            self, query: torch.Tensor, key: torch.Tensor, rpr_key: torch.Tensor, mask: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
+        """Implementation of attention considering RA masking: using torch.Tensor.unfold to create an extra dimension
+        representing the sliding window. Then when applying matmul, Q, K, V share the same T dimension.
+
+        :param query: a query for alignment. Can come from self in case of self-attn or decoder in case of E/D
+        :param key: a set of keys from encoder or self
+        :param mask: masking (for destination) to prevent seeing what we shouldnt
+        :param rpr_key: tensor of the rpr_key embeddings [W, d_k]
+        :return: A tensor that is [B, H, T, 1, W] to be matmul with values
+        """
+        B, H, T, d_k = query.shape
+        window_sz = rpr_key.shape[0]
+        rpr_k = (window_sz - 1) // 2
+        query = query.unsqueeze(-2)  # [B, H, T, 1, d_k]
+        key = unfold_tensor(key, dim=2, window_sz=window_sz)  # [B, H, T, d_k, W]
+        rpr_key = rpr_key.transpose(0, 1).unsqueeze(0).unsqueeze(0).unsqueeze(0)  # [1, 1, 1, d_k, W]
+
+        scores_qk = torch.matmul(query, key)  # [B, H, T, 1, W]
+        scores_qrk = torch.matmul(query, rpr_key)  # [B, H, T, 1, W]
+        scores = (scores_qk + scores_qrk) / math.sqrt(d_k)
+        if mask is not None:
+            mask = self._unfold_mask(mask, B, rpr_k).unsqueeze(-2)  # [B, 1, T, 1, W]
+            scores = scores.masked_fill(mask == False, -1e9)
+        return F.softmax(scores, dim=-1)
+
+    def _update(self, a: torch.Tensor, value: torch.Tensor, rpr_value: torch.Tensor) -> torch.Tensor:
+        # a has dim [B, H, T, 1, W]
+        window_sz = a.shape[-1]
+        value = unfold_tensor(value, dim=2, window_sz=window_sz).transpose(-1, -2)  # [B, H, T, W, d_k]
+        rpr_value = rpr_value.unsqueeze(0).unsqueeze(0).unsqueeze(0)  # [1, 1, 1, W, d_k]
+        updated_values = torch.matmul(a, value)  # [B, H, T, 1, d_k]
+        update_rpr_values = torch.matmul(a, rpr_value)  # [B, H, T, 1, d_k]
+        return (updated_values + update_rpr_values).squeeze(3)  # [B, H, T, d_k]
+
+
 class SeqBahdanauAttention(SequenceSequenceAttention):
     def __init__(self, hsz: int, pdrop: float = 0.1, **kwargs):
         super().__init__(hsz, pdrop=pdrop, **kwargs)
@@ -2781,11 +2912,14 @@ class MultiHeadedRelativeAttention(nn.Module):
         dropout: float = 0.1,
         scale: bool = False,
         d_k: Optional[int] = None,
+        windowed_ra: bool = False,
     ):
         """Constructor for multi-headed attention
 
-        :param h: The number of heads
+        :param num_heads: The number of heads
         :param d_model: The model hidden size
+        :param rpr_k: distance within which relative positional embedding will be considered
+        :param windowed_ra: whether prevent attention beyond rpr_k
         :param dropout (``float``): The amount of dropout to use
         :param scale: Should we scale the dot product attention
         :param d_k: The low-order project per head.  This is normally `d_model // num_heads` unless set explicitly
@@ -2802,14 +2936,17 @@ class MultiHeadedRelativeAttention(nn.Module):
         self.rpr_k = rpr_k
         self.rpr_key = nn.Embedding(2 * rpr_k + 1, self.d_k)
         self.rpr_value = nn.Embedding(2 * rpr_k + 1, self.d_k)
-
+        self.windowed_ra = windowed_ra
         self.h = num_heads
         self.w_Q = Dense(d_model, self.d_k * self.h)
         self.w_K = Dense(d_model, self.d_k * self.h)
         self.w_V = Dense(d_model, self.d_k * self.h)
         self.w_O = Dense(self.d_k * self.h, d_model)
         if scale:
-            self.attn_fn = SeqScaledDotProductRelativeAttention(dropout)
+            if windowed_ra:
+                self.attn_fn = SeqScaledWindowedRelativeAttention(dropout)
+            else:
+                self.attn_fn = SeqScaledDotProductRelativeAttention(dropout)
         else:
             self.attn_fn = SeqDotProductRelativeAttention(dropout)
         self.attn = None
@@ -2822,6 +2959,11 @@ class MultiHeadedRelativeAttention(nn.Module):
         edges = seq.view(1, -1) - seq.view(-1, 1) + self.rpr_k
         edges = torch.clamp(edges, 0, window_len)
         return self.rpr_key(edges), self.rpr_value(edges)
+
+    def make_windowed_rpr(self, device):
+        window_len = 2 * self.rpr_k + 1
+        window = torch.arange(window_len).to(device)
+        return self.rpr_key(window), self.rpr_value(window)
 
     def forward(self, qkvm: Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]) -> torch.Tensor:
         """Low-order projections of query, key and value into multiple heads, then attention application and dropout
@@ -2841,7 +2983,10 @@ class MultiHeadedRelativeAttention(nn.Module):
         key = self.w_K(key).view(batchsz, -1, self.h, self.d_k).transpose(1, 2)
         value = self.w_V(value).view(batchsz, -1, self.h, self.d_k).transpose(1, 2)
 
-        rpr_key, rpr_value = self.make_rpr(seq_len, query.device)
+        if self.windowed_ra:
+            rpr_key, rpr_value = self.make_windowed_rpr(query.device)
+        else:
+            rpr_key, rpr_value = self.make_rpr(seq_len, query.device)
         x = self.attn_fn((query, key, value, rpr_key, rpr_value, mask))
         self.attn = self.attn_fn.attn
 
@@ -2862,7 +3007,8 @@ class TransformerEncoder(nn.Module):
         rpr_k: Optional[int] = None,
         ffn_pdrop: Optional[float] = 0.0,
         layer_norms_after: bool = False,
-        layer_norm_eps: float = 1.0e-6
+        layer_norm_eps: float = 1.0e-6,
+        windowed_ra: Optional[bool] = False
     ):
         super().__init__()
         # to properly execute BERT models, we have to follow T2T and do layer norms after
@@ -2870,7 +3016,8 @@ class TransformerEncoder(nn.Module):
         self.d_model = d_model
         self.d_ff = d_ff if d_ff is not None else 4 * d_model
         if rpr_k is not None:
-            self.self_attn = MultiHeadedRelativeAttention(num_heads, d_model, rpr_k, pdrop, scale, d_k=d_k)
+            self.self_attn = MultiHeadedRelativeAttention(num_heads, d_model, rpr_k, pdrop, scale, d_k=d_k,
+                                                          windowed_ra=windowed_ra)
         else:
             self.self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale=scale, d_k=d_k)
         self.ffn = nn.Sequential(
@@ -2975,6 +3122,7 @@ class TransformerEncoderStack(nn.Module):
         ffn_pdrop: Optional[float] = 0.0,
         layer_norms_after: bool = False,
         layer_norm_eps: float = 1.0e-6,
+        windowed_ra: Optional[bool] = False,
         **kwargs,
     ):
         super().__init__()
@@ -2989,8 +3137,8 @@ class TransformerEncoderStack(nn.Module):
             self.encoders.append(
                 TransformerEncoder(
                     num_heads, d_model, pdrop, scale, activation, d_ff, d_k,
-                    rpr_k=rpr_k[i], ffn_pdrop=ffn_pdrop,
-                    layer_norms_after=layer_norms_after, layer_norm_eps=layer_norm_eps
+                    rpr_k=rpr_k[i], ffn_pdrop=ffn_pdrop, layer_norms_after=layer_norms_after,
+                    layer_norm_eps=layer_norm_eps, windowed_ra=windowed_ra
                 )
             )
 
@@ -3274,7 +3422,7 @@ class BeamSearchBase:
                 # Get the log_probs of the best scoring beams
                 log_probs = probs.view(bsz, -1).gather(1, best_idx).view(bsz, self.K)
 
-                best_beams = best_idx / V  # Get which beam it came from
+                best_beams = best_idx // V  # Get which beam it came from
                 best_idx = best_idx % V  # Get the index of the word regardless of which beam it is.
 
                 # Best Beam index is relative within the batch (only [0, K)).
@@ -3335,6 +3483,17 @@ def rm_old_checkpoints(base_path, current_epoch, last_n=10):
                 os.remove(checkpoint_name)
 
 
+def find_latest_checkpoint(checkpoint_dir: str, wildcard="checkpoint") -> str:
+    step_num = 0
+    for f in glob.glob(os.path.join(checkpoint_dir, f"{wildcard}*")):
+        last = f.split("-")[-1]
+        for x in ('.pth', '.npz'):
+            last = last.replace(x, '', -1)
+        this_step_num = int(last)
+        if this_step_num > step_num:
+            checkpoint = f
+            step_num = this_step_num
+    return checkpoint, step_num
 
 def save_checkpoint(model: torch.nn.Module, model_base: str, count: int, tick_type: str = 'epoch', save_npz: bool = False):
     from eight_mile.pytorch.serialize import save_tlm_npz
@@ -3380,7 +3539,8 @@ def init_distributed(local_rank):
         torch.cuda.set_device(local_rank)
         device = torch.device("cuda", local_rank)
     torch.distributed.init_process_group(backend='nccl', init_method='env://')
-    return device
+    return device, local_rank
+
 
 class SingleHeadReduction(nn.Module):
     """
@@ -3439,3 +3599,115 @@ class SingleHeadReduction(nn.Module):
         x = x.sum(dim=1)  # [B, D]
         x = x * seq_lengths.float().sqrt().unsqueeze(-1)
         return x
+
+
+class TransformerDiscriminator(nn.Module):
+    """A Transformer model that tries to predict if each token is real or fake
+
+
+    This model is based on [ELECTRA: Pre-Training Text Encoders as Discriminators Rather Than Generators,
+    Clark et al. 2019](https://openreview.net/pdf?id=r1xMH1BtvB).
+
+    """
+
+    def __init__(
+            self,
+            embeddings,
+            num_heads: int,
+            d_model: int,
+            dropout: bool,
+            layers: int = 1,
+            activation: str = "relu",
+            d_ff: Optional[int] = None,
+            d_k: Optional[int] = None,
+            rpr_k: Optional[Union[int, List[int]]] = None,
+            layer_norms_after: bool = False,
+            layer_norm_eps: float = 1.0e-6,
+            **kwargs,
+    ):
+        super().__init__()
+        self.embeddings = EmbeddingsStack(embeddings, dropout)
+        self.weight_std = kwargs.get('weight_std', 0.02)
+        assert self.embeddings.dsz == d_model
+        self.transformer = TransformerEncoderStack(
+            num_heads, d_model=d_model, pdrop=dropout, scale=True,
+            layers=layers, activation=activation, d_ff=d_ff, rpr_k=rpr_k, d_k=d_k,
+            layer_norms_after=layer_norms_after, layer_norm_eps=layer_norm_eps
+        )
+        self.proj_to_output = pytorch_linear(d_model, 1)
+        self.apply(self.init_layer_weights)
+        self.lengths_feature = kwargs.get('lengths_feature', list(self.embeddings.keys())[0])
+
+    def init_layer_weights(self, module):
+        if isinstance(module, (nn.Linear, nn.Embedding, nn.LayerNorm)):
+            module.weight.data.normal_(mean=0.0, std=self.weight_std)
+        if isinstance(module, (nn.Linear, nn.LayerNorm)) and module.bias is not None:
+            module.bias.data.zero_()
+
+    def forward(self, features):
+        embedded = self.embeddings(features)
+        x = features[self.lengths_feature]
+        input_mask = torch.zeros(x.shape, device=x.device, dtype=torch.long).masked_fill(x != 0, 1).unsqueeze(1).unsqueeze(1)
+        transformer_out = self.transformer((embedded, input_mask))
+        binary = self.proj_to_output(transformer_out)
+        return torch.sigmoid(binary)
+
+    def create_loss(self):
+        return nn.BCELoss()
+
+
+
+class SequenceCriterion(nn.Module):
+
+    def __init__(self, LossFn=nn.NLLLoss, avg='token'):
+        super(SequenceCriterion, self).__init__()
+        if avg == 'token':
+            # self.crit = LossFn(ignore_index=Offsets.PAD, reduction='elementwise-mean')
+            self.crit = LossFn(ignore_index=Offsets.PAD, size_average=True)
+            self._norm = self._no_norm
+        else:
+            self.crit = LossFn(ignore_index=Offsets.PAD, size_average=False)
+            self._norm = self._batch_norm
+
+    def _batch_norm(self, loss, inputs):
+        return loss / inputs.size()[0]
+
+    def _no_norm(self, loss, inputs):
+        return loss
+
+    def forward(self, inputs, targets):
+        """Evaluate some loss over a sequence.
+
+        :param inputs: torch.FloatTensor, [B, .., C] The scores from the model. Batch First
+        :param targets: torch.LongTensor, The labels.
+
+        :returns: torch.FloatTensor, The loss.
+        """
+        total_sz = targets.nelement()
+        loss = self.crit(inputs.view(total_sz, -1), targets.view(total_sz))
+        return self._norm(loss, inputs)
+
+
+def pytorch_conv1d(in_channels, out_channels, fsz, unif=0, padding=0, initializer=None):
+    c = nn.Conv1d(in_channels, out_channels, fsz, padding=padding)
+    if unif > 0:
+        c.weight.data.uniform_(-unif, unif)
+    elif initializer == "ortho":
+        nn.init.orthogonal(c.weight)
+    elif initializer == "he" or initializer == "kaiming":
+        nn.init.kaiming_uniform(c.weight)
+    else:
+        nn.init.xavier_uniform_(c.weight)
+    return c
+
+
+def tie_weight(to_layer, from_layer):
+    """Assigns a weight object to the layer weights.
+
+    This method exists to duplicate baseline functionality across packages.
+
+    :param to_layer: the pytorch layer to assign weights to
+    :param from_layer: pytorch layer to retrieve weights from
+    """
+    to_layer.weight = from_layer.weight
+

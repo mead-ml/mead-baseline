@@ -1,31 +1,26 @@
-# Fine-tuning and Transfer Learning in MEAD
+# Fine-Tuning, Pre-Training and Transfer Learning in MEAD
 
-MEAD has supported fine-tuning and transfer learning since its initial release.  The typical recipe for MEAD is
-to define an `*EmbeddingsModel` that can load a pretrained checkpoint inside of an `addon`, which is simply a
-custom extension to MEAD with a `@register_embeddings` directive.
+MEAD has extensive support for fine-tuning and transfer learning and language moodel-base self-supervised pre-training.
+Support for Transformer-based pre-training is built into the core library, and you can find examples of this in
+the [sample mead config files](../mead/config) or in the [mead-tutorials](https://github.com/dpressel/mead-tutorials)
 
-In many cases, the user wants to try out some new model where the checkpoint has been posted online, and just
-encode the words in a sequence with that model, and then either fine-tune (by adding a single layer to the logits/labels
-output) or by using a previously defined model architecture with a custom embedding.
+Fine-tuning models are typically applied as an Embedding model in MEAD which contains the entire sub-graph of the upstream model
+except for its training head.  For simple fine-tuning of classifiers, use a `FineTuneModel` to add a classification head.
+For simple fine-tuning of taggers, you can use a `PassThruModel` model to add a single tagger head, and there are
+examples of how to configure these in the [sample mead configs](../mead/config)
+ 
+For additional embeddings for fine-tuning, see also the embeddings provided at [mead-hub](https://github.com/mead-ml/hub)
 
-For most cases, this is quite simple.  We provide embeddings for several well-known models including *BERT*
-and *ELMo*.
+## Fine-Tuning Transformers
 
+#### Using the Library
 
-## Fine-tuning Transformers
+We provide Transformer contextual Embeddings built on our core layers (called 8-mile), which supports a broad variety of
+Transformers.  For example, BERT, a bidirectionally trained transformer can be loaded into these Embeddings and trained as part of a downstream task.
 
-#### Natively
-
-We provide a Transformer-embedding built on our core layers (called 8-mile), which supports a broad variety of
-Transformers.
-
-Since BERT is actually just a normal transformer with an MLM objective
-(and possibly NSP objective) and since MEAD has built-in layers for building your own Transformer,
-BERT is actually a special case where no `addon` is required to load the model at all and the model can be fine-tuned
-with only the core library.
-
-It is important to realize that there are several Transformer variants.  The original code places `LayerNorm` layers
-after each transform, and uses sinusoidal (fixed) positional embeddings.  
+There are several common Transformer variants.  The original Transformer paper places `LayerNorm` layers
+after each transform, and uses sinusoidal (fixed) positional embeddings, but subsequent research has found that
+optimal placement is at the beginning of each block.
 
 - *Embeddings* - Most versions of Transformers since GPT use learned positional embeddings, rather than using the
 sinusoidal embeddings.  If sinusoidal embeddings are used, there are differences between the definition in the paper and
@@ -35,11 +30,10 @@ most implementations.
 operations, which is the default in `8-mile`.  To support either variant, we offer a boolean to tell the 
 blocks where to put the transform.
 
-- *Relative attention* - The [Shaw et al., 2018]() paper defines a modification to Multi-headed attention to support
+- *Relative position representations* - The [Shaw et al., 2018](https://arxiv.org/pdf/1803.02155.pdf) paper defines a modification to Multi-headed attention to support
 relative positional embeddings.  This work demonstrates that RA is often more effective than positional global embeddings,
 and can be used in place of them.  Following this, models may define the usual `LookupTableEmbeddings` instead of the
 positional flavors
-  - *ConveRT relative attention* - TODO
 
 - *BERT flavored Transformer*:  BERT follows the original T2T implementation but substitutes learned positional embeddings
 instead of sinusoidal ones.  To set up your MEAD config to construct the proper Transformer model, the config `features`
@@ -66,59 +60,62 @@ The model block for fine-tuning has the name `fine-tune`:
 
 
 
-#### Using HuggingFace Transformers
+#### Fine-Tuning HuggingFace Transformers
 
 The developers at HuggingFace have been providing faithful PyTorch implementations of nearly all of the popular 
 Transformer models produced by the research community, and have carefully validated each model matches the original
 implementations exactly.
 
-We provide an addon on mead-hub to use the excellent HuggingFace libraries to fine-tune models like BERT in MEAD.  This
-addon simply overrides
+While we provide native support for Transformer models, if you prefer or need to use the HuggingFace libraries to fine-tune models in MEAD, its fairly easy to do [in an addon](https://github.com/mead-ml/hub/blob/master/v1/addons/embed_bert_pytorch.py).
 
-#### Using BERT Official
+#### Fine-Tuning BERT Official
 
-We provide an addon on mead-hub to use either the BERT official code (a copy) or the TF Hub module to fine-tune.
+We provide an [addon on mead-hub](https://github.com/mead-ml/hub/blob/master/v1/addons/embed_bert_tf.py) to use either the BERT official code (a copy) or the TF Hub module to fine-tune.
 Since this is based on the official code, no conversion or non-standard checkpoints are required.
 
 
-
-## Pre-training with MEAD
+## Pre-Training your own Transformers with MEAD
 
 ### Using the API Examples
 
 MEAD has a rich set of pre-training solutions provided in the API examples, with support for a wide-variety of
-Transformer-based pre-training.  For pre-training, which often requires training multi-GPU, multi-worker, we found
-it easiest to use the PyTorch DistributedDataParallel facilities to train, and to have the programs export a
+Transformer-based pre-training.  For pre-training, which often requires training multi-GPU, multi-worker, we support 
+PyTorch DistributedDataParallel facilities to train and TF2.0 autofunction-based distribution and each program exports to a
 framework-independent NPZ file that can be loaded by either TensorFlow or PyTorch MEAD layers.
 
-#### Pre-training Transformer-based Language Models with MEAD
+
+#### Pre-Training Transformer-based Language Models with MEAD
 
 By now, the practice of pre-training Transformer models on a large amount of data to be used for downstream fine-tuning
-is ubiquitous.  MEAD supports pre-training architectures such as BERT/Roberta via several scripts, all of which
+is ubiquitous.  MEAD supports pre-training architectures such as BERT/RoBERTa via several scripts, all of which
 support multi-worker training.
 
-* [../api-examples/pretrain-transformer-lm.py](pretrain-transformer-lm)*: Train in-core on a corpus, caching the
-features on first use, using either `fastBPE` or `WordPiece` to tokenize the words
+* [pretrain_tlm_pytorch](../api-examples/pretrain_tlm_pytorch.py): Train with multi-worker configuration with a large
+(possibly out-of-core) LM dataset, using either `fastBPE` or `WordPiece` to tokenize the words (PyTorch).
+This program supports export of torch checkpoints as well as NPZ checkpoints, and supports reloading from either.
+Supports Kubernetes-based training with PyTorchJob operator
 
-* [../api-examples/pretrain-lm-streaming.py](pretrain-lm-streaming)*: Train out-of-core on very large datasets, treating
-each line of the corpus as a single context.  This variant will zero-pad lines as necessary to ensure that the context
-is filled.  We use a custom iterable dataset
+* [pretrain_tlm_tf](../api-examples/pretrain_tlm_tf.py): Train multi-worker on TPUs or GPUs with a large
+(possibly out-of-core) LM dataset, using [fastBPE](https://github.com/glample/fastBPE) to tokenize the words.  This program supports export of TF checkpoints
+as well as NPZ checkpoints.  Supports training on TPUs as well as Kubernetes-based training with either TFJob operator, Job or Pod CRDs.
+  - There is a [stripped down example Google Colab tutorial](https://colab.research.google.com/github/dpressel/mead-tutorials/blob/master/mead_transformers_tpu.ipynb) based on this program where you can train an MLM on a TPU
 
-* [../api-examples/pretrain-paired.py](pretrain-paired)*: Train either a Transformer encoder-decoder or a Transformer
-dual encoder out-of-core on very large datasets.  The dual-encoder follows [ConveRT, Henderson et al 2019]().
+* [pretrain_paired_pytorch](../api-examples/pretrain_paired_pytorch.py): Train either a Transformer encoder-decoder or a Transformer
+dual encoder out-of-core on very large datasets.  The dual-encoder follows [ConveRT, Henderson et al 2019](https://arxiv.org/pdf/1911.03688.pdf).
 This variant creates 2 context, one for the encoder and one for the
 decoder, either based on splitting a single line in 2 (Next Sequence Prediction or NSP), or by separating the line 
 by a tab delimiter (Next Turn Prediction or NTP).  In the latter case, its presumed that the separator will partition
 the line into a query and a response.
 
-* [../api-examples/pretrain-discrim.py](pretrain-discrim)*: In this approach, we jointly train a generator and a
-discriminator following [ELECTRA, Clark et al. 2019]().
+* [pretrain_discrim](../api-examples/pretrain_discrim.py): In this approach, we jointly train a generator and a
+discriminator following [ELECTRA: Pre-Training Text Encoders as Discriminators Rather Than Generators,
+    Clark et al. 2019](https://openreview.net/pdf?id=r1xMH1BtvB).
 
-#### Writing your own Pre-training script
+#### Writing your own Pre-Training script
 
 Its pretty easy to tweak the above examples to create your own new training regime with Transformers.  Copy one
 of the other training examples that is closest to what you are trying to do, and modify the `create_loss()` and or
-the model architecture accordingly, and kick it off on your machine (or a kubernetes cluster) and make sure you
+the model architecture accordingly, and kick it off on your machine (or a Kubernetes cluster) and make sure you
 follow the structure of the other examples.  If you can use the existing baseline models 
 `TransformerMaskedLanguageModel` or `TransformerLanguageModel`, this will make things the easiest.  If not, you can
 create a similar class to one of those and change the portions you need (or subclass them).
@@ -130,5 +127,49 @@ create a similar class to one of those and change the portions you need (or subc
   `*PositionalEmbeddingsModel` or `LookupTableEmbeddingsModel` for your embeddings where possible to avoid having to
   create custom serializers/converters
 
+### Testing out your Pre-Trained model
+
+If you have pre-trained an MLM (like BERT) or an Encoder-Decoder (like T5), you might want to see what
+kinds of reconstructions it makes given some data.  For MLMs, use [generate_mlm](../api-examples/generate_mlm.py) to
+test out the model on various masked utterances:
+
+```
+$ python generate_mlm.py --sample true --rpr_k 48 --nctx 128 --subword_model_file codes.30k --subword_vocab_file vocab.30k --query " which do you <unk> , coke or <unk> . i prefer <unk> !" --checkpoint checkpoint-step-1208324.npz
+[Query] which do you <unk> , coke or <unk> . i prefer <unk> !
+[BPE] which do you [MASK] , coke or [MASK] . i prefer [MASK] ! <EOU>
+[Response] which do you prefer , coke or pepsi . i prefer coke ! <EOU>
+
+```
+
+To explore results from an encoder-decoder:
+
+```
+$ python transformer_seq2seq_response.py --subword_model_file codes.30k --subword_vocab_file vocab.30k --checkpoint checkpoint-step-483329.npz --device cpu --query "so <unk> vs coke what do you <unk> ." --sample true --go_token "<PAD>"
+
+[Query] so <unk> vs coke what do you <unk> . <EOU>
+[Response] so pepsi vs coke what do you think . <EOU>
+
+
+```
+
 ### Transformer Checkpoint conversion
+
+The checkpoints are written to NPZ format using the 8-mile library, which writes each layer from its native format into
+an NPZ and can hydrate a model from those checkpoints as well.  The checkpoints are roughly the same size as a PyTorch
+checkpoint.
+
+Please note that the checkpoints that are written during pre-training or export are headless as they are typically used
+for downstream processing.  However, for models with tied embeddings (most models), it is possible to restore
+the original language model or encoder-decoder, by properly resetting the `WeightTieDense` module. 
+For Masked Language models, use:
+
+```python
+load_tlm_npz(model, checkpoint_name, lm_head=True)
+```
+
+For Encoder-Decoder models, use:
+
+```python
+load_transformer_seq2seq_npz(model, checkpoint_name, decode_head=True)
+```
 

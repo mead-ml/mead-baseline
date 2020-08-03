@@ -103,6 +103,7 @@ class Seq2SeqTrainerTf(Trainer):
         self.model.sess.run(tables)
         self.model.sess.run(tf.compat.v1.global_variables_initializer())
         self.model.set_saver(tf.compat.v1.train.Saver())
+        self.bleu_n_grams = int(kwargs.get("bleu_n_grams", 4))
 
         init = tf.compat.v1.global_variables_initializer()
         self.model.sess.run(init)
@@ -215,7 +216,7 @@ class Seq2SeqTrainerTf(Trainer):
             pred = [p[0] for p in self.model.predict(batch_dict)]
             preds.extend(convert_seq2seq_preds(pred, self.tgt_rlut))
             golds.extend(convert_seq2seq_golds(tgt, tgt_lens, self.tgt_rlut))
-        metrics = {'bleu': bleu(preds, golds)[0]}
+        metrics = {'bleu': bleu(preds, golds, self.bleu_n_grams)[0]}
         self.report(
             0, metrics, start, 'Test', 'EPOCH', reporting_fns
         )
@@ -262,7 +263,7 @@ class Seq2SeqTrainerTf(Trainer):
             golds.extend(convert_seq2seq_golds(batch_dict['tgt'], batch_dict['tgt_lengths'], self.tgt_rlut))
 
         metrics = self.calc_metrics(total_loss, total_toks)
-        metrics['bleu'] = bleu(preds, golds)[0]
+        metrics['bleu'] = bleu(preds, golds, self.bleu_n_grams)[0]
         self.report(
             self.valid_epochs, metrics, start,
             phase, 'EPOCH', reporting_fns

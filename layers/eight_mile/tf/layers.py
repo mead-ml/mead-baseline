@@ -1,13 +1,14 @@
 import logging
 import tensorflow as tf
 import numpy as np
-from eight_mile.utils import listify, Offsets, wraps, get_version, is_sequence
+from eight_mile.utils import listify, Offsets, wraps, get_version, is_sequence, transition_mask as transition_mask_np
 from typing import Optional, Union, List, Dict, Any, Tuple
 import contextlib
 import math
 
 BASELINE_TF_TRAIN_FLAG = None
 LOGGER = logging.getLogger('mead.layers')
+
 
 @contextlib.contextmanager
 def autograph_options(options):
@@ -17,6 +18,7 @@ def autograph_options(options):
         yield
     finally:
         tf.config.optimizer.set_experimental_options(old_opts)
+
 
 def set_tf_eager_mode(prefer_eager: bool = False):
     tf_version = get_version(tf)
@@ -206,7 +208,7 @@ class WithoutLength(tf.keras.layers.Layer):
         output = self.layer(inputs[0])
         return output
 
-# Mapped
+
 class ConvEncoder(tf.keras.layers.Layer):
     def __init__(self, insz: Optional[int], outsz: int, filtsz: int, pdrop: float = 0.0, activation: str = "relu", name=None):
         super().__init__(name=name)
@@ -2243,6 +2245,75 @@ class SeqDotProductRelativeAttention(SequenceSequenceRelativeAttention):
         return tf.nn.softmax(scores, name="rel_attention_weights")
 
 
+def unfold_tensor(tensor, dim, window_sz):
+    """Unfold a tensor by applying a sliding window on a certain dimension with step 1 and padding of 0's. The window
+    dimension is added after the T dimension
+
+    :param tensor: the tensor to be unfolded, with shape [d_1, d_2, ..., T, ..., d_n]
+    :param dim: the dimension along which unfolding is applied
+    :param window_sz: sliding window size, need to be an odd number
+
+    :return: the unfolded tensor with shape [d_1, d_2, ..., T, window_sz, ..., d_n]
+    """
+    half_window = (window_sz - 1) // 2
+    if dim < 0:
+        dim = len(tensor.shape) + dim
+    paddings = [[0, 0]] * len(tensor.shape)
+    paddings[dim] = [half_window, half_window]
+    padded = tf.pad(tensor, paddings)
+    return tf.signal.frame(padded, frame_length=window_sz, frame_step=1, axis=dim)
+
+
+class SeqScaledWindowedRelativeAttention(SequenceSequenceRelativeAttention):
+    """This class implements windowed relative attention, i.e. preventing attention beyond rpr_k. For efficiency,
+    _attention and _update are implemented in a different way."""
+    def __init__(self, pdrop: float = 0.1, name: str = "scaled_windowed_rel_attention", **kwargs):
+        super().__init__(pdrop=pdrop, name=name, **kwargs)
+
+    def _unfold_mask(self, mask, batchsz, rpr_k):
+        """Transform mask into the unfolded format."""
+        window_sz = 2 * rpr_k + 1
+        if mask.shape[2] > 1:  # mask is from a subsequent mask, with [1, 1, T, T] or [B, 1, T, T]
+            raise Exception("Windowed relative attention cannot be used with mask of size TxT.")
+        else:  # mask is a sequence mask [B, 1, 1, T]
+            mask = unfold_tensor(mask, dim=-1, window_sz=window_sz)  # [B, 1, 1, T, W]
+            return tf.squeeze(mask, axis=1)  # [B, 1, T, W]
+
+    def _attention(
+            self, query, key, rpr_key, mask = None):
+        """Implementation of attention considering RA masking: using tf.extract_volume_patches() to create an extra
+        dimension representing the sliding window. Then when applying matmul, Q, K, V share the same T dimension.
+        :param query: a query for alignment. Can come from self in case of self-attn or decoder in case of E/D
+        :param key: a set of keys from encoder or self
+        :param mask: masking (for destination) to prevent seeing what we shouldn't
+        :param rpr_key: tensor of the rpr_key embeddings [W, d_k]
+        :return: A tensor that is [B, H, T, 1, W] to be matmul with values
+        """
+        B, H, T, d_k = get_shape_as_list(query)
+        window_sz = rpr_key.shape[0]
+        rpr_k = (window_sz - 1) // 2
+        query = tf.expand_dims(query, -2)  # [B, H, T, 1, d_k]
+        key = unfold_tensor(key, dim=2, window_sz=window_sz)  # [B, H, T, W, d_k]
+        rpr_key = tf.expand_dims(tf.expand_dims(tf.expand_dims(rpr_key, 0), 0), 0)  # [1, 1, 1, W, d_k]
+
+        scores_qk = tf.matmul(query, key, transpose_b=True)  # [B, H, T, 1, W]
+        scores_qrk = tf.matmul(query, rpr_key, transpose_b=True)  # [B, H, T, 1, W]
+        scores = (scores_qk + scores_qrk) / math.sqrt(d_k)
+        if mask is not None:
+            mask = tf.expand_dims(self._unfold_mask(mask, B, rpr_k), -2)  # [B, 1, T, 1, W]
+            scores = masked_fill(scores, tf.equal(mask, 0), -1e9)
+        return tf.nn.softmax(scores, name="rel_attention_weights")
+
+    def _update(self, a, value, rpr_value):
+        # a has dim [B, H, T, 1, W]
+        window_sz = a.shape[-1]
+        value = unfold_tensor(value, dim=2, window_sz=window_sz)  # [B, H, T, W, d_k]
+        rpr_value = tf.expand_dims(tf.expand_dims(tf.expand_dims(rpr_value, 0), 0), 0)  # [1, 1, 1, W, d_k]
+        updated_values = tf.matmul(a, value)  # [B, H, T, 1, d_k]
+        update_rpr_values = tf.matmul(a, rpr_value)  # [B, H, T, 1, d_k]
+        return tf.squeeze(updated_values + update_rpr_values, axis=3)  # [B, H, T, d_k]
+
+
 class SeqDotProductAttention(SequenceSequenceAttention):
     def __init__(self, pdrop: float = 0.1, name: str = "dot_product_attention", **kwargs):
         super().__init__(pdrop, name=name, **kwargs)
@@ -2350,6 +2421,7 @@ class MultiHeadedRelativeAttention(tf.keras.layers.Layer):
         dropout: float = 0.1,
         scale: bool = False,
         d_k: Optional[int] = None,
+        windowed_ra: bool = False,
         name=None,
     ):
         """Constructor for multi-headed attention
@@ -2372,14 +2444,17 @@ class MultiHeadedRelativeAttention(tf.keras.layers.Layer):
         self.rpr_k = rpr_k
         self.rpr_key = tf.keras.layers.Embedding(2 * rpr_k + 1, self.d_k)
         self.rpr_value = tf.keras.layers.Embedding(2 * rpr_k + 1, self.d_k)
-
+        self.windowed_ra = windowed_ra
         self.h = num_heads
         self.w_Q = tf.keras.layers.Dense(units=self.d_k * self.h, name="query_projection")
         self.w_K = tf.keras.layers.Dense(units=self.d_k * self.h, name="key_projection")
         self.w_V = tf.keras.layers.Dense(units=self.d_k * self.h, name="value_projection")
         self.w_O = tf.keras.layers.Dense(units=self.d_k * self.h, name="output_projection")
         if scale:
-            self.attn_fn = SeqScaledDotProductRelativeAttention(dropout)
+            if windowed_ra:
+                self.attn_fn = SeqScaledWindowedRelativeAttention(dropout)
+            else:
+                self.attn_fn = SeqScaledDotProductRelativeAttention(dropout)
         else:
             self.attn_fn = SeqDotProductRelativeAttention(dropout)
         self.attn = None
@@ -2392,6 +2467,11 @@ class MultiHeadedRelativeAttention(tf.keras.layers.Layer):
         edges = tf.reshape(seq, [1, -1]) - tf.reshape(seq, [-1, 1]) + self.rpr_k
         edges = tf.clip_by_value(edges, 0, window_len)
         return self.rpr_key(edges), self.rpr_value(edges)
+
+    def make_windowed_rpr(self):
+        window_sz = 2 * self.rpr_k + 1
+        window = tf.range(window_sz)
+        return self.rpr_key(window), self.rpr_value(window)
 
     def call(self, qkvm):
         """Low-order projections of query, key and value into multiple heads, then attention application and dropout
@@ -2412,7 +2492,10 @@ class MultiHeadedRelativeAttention(tf.keras.layers.Layer):
         key = tf.transpose(tf.reshape(self.w_K(key), [batchsz, -1, self.h, self.d_k]), [0, 2, 1, 3])
         value = tf.transpose(tf.reshape(self.w_V(value), [batchsz, -1, self.h, self.d_k]), [0, 2, 1, 3])
 
-        rpr_key, rpr_value = self.make_rpr(seq_len)
+        if self.windowed_ra:
+            rpr_key, rpr_value = self.make_windowed_rpr()
+        else:
+            rpr_key, rpr_value = self.make_rpr(seq_len)
         x = self.attn_fn((query, key, value, rpr_key, rpr_value, mask))
         self.attn = self.attn_fn.attn
         # (B, H, T, D) -> (B, T, H, D) -> (B, T, H*D)
@@ -2435,6 +2518,7 @@ class TransformerEncoder(tf.keras.layers.Layer):
         ffn_pdrop: Optional[float] = 0.0,
         layer_norms_after: bool = False,
         layer_norm_eps: float = 1.0e-6,
+        windowed_ra: bool = False,
         name: Optional[str] = None
     ):
         super().__init__(name=name)
@@ -2442,7 +2526,8 @@ class TransformerEncoder(tf.keras.layers.Layer):
         self.d_model = d_model
         self.d_ff = d_ff if d_ff is not None else 4 * d_model
         if rpr_k is not None:
-            self.self_attn = MultiHeadedRelativeAttention(num_heads, d_model, rpr_k, pdrop, scale, d_k=d_k)
+            self.self_attn = MultiHeadedRelativeAttention(num_heads, d_model, rpr_k, pdrop, scale, d_k=d_k,
+                                                          windowed_ra=windowed_ra)
         else:
             self.self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale=scale, d_k=d_k)
 
@@ -2471,8 +2556,8 @@ class TransformerEncoder(tf.keras.layers.Layer):
 class TransformerDecoder(tf.keras.layers.Layer):
     def __init__(
         self,
-        d_model: int,
         num_heads: int,
+        d_model: int,
         pdrop: float,
         scale: bool = True,
         activation_type: str = "relu",
@@ -2533,6 +2618,7 @@ class TransformerEncoderStack(tf.keras.layers.Layer):
         ffn_pdrop: Optional[float] = 0.0,
         layer_norms_after: bool = False,
         layer_norm_eps: float = 1.0e-6,
+        windowed_ra: bool = False,
         name=None,
         **kwargs,
     ):
@@ -2549,7 +2635,7 @@ class TransformerEncoderStack(tf.keras.layers.Layer):
                 TransformerEncoder(
                     num_heads, d_model, pdrop, scale, activation, d_ff, d_k,
                     rpr_k=rpr_k[i], ffn_pdrop=ffn_pdrop,
-                    layer_norms_after=layer_norms_after, layer_norm_eps=layer_norm_eps,
+                    layer_norms_after=layer_norms_after, layer_norm_eps=layer_norm_eps, windowed_ra=windowed_ra,
                     name=name,
                 )
             )
@@ -2617,15 +2703,69 @@ class TransformerEncoderStackWithTimeMask(TransformerEncoderStack):
         return super().call((x, mask))
 
 
+class TransformerDiscriminator(tf.keras.Model):
+    """A Transformer model that tries to predict if each token is real or fake
+
+
+    This model is based on [ELECTRA: Pre-Training Text Encoders as Discriminators Rather Than Generators,
+    Clark et al. 2019](https://openreview.net/pdf?id=r1xMH1BtvB).
+
+    """
+    def __init__(
+        self,
+        embeddings,
+        num_heads: int,
+        d_model: int,
+        dropout: bool,
+        layers: int = 1,
+        activation: str = "relu",
+        d_ff: Optional[int] = None,
+        d_k: Optional[int] = None,
+        rpr_k: Optional[Union[int, List[int]]] = None,
+        layer_norms_after: bool = False,
+        layer_norm_eps: float = 1.0e-6,
+        name: Optional[str] = None,
+        **kwargs,
+    ):
+        super().__init__(name=name)
+        self.embeddings = EmbeddingsStack(embeddings, dropout)
+        self.transformer = TransformerEncoderStack(
+            num_heads, d_model=d_model, pdrop=dropout, scale=True,
+            layers=layers, activation=activation, d_ff=d_ff, rpr_k=rpr_k, d_k=d_k,
+            layer_norms_after=layer_norms_after, layer_norm_eps=layer_norm_eps
+        )
+
+        self.proj_to_output = tf.keras.layers.Dense(1)
+
+        self.lengths_feature = kwargs.get('lengths_feature', list(self.embeddings.keys())[0])
+
+    def call(self, features):
+        embedded = self.embeddings(features)
+        x = features[self.lengths_feature]
+        input_mask = tf.expand_dims(tf.expand_dims(tf.cast(x != 0, tf.int32), 1), 1)
+        #input_mask = tf.expand_dims(tf.expand_dims(tf.ones_like(x, dtype=tf.uint8), 1), 1)
+        transformer_out = self.transformer((embedded, input_mask))
+        binary = tf.squeeze(self.proj_to_output(transformer_out), -1)
+        return binary
+
+    def create_loss(self):
+
+        def loss_fn(model, features, labels):
+            logits = model(features)
+            losses = tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.cast(labels, tf.float32), logits=logits)
+            return tf.reduce_mean(losses)
+        return loss_fn
+
+
 class TransformerDecoderStack(tf.keras.layers.Layer):
     def __init__(
         self,
-        d_model: int,
         num_heads: int,
+        d_model: int,
         pdrop: float,
         scale: bool = True,
         layers: int = 1,
-        activation: str = "relu",
+        activation_type: str = "relu",
         d_ff: Optional[int] = None,
         d_k: Optional[int] = None,
         rpr_k: Optional[Union[int, List[int]]] = None,
@@ -2637,10 +2777,16 @@ class TransformerDecoderStack(tf.keras.layers.Layer):
     ):
         super().__init__(name=name)
         self.decoders = []
-        self.ln = tf.identity if layer_norms_after else tf.keras.layers.LayerNormalization(epsilon=1e-6)
+        self.ln = tf.identity if layer_norms_after else tf.keras.layers.LayerNormalization(epsilon=layer_norm_eps)
+
+        if not is_sequence(rpr_k):
+            rpr_k = [rpr_k] * layers
+
         for i in range(layers):
             self.decoders.append(
-                TransformerDecoder(d_model, num_heads, pdrop, scale, activation, d_ff, ffn_pdrop=ffn_pdrop)
+                TransformerDecoder(num_heads, d_model, pdrop, scale, activation_type, d_ff,
+                                   d_k=d_k, rpr_k=rpr_k[i], ffn_pdrop=ffn_pdrop,
+                                   layer_norms_after=layer_norms_after, layer_norm_eps=layer_norm_eps)
             )
 
     def call(self, inputs):
@@ -3129,6 +3275,73 @@ def reload_checkpoint(sess: tf.compat.v1.Session, checkpoint: str, blocks_to_ski
     LOGGER.info("Restoring %s", g)
     saver = tf.compat.v1.train.Saver(g)
     saver.restore(sess, latest)
+
+
+def transition_mask(vocab, span_type, s_idx, e_idx, pad_idx=None):
+    """Create a CRF Mask.
+    Returns a mask with invalid moves as 0 and valid moves as 1.
+    """
+    mask = transition_mask_np(vocab, span_type, s_idx, e_idx, pad_idx).T
+    inv_mask = (mask == 0).astype(np.float32)
+    return mask, inv_mask
+
+
+def tie_weight(weight, tie_shape):
+    """Higher order function to share weights between two layers.
+
+    Tensorflow will take a custom_getter inside of a variable scope.
+    This method creates a getter that looks for a match in shapes. If they match,
+    The weights are transposed and shared.
+
+    """
+    def tie_getter(getter, name, *args, **kwargs):
+        if kwargs['shape'] == tie_shape:
+            return tf.transpose(weight)
+        return getter("{}".format(name), *args, **kwargs)
+    return tie_getter
+
+
+def rnn_cell_w_dropout(hsz, pdrop, rnntype, st=None, variational=False, training=False):
+
+    """Produce a single RNN cell with dropout
+    :param hsz: (``int``) The number of hidden units per LSTM
+    :param rnntype: (``str``): `lstm` or `gru`
+    :param pdrop: (``int``) The probability of dropping a unit value during dropout
+    :param st: (``bool``) state is tuple? defaults to `None`
+    :param variational: (``bool``) Variational recurrence is on
+    :param training: (``bool``) Are we training?  Defaults to ``False``
+    :return: a cell
+    """
+    output_keep_prob = tf.contrib.framework.smart_cond(training, lambda: 1.0 - pdrop, lambda: 1.0)
+    state_keep_prob = tf.contrib.framework.smart_cond(training, lambda: 1.0 - pdrop if variational else 1.0, lambda: 1.0)
+    cell = rnn_cell(hsz, rnntype, st)
+    output = tf.contrib.rnn.DropoutWrapper(cell,
+                                           output_keep_prob=output_keep_prob,
+                                           state_keep_prob=state_keep_prob,
+                                           variational_recurrent=variational,
+                                           dtype=tf.float32)
+    return output
+
+
+def multi_rnn_cell_w_dropout(hsz, pdrop, rnntype, num_layers, variational=False, training=False):
+    """Produce a stack of RNNs with dropout performed on all but the last layer.
+
+    :param hsz: (``int``) The number of hidden units per RNN
+    :param pdrop: (``int``) The probability of dropping a unit value during dropout
+    :param rnntype: (``str``) The type of RNN to use - `lstm` or `gru`
+    :param num_layers: (``int``) The number of layers of RNNs to stack
+    :param training: (``bool``) Are we training? Defaults to ``False``
+    :return: a stacked cell
+    """
+    if variational:
+        return tf.contrib.rnn.MultiRNNCell(
+            [rnn_cell_w_dropout(hsz, pdrop, rnntype, variational=variational, training=training) for _ in range(num_layers)],
+            state_is_tuple=True
+        )
+    return tf.contrib.rnn.MultiRNNCell(
+        [rnn_cell_w_dropout(hsz, pdrop, rnntype, training=training) if i < num_layers - 1 else rnn_cell_w_dropout(hsz, 1.0, rnntype) for i in range(num_layers)],
+        state_is_tuple=True
+    )
 
 
 def tf_device_wrapper(func):

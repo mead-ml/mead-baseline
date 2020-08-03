@@ -72,7 +72,7 @@ class CompositeLRSchedulerPyTorch(CompositeLRScheduler):
 
 
 class AdamW(torch.optim.Optimizer):
-    def __init__(self, params, set_lr, lr=1e-3, betas=(0.9, 0.999), eps=1e-8, weight_decay=0):
+    def __init__(self, params, lr=1e-3, betas=(0.9, 0.999), eps=1e-8, weight_decay=0):
         if not 0.0 <= lr:
             raise ValueError("Invalid learning rate: {}".format(lr))
         if not 0.0 <= eps:
@@ -82,8 +82,7 @@ class AdamW(torch.optim.Optimizer):
         if not 0.0 <= betas[1] < 1.0:
             raise ValueError("Invalid beta parameter at index 1: {}".format(betas[1]))
         defaults = dict(lr=lr, betas=betas, eps=eps, weight_decay=weight_decay)
-        super(AdamW, self).__init__(params, defaults)
-        self.set_lr = set_lr
+        super().__init__(params, defaults)
 
     def step(self, closure=None):
         """Performs a single optimization step.
@@ -120,25 +119,22 @@ class AdamW(torch.optim.Optimizer):
                 state["step"] += 1
 
                 # Decay the first and second moment running average coefficient
-                exp_avg.mul_(beta1).add_(1 - beta1, grad)
-                exp_avg_sq.mul_(beta2).addcmul_(1 - beta2, grad, grad)
+                exp_avg.mul_(beta1).add_(grad, alpha=1.0 - beta1)
+                exp_avg_sq.mul_(beta2).addcmul_(grad, grad, value=1.0 - beta2)
                 denom = exp_avg_sq.sqrt().add_(group["eps"])
 
                 bias_correction1 = 1 - beta1 ** state["step"]
                 bias_correction2 = 1 - beta2 ** state["step"]
+                step_size = group['lr'] * math.sqrt(bias_correction2) / bias_correction1
+                p.data.addcdiv_(exp_avg, denom, value=-step_size)
 
-                lr = self.set_lr()
-                step_size = lr * math.sqrt(bias_correction2) / bias_correction1
-
-                p.data.addcdiv_(-step_size, exp_avg, denom)
-
-                if group["weight_decay"] != 0:
-                    grad.add_(group["weight_decay"], p.data)
+                if group["weight_decay"] != 0.0:
+                    p.data.add_(p.data, alpha=-group["weight_decay"] * group["lr"])
 
         return loss
 
 
-class OptimizerManager(object):
+class OptimizerManager:
     def __init__(self, model_or_params, global_step=0, **kwargs):
         if isinstance(model_or_params, torch.nn.Module):
             parameters = model_or_params.parameters()
@@ -152,6 +148,7 @@ class OptimizerManager(object):
                 kwargs["lr_scheduler_type"] = "default"
             self.lr_function = create_lr_scheduler(**kwargs)
         self._init_optimizer(parameters, **kwargs)
+        self.current_lr = 0
 
     @property
     def global_step(self):
@@ -165,7 +162,6 @@ class OptimizerManager(object):
         wd = float(kwargs.get("weight_decay", 0))
         optim = kwargs.get("optim", "sgd")
         self.current_lr = kwargs.get("eta", kwargs.get("lr", 0.01))
-        self.step = self._step_then_update
         if optim == "adadelta":
             logger.info("adadelta(eta=%f, wd=%f)", self.current_lr, wd)
             self.optimizer = torch.optim.Adadelta(parameters, lr=self.current_lr, weight_decay=wd)
@@ -186,13 +182,11 @@ class OptimizerManager(object):
                 )
                 self.optimizer = AdamW(
                     parameters,
-                    set_lr=self.update_lr,
                     lr=self.current_lr,
                     betas=(beta1, beta2),
                     eps=eps,
                     weight_decay=wd,
                 )
-                self.step = self._step_and_update
         elif optim == "rmsprop":
             mom = kwargs.get("mom", 0.0)
             logger.info("rmsprop(eta=%f, wd=%f, mom=%f)", self.current_lr, wd, mom)
@@ -208,15 +202,7 @@ class OptimizerManager(object):
     def _identity(self, _):
         return self.current_lr
 
-    def _step_and_update(self):
-        """
-        For AdamW, we need to do the LR update inside the optimizer before weight_decay, so have to make a custom path
-        :return:
-        """
-        self.optimizer.step()
-        self.global_step += 1
-
-    def _step_then_update(self):
+    def step(self):
         """Runs at every step and updates the learning rate
 
         :return:
@@ -232,10 +218,11 @@ class OptimizerManager(object):
         lr = self.lr_function(self.global_step)
         for p in self.optimizer.param_groups:
             p["lr"] = lr
+
         return lr
 
 
-class EagerOptimizer(object):
+class EagerOptimizer:
     def __init__(self, loss, optimizer=None, **kwargs):
         self.loss = loss
         if optimizer:

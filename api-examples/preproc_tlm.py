@@ -14,7 +14,7 @@ except:
     pass
 
 
-def create_record(chunk, str_lookup, prefix, suffix, mask_value, vocab_size):
+def create_record(chunk, str_lookup, prefix, suffix, mask_value, vocab_size, causal=False, pad_y=True):
     """Emit a record
 
     :param chunk: A chunk of integer inputs
@@ -23,6 +23,7 @@ def create_record(chunk, str_lookup, prefix, suffix, mask_value, vocab_size):
     :param suffix: A suffix integer token
     :param mask_value: An integer value representing a [MASK]
     :param vocab_size: The total size of the vocab
+    :param pad_y: Should we replace non-[MASK] X values with <PAD> in Y?
     :return: An object with `[xy]_str` and `[xy]` entries
     """
     ignore_prefix = False
@@ -34,7 +35,10 @@ def create_record(chunk, str_lookup, prefix, suffix, mask_value, vocab_size):
         chunk = [suffix] + chunk
         ignore_suffix = True
 
-    inputs, labels = mlm_masking(np.array(chunk), mask_value, vocab_size, ignore_prefix, ignore_suffix)
+    if causal:
+        inputs = np.array(chunk)
+        return {'x': inputs, 'x_str': [str_lookup[s] for s in inputs]}
+    inputs, labels = mlm_masking(np.array(chunk), mask_value, vocab_size, ignore_prefix, ignore_suffix, pad_y=pad_y)
     return {'x': inputs, 'y': labels, 'x_str': [str_lookup[s] for s in inputs], 'y_str': [str_lookup[s] for s in labels]}
 
 
@@ -186,8 +190,9 @@ def create_file_writer(fmt, name, fields, max_file_size_mb):
 
 parser = argparse.ArgumentParser(description='Convert text into MLM fixed width contexts')
 
-parser.add_argument('--text', help='The text to classify as a string, or a path to a file with each line as an example',
-                    type=str)
+parser.add_argument('--input_files',
+                    help='The text to classify as a string, or a path to a file with each line as an example', type=str)
+parser.add_argument('--input_pattern', type=str, default='*.txt')
 parser.add_argument('--codes', help='BPE codes')
 parser.add_argument('--vocab', help='BPE vocab')
 parser.add_argument("--nctx", type=int, default=256, help="Max input length")
@@ -200,12 +205,23 @@ parser.add_argument("--max_file_size", type=int, default=100, help="Shard size, 
 parser.add_argument("--stride", type=int, help="Tokens to stride before next read, defaults to `nctx`")
 parser.add_argument("--eos_on_eol", type=baseline.str2bool, default=True)
 parser.add_argument("--cased", type=baseline.str2bool, default=True)
+parser.add_argument("--causal", type=baseline.str2bool, default=False, help="Generate for CLM, not MLM (X value only)")
+parser.add_argument("--pad_y", type=baseline.str2bool, default=True, help="Replace all non-masked Y values with <PAD>")
+
 args = parser.parse_args()
-if not args.output:
-    args.output = f'{args.text}.records'
+
+if os.path.isdir(args.input_files):
+    import glob
+    input_files = list(glob.glob(os.path.join(args.input_files, args.input_pattern)))
+    if not args.output:
+        args.output = os.path.join(args.input_files, 'records')
+else:
+    input_files = [args.input_files]
+    if not args.output:
+        args.output = f'{args.input_files}.records'
 
 print(args.output)
-transform = baseline.lowercase
+transform = baseline.lowercase if not args.cased else lambda x: x
 vectorizer = BPEVectorizer1D(transform_fn=transform, model_file=args.codes, vocab_file=args.vocab, mxlen=1024)
 
 lookup_indices = []
@@ -229,32 +245,34 @@ if args.suffix:
 
 fw = create_file_writer(args.fmt, args.output, args.fields, args.max_file_size)
 num_samples = 0
-with open(args.text, encoding='utf-8') as rf:
-    for line in rf:
-        to_bpe = line.strip().split()
-        if args.eos_on_eol:
-            to_bpe += ['<EOS>']
+for text in input_files:
+    with open(text, encoding='utf-8') as rf:
+        print(f"Reading from {text}...")
+        for line in rf:
+            to_bpe = line.strip().split()
+            if args.eos_on_eol:
+                to_bpe += ['<EOS>']
 
-        output, available = vectorizer.run(to_bpe, vectorizer.vocab)
-        while available > 0:
-            if len(lookup_indices) == nctx:
-                record = create_record(lookup_indices, indices2word, prefix, suffix, mask_value, vocab_size)
-                fw.write(record)
-                num_samples += 1
-                lookup_indices = []
-            needed = nctx - len(lookup_indices)
-            if available >= needed:
-                lookup_indices += output[:needed].tolist()
-                output = output[needed:]
-                available -= needed
-                record = create_record(lookup_indices, indices2word, prefix, suffix, mask_value, vocab_size)
-                fw.write(record)
-                num_samples += 1
-                lookup_indices = []
-            # The amount available is less than what we need, so read the whole thing
-            else:
-                lookup_indices += output[:available].tolist()
-                available = 0
+            output, available = vectorizer.run(to_bpe, vectorizer.vocab)
+            while available > 0:
+                if len(lookup_indices) == nctx:
+                    record = create_record(lookup_indices, indices2word, prefix, suffix, mask_value, vocab_size, causal=args.causal, pad_y=args.pad_y)
+                    fw.write(record)
+                    num_samples += 1
+                    lookup_indices = []
+                needed = nctx - len(lookup_indices)
+                if available >= needed:
+                    lookup_indices += output[:needed].tolist()
+                    output = output[needed:]
+                    available -= needed
+                    record = create_record(lookup_indices, indices2word, prefix, suffix, mask_value, vocab_size, causal=args.causal, pad_y=args.pad_y)
+                    fw.write(record)
+                    num_samples += 1
+                    lookup_indices = []
+                # The amount available is less than what we need, so read the whole thing
+                else:
+                    lookup_indices += output[:available].tolist()
+                    available = 0
 
 fw.close()
 write_yaml({'num_samples': num_samples}, os.path.join(root_dir, 'md.yml'))

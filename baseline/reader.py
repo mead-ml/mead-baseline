@@ -6,7 +6,7 @@ from collections import Counter
 import numpy as np
 import baseline.data
 from baseline.vectorizers import Dict1DVectorizer, GOVectorizer, Token1DVectorizer, create_vectorizer
-from baseline.utils import import_user_module, revlut, exporter, optional_params, Offsets, listify
+from baseline.utils import import_user_module, revlut, exporter, optional_params, Offsets, listify, SingleFileDownloader
 
 __all__ = []
 export = exporter(__all__)
@@ -274,6 +274,11 @@ class SeqPredictReader(object):
         self.truncate = truncate
         label_vectorizer_spec = kwargs.get('label_vectorizer', None)
         if label_vectorizer_spec:
+            cache = label_vectorizer_spec.get("data_download_cache", os.path.expanduser("~/.bl-data"))
+            if 'model_file' in label_vectorizer_spec:
+                label_vectorizer_spec['model_file'] = SingleFileDownloader(label_vectorizer_spec['model_file'], cache).download()
+            if 'vocab_file' in label_vectorizer_spec:
+                label_vectorizer_spec['vocab_file'] = SingleFileDownloader(label_vectorizer_spec['vocab_file'], cache).download()
             self.label_vectorizer = create_vectorizer(**label_vectorizer_spec)
         else:
             self.label_vectorizer = Dict1DVectorizer(fields='y', mxlen=mxlen)

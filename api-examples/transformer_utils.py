@@ -5,7 +5,8 @@ from eight_mile.pytorch.layers import *
 from eight_mile.optz import create_lr_scheduler
 import baseline.pytorch.embeddings
 import baseline.embeddings
-from baseline.progress import create_progress_bar
+import random
+from eight_mile.progress import create_progress_bar
 from torch.utils.data.dataset import IterableDataset, TensorDataset
 from baseline.vectorizers import Token1DVectorizer, BPEVectorizer1D, Char2DVectorizer, WordpieceVectorizer1D
 import codecs
@@ -13,14 +14,7 @@ from collections import Counter
 import glob
 import json
 
-def find_latest_checkpoint(checkpoint_dir: str, wildcard="checkpoint") -> str:
-    step_num = 0
-    for f in glob.glob(os.path.join(checkpoint_dir, f"{wildcard}*")):
-        this_step_num = int(f.split("-")[-1])
-        if this_step_num > step_num:
-            checkpoint = f
-            step_num = this_step_num
-    return checkpoint
+
 
 
 class TripletLoss(nn.Module):
@@ -161,7 +155,8 @@ class PairedModel(nn.Module):
                  weight_std=0.02,
                  rpr_k=None,
                  reduction_d_k=64,
-                 ff_pdrop=0.1):
+                 ff_pdrop=0.1,
+                 windowed_ra=False):
         super().__init__()
         if stacking_layers is None:
             stacking_layers = [d_model] * 3
@@ -170,7 +165,7 @@ class PairedModel(nn.Module):
         stacking_layers = listify(stacking_layers)
         transformer = TransformerEncoderStack(num_heads=num_heads, d_model=d_model,
                                               pdrop=dropout, layers=num_layers, activation='gelu', d_ff=d_ff,
-                                              d_k=d_k, rpr_k=rpr_k)
+                                              d_k=d_k, rpr_k=rpr_k, windowed_ra=windowed_ra)
         self.attention_layer = TwoHeadConcat(d_model, dropout, scale=False, d_k=reduction_d_k)
         self.transformer_layers = transformer
         self.embedding_layers = embeddings
@@ -213,48 +208,7 @@ class PairedModel(nn.Module):
         return TripletLoss(self)
 
 
-class TransformerDiscriminator(nn.Module):
-
-    def __init__(self, embeddings, d_model, d_ff, dropout, num_heads, num_layers, rpr_k, d_k, **kwargs):
-        super().__init__()
-        self.embeddings = EmbeddingsStack(embeddings, dropout)
-        self.weight_std = kwargs.get('weight_std', 0.02)
-        assert self.embeddings.dsz == d_model
-        self.transformer = TransformerEncoderStack(num_heads, d_model=d_model, pdrop=dropout, scale=True,
-                                                   layers=num_layers, d_ff=d_ff, rpr_k=rpr_k, d_k=d_k)
-        self.proj_to_output = pytorch_linear(d_model, 1)
-
-        self.apply(self.init_layer_weights)
-        self.lengths_feature = kwargs.get('lengths_feature', self.embeddings.keys()[0])
-
-    def init_layer_weights(self, module):
-        if isinstance(module, (nn.Linear, nn.Embedding, nn.LayerNorm)):
-            module.weight.data.normal_(mean=0.0, std=self.weight_std)
-        if isinstance(module, (nn.Linear, nn.LayerNorm)) and module.bias is not None:
-            module.bias.data.zero_()
-
-    def forward(self, features):
-        embedded = self.embeddings(features)
-        x = features[self.lengths_feature]
-        input_mask = torch.zeros(x.shape, device=x.device, dtype=torch.long).masked_fill(x != 0, 1).unsqueeze(1).unsqueeze(1)
-        transformer_out = self.transformer((embedded, input_mask))
-        binary = self.proj_to_output(transformer_out)
-        return torch.sigmoid(binary)
-
-    def create_loss(self):
-        class Loss(nn.Module):
-            def __init__(self):
-                super().__init__()
-                self.loss = nn.BCELoss()
-
-            def forward(self, input, target):
-                fake_loss = self.loss(input[target == 0], target[target == 0])
-                real_loss = self.loss(input[target != 0], target[target != 0])
-                return real_loss + fake_loss
-        return Loss()
-
-
-class TensorDatasetReaderBase(object):
+class TensorDatasetReaderBase:
     """Provide a base-class to do operations that are independent of token representation
     """
     def __init__(self, nctx, vectorizers):
@@ -373,7 +327,7 @@ def load_data_caching(token_type, reader, dataset, file_key, vocabs, caching, lo
 
 class MultiFileLoader(IterableDataset):
 
-    def __init__(self, directory, pattern, vocabs, vectorizer, nctx, last_turn_only=True):
+    def __init__(self, directory, pattern, vocabs, vectorizer, nctx, last_turn_only=True, distribute=True, shuffle=True):
         super().__init__()
         self.vectorizer = vectorizer
         self.pattern = pattern
@@ -383,8 +337,10 @@ class MultiFileLoader(IterableDataset):
         self.samples = 0
         self.rank = 0
         self.world_size = 1
+        self.shuffle = shuffle
         self.last_turn_only = last_turn_only
-        if torch.distributed.is_initialized():
+        self.distribute = distribute
+        if torch.distributed.is_initialized() and distribute:
             self.rank = torch.distributed.get_rank()
             self.world_size = torch.distributed.get_world_size()
 
@@ -403,11 +359,14 @@ class MultiFileLoader(IterableDataset):
     def __len__(self):
         return self.samples
 
+    def _get_worker_info(self):
+        return torch.utils.data.get_worker_info() if self.distribute else None
+
     def __iter__(self):
         # Each node has the same worker_info, so the unique offsets for each is
         # rank * num_workers + worker_id
         # and the total available workers is world_size * num_workers
-        worker_info = torch.utils.data.get_worker_info()
+        worker_info = self._get_worker_info()
         files = sorted(list(glob.glob(f"{self.directory}/{self.pattern}")))
 
         if worker_info is None:
@@ -417,20 +376,32 @@ class MultiFileLoader(IterableDataset):
             num_workers_per_node = worker_info.num_workers
             node_worker_id = worker_info.id
         all_workers = (self.world_size * num_workers_per_node)
-        files_per_worker = len(files) // all_workers
         offset = self.rank * num_workers_per_node + node_worker_id
-        start_idx = offset * files_per_worker
-        end_idx = start_idx + files_per_worker if offset < all_workers - 1 else len(files)
-        print(f'worker {node_worker_id} [{start_idx}:{end_idx}]')
-
         self.vectorizer.mxlen = self.nctx
+        read_file_order = list(range(offset, len(files), all_workers))
+        # If we have multiple files per worker, possibly shuffle the file read order
+        if not read_file_order:
+            if offset > 0:
+                # This is probably wrong
+                logger.warning(f"There are no files to read for worker {node_worker_id}, offset {offset}!" +
+                               " This might mean that you are passing an incorrect training or validation directory")
+            else:
+                # This is definitely wrong
+                raise Exception(f"No files of pattern {self.pattern} were found in {self.directory}!")
+        while True:
+            if self.shuffle:
+                random.shuffle(read_file_order)
 
-        for file in files[start_idx:end_idx]:
-            with open(file) as rf:
-                for line in rf:
-                    response = self.process_line(line)
-                    if response:
-                        yield response
+            for file_idx in read_file_order:
+                file = files[file_idx]
+                with open(file) as rf:
+                    lines = rf.readlines()
+                    if self.shuffle:
+                        random.shuffle(lines)
+                    for l in lines:
+                        response = self.process_line(l)
+                        if response:
+                            yield response
 
     def process_line(self, line):
         """Read in a line and turn it into an entry
@@ -479,7 +450,8 @@ def on_demand_mlm_masking(inputs, labels, mask_value, vocab_size):
         torch.bool) & masked_indices & ~indices_replaced
     random_words = torch.randint(vocab_size, labels.shape, dtype=torch.long, device=labels.device)
     inputs[indices_random] = random_words[indices_random]
-    return inputs, labels
+    return inputs, labels, masked_indices
+
 
 class SequencePredictionFileLoader(MultiFileLoader):
 
@@ -498,7 +470,10 @@ class PreprocessedFileLoader(MultiFileLoader):
 
     def process_line(self, line):
         obj = json.loads(line)
-        return np.array(obj['x'], dtype=int), np.array(obj['y'], dtype=int)
+        if 'y' in obj.keys():
+            return np.array(obj['x'], dtype=int), np.array(obj['y'], dtype=int)
+        else:
+            return np.array(obj['x'], dtype=int), np.array(obj['x'], dtype=int)
 
 
 class NextSequencePredictionFileLoader(MultiFileLoader):
@@ -534,16 +509,17 @@ class MultiFileDatasetReader:
     def build_vocab(self, _=None):
         return {'x': self.vectorizer.vocab}
 
-    def load(self, directory, vocabs):
+    def load(self, directory, vocabs, distribute=True, shuffle=True):
         reader_type = self.reader_type.lower()
         if reader_type == "ntp":
-            return NextTurnPredictionFileLoader(directory, self.pattern, vocabs, self.vectorizer, self.nctx)
+            return NextTurnPredictionFileLoader(directory, self.pattern, vocabs, self.vectorizer, self.nctx, distribute=distribute, shuffle=shuffle)
         elif reader_type == "nsp":
-            return NextSequencePredictionFileLoader(directory, self.pattern, vocabs, self.vectorizer, 2*self.nctx)
+            return NextSequencePredictionFileLoader(directory, self.pattern, vocabs, self.vectorizer, 2*self.nctx, distribute=distribute, shuffle=shuffle)
         elif reader_type == "lang":
             print("Using files as an LM")
-            return SequencePredictionFileLoader(directory, self.pattern, vocabs, self.vectorizer, self.nctx)
-        return PreprocessedFileLoader(directory, self.pattern, vocabs, self.vectorizer, self.nctx)
+            return SequencePredictionFileLoader(directory, self.pattern, vocabs, self.vectorizer, self.nctx, distribute=distribute, shuffle=shuffle)
+        return PreprocessedFileLoader(directory, self.pattern, vocabs, self.vectorizer, self.nctx, distribute=distribute, shuffle=shuffle)
+
 
 class TiedEmbeddingsSeq2SeqModel(Seq2SeqModel):
 
@@ -598,30 +574,6 @@ class TiedEmbeddingsSeq2SeqModel(Seq2SeqModel):
                 pred = self.model(in_)
                 return self._loss(pred, targets)
         return LossFn(self, loss)
-
-
-def create_model(embeddings, d_model, d_ff, dropout, num_heads, num_layers, model_type, rpr_k, d_k, reduction_d_k,
-                 stacking_layers, ff_pdrop, logger):
-    if model_type == "encoder-decoder":
-        logger.info("Creating tied encoder decoder model")
-        hps = {"dsz": d_model,
-               "hsz": d_model,
-               "d_ff": d_ff,
-               "dropout": dropout,
-               "num_heads": num_heads,
-               "layers": num_layers,
-               "encoder_type": "transformer",
-               "decoder_type": "transformer",
-               "src_lengths_key": "x_lengths",
-               "d_k": d_k,
-               "rpr_k": rpr_k}
-        model = TiedEmbeddingsSeq2SeqModel(embeddings, **hps)
-    else:
-        model = PairedModel(embeddings, d_model, d_ff, dropout, num_heads, num_layers, rpr_k=rpr_k, d_k=d_k,
-                            reduction_d_k=reduction_d_k, stacking_layers=stacking_layers, ff_pdrop=ff_pdrop)
-
-    logger.info(model)
-    return model
 
 
 def get_lr_decay(sched_type, lr, steps_per_epoch, n_epochs, logger, decay_steps=None, decay_rate=None, alpha=None):

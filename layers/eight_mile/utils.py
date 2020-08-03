@@ -1602,7 +1602,7 @@ def to_numpy(x):
 
 
 @export
-def mlm_masking(inputs, mask_value, vocab_size, ignore_prefix, ignore_suffix):
+def mlm_masking(inputs, mask_value, vocab_size, ignore_prefix, ignore_suffix, pad_y=True):
     labels = np.copy(inputs)
     masked_indices = np.random.binomial(size=len(inputs), n=1, p=0.15)
     masked_indices[np.random.randint(1, len(inputs)-1)] = 1
@@ -1611,7 +1611,8 @@ def mlm_masking(inputs, mask_value, vocab_size, ignore_prefix, ignore_suffix):
     if ignore_suffix:
         masked_indices[-1] = 0
     # Anything not masked is 0 so no loss
-    labels[masked_indices == 0] = 0
+    if pad_y:
+        labels[masked_indices == 0] = 0
     # Of the masked items, mask 80% of them with [MASK]
     indices_replaced = np.random.binomial(size=len(inputs), n=1, p=0.8)
     indices_replaced = indices_replaced & masked_indices
@@ -1680,3 +1681,34 @@ class Average:
         fmtstr = '{name} {val' + self.fmt + '} ({avg' + self.fmt + '})'
         return fmtstr.format(**self.__dict__)
 
+
+@export
+def undo_bpe(seq: str) -> str:
+    """Undo the BPE splits to make Bleu comparable.
+
+    :param seq: The string with encoded tokens in it.
+
+    :returns: The string with BPE splits collapsed.
+    """
+    # BPE token is @@ this removes it if it is at the end of a word or the end
+    # of the sequence.
+    return re.sub(r"@@( | ?$)", "", seq)
+
+
+@export
+def undo_wordpiece(seq: str) -> str:
+    """Undo the WordPiece splits to make Bleu comparable.  Use BERT-style detok
+    :param seq: The string with encoded tokens in it.
+
+    :returns: The string with BPE splits collapsed.
+    """
+    return re.sub(r"\s+##", "", seq)
+
+
+@export
+def undo_sentence_piece(seq):
+    """Undo the sentence Piece splits to make Bleu comparable.
+    TODO: in what context does this actually work?  it doesnt do replacement as above
+    """
+
+    return seq.replace("\u2581", "")

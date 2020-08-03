@@ -2,8 +2,8 @@ import argparse
 import os
 from transformer_utils import *
 from baseline.pytorch.lm import TransformerLanguageModel
-from baseline.progress import create_progress_bar
-from baseline.utils import str2bool
+from eight_mile.progress import create_progress_bar
+from eight_mile.utils import str2bool
 from torch.utils.data import DataLoader
 import logging
 logger = logging.getLogger("baseline")
@@ -66,7 +66,7 @@ model = create_model(embeddings,
                      logger=logger)
 
 if os.path.isdir(args.ckpt):
-    checkpoint = find_latest_checkpoint(args.ckpt)
+    checkpoint, _ = find_latest_checkpoint(args.ckpt)
     logger.warning("Found latest checkpoint %s", checkpoint)
 else:
     checkpoint = args.ckpt

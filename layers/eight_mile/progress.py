@@ -134,7 +134,6 @@ class ProgressBarTerminal(Progress):
         self.update(step=0)
         self.print_("")
 
-
 @register_progress('tqdm')
 class ProgressBarTQDM(Progress):
     """Simple TQDM progress bar
@@ -161,4 +160,3 @@ class ProgressBarTQDM(Progress):
 @export
 def create_progress_bar(steps, name='default', **kwargs):
     return MEAD_LAYERS_PROGRESS[name](steps, **kwargs)
-

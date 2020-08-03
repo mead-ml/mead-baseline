@@ -232,7 +232,7 @@ class RNNDecoderWithAttn(RNNDecoder):
 @register_decoder(name='transformer')
 class TransformerDecoderWrapper(tf.keras.layers.Layer):
 
-    def __init__(self, tgt_embeddings, dropout=0.5, layers=1, hsz=None, num_heads=4, scale=True, **kwargs):
+    def __init__(self, tgt_embeddings, dropout=0.5, layers=1, hsz=None, num_heads=4, **kwargs):
         super().__init__()
         self.tgt_embeddings = tgt_embeddings
         dsz = self.tgt_embeddings.get_dsz()
@@ -240,7 +240,16 @@ class TransformerDecoderWrapper(tf.keras.layers.Layer):
             hsz = dsz
         self.hsz = hsz
 
-        self.transformer_decoder = TransformerDecoderStack(d_model=hsz, num_heads=num_heads, pdrop=dropout, scale=scale, layers=layers)
+        d_ff = int(kwargs.get('d_ff', 4 * hsz))
+        rpr_k = kwargs.get('rpr_k')
+        d_k = kwargs.get('d_k')
+        activation = kwargs.get('activation', 'relu')
+        scale = bool(kwargs.get('scale', True))
+
+        self.transformer_decoder = TransformerDecoderStack(num_heads, d_model=hsz, d_ff=d_ff,
+                                                           pdrop=dropout, scale=scale,
+                                                           layers=layers, rpr_k=rpr_k, d_k=d_k,
+                                                           activation_type=activation)
 
         self.proj_to_dsz = self._identity
         self.proj_to_hsz = self._identity
