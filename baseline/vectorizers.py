@@ -947,6 +947,10 @@ class WordpieceVectorizer1D(AbstractVectorizer):
         valid_length = i + 1
         return vec1d, valid_length
 
+    @property
+    def vocab(self):
+        return self.tokenizer.vocab
+
     def get_dims(self):
         return self.mxlen,
 

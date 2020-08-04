@@ -134,11 +134,29 @@ class ProgressBarTerminal(Progress):
         self.update(step=0)
         self.print_("")
 
+@register_progress('tqdm')
+class ProgressBarTQDM(Progress):
+    """Simple TQDM progress bar
+
+    Writes a progress bar to an ipython widget
+
+    """
+
+    def __init__(self, total):
+        super().__init__()
+        from tqdm import tqdm
+
+        self.progress = tqdm(total=total)
+
+    def update(self, step=1):
+        self.progress.update(step)
+
+    def done(self):
+        """Close the widget
+        """
+        self.progress.close()
+
 
 @export
 def create_progress_bar(steps, name='default', **kwargs):
     return MEAD_LAYERS_PROGRESS[name](steps, **kwargs)
-
-
-
-

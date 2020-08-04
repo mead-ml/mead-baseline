@@ -176,7 +176,11 @@ class Task(object):
             if 'vocab_file' in vectorizer_section:
                 vectorizer_section['vocab_file'] = SingleFileDownloader(vectorizer_section['vocab_file'], self.data_download_cache).download()
             if 'transform' in vectorizer_section:
-                vectorizer_section['transform_fn'] = eval(vectorizer_section['transform'])
+                vectorizer_section['transform_fn'] = vectorizer_section['transform']
+
+            if 'transform_fn' in vectorizer_section and isinstance(vectorizer_section['transform_fn'], str):
+                vectorizer_section['transform_fn'] = eval(vectorizer_section['transform_fn'])
+
             vectorizer = baseline.create_vectorizer(**vectorizer_section)
             self.vectorizers[key] = vectorizer
 
