@@ -50,7 +50,7 @@ def train():
     parser.add_argument("--num_layers", type=int, default=8, help="Number of layers")
     parser.add_argument("--num_train_workers", type=int, default=4, help="Number train workers")
     parser.add_argument("--nctx", type=int, default=256, help="Max input length")
-    parser.add_argument("--pattern", default='*.json', help="Glob pattern for data")
+    parser.add_argument("--file_type", default='json', help="Glob pattern for data")
     parser.add_argument("--batch_size", type=int, default=256, help="Batch Size")
     parser.add_argument("--subword_model_file", type=str, help="The BPE model file", required=True)
     parser.add_argument("--subword_vocab_file", type=str, help="The BPE subword vocab", required=True)
@@ -103,8 +103,13 @@ def train():
         args.device, updated_local_rank = init_distributed(args.local_rank)
         args.local_rank = updated_local_rank
 
-    reader_type = "lang" if not args.preprocessed else "preprocessed"
-    reader = MultiFileDatasetReader(args.nctx, args.subword_model_file, args.subword_vocab_file, args.pattern,
+    if args.file_type == 'tfrecord':
+        reader_type = 'tfrecord'
+    elif args.preprocessed:
+        reader_type = 'preprocessed'
+    else:
+        reader_type = 'lang'
+    reader = MultiFileDatasetReader(args.nctx, args.subword_model_file, args.subword_vocab_file, f'*.{args.file_type}',
                                     reader_type=reader_type)
 
     # This looks a bit funny but the streaming reader ignores our vocab and gives us the one from the subword_model
