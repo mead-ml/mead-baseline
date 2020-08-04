@@ -30,6 +30,9 @@ parser.add_argument('--max_len1d', type=int, default=100)
 parser.add_argument('--embeddings', help='index of embeddings: local file, remote URL or mead-ml/hub ref', type=convert_path)
 parser.add_argument('--vecs', help='index of vectorizers: local file, remote URL or hub mead-ml/ref', type=convert_path)
 parser.add_argument('--cuda', type=baseline.str2bool, default=True)
+parser.add_argument('--has_header', type=baseline.str2bool, default=True)
+parser.add_argument('--sep', default='\t')
+
 args = parser.parse_args()
 
 args.embeddings = convert_path(DEFAULT_EMBEDDINGS_LOC) if args.embeddings is None else args.embeddings
@@ -63,9 +66,13 @@ def chunks(lst, n):
     for i in range(0, len(lst), n):
         yield lst[i:i + n]
 
-df = pd.read_csv(args.file)[args.column]
+df = pd.read_csv(args.file, header='infer' if args.has_header else None, sep=args.sep)
+if not args.has_header:
+    col = df[int(args.column)]
+else:
+    col = df[args.column]
 batches = []
-as_list = df.tolist()
+as_list = col.tolist()
 num_batches = math.ceil(len(as_list) / args.batchsz)
 pg = baseline.create_progress_bar(num_batches, name='tqdm')
 for i, batch in enumerate(chunks(as_list, args.batchsz)):
