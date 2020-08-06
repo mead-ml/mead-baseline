@@ -60,10 +60,28 @@ class AbstractVectorizer(Vectorizer):
         self.transform_fn = identity_trans_fn if transform_fn is None else transform_fn
 
     def iterable(self, tokens):
+        """Produce an iterable of segmented tokens from an iterable input
+
+        The tokens here could be subwords, the identity, or some other transform, this is really
+        up to the implementation, but the intent here is that the items yielded are the underlying
+        atoms, meaning that there is no processing left to do to convert them to integer values other
+        than to lookup their values in a word-to-index lookup table
+
+        :param tokens: An iterable of tokens
+        :return: Generator for atoms
+        """
         for tok in tokens:
             yield self.transform_fn(tok)
 
     def _next_element(self, tokens, vocab):
+        """This function transforms non "atomic" input to its elements and yields integer values
+
+        Because this function requires a vocab, it cannot be used during counting (which is responsible for producing
+        the text atomic words (or subwords) that may be used for vocabulary tabulation
+        :param tokens: An iterable of tokens
+        :param vocab:
+        :return: Generator for integer values that can be directly used in Embeddings
+        """
         for atom in self.iterable(tokens):
             value = vocab.get(atom)
             if value is None:
@@ -73,6 +91,13 @@ class AbstractVectorizer(Vectorizer):
             yield value
 
     def valid_label_indices(self, tokens: Iterable) -> List[int]:
+        """Produce the indices in an iterable containing valid labels only
+
+        For instance, if the vectorizer deals with sub-words, this function will return
+        the leader token indices
+        :param tokens:
+        :return:
+        """
         try:
             return list(range(len(tokens)))
         except TypeError:
@@ -90,6 +115,14 @@ class Token1DVectorizer(AbstractVectorizer):
         self.max_seen = 0
 
     def count(self, tokens):
+        """Count (tabulate) the "atoms" in this tokens stream
+
+        This method converts each token to its atoms (e.g. subwords, or transformed case tokens), and gives back
+        a frequency table tabulated from the input
+
+        :param tokens: An iterable of string tokens
+        :return: A frequency table of atoms
+        """
         seen = 0
         counter = collections.Counter()
         for tok in self.iterable(tokens):
@@ -99,11 +132,23 @@ class Token1DVectorizer(AbstractVectorizer):
         return counter
 
     def reset(self):
+        """Reset allows the vectorizer to reset any critical information from scratch
+
+        In this implementation, the only critical items are the max length of the temporal stream allowable and the
+        maximum attested temporal stream length
+
+        :return: None
+        """
         self.mxlen = -1
         self.max_seen = -1
 
     def run(self, tokens, vocab):
+        """Convert an iterable token stream to an integer padded up to the maximum length `mxlen)
 
+        :param tokens: An iterable token stream
+        :param vocab: A word-to-integer index
+        :return: A (padded) vector and the valid (unpadded length)
+        """
         if self.mxlen < 0:
             self.mxlen = self.max_seen
 

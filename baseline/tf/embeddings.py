@@ -299,11 +299,23 @@ class TransformerLMPooledEmbeddings(TransformerLMEmbeddings):
 
 class TransformerLMPooled2DEmbeddings(TransformerLMPooledEmbeddings):
 
-    def forward(self, xch):
-        _0, _1, W = get_shape_as_list(xch)
-        xch = tf.reshape(xch, [-1, W])
-        pooled = super().forward(xch)
-        pooled = tf.reshape(pooled, [_0, _1, self.get_dsz()])
+    def encode(self, xch):
+        """Encode 3D data
+
+        When the TLM rehydrates, it uses a (B, T) shape, which would cause an exception on 3D data, so
+        we do a try block to allow it to hydrate first
+
+        :param xch:
+        :return:
+        """
+        try:
+            _0, _1, W = get_shape_as_list(xch)
+            xch = tf.reshape(xch, [-1, W])
+            pooled = super().encode(xch)
+            pooled = tf.reshape(pooled, [_0, _1, self.get_dsz()])
+        except:
+            pooled = super().encode(xch)
+
         return pooled
 
 
