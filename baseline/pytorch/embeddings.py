@@ -215,6 +215,7 @@ def _max_pool(inputs, embeddings):
     return torch.max(embeddings, 1, False)[0]
 
 
+
 @register_embeddings(name='tlm-words-embed-pooled')
 class TransformerLMPooledEmbeddingsModel(TransformerLMEmbeddingsModel):
 
@@ -251,3 +252,12 @@ class TransformerLMPooledEmbeddingsModel(TransformerLMEmbeddingsModel):
     def get_output(self, inputs, z):
         z = self.pooling_op(inputs, z)
         return z if self.finetune else z.detach()
+
+
+@register_embeddings(name='tlm-words-embed-pooled2d')
+class TransformerLMPooled2DEmbeddingsModel(TransformerLMPooledEmbeddingsModel):
+
+    def forward(self, xch, token_type=None):
+        _0, _1, W = xch.shape
+        pooled = super().forward(xch.view(-1, W))
+        return pooled.view(_0, _1, self.get_dsz())

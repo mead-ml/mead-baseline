@@ -296,6 +296,17 @@ class TransformerLMPooledEmbeddings(TransformerLMEmbeddings):
         return self.pooling_op(inputs, z)
 
 
+
+class TransformerLMPooled2DEmbeddings(TransformerLMPooledEmbeddings):
+
+    def forward(self, xch):
+        _0, _1, W = get_shape_as_list(xch)
+        xch = tf.reshape(xch, [-1, W])
+        pooled = super().forward(xch)
+        pooled = tf.reshape(pooled, [_0, _1, self.get_dsz()])
+        return pooled
+
+
 @register_embeddings(name='tlm-words-embed')
 class TransformerLMEmbeddingsModel(TensorFlowEmbeddingsMixin, TransformerLMEmbeddings):
 
@@ -309,9 +320,16 @@ class TransformerLMPooledEmbeddingsModel(TensorFlowEmbeddingsMixin, TransformerL
     pass
 
 
+@register_embeddings(name='tlm-words-embed-pooled2d')
+class TransformerLMPooled2DEmbeddingsModel(TensorFlowEmbeddingsMixin, TransformerLMPooled2DEmbeddings):
+
+    @classmethod
+    def create_placeholder(cls, name):
+        return tf.compat.v1.placeholder(tf.int32, [None, None, None], name=name)
+
+
 def _identity(x):
     return x
-
 
 def _mean_pool(inputs, embeddings):
     mask = tf.not_equal(inputs, 0)
