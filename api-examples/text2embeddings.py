@@ -21,11 +21,11 @@ parser.add_argument('--subword_model_file', help='Subword model file')
 parser.add_argument('--nctx', default=256, type=int)
 parser.add_argument('--batchsz', default=20, type=int)
 parser.add_argument('--vec_id', default='bert-base-uncased', help='Reference to a specific embedding type')
-parser.add_argument('--embed_id', default='bert-base-uncased-pooled', help='What type of embeddings to use')
+parser.add_argument('--embed_id', default='bert-base-uncased', help='What type of embeddings to use')
 parser.add_argument('--file', required=True)
 parser.add_argument('--column', required=True)
 parser.add_argument('--output', default='embeddings.npz')
-parser.add_argument('--pool', help='Should a reduction be applied on the embeddings?', choices=['cls', 'max', 'mean'], default='cls')
+parser.add_argument('--pool', help='Should a reduction be applied on the embeddings?', choices=['max', 'mean'], default='mean')
 parser.add_argument('--max_len1d', type=int, default=100)
 parser.add_argument('--embeddings', help='index of embeddings: local file, remote URL or mead-ml/hub ref', type=convert_path)
 parser.add_argument('--vecs', help='index of vectorizers: local file, remote URL or hub mead-ml/ref', type=convert_path)
@@ -61,6 +61,19 @@ if args.cuda:
     embedder = embedder.cuda()
 
 
+def _mean_pool(inputs, embeddings):
+    mask = (inputs != 0)
+    seq_lengths = mask.sum(1).unsqueeze(-1)
+    return embeddings.sum(1)/seq_lengths
+
+def _max_pool(inputs, embeddings):
+    mask = (inputs != 0)
+    embeddings = embeddings.masked_fill(mask.unsqueeze(-1) == False, -1e8)
+    return torch.max(embeddings, 1, False)[0]
+
+
+pool = _max_pool if args.pool == 'max' else _mean_pool
+
 def chunks(lst, n):
     """Yield successive n-sized chunks from lst."""
     for i in range(0, len(lst), n):
@@ -86,6 +99,6 @@ for i, batch in enumerate(chunks(as_list, args.batchsz)):
         if args.cuda:
             vecs = vecs.cuda()
         embedding = embedder(vecs)
-        batches += embedding.cpu().numpy().tolist()
+        batches += pool(vecs, embedding).cpu().numpy().tolist()
 
 np.savez(args.output, embeddings=batches, text=as_list)
