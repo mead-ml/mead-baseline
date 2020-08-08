@@ -11,7 +11,7 @@ from baseline.train import register_training_func, Trainer
 from baseline.tf.lm.training.utils import to_tensors, SHUF_BUF_SZ, NUM_PREFETCH
 
 
-def loss_with_state(model, h, x, y):
+def loss_with_state(model, h, x, y, **kwargs):
     logits, h_out = model(x, h)
     vsz = model.vsz
     targets = tf.reshape(y, [-1])
@@ -22,7 +22,7 @@ def loss_with_state(model, h, x, y):
     return loss, h_out
 
 
-def loss_without_state(model, x, y):
+def loss_without_state(model, x, y, **kwargs):
     # Model will produce a null hidden state
     logits = model(x, None)[0]
     vsz = model.vsz

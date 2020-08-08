@@ -776,17 +776,17 @@ class EagerOptimizer:
     def global_step(self):
         return self.optimizer.iterations
 
-    def update(self, model, x, y, num_replicas=1):
+    def update(self, model, x, y, num_replicas=1, **kwargs):
         with tf.GradientTape() as tape:
-            loss_value = self.loss(model, x, y) / num_replicas
+            loss_value = self.loss(model, x, y, **kwargs) / num_replicas
         grads = tape.gradient(loss_value, model.trainable_variables)
         grads, _ = tf.clip_by_global_norm(grads, self.clip)
         self.optimizer.apply_gradients(zip(grads, model.trainable_variables))
         return loss_value
 
-    def update_with_hidden(self, model, h, x, y):
+    def update_with_hidden(self, model, h, x, y, **kwargs):
         with tf.GradientTape() as tape:
-            loss_value, h = self.loss(model, h, x, y)
+            loss_value, h = self.loss(model, h, x, y, **kwargs)
 
         grads = tape.gradient(loss_value, model.trainable_variables)
         grads, _ = tf.clip_by_global_norm(grads, self.clip)

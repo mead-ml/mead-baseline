@@ -13,7 +13,7 @@ from baseline.train import register_training_func, Trainer
 from baseline.tf.seq2seq.training.utils import to_tensors, SHUF_BUF_SZ, NUM_PREFETCH
 
 
-def loss(model, features, labels):
+def loss(model, features, labels, **kwargs):
     # Claims its T, B, H
     logits = tf.transpose(model(features), [1, 0, 2])
     # So ok, then transpose this too
@@ -23,7 +23,15 @@ def loss(model, features, labels):
     mx_seq_len = tf.reduce_max(label_lengths)-1
     labels = labels[1:mx_seq_len + 1, :]
     logits = logits[:mx_seq_len, :, :]
-    losses = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=labels)
+    label_smoothing = kwargs.get("label_smoothing")
+    if label_smoothing is not None:
+        V = get_shape_as_list(logits)[-1]
+        one_hot = tf.one_hot(labels, V)
+        losses = tf.keras.losses.categorical_crossentropy(
+            y_true=one_hot, y_pred=logits, from_logits=True, label_smoothing=label_smoothing
+        )
+    else:
+        losses = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=labels)
     loss_mask = tf.cast(tf.sequence_mask(label_lengths-1), dtype=tf.float32)
     losses = losses * tf.transpose(loss_mask, [1, 0])
 
@@ -55,6 +63,7 @@ class Seq2SeqTrainerEagerTf(Trainer):
         self._checkpoint = tf.train.Checkpoint(optimizer=self.optimizer.optimizer, model=self.model)
         checkpoint_dir = '{}-{}'.format("./tf-seq2seq", os.getpid())
         self.bleu_n_grams = int(kwargs.get("bleu_n_grams", 4))
+        self.label_smoothing = kwargs.get("label_smoothing")
 
         self.checkpoint_manager = tf.train.CheckpointManager(self._checkpoint,
                                                              directory=checkpoint_dir,
@@ -105,7 +114,7 @@ class Seq2SeqTrainerEagerTf(Trainer):
         def _train_step(features, y):
             """Replicated training step."""
 
-            loss = self.optimizer.update(self.model, features, y)
+            loss = self.optimizer.update(self.model, features, y, label_smoothing=self.label_smoothing)
             toks = self._num_toks(features['tgt_len'])
             report_loss = loss * tf.cast(toks, tf.float32)
             return report_loss, toks
@@ -198,7 +207,7 @@ class Seq2SeqTrainerEagerTf(Trainer):
         for features, tgt in vs:
             features['dst'] = tgt[:, :-1]
             top_preds = self.model.predict(features, beam=1, make_input=False)
-            loss_value = loss(self.model, features, tgt).numpy()
+            loss_value = loss(self.model, features, tgt, label_smoothing=self.label_smoothing).numpy()
             toks = tf.cast(self._num_toks(features['tgt_len']), tf.float32).numpy()
             total_loss += loss_value * toks
             total_toks += toks
