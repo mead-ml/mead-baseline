@@ -30,9 +30,10 @@ class Seq2SeqTrainerPyTorch(Trainer):
         self.tgt_rlut = kwargs['tgt_rlut']
         self.gpus = kwargs.get('gpus', 1)
         self.bleu_n_grams = int(kwargs.get("bleu_n_grams", 4))
+        self.label_smoothing = kwargs.get("label_smoothing")
 
         if self.gpus > 0:
-            self.crit = model.create_loss().cuda()
+            self.crit = model.create_loss(label_smooth=self.label_smoothing).cuda()
             if self.gpus > 1:
                 self.model = torch.nn.DataParallel(model).cuda()
             else:
