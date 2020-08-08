@@ -840,6 +840,9 @@ class WordpieceTokenizer:
         self.unk_token = unk_token
         self.max_input_chars_per_word = max_input_chars_per_word
 
+    def convert_tokens_to_ids(self, tokens):
+        return convert_by_vocab(self.vocab, tokens)
+
     @property
     def subword_sentinel(self):
         return "##"
