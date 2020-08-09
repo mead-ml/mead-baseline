@@ -1,6 +1,6 @@
 # Text Classification
 
-There are several classification models built in to the `baseline` codebase.  These are summarized individually in the sections below, and an overall performance summary is given at the bottom.
+There are several classification models built in to the codebase.  These are summarized individually in the sections below, and an overall performance summary is given at the bottom.
 The final section provides information on the API design, and how to make your own models
 
 ## A Note About Fine-Tuning Embeddings
