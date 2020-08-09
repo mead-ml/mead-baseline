@@ -1,6 +1,6 @@
-## Extending Baseline and MEAD
+## Extending MEAD
 
-Baseline provides a simple extension process made up of registering handlers for some aspect of training using a python decorator.  There are hooks for overriding many of the functionalities inside of Baseline without a lot of hassle.
+MEAD provides a simple extension process made up of registering handlers for some aspect of training using a python decorator.  There are hooks for overriding many of the functionalities inside of Baseline without a lot of hassle.
 
 These extensions can be used programmatically if you are not using MEAD at all.  In that case, use `mead.tasks` as a reference for how you can orchestrate the code.
 
@@ -12,7 +12,7 @@ Almost all extensions are done by writing a class to handle some aspect of train
 
 - `@register_embeddings(cls, name=None)`: Create your own embeddings sub-graph in the Deep Learning framework you are using.  The name is a key which is use to identify the embeddings in mead.  As in the other cases, it defaults to the class name.  Implementors should inherit from `baseline.{framework}.Embeddings`
 
-- `@register_reporting(cls, name=None)`: Create your own reporting hook which will be advised of training updates. The name, if none, deafults to the class name.  There is a parameter block that will be passed to this constructor to initialize it by mead.  Implementors should inherit from `baseline.ReportingHook`
+- `@register_reporting(cls, name=None)`: Create your own reporting hook which will be advised of training updates. The name, if none, defaults to the class name.  There is a parameter block that will be passed to this constructor to initialize it by mead.  Implementors should inherit from `baseline.ReportingHook`
 
 - `@register_reader(cls, name=None)`: Create your own readers for given tasks.  The name is defaulted to the reader class name
 
@@ -22,7 +22,7 @@ Almost all extensions are done by writing a class to handle some aspect of train
 
 ### Inversion of Control and MEAD
 
-MEAD is a program that orchestrates training by delegation of its sub-components to registered handlers.  This is a design pattern known as Inversion of Control (IoC), and its commonly used in plugin architectures, and very powerful, but it can be confusing to the uninitiated.  The basic idea in our case is this:  we know we want to use some generalized training routine to use some Deep Learning framework to train some sort of model for some task.  We want to also properly vectorize inputs and readers.  The typical pattern for this would be to create some pre-registered components for everything, but to allow a user to define their own implementations, and somehow know that these exists and should be called to handle certain events.
+MEAD orchestrates training by delegation of its sub-components to registered handlers.  This is a design pattern known as Inversion of Control (IoC), and its commonly used in plugin architectures, and very powerful, but it can be confusing to the uninitiated.  The basic idea in our case is this:  we know we want to use some generalized training routine to use some Deep Learning framework to train some sort of model for some task.  We want to also properly vectorize inputs and readers.  The typical pattern for this would be to create some pre-registered components for everything, but to allow a user to define their own implementations, and somehow know that these exists and should be called to handle certain events.
 
 The registration process in Baseline makes this easy for MEAD.  All the classes which a researcher wants to use for some hook that MEAD needs to call have to register themselves with a dictionary (usually referred to as a registry).  But wwe want to make this as simple as possible for users.
 
