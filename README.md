@@ -1,6 +1,6 @@
-# MEAD Baseline
+# MEAD
 
-MEAD Baseline is a library for reproducible deep learning research and fast model
+MEAD is a library for reproducible deep learning research and fast model
 development for NLP. It provides easily extensible abstractions and
 implementations for data loading, model development, training, experiment tracking and export to production. 
 
@@ -71,4 +71,4 @@ If you use the library, please cite the following paper:
 }
 ```
 
-MEAD Baseline was selected for a Spotlight Poster at the NeurIPS MLOSS workshop in 2018.  [OpenReview link](https://openreview.net/forum?id=r1xEb7J15Q)
+MEAD was selected for a Spotlight Poster at the NeurIPS MLOSS workshop in 2018.  [OpenReview link](https://openreview.net/forum?id=r1xEb7J15Q)
