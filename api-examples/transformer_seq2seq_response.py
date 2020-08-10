@@ -70,7 +70,7 @@ def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, d_k, a
            "rpr_k": rpr_k}
     model = TiedEmbeddingsSeq2SeqModel(embeddings, **hps)
     if checkpoint_name.endswith('npz'):
-        load_transformer_seq2seq_npz(model, checkpoint_name, decode_head=True)
+        load_transformer_seq2seq_npz(model, checkpoint_name)
     else:
         model.load_state_dict(torch.load(checkpoint_name))
     model.eval()

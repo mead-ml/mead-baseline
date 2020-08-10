@@ -159,17 +159,7 @@ an NPZ and can hydrate a model from those checkpoints as well.  The checkpoints 
 checkpoint.
 
 Please note that the checkpoints that are written during pre-training or export are headless as they are typically used
-for downstream processing.  However, for models with tied embeddings (most models), it is possible to restore
-the original language model or encoder-decoder, by properly resetting the `WeightTieDense` module. 
-For Masked Language models, use:
+for downstream processing.  However, for models with tied embeddings (most models), the heads will automatically be
+restored to the tied module since `weight` is property that is tied to the other module's `.weight`
 
-```python
-load_tlm_npz(model, checkpoint_name, lm_head=True)
-```
-
-For Encoder-Decoder models, use:
-
-```python
-load_transformer_seq2seq_npz(model, checkpoint_name, decode_head=True)
-```
 

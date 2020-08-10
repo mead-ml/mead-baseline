@@ -1865,19 +1865,21 @@ class WeightTieDense(tf.keras.layers.Layer):
     def build(self, input_shape):
         emb = getattr(self.tied, "embedding_layer", None)
         if emb is not None:
-            self.W = getattr(emb, "W")
-            self._add_bias(self.W)
+            self._add_bias(getattr(emb, "W"))
             super().build(input_shape)
             return
         W = getattr(self.tied, "W", None)
         if W is not None:
-            self.W = W
-            self._add_bias(self.W)
+            self._add_bias(W)
             super().build(input_shape)
             return
-        self.W = getattr(self.tied, "kernel")
         self._add_bias(self.W)
         super().build()
+
+    @property
+    def W(self):
+        w = getattr(self.tied, "W", None)
+        return w if w is not None else getattr(self.tied, "kernel")
 
     def call(self, inputs):
         shape = tf.shape(inputs)

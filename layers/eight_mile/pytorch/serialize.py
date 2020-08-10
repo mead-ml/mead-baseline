@@ -429,7 +429,7 @@ def from_decoder_stack_array(
         from_decoder_array(dec_pyt, d, f"{name}/{i}")
 
 
-def from_tlm_array(pytorch_tlm: nn.Module, d: Dict, embeddings_keys: List[str] = None, name: str = "TLM", lm_head=False):
+def from_tlm_array(pytorch_tlm: nn.Module, d: Dict, embeddings_keys: List[str] = None, name: str = "TLM"):
     """Restore a TLM-like model (possibly a `nn.Module` for fine-tuning)
 
     We just populate the `TransformerEncoderStack` and the embeddings from weights, all other values remain
@@ -439,7 +439,6 @@ def from_tlm_array(pytorch_tlm: nn.Module, d: Dict, embeddings_keys: List[str] =
     :param d: A Dict of weights to restore for each layer
     :param embeddings_keys: Name of embeddings to restore, defaults to `None`, in which case all embeddings are restored
     :param name: A name for this primitive
-    :param lm_head: Should we reload the LM head? We assume weights are tied and first embedding key is also target
     :return:
     """
     transformer = pytorch_tlm.transformer if hasattr(pytorch_tlm, 'transformer') else pytorch_tlm.generator
@@ -456,12 +455,8 @@ def from_tlm_array(pytorch_tlm: nn.Module, d: Dict, embeddings_keys: List[str] =
     if hasattr(pytorch_tlm.embeddings.reduction, 'ln'):
         from_weight_array(pytorch_tlm.embeddings.reduction.ln, d, f"{name}/Embeddings/reduction/ln")
 
-    if lm_head:
-        tgt_key = keys_to_restore[0]
-        pytorch_tlm.output_layer.weight = nn.Parameter(pytorch_tlm.embeddings[tgt_key].embeddings.weight)
 
-
-def load_tlm_npz(pytorch_tlm: nn.Module, npz: str, embeddings_keys: List[str] = None, name: str = "TLM", lm_head=False):
+def load_tlm_npz(pytorch_tlm: nn.Module, npz: str, embeddings_keys: List[str] = None, name: str = "TLM"):
     """Restore a TLM-like model (possibly a `nn.Module` for fine-tuning
 
     We just populate the `TransformerEncoderStack` and the embeddings from weights, all other values remain
@@ -471,15 +466,14 @@ def load_tlm_npz(pytorch_tlm: nn.Module, npz: str, embeddings_keys: List[str] = 
     :param npz: A file to restore the weights from
     :param embeddings_key: Name of embeddings to restore, defaults to `None` in which case we restore all embeddings
     :param name: A name for this primitive
-    :param lm_head: Should we reload the LM head? We assume weights are tied and first embedding key is also target
     :return:
     """
     d = np.load(npz)
-    from_tlm_array(pytorch_tlm, d, embeddings_keys, name, lm_head)
+    from_tlm_array(pytorch_tlm, d, embeddings_keys, name)
 
 
 def load_transformer_seq2seq_npz(pytorch_seq2seq: nn.Module, npz: str, src_embeddings_keys: List[str] = None,
-                                 tgt_embedding_key: str = 'y', name: str = "Seq2Seq", decode_head=False):
+                                 tgt_embedding_key: str = 'y', name: str = "Seq2Seq"):
     """Save a Transformer seq2seq file out
 
     The will be in pytorch_seq2seq.encoder.transformer, and the usual conversions work for that (via `to_tlm_array()`).
@@ -490,8 +484,6 @@ def load_transformer_seq2seq_npz(pytorch_seq2seq: nn.Module, npz: str, src_embed
     :param src_embeddings_keys: An optional list of the src embeddings keys to load, otherwise use what we find
     :param tgt_embedding_key: An optional tgt embedding, otherwise assume 'y' (TODO: bad assumption?)
     :param name: An optional name of the model in the NPZ, otherwise assume `Seq2Seq`
-    :param decode_head: If we want to use this model for fine-tuning, we need to reconstruct its decoder head, which
-      we assume to be tied to the target embeddings weight stored (which may also be the encoder LUT weights)
     """
 
     d = np.load(npz)
@@ -508,10 +500,6 @@ def load_transformer_seq2seq_npz(pytorch_seq2seq: nn.Module, npz: str, src_embed
 
     from_decoder_stack_array(transformer_decoder, d,  name=f"{name}/TransformerDecoderStack")
     from_embed_array(pytorch_seq2seq.decoder.tgt_embeddings, d, name=f"{name}/TgtEmbedding/{tgt_embedding_key}")
-
-    if decode_head:
-        pytorch_seq2seq.decoder.preds.weight = torch.nn.Parameter(pytorch_seq2seq.decoder.tgt_embeddings.embeddings.weight)
-
 
 def load_tlm_transformers_bin(pytorch_tlm: nn.Module, bin_file: str, replace_layers=BERT_HF_LAYER_MAP, replace_embeds=BERT_HF_EMBED_MAP):
     """For BERT transformer from HuggingFace, we need a TLM with EmbeddingsStack with 2 features and LN reduce
