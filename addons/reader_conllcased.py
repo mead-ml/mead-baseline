@@ -12,7 +12,7 @@ class CONLLSeqMixedCaseReader(CONLLSeqReader):
 
     def __init__(self, max_sentence_length=-1, max_word_length=-1, word_trans_fn=None,
                  vec_alloc=np.zeros, vec_shape=np.shape, trim=False, extended_features=dict()):
-        super(CONLLSeqMixedCaseReader, self).__init__(max_sentence_length, max_word_length, word_trans_fn, vec_alloc, vec_shape, trim, extended_features)
+        super().__init__(max_sentence_length, max_word_length, word_trans_fn, vec_alloc, vec_shape, trim, extended_features)
         self.idx = 2 # GO=0, START=1, EOS=2
 
 

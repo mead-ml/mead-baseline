@@ -260,7 +260,7 @@ if not tf.executing_eagerly():
     class Seq2Seq(EncoderDecoderModelBase):
 
         def __init__(self):
-            super(Seq2Seq, self).__init__()
+            super().__init__()
             self._vdrop = False
 
         @property

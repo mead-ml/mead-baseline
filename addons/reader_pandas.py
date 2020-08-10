@@ -9,7 +9,7 @@ from baseline.reader import TSVSeqLabelReader, register_reader
 @register_reader(task='classify', name='pandas')
 class PandasReader(TSVSeqLabelReader):
     def __init__(self, vectorizers, trim=False, **kwargs):
-        super(PandasReader, self).__init__(vectorizers, trim, **kwargs)
+        super().__init__(vectorizers, trim, **kwargs)
         self.label = kwargs.get('label', 'label')
         self.text = kwargs.get('text', 'text')
         self.sep = kwargs.get('sep', ',')

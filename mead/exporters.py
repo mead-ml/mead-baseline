@@ -9,7 +9,7 @@ export = exporter(__all__)
 class Exporter(object):
 
     def __init__(self, task, **kwargs):
-        super(Exporter, self).__init__()
+        super().__init__()
         self.task = task
 
     @classmethod

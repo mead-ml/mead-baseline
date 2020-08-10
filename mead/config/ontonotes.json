@@ -1,7 +1,7 @@
 {
   "task": "tagger",
   "batchsz": 9,
-  "conll_output": "conllresults.conll",
+  "conll_output": "ontonotes-results.conll",
   "unif": 0.1,
   "features": [
     {

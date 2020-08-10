@@ -36,7 +36,7 @@ def get_tf_index_from_unzipped(dir_path):
 class TensorFlowExporter(Exporter):
 
     def __init__(self, task, **kwargs):
-        super(TensorFlowExporter, self).__init__(task, **kwargs)
+        super().__init__(task, **kwargs)
 
     def _run(self, basename, output_dir, project=None, name=None, model_version=None, **kwargs):
         basename = get_tf_index_from_unzipped(basename)
@@ -114,7 +114,7 @@ class TensorFlowExporter(Exporter):
 class ClassifyTensorFlowExporter(TensorFlowExporter):
 
     def __init__(self, task, **kwargs):
-        super(ClassifyTensorFlowExporter, self).__init__(task, **kwargs)
+        super().__init__(task, **kwargs)
         self.return_labels = kwargs.get('return_labels', True)
 
     def _create_model(self, sess, basename, **kwargs):
@@ -160,7 +160,7 @@ class ClassifyTensorFlowExporter(TensorFlowExporter):
 class TaggerTensorFlowExporter(TensorFlowExporter):
 
     def __init__(self, task, **kwargs):
-        super(TaggerTensorFlowExporter, self).__init__(task, **kwargs)
+        super().__init__(task, **kwargs)
         self.return_labels = kwargs.get('return_labels', False)  # keep default behavior
 
     def _create_model(self, sess, basename, **kwargs):
@@ -230,7 +230,7 @@ class Seq2SeqTensorFlowExporter(TensorFlowExporter):
     TARGET_EMBED_KEY = 'tgt'
 
     def __init__(self, task, **kwargs):
-        super(Seq2SeqTensorFlowExporter, self).__init__(task, **kwargs)
+        super().__init__(task, **kwargs)
         self.return_labels = kwargs.get('return_labels', False)
 
     def _create_model(self, sess, basename, **kwargs):

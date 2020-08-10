@@ -88,7 +88,7 @@ class LanguageModelTrainerTf(Trainer):
     When the latter, we will use the baseline DataFeed to read the object into the `feed_dict`
     """
     def __init__(self, model_params, **kwargs):
-        super(LanguageModelTrainerTf, self).__init__()
+        super().__init__()
         if type(model_params) is dict:
             self.model = create_model_for('lm', **model_params)
         else:
@@ -205,7 +205,7 @@ class LanguageModelTrainerTf(Trainer):
         return metrics
 
     def calc_metrics(self, agg, norm):
-        metrics = super(LanguageModelTrainerTf, self).calc_metrics(agg, norm)
+        metrics = super().calc_metrics(agg, norm)
         metrics['perplexity'] = np.exp(metrics['avg_loss'])
         return metrics
 

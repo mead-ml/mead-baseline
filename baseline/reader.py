@@ -265,7 +265,7 @@ class MultiFileParallelCorpusReader(ParallelCorpusReader):
 
 
 @export
-class SeqPredictReader(object):
+class SeqPredictReader:
 
     def __init__(self, vectorizers, trim=False, truncate=False, mxlen=-1, **kwargs):
         super().__init__()

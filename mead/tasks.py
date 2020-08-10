@@ -54,7 +54,7 @@ def merge_reporting_with_settings(reporting, settings):
     return reporting_hooks, reporting
 
 
-class Backend(object):
+class Backend:
     """Simple object to represent a deep-learning framework backend"""
     def __init__(self, name=None, params=None, exporter=None):
         """Initialize the backend, optional with constructor args
@@ -81,7 +81,10 @@ class Backend(object):
         import_user_module('baseline.{}.embeddings'.format(self.name))
         import_user_module('mead.{}.exporters'.format(self.name))
         if task_name is not None:
-            import_user_module('{}.{}'.format(base_pkg_name, task_name))
+            try:
+                import_user_module(f'{base_pkg_name}.{task_name}')
+            except:
+                logger.warning(f"No module found [{base_pkg_name}.{task_name}]")
         self.transition_mask = mod.transition_mask
 
 
@@ -109,7 +112,7 @@ def assert_unique_feature_names(names: List[str]) -> None:
 
 
 @export
-class Task(object):
+class Task:
     """Basic building block for a task of NLP problems, e.g. `tagger`, `classify`, etc.
     """
 
@@ -492,7 +495,7 @@ class Task(object):
 class ClassifierTask(Task):
 
     def __init__(self, mead_settings_config, **kwargs):
-        super(ClassifierTask, self).__init__(mead_settings_config, **kwargs)
+        super().__init__(mead_settings_config, **kwargs)
 
     @classmethod
     def task_name(cls):
@@ -505,7 +508,7 @@ class ClassifierTask(Task):
         return backend
 
     def _setup_task(self, **kwargs):
-        super(ClassifierTask, self)._setup_task(**kwargs)
+        super()._setup_task(**kwargs)
         if self.config_params.get('preproc', {}).get('clean', False) is True:
             self.config_params.get('preproc', {})['clean_fn'] = baseline.TSVSeqLabelReader.do_clean
             logger.info('Clean')
@@ -584,7 +587,7 @@ class ClassifierTask(Task):
 class TaggerTask(Task):
 
     def __init__(self, mead_settings_config, **kwargs):
-        super(TaggerTask, self).__init__(mead_settings_config, **kwargs)
+        super().__init__(mead_settings_config, **kwargs)
 
     @classmethod
     def task_name(cls):
@@ -707,7 +710,7 @@ class TaggerTask(Task):
 class EncoderDecoderTask(Task):
 
     def __init__(self, mead_settings_config, **kwargs):
-        super(EncoderDecoderTask, self).__init__(mead_settings_config, **kwargs)
+        super().__init__(mead_settings_config, **kwargs)
 
     @classmethod
     def task_name(cls):

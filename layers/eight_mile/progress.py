@@ -60,7 +60,7 @@ class ProgressBarJupyter(Progress):
     """
 
     def __init__(self, total):
-        super(ProgressBarJupyter, self).__init__()
+        super().__init__()
         from ipywidgets import FloatProgress
         from IPython.display import display
 
@@ -91,7 +91,7 @@ class ProgressBarTerminal(Progress):
     FULL = "%(bar)s %(current)d/%(total)d (%(percent)3d%%) %(remaining)d to go"
 
     def __init__(self, total, width=40, fmt=DEFAULT, symbol="="):
-        super(ProgressBarTerminal, self).__init__()
+        super().__init__()
         assert len(symbol) == 1
 
         self.total = total

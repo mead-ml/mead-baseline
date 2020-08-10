@@ -2037,7 +2037,7 @@ class ResidualBlock(tf.keras.layers.Layer):
 
 class SkipConnection(ResidualBlock):
     def __init__(self, input_size: int, activation: str = "relu"):
-        super(SkipConnection, self).__init__(tf.keras.layers.Dense(input_size, activation=activation))
+        super().__init__(tf.keras.layers.Dense(input_size, activation=activation))
 
 
 class TimeDistributedProjection(tf.keras.layers.Layer):
