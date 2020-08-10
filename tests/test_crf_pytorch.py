@@ -538,7 +538,8 @@ def test_ONNX_export():
             p1 = p1.numpy()
             s1 = s1.numpy()
 
-            p2, s2 = o.run(None, {"unary": unary, "trans": trans, "length": length})
+            inputs = {"unary": unary, "trans": trans, "length": length}
+            p2, s2 = o.run(None, {k: v for k, v in inputs.items() if k in set(i.name for i in o.get_inputs())})
 
             np.testing.assert_allclose(p1, p2, atol=1e-6)
             np.testing.assert_allclose(s1, s2, atol=1e-6)
