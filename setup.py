@@ -82,7 +82,7 @@ def main():
             'mead-layers=={}'.format(About.VERSION),
         ],
         extras_require={
-            'test': ['pytest', 'mock', 'contextdecorator', 'pytest-forked'],
+            'test': ['pytest', 'mock', 'contextdecorator', 'pytest-forked', 'onnxruntime'],
             'report': ['visdom', 'tensorboard'],
             'yaml': ['pyyaml'],
             'bpe': ['fastBPE'],
