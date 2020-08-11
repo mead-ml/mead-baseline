@@ -45,6 +45,9 @@ vecs_set = index_by_label(vecs_index)
 vec_params = vecs_set[args.vec_id]
 vec_params['mxlen'] = args.nctx
 
+if 'transform' in vec_params:
+    vec_params['transform_fn'] = vec_params['transform']
+
 if 'transform_fn' in vec_params and isinstance(vec_params['transform_fn'], str):
     vec_params['transform_fn'] = eval(vec_params['transform_fn'])
 
