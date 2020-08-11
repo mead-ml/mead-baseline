@@ -501,6 +501,7 @@ def test_vec_log_sum_exp_batch_stable():
 
 def test_ONNX_export():
     ort = pytest.importorskip("onnxruntime")
+    pytest.mark.skipif(get_version(torch) <= 1.4, reason="Old ONNX")
 
     v = ViterbiBatchSize1(Offsets.GO, Offsets.EOS)
 
@@ -523,7 +524,7 @@ def test_ONNX_export():
             f=f.name,
             input_names=["unary", "trans", "length"],
             output_names=["path", "score"],
-            opset_version=12 if get_version(torch) > 1.4 else 11,
+            opset_version=12,
             example_outputs=[p1, s1],
         )
         o = ort.InferenceSession(f.name)
