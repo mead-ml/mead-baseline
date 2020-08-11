@@ -126,7 +126,7 @@ class ColoredFormatter(logging.Formatter):
 
     def format(self, record):
         if record.levelname in self.COLORS:
-            return color(super(ColoredFormatter, self).format(record), self.COLORS[record.levelname])
+            return color(super().format(record), self.COLORS[record.levelname])
         return super().format(record)
 
 

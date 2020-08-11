@@ -14,7 +14,7 @@ class TensorFlowPreprocessor(Preprocessor):
     """
 
     def __init__(self, feature, vectorizer, index, vocab, **kwargs):
-        super(TensorFlowPreprocessor, self).__init__(feature, vectorizer, index, vocab, **kwargs)
+        super().__init__(feature, vectorizer, index, vocab, **kwargs)
         self.FIELD_NAME = kwargs.get('FIELD_NAME', 'tokens')
         self.upchars = tf.constant([chr(i) for i in range(65, 91)])
         self.lchars = tf.constant([chr(i) for i in range(97, 123)])
@@ -122,11 +122,11 @@ class Char2DPreprocessor(TensorFlowPreprocessor):
 @register_preprocessor(name='dict1d')
 class Dict1DPreprocessor(Token1DPreprocessor):
     def __init__(self, feature, vectorizer, index, vocab, **kwargs):
-        super(Dict1DPreprocessor, self).__init__(feature, vectorizer, index, vocab, **kwargs)
+        super().__init__(feature, vectorizer, index, vocab, **kwargs)
 
 
 @export
 @register_preprocessor(name='dict2d')
 class Dict2DPreprocessor(Char2DPreprocessor):
     def __init__(self, feature, vectorizer, index, vocab, **kwargs):
-        super(Dict2DPreprocessor, self).__init__(feature, vectorizer, index, vocab, **kwargs)
+        super().__init__(feature, vectorizer, index, vocab, **kwargs)

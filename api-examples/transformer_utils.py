@@ -292,7 +292,7 @@ class TensorCharDatasetReader(TensorDatasetReaderBase):
     def __init__(self, nctx, chars_per_word):
         y_vectorizer = Token1DVectorizer(transform_fn=baseline.lowercase)
         x_vectorizer = Char2DVectorizer(mxwlen=chars_per_word)
-        super(TensorCharDatasetReader, self).__init__(nctx, {'x': x_vectorizer, 'y': y_vectorizer})
+        super().__init__(nctx, {'x': x_vectorizer, 'y': y_vectorizer})
         self.chars_per_word = chars_per_word
 
     def load(self, filename, vocabs):

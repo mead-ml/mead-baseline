@@ -57,7 +57,7 @@ class StepReportingHook(ReportingHook):
 @register_reporting(name='console')
 class ConsoleReporting(EpochReportingHook):
     def __init__(self, **kwargs):
-        super(ConsoleReporting, self).__init__(**kwargs)
+        super().__init__(**kwargs)
 
     def _step(self, metrics, tick, phase, tick_type=None, **kwargs):
         """Write results to `stdout`
@@ -80,7 +80,7 @@ class ConsoleReporting(EpochReportingHook):
 @register_reporting(name='step_logging')
 class StepLoggingReporting(StepReportingHook):
     def __init__(self, **kwargs):
-        super(StepLoggingReporting, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self.log = logging.getLogger('baseline')
 
     def _step(self, metrics, tick, phase, tick_type=None, **kwargs):
@@ -101,7 +101,7 @@ class StepLoggingReporting(StepReportingHook):
 @register_reporting(name='logging')
 class LoggingReporting(EpochReportingHook):
     def __init__(self, **kwargs):
-        super(LoggingReporting, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self.log = logging.getLogger('baseline.reporting')
 
     def _step(self, metrics, tick, phase, tick_type=None, **kwargs):

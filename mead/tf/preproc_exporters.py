@@ -146,7 +146,7 @@ class ClassifyTensorFlowPreProcExporter(ClassifyTensorFlowExporter):
         return 'server'
 
     def __init__(self, task, **kwargs):
-        super(ClassifyTensorFlowPreProcExporter, self).__init__(task, **kwargs)
+        super().__init__(task, **kwargs)
         self.feature_exporter_field_map = kwargs.get('feature_exporter_field_map', {'tokens': 'text'})
         self.return_labels = kwargs.get('return_labels', False)
 
@@ -188,7 +188,7 @@ class TaggerTensorFlowPreProcExporter(TaggerTensorFlowExporter):
         return 'server'
 
     def __init__(self, task, **kwargs):
-        super(TaggerTensorFlowPreProcExporter, self).__init__(task, **kwargs)
+        super().__init__(task, **kwargs)
         self.feature_exporter_field_map = kwargs.get('feature_exporter_field_map', {'tokens': 'text'})
         self.return_labels = kwargs.get('return_labels', False)
 

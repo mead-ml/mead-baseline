@@ -65,7 +65,7 @@ class ExampleDataFeed(DataFeed):
                 a full batch cannot be made, otherwise the final batch is smaller
                 than normal batches.
         """
-        super(ExampleDataFeed, self).__init__()
+        super().__init__()
 
         self.examples = examples
         self.batchsz = batchsz

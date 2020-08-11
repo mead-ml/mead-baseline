@@ -3671,7 +3671,7 @@ class TransformerDiscriminator(nn.Module):
 class SequenceCriterion(nn.Module):
 
     def __init__(self, LossFn=nn.NLLLoss, avg='token'):
-        super(SequenceCriterion, self).__init__()
+        super().__init__()
         if avg == 'token':
             # self.crit = LossFn(ignore_index=Offsets.PAD, reduction='elementwise-mean')
             self.crit = LossFn(ignore_index=Offsets.PAD, size_average=True)

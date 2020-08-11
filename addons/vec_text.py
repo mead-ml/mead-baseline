@@ -29,7 +29,7 @@ class Text1DVectorizer(Token1DVectorizer):
 @register_vectorizer(name='dict_text')
 class DictText1DVectorizer(Text1DVectorizer):
     def __init__(self, **kwargs):
-        super(DictText1DVectorizer, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self.fields = listify(kwargs.get('fields', 'text'))
         self.delim = kwargs.get('token_delim', '@@')
 

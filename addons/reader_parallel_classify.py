@@ -19,7 +19,7 @@ class ParallelSeqLabelReader(SeqLabelReader):
                 }
 
     def __init__(self, vectorizers, trim=False, truncate=False, **kwargs):
-        super(ParallelSeqLabelReader, self).__init__()
+        super().__init__()
 
         self.label2index = {}
         self.vectorizers = vectorizers

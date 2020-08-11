@@ -54,7 +54,7 @@ class Seq2SeqTrainerPyTorch(Trainer):
         return self.model.module if self.gpus > 1 else self.model
 
     def calc_metrics(self, agg, norm):
-        metrics = super(Seq2SeqTrainerPyTorch, self).calc_metrics(agg, norm)
+        metrics = super().calc_metrics(agg, norm)
         metrics['perplexity'] = np.exp(metrics['avg_loss'])
         return metrics
 

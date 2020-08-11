@@ -743,7 +743,7 @@ class EncoderDecoderService(Service):
         return 'suggest_text'
 
     def __init__(self, vocabs=None, vectorizers=None, model=None, preproc='client'):
-        super(EncoderDecoderService, self).__init__(None, None, model, preproc)
+        super().__init__(None, None, model, preproc)
         self.src_vocabs = {}
         self.tgt_vocab = None
         for k, vocab in vocabs.items():

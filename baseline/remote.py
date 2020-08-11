@@ -124,7 +124,7 @@ class RemoteModelREST(RemoteModel):
         :param return_labels: Whether the remote model returns class indices or the class labels directly. This depends
         on the `return_labels` parameter in exporters
         """
-        super(RemoteModelREST, self).__init__(
+        super().__init__(
             remote, name, signature, labels, beam, lengths_key, inputs, version, return_labels
         )
         url = urlparse(self.remote)
@@ -258,7 +258,7 @@ class RemoteModelGRPC(RemoteModel):
         :param return_labels: Whether the remote model returns class indices or the class labels directly. This depends
         on the `return_labels` parameter in exporters
         """
-        super(RemoteModelGRPC, self).__init__(
+        super().__init__(
             remote, name, signature, labels, beam, lengths_key, inputs, version, return_labels
         )
         self.predictpb = import_user_module('baseline.tensorflow_serving.apis.predict_pb2')
