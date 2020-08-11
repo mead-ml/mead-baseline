@@ -7,7 +7,7 @@ import numpy as np
 from mock import patch, MagicMock
 
 torch = pytest.importorskip("torch")
-from eight_mile.utils import Offsets
+from eight_mile.utils import Offsets, get_version
 from eight_mile.pytorch.layers import (
     CRF,
     Viterbi,
