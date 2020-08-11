@@ -71,7 +71,7 @@ def _get_accuracy(golds, preds):
     return correct / float(total) * 100, total
 
 
-def _get_entites(golds, preds, span_type="iobes", verbose=False):
+def _get_entities(golds, preds, span_type="iobes", verbose=False):
     """ Convert the tags into sets of entities.
 
     :param golds: `List[List[str]]` The list of gold tags.
@@ -96,7 +96,7 @@ def main():
         choices={"iobes", "iob", "bio"},
         help="What tag annotation scheme is this file using.",
     )
-    parser.add_argument("--delimiterTag", "-d", default=" ", help="The separator between items in the file.")
+    parser.add_argument("--delimiterTag", "-d", help="The separator between items in the file.")
     parser.add_argument(
         "--verbose", "-v", action="store_true", help="Output warnings when there is an illegal transition."
     )
@@ -104,7 +104,7 @@ def main():
 
     golds, preds = _read_conll_file(sys.stdin, args.delimiterTag)
     acc, tokens = _get_accuracy(golds, preds)
-    golds, preds = _get_entites(golds, preds, args.span_type, args.verbose)
+    golds, preds = _get_entities(golds, preds, args.span_type, args.verbose)
     metrics = per_entity_f1(golds, preds)
     metrics["acc"] = acc
     metrics["tokens"] = tokens
