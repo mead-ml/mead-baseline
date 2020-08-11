@@ -1,12 +1,13 @@
 import os
 import math
 import json
+import tempfile
 import pytest
 import numpy as np
 from mock import patch, MagicMock
 
 torch = pytest.importorskip("torch")
-from eight_mile.utils import Offsets
+from eight_mile.utils import Offsets, get_version
 from eight_mile.pytorch.layers import (
     CRF,
     Viterbi,
@@ -16,6 +17,9 @@ from eight_mile.pytorch.layers import (
     ViterbiBatchSize1,
     vec_log_sum_exp,
 )
+
+
+TRIALS = 100
 
 
 def explicit_log_sum_exp(xs):
@@ -493,3 +497,50 @@ def test_vec_log_sum_exp_batch_stable():
     one_x_one = torch.cat([lse1, lse2], dim=0)
     lse = vec_log_sum_exp(i, 2)
     np.testing.assert_allclose(one_x_one.numpy(), lse.numpy())
+
+
+@pytest.mark.skipif(get_version(torch) <= 1.4, reason="Old ONNX")
+def test_ONNX_export():
+    ort = pytest.importorskip("onnxruntime")
+
+    v = ViterbiBatchSize1(Offsets.GO, Offsets.EOS)
+
+    B = 1
+    T = np.random.randint(10, 100)
+    H = np.random.randint(24, 76)
+
+    unary = torch.rand(T, B, H)
+    trans = torch.rand(1, H, H)
+    length = torch.randint(1, T, size=(B,))
+
+    p1, s1 = v(unary, trans, length)
+
+    with tempfile.NamedTemporaryFile() as f:
+        torch.onnx.export(
+            v,
+            (unary, trans, length),
+            verbose=True,
+            dynamic_axes={"path": {0: "sequence"}, "unary": {0: "sequence"}},
+            f=f.name,
+            input_names=["unary", "trans", "length"],
+            output_names=["path", "score"],
+            opset_version=12,
+            example_outputs=[p1, s1],
+        )
+        o = ort.InferenceSession(f.name)
+
+        for _ in range(TRIALS):
+            T = np.random.randint(10, 100)
+            unary = np.random.rand(T, B, H).astype(np.float32)
+            trans = np.random.rand(1, H, H).astype(np.float32)
+            length = np.random.randint(1, T, size=(B,)).astype(np.int64)
+
+            p1, s1 = v(*tuple(map(torch.from_numpy, (unary, trans, length))))
+            p1 = p1.numpy()
+            s1 = s1.numpy()
+
+            inputs = {"unary": unary, "trans": trans, "length": length}
+            p2, s2 = o.run(None, {k: v for k, v in inputs.items() if k in set(i.name for i in o.get_inputs())})
+
+            np.testing.assert_allclose(p1, p2, atol=1e-6)
+            np.testing.assert_allclose(s1, s2, atol=1e-6)
