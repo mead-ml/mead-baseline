@@ -499,9 +499,9 @@ def test_vec_log_sum_exp_batch_stable():
     np.testing.assert_allclose(one_x_one.numpy(), lse.numpy())
 
 
+@pytest.mark.skipif(get_version(torch) <= 1.4, reason="Old ONNX")
 def test_ONNX_export():
     ort = pytest.importorskip("onnxruntime")
-    pytest.mark.skipif(get_version(torch) <= 1.4, reason="Old ONNX")
 
     v = ViterbiBatchSize1(Offsets.GO, Offsets.EOS)
 
