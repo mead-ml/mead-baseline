@@ -523,8 +523,8 @@ def test_ONNX_export():
             f=f.name,
             input_names=["unary", "trans", "length"],
             output_names=["path", "score"],
-            opset_version=12,
-            example_outputs=[p1, s1]
+            opset_version=12 if get_version(torch) > 1.4 else 11,
+            example_outputs=[p1, s1],
         )
         o = ort.InferenceSession(f.name)
 
