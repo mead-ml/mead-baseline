@@ -60,6 +60,7 @@ embeddings = load_embeddings_overlay(embeddings_set, embeddings_params, vectoriz
 
 vocabs = {'x': embeddings['vocab']}
 embedder = embeddings['embeddings'].cpu()
+embedder.eval()
 if args.cuda:
     embedder = embedder.cuda()
 
