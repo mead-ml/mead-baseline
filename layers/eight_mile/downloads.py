@@ -90,6 +90,36 @@ def extractor(filepath, cache_dir, extractor_func):
 
 
 @export
+def get_file_or_url(file, cache=None):
+    """
+    Return itself if its a file, else downloaded.  If cache, use that
+    :param file: The file name
+    :param cache: A cache location, If `None`, just download
+    :return: The proper filename
+    """
+
+    if validate_url(file):
+        logger.info(f'Downloading {file}')
+        if cache:
+            file = SingleFileDownloader(file, cache).download()
+        else:
+            file, _ = urlretrieve(file)
+    return file
+
+
+@export
+def open_file_or_url(file, mode='r', cache=None):
+    """
+    Return handle to a file, if a url, download first. If cache, use that
+    :param file: The file name
+    :param model: The open mode
+    :param cache: A cache location, If `None`, just download
+    :return: The handle
+    """
+    return open(get_file_or_url(file, cache), mode)
+
+
+@export
 def web_downloader(url, path_to_save=None):
     # Use a class to simulate the nonlocal keyword in 2.7
     class Context: pg = None

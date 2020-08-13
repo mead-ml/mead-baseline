@@ -3,8 +3,7 @@ import tempfile
 import unicodedata
 from typing import Tuple, List, Iterable, Set
 import numpy as np
-from six.moves.urllib.request import urlretrieve
-
+from eight_mile.downloads import open_file_or_url, get_file_or_url
 from baseline.utils import exporter, optional_params, listify, register, Offsets, import_user_module, validate_url
 
 
@@ -440,8 +439,12 @@ class DictTextNGramVectorizer(TextNGramVectorizer):
 class SavableFastBPE:
     def __init__(self, codes_path, vocab_path):
         from fastBPE import fastBPE
-        self.codes = open(codes_path, 'rb').read()
-        self.vocab = open(vocab_path, 'rb').read()
+        codes_path = get_file_or_url(codes_path)
+        vocab_path = get_file_or_url(vocab_path)
+        with open(codes_path, 'rb') as rf:
+            self.codes = rf.read()
+        with open(vocab_path) as rf:
+            self.vocab = rf.read()
         self.bpe = fastBPE(codes_path, vocab_path)
 
     @property
@@ -513,7 +516,7 @@ class BPEVectorizer1D(AbstractVectorizer):
 
     def read_vocab(self, s):
         vocab = [] + Offsets.VALUES + ['[CLS]', '[MASK]']
-        with open(s, "r") as f:
+        with open_file_or_url(s, "r") as f:
             for line in f.readlines():
                 token = line.split()[0].strip()
                 vocab.append(token)
@@ -675,13 +678,9 @@ def load_bert_vocab(vocab_file):
     if BERT_VOCAB is not None:
         return BERT_VOCAB
 
-    if validate_url(vocab_file):
-        print(f'Downloading {vocab_file}')
-        vocab_file, _ = urlretrieve(vocab_file)
-
     vocab = collections.OrderedDict()
     index = 0
-    with open(vocab_file, "r") as rf:
+    with open_file_or_url(vocab_file, "r") as rf:
         for line in rf:
             token = convert_to_unicode(line)
             if not token:
