@@ -345,11 +345,11 @@ def train():
                     return
 
                 if (i + 1) % report_on == 0:
-                    logging.info(avg_loss)
+                    logger.info(avg_loss)
                 if (i + 1) % update_on == 0:
                     elapsed = (time.time() - start)/60
-                    logging.info('elapsed time this epoch %d min', elapsed)
-                    logging.info('elapsed step time %f steps/min', i/elapsed)
+                    logger.info('elapsed time this epoch %d min', elapsed)
+                    logger.info('elapsed step time %f steps/min', i/elapsed)
                     checkpoint_manager.save()
                     if args.npz:
                         steps = optimizer.global_step.numpy()
