@@ -171,12 +171,16 @@ def to_attn_array(pytorch_attn: nn.Module, name: str) -> Dict:
     d.update(to_weight_array(pytorch_attn.w_Q, f"{name}/w_Q"))
     d.update(to_weight_array(pytorch_attn.w_K, f"{name}/w_K"))
     d.update(to_weight_array(pytorch_attn.w_V, f"{name}/w_V"))
-    d.update(to_weight_array(pytorch_attn.w_O, f"{name}/w_O"))
+
+    if hasattr(pytorch_attn, 'w_O'):
+        d.update(to_weight_array(pytorch_attn.w_O, f"{name}/w_O"))
 
     if hasattr(pytorch_attn, 'rpr_key'):
         rpr_key_weights = pytorch_attn.rpr_key.weight.cpu().detach().numpy()
-        rpr_value_weights = pytorch_attn.rpr_value.weight.cpu().detach().numpy()
         d.update({f"{name}/rpr_key": rpr_key_weights})
+
+    if hasattr(pytorch_attn, 'rpr_value'):
+        rpr_value_weights = pytorch_attn.rpr_value.weight.cpu().detach().numpy()
         d.update({f"{name}/rpr_value": rpr_value_weights})
 
     return d
@@ -192,11 +196,16 @@ def from_attn_array(pytorch_attn: nn.Module, d: Dict, name: str):
     from_weight_array(pytorch_attn.w_Q, d, f"{name}/w_Q")
     from_weight_array(pytorch_attn.w_K, d, f"{name}/w_K")
     from_weight_array(pytorch_attn.w_V, d, f"{name}/w_V")
-    from_weight_array(pytorch_attn.w_O, d, f"{name}/w_O")
+
+    if hasattr(pytorch_attn, 'w_O'):
+        from_weight_array(pytorch_attn.w_O, d, f"{name}/w_O")
 
     if hasattr(pytorch_attn, 'rpr_key'):
         device = pytorch_attn.rpr_key.weight.device
         pytorch_attn.rpr_key.weight = torch.nn.Parameter(torch.from_numpy(d[f"{name}/rpr_key"]).to(device=device))
+
+    if hasattr(pytorch_attn, 'rpr_value'):
+        device = pytorch_attn.rpr_key.weight.device
         pytorch_attn.rpr_value.weight = torch.nn.Parameter(torch.from_numpy(d[f"{name}/rpr_value"]).to(device=device))
 
 
