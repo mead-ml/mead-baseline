@@ -177,6 +177,9 @@ def train():
     parser.add_argument('--rpr_k',
                         help='Relative attention positional sizes pass 0 if you dont want relative attention',
                         type=int, default=[8], nargs='+')
+    parser.add_argument('--rpr_value_on', type=str2bool, default=True,
+                        help="In relative attention, whether add positional correction to values in addition to the "
+                             "correction to attention matrix")
     parser.add_argument('--windowed_ra', type=str2bool, default=False, help="whether prevent attention beyond rpr_k")
     parser.add_argument("--strategy", help="Training strategy, defaults to `mirror`", choices=["mirror"])
     parser.add_argument("--npz", help="Should we write out NPZ files?", type=str2bool, default=False)
@@ -257,6 +260,7 @@ def train():
                        rpr_k=rpr_k,
                        d_k=args.d_k,
                        windowed_ra=args.windowed_ra,
+                       rpr_value_on=args.rpr_value_on,
                        src_keys=['x'], tgt_key='x')
 
     loss_function = Loss(vocab_size, args.nctx)
