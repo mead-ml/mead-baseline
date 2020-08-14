@@ -2681,10 +2681,13 @@ class SequenceSequenceRelativeAttention(nn.Module):
         """
         B, H, T, D = value.shape
         updated_values = torch.matmul(a, value)
-        a = a.view(B * H, T, T).transpose(0, 1)  # (T, BxH, T)
-        t = torch.matmul(a, edges_value)  # (T, BxH, D)
-        update_edge_values = t.transpose(0, 1).view(B, H, T, D)
-        return updated_values + update_edge_values
+        if edges_value is not None:
+            a = a.view(B * H, T, T).transpose(0, 1)  # (T, BxH, T)
+            t = torch.matmul(a, edges_value)  # (T, BxH, D)
+            update_edge_values = t.transpose(0, 1).view(B, H, T, D)
+            return updated_values + update_edge_values
+        else:
+            return updated_values
 
 
 class SeqScaledDotProductRelativeAttention(SequenceSequenceRelativeAttention):
@@ -2807,10 +2810,13 @@ class SeqScaledWindowedRelativeAttention(SequenceSequenceRelativeAttention):
         # a has dim [B, H, T, 1, W]
         window_sz = a.shape[-1]
         value = unfold_tensor(value, dim=2, window_sz=window_sz).transpose(-1, -2)  # [B, H, T, W, d_value]
-        rpr_value = rpr_value.unsqueeze(0).unsqueeze(0).unsqueeze(0)  # [1, 1, 1, W, d_value]
         updated_values = torch.matmul(a, value)  # [B, H, T, 1, d_value]
-        update_rpr_values = torch.matmul(a, rpr_value)  # [B, H, T, 1, d_value]
-        return (updated_values + update_rpr_values).squeeze(3)  # [B, H, T, d_value]
+        if rpr_value is not None:
+            rpr_value = rpr_value.unsqueeze(0).unsqueeze(0).unsqueeze(0)  # [1, 1, 1, W, d_value]
+            update_rpr_values = torch.matmul(a, rpr_value)  # [B, H, T, 1, d_value]
+            return (updated_values + update_rpr_values).squeeze(3)  # [B, H, T, d_value]
+        else:
+            return updated_values.squeeze(3)
 
 
 class SeqBahdanauAttention(SequenceSequenceAttention):
@@ -2934,6 +2940,7 @@ class MultiHeadedRelativeAttention(nn.Module):
         scale: bool = False,
         d_k: Optional[int] = None,
         windowed_ra: bool = False,
+        rpr_value_on: bool = True
     ):
         """Constructor for multi-headed attention
 
@@ -2962,8 +2969,10 @@ class MultiHeadedRelativeAttention(nn.Module):
         else:
             self.d_value = d_model
         self.rpr_k = rpr_k
+        self.rpr_value_on = rpr_value_on
         self.rpr_key = nn.Embedding(2 * rpr_k + 1, self.d_k)
-        self.rpr_value = nn.Embedding(2 * rpr_k + 1, self.d_value)
+        if self.rpr_value_on:
+            self.rpr_value = nn.Embedding(2 * rpr_k + 1, self.d_value)
         self.windowed_ra = windowed_ra
         self.w_Q = Dense(d_model, self.d_k * self.h)
         self.w_K = Dense(d_model, self.d_k * self.h)
@@ -2986,12 +2995,18 @@ class MultiHeadedRelativeAttention(nn.Module):
         window_len = 2 * self.rpr_k
         edges = seq.view(1, -1) - seq.view(-1, 1) + self.rpr_k
         edges = torch.clamp(edges, 0, window_len)
-        return self.rpr_key(edges), self.rpr_value(edges)
+        if self.rpr_value_on:
+            return self.rpr_key(edges), self.rpr_value(edges)
+        else:
+            return self.rpr_key(edges), None
 
     def make_windowed_rpr(self, device):
         window_len = 2 * self.rpr_k + 1
         window = torch.arange(window_len).to(device)
-        return self.rpr_key(window), self.rpr_value(window)
+        if self.rpr_value_on:
+            return self.rpr_key(window), self.rpr_value(window)
+        else:
+            return self.rpr_key(window), None
 
     def forward(self, qkvm: Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]) -> torch.Tensor:
         """Low-order projections of query, key and value into multiple heads, then attention application and dropout
@@ -3039,7 +3054,8 @@ class TransformerEncoder(nn.Module):
         ffn_pdrop: Optional[float] = 0.0,
         layer_norms_after: bool = False,
         layer_norm_eps: float = 1.0e-6,
-        windowed_ra: Optional[bool] = False
+        windowed_ra: Optional[bool] = False,
+        rpr_value_on: bool = True
     ):
         super().__init__()
         # to properly execute BERT models, we have to follow T2T and do layer norms after
@@ -3048,7 +3064,7 @@ class TransformerEncoder(nn.Module):
         self.d_ff = d_ff if d_ff is not None else 4 * d_model
         if rpr_k is not None:
             self.self_attn = MultiHeadedRelativeAttention(num_heads, d_model, rpr_k, pdrop, scale, d_k=d_k,
-                                                          windowed_ra=windowed_ra)
+                                                          windowed_ra=windowed_ra, rpr_value_on=rpr_value_on)
         else:
             self.self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale=scale, d_k=d_k)
         self.ffn = nn.Sequential(
@@ -3154,6 +3170,7 @@ class TransformerEncoderStack(nn.Module):
         layer_norms_after: bool = False,
         layer_norm_eps: float = 1.0e-6,
         windowed_ra: Optional[bool] = False,
+        rpr_value_on: bool = True,
         **kwargs,
     ):
         super().__init__()
@@ -3169,7 +3186,7 @@ class TransformerEncoderStack(nn.Module):
                 TransformerEncoder(
                     num_heads, d_model, pdrop, scale, activation, d_ff, d_k,
                     rpr_k=rpr_k[i], ffn_pdrop=ffn_pdrop, layer_norms_after=layer_norms_after,
-                    layer_norm_eps=layer_norm_eps, windowed_ra=windowed_ra
+                    layer_norm_eps=layer_norm_eps, windowed_ra=windowed_ra, rpr_value_on=rpr_value_on
                 )
             )
 
