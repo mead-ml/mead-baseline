@@ -2806,11 +2806,11 @@ class SeqScaledWindowedRelativeAttention(SequenceSequenceRelativeAttention):
     def _update(self, a: torch.Tensor, value: torch.Tensor, rpr_value: torch.Tensor) -> torch.Tensor:
         # a has dim [B, H, T, 1, W]
         window_sz = a.shape[-1]
-        value = unfold_tensor(value, dim=2, window_sz=window_sz).transpose(-1, -2)  # [B, H, T, W, d_k]
-        rpr_value = rpr_value.unsqueeze(0).unsqueeze(0).unsqueeze(0)  # [1, 1, 1, W, d_k]
-        updated_values = torch.matmul(a, value)  # [B, H, T, 1, d_k]
-        update_rpr_values = torch.matmul(a, rpr_value)  # [B, H, T, 1, d_k]
-        return (updated_values + update_rpr_values).squeeze(3)  # [B, H, T, d_k]
+        value = unfold_tensor(value, dim=2, window_sz=window_sz).transpose(-1, -2)  # [B, H, T, W, d_value]
+        rpr_value = rpr_value.unsqueeze(0).unsqueeze(0).unsqueeze(0)  # [1, 1, 1, W, d_value]
+        updated_values = torch.matmul(a, value)  # [B, H, T, 1, d_value]
+        update_rpr_values = torch.matmul(a, rpr_value)  # [B, H, T, 1, d_value]
+        return (updated_values + update_rpr_values).squeeze(3)  # [B, H, T, d_value]
 
 
 class SeqBahdanauAttention(SequenceSequenceAttention):
@@ -2870,10 +2870,17 @@ class MultiHeadedAttention(nn.Module):
         else:
             self.d_k = d_k
         self.h = num_heads
+        # for multi-headed attention, w_V projects to h heads, each head has dim d_k; for single headed attention, w_V
+        # project to 1 head with dim d_model
+        if self.h > 1:
+            self.d_value = self.d_k
+        else:
+            self.d_value = d_model
         self.w_Q = Dense(d_model, self.d_k * self.h)
         self.w_K = Dense(d_model, self.d_k * self.h)
-        self.w_V = Dense(d_model, self.d_k * self.h)
-        self.w_O = Dense(self.d_k * self.h, d_model)
+        self.w_V = Dense(d_model, self.d_value * self.h)
+        if self.h > 1:  # w_O is not needed for sinlge headed attention
+            self.w_O = Dense(self.d_k * self.h, d_model)
         if scale:
             self.attn_fn = SeqScaledDotProductAttention(dropout)
         else:
@@ -2895,13 +2902,16 @@ class MultiHeadedAttention(nn.Module):
         # (B, H, T, D)
         query = self.w_Q(query).view(batchsz, -1, self.h, self.d_k).transpose(1, 2)
         key = self.w_K(key).view(batchsz, -1, self.h, self.d_k).transpose(1, 2)
-        value = self.w_V(value).view(batchsz, -1, self.h, self.d_k).transpose(1, 2)
+        value = self.w_V(value).view(batchsz, -1, self.h, self.d_value).transpose(1, 2)
 
         x = self.attn_fn((query, key, value, mask))
         self.attn = self.attn_fn.attn
 
-        x = x.transpose(1, 2).contiguous().view(batchsz, -1, self.h * self.d_k)
-        return self.w_O(x)
+        x = x.transpose(1, 2).contiguous().view(batchsz, -1, self.h * self.d_value)
+        if self.h > 1:
+            return self.w_O(x)
+        else:
+            return x
 
 
 class MultiHeadedRelativeAttention(nn.Module):
@@ -2944,15 +2954,22 @@ class MultiHeadedRelativeAttention(nn.Module):
         else:
             self.d_k = d_k
 
+        self.h = num_heads
+        # for multi-headed attention, w_V projects to h heads, each head has dim d_k; for single headed attention, w_V
+        # project to 1 head with dim d_model
+        if self.h > 1:
+            self.d_value = self.d_k
+        else:
+            self.d_value = d_model
         self.rpr_k = rpr_k
         self.rpr_key = nn.Embedding(2 * rpr_k + 1, self.d_k)
-        self.rpr_value = nn.Embedding(2 * rpr_k + 1, self.d_k)
+        self.rpr_value = nn.Embedding(2 * rpr_k + 1, self.d_value)
         self.windowed_ra = windowed_ra
-        self.h = num_heads
         self.w_Q = Dense(d_model, self.d_k * self.h)
         self.w_K = Dense(d_model, self.d_k * self.h)
-        self.w_V = Dense(d_model, self.d_k * self.h)
-        self.w_O = Dense(self.d_k * self.h, d_model)
+        self.w_V = Dense(d_model, self.d_value * self.h)
+        if self.h > 1:  # w_O is not needed for sinlge headed attention
+            self.w_O = Dense(self.d_k * self.h, d_model)
         if scale:
             if windowed_ra:
                 self.attn_fn = SeqScaledWindowedRelativeAttention(dropout)
@@ -2992,7 +3009,7 @@ class MultiHeadedRelativeAttention(nn.Module):
         # (B, H, T, D)
         query = self.w_Q(query).view(batchsz, -1, self.h, self.d_k).transpose(1, 2)
         key = self.w_K(key).view(batchsz, -1, self.h, self.d_k).transpose(1, 2)
-        value = self.w_V(value).view(batchsz, -1, self.h, self.d_k).transpose(1, 2)
+        value = self.w_V(value).view(batchsz, -1, self.h, self.d_value).transpose(1, 2)
 
         if self.windowed_ra:
             rpr_key, rpr_value = self.make_windowed_rpr(query.device)
@@ -3001,8 +3018,11 @@ class MultiHeadedRelativeAttention(nn.Module):
         x = self.attn_fn((query, key, value, rpr_key, rpr_value, mask))
         self.attn = self.attn_fn.attn
 
-        x = x.transpose(1, 2).contiguous().view(batchsz, -1, self.h * self.d_k)
-        return self.w_O(x)
+        x = x.transpose(1, 2).contiguous().view(batchsz, -1, self.h * self.d_value)
+        if self.h > 1:
+            return self.w_O(x)
+        else:
+            return x
 
 
 class TransformerEncoder(nn.Module):
