@@ -2384,7 +2384,7 @@ class MultiHeadedAttention(tf.keras.layers.Layer):
 
         self.h = num_heads
         if self.h > 1:
-            self.d_value = d_k
+            self.d_value = self.d_k
         else:
             self.d_value = d_model
         self.w_Q = tf.keras.layers.Dense(units=self.d_k * self.h, name="query_projection")
@@ -2460,7 +2460,7 @@ class MultiHeadedRelativeAttention(tf.keras.layers.Layer):
 
         self.h = num_heads
         if self.h > 1:
-            self.d_value = d_k
+            self.d_value = self.d_k
         else:
             self.d_value = d_model
         self.rpr_k = rpr_k
