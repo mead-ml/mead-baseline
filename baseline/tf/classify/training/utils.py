@@ -44,8 +44,9 @@ def to_tensors(ts, lengths_key):
                 features[k].append(s)
 
     features = dict((k, np.stack(v)) for k, v in features.items())
-    features['lengths'] = features[lengths_key]
-    del features[lengths_key]
+    if lengths_key and lengths_key in features:
+        features['lengths'] = features[lengths_key]
+        del features[lengths_key]
     y = features.pop('y')
     return features, y
 

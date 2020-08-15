@@ -1677,7 +1677,11 @@ class EmbeddingsStack(nn.Module):
         for embedding in self.embeddings:
             k = self._keys[i]
             x = inputs[k]
-            embeddings_out = embedding(x)
+            # Its a hair faster to do this than using isinstance
+            if x.__class__ == tuple:
+                embeddings_out = embedding(*x)
+            else:
+                embeddings_out = embedding(x)
             all_embeddings_out.append(embeddings_out)
             i += 1
         word_embeddings = self.reduction(all_embeddings_out)

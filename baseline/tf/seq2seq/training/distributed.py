@@ -3,7 +3,7 @@ import numpy as np
 import time
 import tensorflow as tf
 from eight_mile.utils import listify
-from eight_mile.tf.layers import SET_TRAIN_FLAG, get_shape_as_list, autograph_options
+from eight_mile.tf.layers import SET_TRAIN_FLAG, get_shape_as_list, autograph_options, create_distribute_strategy
 from eight_mile.tf.optz import EagerOptimizer
 from baseline.progress import create_progress_bar
 from baseline.utils import get_model_file, get_metric_cmp, convert_seq2seq_golds, convert_seq2seq_preds
@@ -38,8 +38,6 @@ class Seq2SeqTrainerDistributedTf(Trainer):
     """
     def __init__(self, model_params, **kwargs):
         super().__init__()
-        self.gpus = int(kwargs.get('gpus', 1))
-
         if type(model_params) is dict:
             self.model = create_model_for('seq2seq', **model_params)
         else:
@@ -54,8 +52,10 @@ class Seq2SeqTrainerDistributedTf(Trainer):
         self.checkpoint_manager = tf.train.CheckpointManager(self._checkpoint,
                                                              directory=checkpoint_dir,
                                                              max_to_keep=5)
-        devices = ['/device:GPU:{}'.format(i) for i in range(self.gpus)]
-        self.strategy = tf.distribute.MirroredStrategy(devices)
+        strategy_type = kwargs.get('strategy_type', 'mirror')
+        gpus = int(kwargs.get('gpus', 1))
+        endpoint = kwargs.get('endpoint')
+        self.strategy = create_distribute_strategy(strategy_type, gpus, endpoint)
         self.bleu_n_grams = int(kwargs.get("bleu_n_grams", 4))
 
     def checkpoint(self):

@@ -375,6 +375,72 @@ class FineTuneModelClassifier(ClassifierModelBase):
         return self.output_layer(stacked)
 
 
+@register_model(task='classify', name='fine-tune-paired')
+class FineTunePairedClassifierModel(FineTuneModelClassifier):
+
+    """Fine-tuning model for pairs
+
+    This model encodes a pair as a single utterance using some encoding scheme defined in
+    convert_to_input which is fed directly into the fine-tuning model.
+
+    For BERT, this simply encodes the input key pair as a single utterance while building
+    a token-type vector.
+
+    For the input, we will assume that the vectorizer will be producing a start token and an end token.
+    We will simply remove the start token from the second sentence and concatenate
+    [CLS] this is sentence one [SEP]
+
+    [CLS] this is sentence two [SEP]
+
+
+    """
+    def _convert_pair(self, key, batch_dict, numpy_to_tensor, example_dict):
+
+        toks = batch_dict[f"{key}"]
+        token_type_key = f"{key}_tt"
+        tt = batch_dict.get(token_type_key)
+        if numpy_to_tensor:
+            toks = torch.from_numpy(toks)
+            if tt is not None:
+                tt = torch.from_numpy(tt)
+        if self.gpu:
+            toks = toks.cuda()
+            if tt is not None:
+                tt = tt.cuda()
+        if tt is not None:
+            example_dict[key] = (toks, tt)
+        else:
+            example_dict[key] = toks
+
+    def make_input(self, batch_dict, perm=False, numpy_to_tensor=False):
+
+        """Transform a `batch_dict` into something usable in this model
+
+        :param batch_dict: (``dict``) A dictionary containing all inputs to the embeddings for this model
+        :return:
+        """
+        example_dict = dict({})
+        perm_idx = None
+        # Allow us to track a length, which is needed for BLSTMs
+        for key in self.embeddings.keys():
+            self._convert_pair(key, batch_dict, numpy_to_tensor, example_dict)
+
+        y = batch_dict.get('y')
+        if y is not None:
+            if numpy_to_tensor:
+                y = torch.from_numpy(y)
+            if perm_idx is not None:
+                y = y[perm_idx]
+            if self.gpu:
+                y = y.cuda()
+            example_dict['y'] = y
+
+        if perm:
+            return example_dict, perm_idx
+
+        return example_dict
+
+
 @register_model(task='classify', name='composite')
 class CompositePoolingModel(ClassifierModelBase):
     """Fulfills pooling contract by aggregating pooling from a set of sub-models and concatenates each"""
