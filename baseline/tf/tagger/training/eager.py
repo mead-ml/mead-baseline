@@ -21,7 +21,7 @@ SHUF_BUF_SZ = 5000
 logger = logging.getLogger('baseline')
 
 
-def loss(model, x, y, **kwargs):
+def loss(model, x, y):
     unary = model.transduce(x)
     return model.decoder.neg_log_loss(unary, y, x['lengths'])
 

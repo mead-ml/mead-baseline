@@ -38,7 +38,6 @@
     "train": {
         "epochs": 30,
         "optim": "adam",
-        "label_smoothing": 0.1,
         "eta": 0.001,
         "mom": 0.9,
         "patience": 10,

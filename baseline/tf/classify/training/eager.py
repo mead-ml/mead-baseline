@@ -29,7 +29,7 @@ if TF_VERSION < 2:
     tf.enable_eager_execution()
 
 
-def loss(model, x, y, **kwargs):
+def loss(model, x, y):
     y_ = model(x)
     return tf.compat.v1.losses.sparse_softmax_cross_entropy(labels=y, logits=y_)
 
