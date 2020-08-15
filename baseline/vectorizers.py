@@ -951,6 +951,8 @@ class WordpieceVectorizer1D(AbstractVectorizer):
         self.mxlen = kwargs.get('mxlen', -1)
         self.dtype = kwargs.get('dtype', 'int')
         self._special_tokens = {"[CLS]", "<unk>", "<EOS>"}
+        self.emit_begin_toks = listify(kwargs.get('emit_begin_tok', ['[CLS]']))
+        self.emit_end_toks = listify(kwargs.get('emit_end_tok', ['[SEP]']))
 
     @property
     def subword_sentinel(self):
@@ -964,7 +966,8 @@ class WordpieceVectorizer1D(AbstractVectorizer):
         return [i for i, t in enumerate(tokens) if not t.startswith(self.subword_sentinel) and t not in self.special_tokens]
 
     def iterable(self, tokens):
-        yield '[CLS]'
+        for t in self.emit_begin_toks:
+            yield t
         for tok in tokens:
             if tok == '<unk>':
                 yield '[UNK]'
@@ -973,7 +976,17 @@ class WordpieceVectorizer1D(AbstractVectorizer):
             else:
                 for subtok in self.tokenizer.tokenize(self.transform_fn(tok)):
                     yield subtok
-        yield '[SEP]'
+        for t in self.emit_begin_toks:
+            yield t
+
+    def count(self, tokens):
+        seen = 0
+        counter = collections.Counter()
+        for tok in self.iterable(tokens):
+            counter[tok] += 1
+            seen += 1
+        self.max_seen = max(self.max_seen, seen)
+        return counter
 
     def _next_element(self, tokens, vocab):
         for atom in self.iterable(tokens):
@@ -1009,9 +1022,12 @@ class WordpieceLabelDict1DVectorizer(WordpieceVectorizer1D):
         super().__init__(**kwargs)
         self.field = kwargs.get('fields', kwargs.get('field', 'text'))
         self.label = kwargs.get('label', 'label')
+        self.emit_begin_toks = listify(kwargs.get('emit_begin_tok', [Offsets.VALUES[Offsets.PAD]]))
+        self.emit_end_toks = listify(kwargs.get('emit_end_tok', [Offsets.VALUES[Offsets.PAD]]))
 
     def iterable(self, tokens):
-        yield Offsets.VALUES[Offsets.PAD]
+        for t in self.emit_begin_toks:
+            yield t
         for t in tokens:
             t_word = t[self.field]
             t_label = t[self.label]
@@ -1023,7 +1039,8 @@ class WordpieceLabelDict1DVectorizer(WordpieceVectorizer1D):
                 subwords[0] = t_label
             for x in subwords:
                 yield x
-        yield Offsets.VALUES[Offsets.PAD]
+        for t in self.emit_end_toks:
+            yield t
 
     def run(self, tokens, vocab):
         return super().run(tokens, vocab)
@@ -1047,7 +1064,8 @@ class WordpieceDict1DVectorizer(WordpieceVectorizer1D):
         self.delim = kwargs.get('token_delim', '~~')
 
     def iterable(self, tokens):
-        yield '[CLS]'
+        for t in self.emit_begin_toks:
+            yield t
         for t in tokens:
             tok = t[self.field] if isinstance(t, dict) else t
             if tok == '<unk>':
@@ -1057,7 +1075,8 @@ class WordpieceDict1DVectorizer(WordpieceVectorizer1D):
             else:
                 for subtok in self.tokenizer.tokenize(self.transform_fn(tok)):
                     yield subtok
-        yield '[SEP]'
+        for t in self.emit_end_toks:
+            yield t
 
 
 @export
