@@ -7,6 +7,7 @@ import numpy as np
 import baseline
 from copy import deepcopy
 from baseline.reporting import create_reporting
+from eight_mile.progress import SET_DEFAULT_PROGRESS_BAR
 from baseline.utils import (
     exporter,
     get_version,
@@ -219,6 +220,10 @@ class Task:
         if basedir is not None and not os.path.exists(basedir):
             logger.info('Creating: %s', basedir)
             os.makedirs(basedir)
+        progress_bar_type = self.config_params.get('progress_bar', os.getenv('MEAD_PROGRESS_BAR'))
+        if progress_bar_type is not None:
+            logger.info("Setting progress bar type %s", progress_bar_type)
+            SET_DEFAULT_PROGRESS_BAR(progress_bar_type)
         self.config_params['train']['basedir'] = basedir
         # Read GPUS from env variables now so that the reader has access
         if self.config_params['train'].get('gpus', -1) == -1:
