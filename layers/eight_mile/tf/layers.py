@@ -2173,12 +2173,15 @@ class SequenceSequenceRelativeAttention(tf.keras.layers.Layer):
         """
         B, H, T, D = get_shape_as_list(value)
         updated_values = tf.matmul(a, value)
-        # (T, BxH, T)
-        a = tf.transpose(tf.reshape(a, [B * H, T, T]), [1, 0, 2])
-        t = tf.matmul(a, edges_value)  # (T, BxH, D)
-        t = tf.transpose(t, [1, 0, 2])
-        update_edge_values = tf.reshape(t, [B, H, T, D])
-        return updated_values + update_edge_values
+        if edges_value is not None:
+            # (T, BxH, T)
+            a = tf.transpose(tf.reshape(a, [B * H, T, T]), [1, 0, 2])
+            t = tf.matmul(a, edges_value)  # (T, BxH, D)
+            t = tf.transpose(t, [1, 0, 2])
+            update_edge_values = tf.reshape(t, [B, H, T, D])
+            return updated_values + update_edge_values
+        else:
+            return updated_values
 
 
 class SeqScaledDotProductRelativeAttention(SequenceSequenceRelativeAttention):
@@ -2309,11 +2312,14 @@ class SeqScaledWindowedRelativeAttention(SequenceSequenceRelativeAttention):
     def _update(self, a, value, rpr_value):
         # a has dim [B, H, T, 1, W]
         window_sz = a.shape[-1]
-        value = unfold_tensor(value, dim=2, window_sz=window_sz)  # [B, H, T, W, d_k]
-        rpr_value = tf.expand_dims(tf.expand_dims(tf.expand_dims(rpr_value, 0), 0), 0)  # [1, 1, 1, W, d_k]
-        updated_values = tf.matmul(a, value)  # [B, H, T, 1, d_k]
-        update_rpr_values = tf.matmul(a, rpr_value)  # [B, H, T, 1, d_k]
-        return tf.squeeze(updated_values + update_rpr_values, axis=3)  # [B, H, T, d_k]
+        value = unfold_tensor(value, dim=2, window_sz=window_sz)  # [B, H, T, W, d_value]
+        updated_values = tf.matmul(a, value)  # [B, H, T, 1, d_value]
+        if rpr_value is not None:
+            rpr_value = tf.expand_dims(tf.expand_dims(tf.expand_dims(rpr_value, 0), 0), 0)  # [1, 1, 1, W, d_value]
+            update_rpr_values = tf.matmul(a, rpr_value)  # [B, H, T, 1, d_value]
+            return tf.squeeze(updated_values + update_rpr_values, axis=3)  # [B, H, T, d_value]
+        else:
+            return tf.squeeze(updated_values, axis=3)
 
 
 class SeqDotProductAttention(SequenceSequenceAttention):
@@ -2377,10 +2383,15 @@ class MultiHeadedAttention(tf.keras.layers.Layer):
             self.d_k = d_k
 
         self.h = num_heads
+        if self.h > 1:
+            self.d_value = self.d_k
+        else:
+            self.d_value = d_model
         self.w_Q = tf.keras.layers.Dense(units=self.d_k * self.h, name="query_projection")
         self.w_K = tf.keras.layers.Dense(units=self.d_k * self.h, name="key_projection")
-        self.w_V = tf.keras.layers.Dense(units=self.d_k * self.h, name="value_projection")
-        self.w_O = tf.keras.layers.Dense(units=self.d_k * self.h, name="output_projection")
+        self.w_V = tf.keras.layers.Dense(units=self.d_value * self.h, name="value_projection")
+        if self.h > 1:  # w_O is not needed for sinlge headed attention
+            self.w_O = tf.keras.layers.Dense(units=self.d_k * self.h, name="output_projection")
         if scale:
             self.attn_fn = SeqScaledDotProductAttention(dropout)
         else:
@@ -2394,14 +2405,17 @@ class MultiHeadedAttention(tf.keras.layers.Layer):
         # (B, T, H, D) -> (B, H, T, D)
         query = tf.transpose(tf.reshape(self.w_Q(query), [batchsz, -1, self.h, self.d_k]), [0, 2, 1, 3])
         key = tf.transpose(tf.reshape(self.w_K(key), [batchsz, -1, self.h, self.d_k]), [0, 2, 1, 3])
-        value = tf.transpose(tf.reshape(self.w_V(value), [batchsz, -1, self.h, self.d_k]), [0, 2, 1, 3])
+        value = tf.transpose(tf.reshape(self.w_V(value), [batchsz, -1, self.h, self.d_value]), [0, 2, 1, 3])
         x = self.attn_fn((query, key, value, mask))
         self.attn = self.attn_fn.attn
 
         # (B, H, T, D) -> (B, T, H, D) -> (B, T, H*D)
         x = tf.transpose(x, [0, 2, 1, 3])
-        x = tf.reshape(x, [batchsz, -1, self.h * self.d_k])
-        return self.w_O(x)
+        x = tf.reshape(x, [batchsz, -1, self.h * self.d_value])
+        if self.h > 1:
+            return self.w_O(x)
+        else:
+            return x
 
 
 class MultiHeadedRelativeAttention(tf.keras.layers.Layer):
@@ -2424,6 +2438,7 @@ class MultiHeadedRelativeAttention(tf.keras.layers.Layer):
         scale: bool = False,
         d_k: Optional[int] = None,
         windowed_ra: bool = False,
+        rpr_value_on: bool = True,
         name=None,
     ):
         """Constructor for multi-headed attention
@@ -2443,15 +2458,22 @@ class MultiHeadedRelativeAttention(tf.keras.layers.Layer):
         else:
             self.d_k = d_k
 
-        self.rpr_k = rpr_k
-        self.rpr_key = tf.keras.layers.Embedding(2 * rpr_k + 1, self.d_k)
-        self.rpr_value = tf.keras.layers.Embedding(2 * rpr_k + 1, self.d_k)
-        self.windowed_ra = windowed_ra
         self.h = num_heads
+        if self.h > 1:
+            self.d_value = self.d_k
+        else:
+            self.d_value = d_model
+        self.rpr_k = rpr_k
+        self.rpr_value_on = rpr_value_on
+        self.rpr_key = tf.keras.layers.Embedding(2 * rpr_k + 1, self.d_k)
+        if self.rpr_value_on:
+            self.rpr_value = tf.keras.layers.Embedding(2 * rpr_k + 1, self.d_value)
+        self.windowed_ra = windowed_ra
         self.w_Q = tf.keras.layers.Dense(units=self.d_k * self.h, name="query_projection")
         self.w_K = tf.keras.layers.Dense(units=self.d_k * self.h, name="key_projection")
-        self.w_V = tf.keras.layers.Dense(units=self.d_k * self.h, name="value_projection")
-        self.w_O = tf.keras.layers.Dense(units=self.d_k * self.h, name="output_projection")
+        self.w_V = tf.keras.layers.Dense(units=self.d_value * self.h, name="value_projection")
+        if self.h > 1:  # w_O is not needed for sinlge headed attention
+            self.w_O = tf.keras.layers.Dense(units=self.d_k * self.h, name="output_projection")
         if scale:
             if windowed_ra:
                 self.attn_fn = SeqScaledWindowedRelativeAttention(dropout)
@@ -2468,12 +2490,18 @@ class MultiHeadedRelativeAttention(tf.keras.layers.Layer):
         window_len = 2 * self.rpr_k
         edges = tf.reshape(seq, [1, -1]) - tf.reshape(seq, [-1, 1]) + self.rpr_k
         edges = tf.clip_by_value(edges, 0, window_len)
-        return self.rpr_key(edges), self.rpr_value(edges)
+        if self.rpr_value_on:
+            return self.rpr_key(edges), self.rpr_value(edges)
+        else:
+            return self.rpr_key(edges), None
 
     def make_windowed_rpr(self):
         window_sz = 2 * self.rpr_k + 1
         window = tf.range(window_sz)
-        return self.rpr_key(window), self.rpr_value(window)
+        if self.rpr_value_on:
+            return self.rpr_key(window), self.rpr_value(window)
+        else:
+            return self.rpr_key(window), None
 
     def call(self, qkvm):
         """Low-order projections of query, key and value into multiple heads, then attention application and dropout
@@ -2492,7 +2520,7 @@ class MultiHeadedRelativeAttention(tf.keras.layers.Layer):
         # (B, T, H, D) -> (B, H, T, D)
         query = tf.transpose(tf.reshape(self.w_Q(query), [batchsz, -1, self.h, self.d_k]), [0, 2, 1, 3])
         key = tf.transpose(tf.reshape(self.w_K(key), [batchsz, -1, self.h, self.d_k]), [0, 2, 1, 3])
-        value = tf.transpose(tf.reshape(self.w_V(value), [batchsz, -1, self.h, self.d_k]), [0, 2, 1, 3])
+        value = tf.transpose(tf.reshape(self.w_V(value), [batchsz, -1, self.h, self.d_value]), [0, 2, 1, 3])
 
         if self.windowed_ra:
             rpr_key, rpr_value = self.make_windowed_rpr()
@@ -2502,8 +2530,11 @@ class MultiHeadedRelativeAttention(tf.keras.layers.Layer):
         self.attn = self.attn_fn.attn
         # (B, H, T, D) -> (B, T, H, D) -> (B, T, H*D)
         x = tf.transpose(x, [0, 2, 1, 3])
-        x = tf.reshape(x, [batchsz, -1, self.h * self.d_k])
-        return self.w_O(x)
+        x = tf.reshape(x, [batchsz, -1, self.h * self.d_value])
+        if self.h > 1:
+            return self.w_O(x)
+        else:
+            return x
 
 
 class TransformerEncoder(tf.keras.layers.Layer):
@@ -2521,6 +2552,7 @@ class TransformerEncoder(tf.keras.layers.Layer):
         layer_norms_after: bool = False,
         layer_norm_eps: float = 1.0e-6,
         windowed_ra: bool = False,
+        rpr_value_on: bool = True,
         name: Optional[str] = None
     ):
         super().__init__(name=name)
@@ -2529,7 +2561,7 @@ class TransformerEncoder(tf.keras.layers.Layer):
         self.d_ff = d_ff if d_ff is not None else 4 * d_model
         if rpr_k is not None:
             self.self_attn = MultiHeadedRelativeAttention(num_heads, d_model, rpr_k, pdrop, scale, d_k=d_k,
-                                                          windowed_ra=windowed_ra)
+                                                          windowed_ra=windowed_ra, rpr_value_on=rpr_value_on)
         else:
             self.self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale=scale, d_k=d_k)
 
@@ -2621,6 +2653,7 @@ class TransformerEncoderStack(tf.keras.layers.Layer):
         layer_norms_after: bool = False,
         layer_norm_eps: float = 1.0e-6,
         windowed_ra: bool = False,
+        rpr_value_on: bool = True,
         name=None,
         **kwargs,
     ):
@@ -2638,7 +2671,7 @@ class TransformerEncoderStack(tf.keras.layers.Layer):
                     num_heads, d_model, pdrop, scale, activation, d_ff, d_k,
                     rpr_k=rpr_k[i], ffn_pdrop=ffn_pdrop,
                     layer_norms_after=layer_norms_after, layer_norm_eps=layer_norm_eps, windowed_ra=windowed_ra,
-                    name=name,
+                    rpr_value_on=rpr_value_on, name=name,
                 )
             )
 

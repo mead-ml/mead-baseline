@@ -402,10 +402,12 @@ class TransformerLanguageModel(AbstractGeneratorModel):
         layer_norm_eps = kwargs.get('layer_norm_eps', 1e-12)
         layer_norms_after = kwargs.get('layer_norms_after', False)
         windowed_ra = kwargs.get('windowed_ra', False)
+        rpr_value_on = kwargs.get('rpr_value_on', True)
         return TransformerEncoderStack(num_heads, d_model=d_model, pdrop=pdrop, scale=scale,
                                        layers=layers, d_ff=d_ff, rpr_k=rpr_k, d_k=d_k,
                                        activation=activation, layer_norm_eps=layer_norm_eps,
-                                       layer_norms_after=layer_norms_after, windowed_ra=windowed_ra)
+                                       layer_norms_after=layer_norms_after, windowed_ra=windowed_ra,
+                                       rpr_value_on=rpr_value_on)
 
     def create_mask(self, bth):
         max_seqlen = get_shape_as_list(bth)[1]
