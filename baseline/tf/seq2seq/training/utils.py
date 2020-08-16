@@ -213,7 +213,7 @@ class Seq2SeqTrainerTf(Trainer):
         for batch_dict in pg(es):
             tgt = batch_dict.pop('tgt')
             tgt_lens = batch_dict.pop('tgt_lengths')
-            pred = [p[0] for p in self.model.predict(batch_dict)]
+            pred = [p[0] for p in self.model.predict(batch_dict)[0]]
             preds.extend(convert_seq2seq_preds(pred, self.tgt_rlut))
             golds.extend(convert_seq2seq_golds(tgt, tgt_lens, self.tgt_rlut))
         metrics = {'bleu': bleu(preds, golds, self.bleu_n_grams)[0]}
