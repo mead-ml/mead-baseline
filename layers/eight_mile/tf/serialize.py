@@ -69,13 +69,17 @@ def to_attn_array(tf_attn: tf.keras.layers.Layer, name: str) -> Dict:
     d.update(to_weight_array(tf_attn.w_Q, f"{name}/w_Q"))
     d.update(to_weight_array(tf_attn.w_K, f"{name}/w_K"))
     d.update(to_weight_array(tf_attn.w_V, f"{name}/w_V"))
-    d.update(to_weight_array(tf_attn.w_O, f"{name}/w_O"))
+
+    if hasattr(tf_attn, 'w_O'):
+        d.update(to_weight_array(tf_attn.w_O, f"{name}/w_O"))
 
     if hasattr(tf_attn, 'rpr_key'):
         # Embeddings have same shape in PyTorch and TF [input_sz, output_sz]
         rpr_key_weights = tf_attn.rpr_key.get_weights()[0]
-        rpr_value_weights = tf_attn.rpr_value.get_weights()[0]
         d.update({f"{name}/rpr_key": rpr_key_weights})
+
+    if hasattr(tf_attn, 'rpr_value'):
+        rpr_value_weights = tf_attn.rpr_value.get_weights()[0]
         d.update({f"{name}/rpr_value": rpr_value_weights})
 
     return d
@@ -92,10 +96,14 @@ def from_attn_array(tf_attn: tf.keras.layers.Layer, d: Dict, name: str):
     from_weight_array(tf_attn.w_Q, d, f"{name}/w_Q")
     from_weight_array(tf_attn.w_K, d, f"{name}/w_K")
     from_weight_array(tf_attn.w_V, d, f"{name}/w_V")
-    from_weight_array(tf_attn.w_O, d, f"{name}/w_O")
+
+    if hasattr(tf_attn, 'w_O'):
+        from_weight_array(tf_attn.w_O, d, f"{name}/w_O")
 
     if hasattr(tf_attn, 'rpr_key'):
         tf_attn.rpr_key.set_weights([d[f"{name}/rpr_key"]])
+
+    if hasattr(tf_attn, 'rpr_value'):
         tf_attn.rpr_value.set_weights([d[f"{name}/rpr_value"]])
 
 
