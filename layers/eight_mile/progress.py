@@ -16,7 +16,7 @@ def register_progress(cls, name=None):
 
 
 @export
-class Progress(object):
+class Progress:
     """Progress hook
 
     Provide interface for progress updates
@@ -79,7 +79,7 @@ class ProgressBarJupyter(Progress):
 # Modifed from here
 # http://stackoverflow.com/questions/3160699/python-progress-bar#3160819
 @export
-@register_progress('default')
+@register_progress('terminal')
 class ProgressBarTerminal(Progress):
     """Simple terminal-based progress bar
 
@@ -160,3 +160,9 @@ class ProgressBarTQDM(Progress):
 @export
 def create_progress_bar(steps, name='default', **kwargs):
     return MEAD_LAYERS_PROGRESS[name](steps, **kwargs)
+
+
+def SET_DEFAULT_PROGRESS_BAR(type):
+    MEAD_LAYERS_PROGRESS['default'] = MEAD_LAYERS_PROGRESS[type]
+
+SET_DEFAULT_PROGRESS_BAR('terminal')
