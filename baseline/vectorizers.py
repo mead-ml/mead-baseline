@@ -976,7 +976,7 @@ class WordpieceVectorizer1D(AbstractVectorizer):
             else:
                 for subtok in self.tokenizer.tokenize(self.transform_fn(tok)):
                     yield subtok
-        for t in self.emit_begin_toks:
+        for t in self.emit_end_toks:
             yield t
 
     def count(self, tokens):
