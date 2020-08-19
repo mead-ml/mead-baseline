@@ -2,14 +2,18 @@ import os
 import re
 import codecs
 from itertools import chain
+import logging
 from collections import Counter
 import numpy as np
 import baseline.data
-from baseline.vectorizers import Dict1DVectorizer, GOVectorizer, Token1DVectorizer, create_vectorizer
+from baseline.vectorizers import Dict1DVectorizer, GOVectorizer, Token1DVectorizer, create_vectorizer, HasPredefinedVocab
 from baseline.utils import import_user_module, revlut, exporter, optional_params, Offsets, listify, SingleFileDownloader
 
 __all__ = []
 export = exporter(__all__)
+
+
+logger = logging.getLogger('baseline')
 
 
 BASELINE_READERS = {}
@@ -52,6 +56,10 @@ def num_lines(filename):
     """
     with codecs.open(filename, encoding='utf-8', mode='r') as f:
         return sum(1 for _ in f)
+
+
+def _all_predefined_vocabs(vectorizers):
+    return all(isinstance(v, HasPredefinedVocab) for v in vectorizers.values())
 
 
 def _filter_vocab(vocab, min_fs):
@@ -175,6 +183,9 @@ class TSVParallelCorpusReader(ParallelCorpusReader):
         self.tgt_col_num = tgt_col_num
 
     def build_vocabs(self, files, **kwargs):
+        if _all_predefined_vocabs(self.src_vectorizers) and isinstance(self.tgt_vectorizer, HasPredefinedVocab):
+            logger.info("Skipping building vocabulary.  All vectorizers have predefined vocabs!")
+            return {k: v.vocab for k, v in self.src_vectorizers.items()}, {'tgt': self.tgt_vectorizer.vocab}
         vocab_file = kwargs.get('vocab_file')
         if vocab_file is not None:
             all_vects = self.src_vectorizers.copy()
@@ -228,6 +239,9 @@ class MultiFileParallelCorpusReader(ParallelCorpusReader):
             self.tgt_suffix = '.' + self.tgt_suffix
 
     def build_vocabs(self, files, **kwargs):
+        if _all_predefined_vocabs(self.src_vectorizers) and isinstance(self.tgt_vectorizer, HasPredefinedVocab):
+            logger.info("Skipping building vocabulary.  All vectorizers have predefined vocabs!")
+            return {k: v.vocab for k, v in self.src_vectorizers.items()}, {'tgt': self.tgt_vectorizer.vocab}
         vocab_file = kwargs.get('vocab_file')
         if vocab_file is not None:
             all_vects = self.src_vectorizers.copy()
@@ -289,22 +303,28 @@ class SeqPredictReader:
         }
 
     def build_vocab(self, files, **kwargs):
+
+        label_file = kwargs.get('label_file')
+        if label_file:
+            pre_labels = Counter(chain(*_read_from_col(0, listify(label_file))))
+            self.label2index = {l: i for i, l in enumerate(pre_labels)}
+
+        if label_file and _all_predefined_vocabs(self.vectorizers):
+            logger.info("Skipping building vocabulary.  All vectorizers have predefined vocabs and a label file was given!")
+            return {k: v.vocab for k, v in self.vectorizers.items()}
         pre_vocabs = None
         pre_labels = None
         vocabs = {k: Counter() for k in self.vectorizers.keys()}
 
         vocab_file = kwargs.get('vocab_file')
-        label_file = kwargs.get('label_file')
+
         if vocab_file:
             _vocab_allowed(self.vectorizers)
             pre_vocabs = _build_vocab_for_col(0, listify(vocab_file), self.vectorizers)
-        if label_file:
-            pre_labels = Counter(chain(*_read_from_col(0, listify(label_file))))
-            self.label2index = {l: i for i, l in enumerate(pre_labels)}
+
 
         labels = Counter()
 
-        #if not pre_vocabs:
         for file in files:
             if file is None:
                 continue
@@ -395,70 +415,8 @@ def _norm_ext(ext):
     return ext if ext.startswith('.') else '.' + ext
 
 
-# TODO: get rid of this class
 @export
-@register_reader(task='tagger', name='parallel')
-class ParallelSeqReader(SeqPredictReader):
-    def __init__(self, vectorizers, trim=False, truncate=False, mxlen=-1, **kwargs):
-        # This works but its not helpful for most custom vectorizers
-        kwargs.get['label_vectorizer'] = kwargs.get('label_vectorizer', Token1DVectorizer(mxlen=mxlen))
-        super().__init__(vectorizers, trim, truncate, mxlen, **kwargs)
-        self.data = _norm_ext(kwargs.get('data_suffix', 'in'))
-        self.tag = _norm_ext(kwargs.get('label_suffix', 'out'))
-
-    def build_vocab(self, files, **kwargs):
-        vocabs = {k: Counter() for k in self.vectorizers.keys()}
-        labels = Counter()
-
-        for file_name in files:
-            if file_name is None:
-                continue
-            examples = self.read_examples(file_name + self.data)
-            tags = self.read_examples(file_name + self.tag)
-            for example, tag in zip(examples, tags):
-                labels.update(self.label_vectorizer.count(tag))
-                for k, vectorizer in self.vectorizers.items():
-                    vocab_example = vectorizer.count(example)
-                    vocabs[k].update(vocab_example)
-
-        vocabs = _filter_vocab(vocabs, kwargs.get('min_f', {}))
-        base_offset = len(self.label2index)
-        for i, k in enumerate(labels.keys()):
-            self.label2index[k] = i + base_offset
-        return vocabs
-
-    def read_examples(self, file_name):
-        with codecs.open(file_name, encoding='utf-8', mode='r') as f:
-            return [l.strip().split() for l in f]
-
-    def load(self, filename, vocabs, batchsz, shuffle=False, sort_key=None):
-
-        ts = []
-        texts = self.read_examples(filename + self.data)
-        tag_texts = self.read_examples(filename + self.tag)
-
-        if sort_key is not None and not sort_key.endswith('_lengths'):
-            sort_key += '_lengths'
-
-        raw_texts = []
-
-        for i, (example_tokens, tag_tokens) in enumerate(zip(texts, tag_texts)):
-            example = {}
-            for k, vectorizer in self.vectorizers.items():
-                example[k], lengths = vectorizer.run(example_tokens, vocabs[k])
-                if lengths is not None:
-                    example['{}_lengths'.format(k)] = lengths
-            example['y'], lengths = self.label_vectorizer.run(tag_tokens, self.label2index)
-            example['y_lengths'] = lengths
-            example['ids'] = i
-            ts.append(example)
-            raw_texts.append([{'text': t, 'y': l} for t, l in zip(example_tokens, tag_tokens)])
-        examples = baseline.data.DictExamples(ts, do_shuffle=shuffle, sort_key=sort_key)
-        return baseline.data.ExampleDataFeed(examples, batchsz=batchsz, shuffle=shuffle, trim=self.trim, truncate=self.truncate), raw_texts
-
-
-@export
-class SeqLabelReader(object):
+class SeqLabelReader:
 
     def __init__(self):
         pass
@@ -540,7 +498,27 @@ class TSVSeqLabelReader(SeqLabelReader):
         """
         vocab_file = kwargs.get('vocab_file')
         label_file = kwargs.get('label_file')
-        if vocab_file is not None and label_file is not None:
+        if label_file:
+            labels = Counter(chain(*_read_from_col(0, listify(label_file))))
+            self.label2index = {l: i for i, l in enumerate(labels)}
+
+        if _all_predefined_vocabs(self.vectorizers):
+            if not label_file:
+                logger.warning("If you provide a label file, we can skip tabulating the labels from the data!")
+                label_idx = 0
+                for file_name in files:
+                    with codecs.open(file_name, encoding='utf-8', mode='r') as f:
+                        for il, line in enumerate(f):
+                            label, _ = TSVSeqLabelReader.label_and_sentence(line, self.clean_fn)
+                            if label not in self.label2index:
+                                self.label2index[label] = label_idx
+                                label_idx += 1
+            else:
+                logger.info("Skipping label file and vocabulary!")
+            logger.info("Skipping building vocabulary!")
+            return {k: v.vocab for k, v in self.vectorizers.items()}, self.get_labels()
+
+        if vocab_file and label_file:
             _vocab_allowed(self.vectorizers)
             vocab = _build_vocab_for_col(0, listify(vocab_file), self.vectorizers)
             labels = Counter(chain(*_read_from_col(0, listify(label_file))))
@@ -643,13 +621,17 @@ class TSVSeqLabelReader(SeqLabelReader):
 
 @export
 @register_reader(task='lm', name='default')
-class LineSeqReader(object):
+class LineSeqReader:
 
     def __init__(self, vectorizers, trim=False, **kwargs):
         self.nctx = kwargs['nctx']
         self.vectorizers = vectorizers
 
     def build_vocab(self, files, **kwargs):
+        if _all_predefined_vocabs(self.vectorizers):
+            logger.info("Skipping building vocabulary.  All vectorizers have predefined vocabs!")
+            return {k: v.vocab for k, v in self.vectorizers.items()}
+
         vocab_file = kwargs.get('vocab_file')
         if vocab_file is not None:
             _vocab_allowed(self.vectorizers)
