@@ -704,6 +704,10 @@ class TaggerTask(Task):
         train_params['conll_output'] = conll_output
         train_params['txts'] = self.txts
 
+        if conll_output is not None:
+            dir_name = os.path.dirname(conll_output)
+            os.makedirs(dir_name, exist_ok=True)
+
         baseline.train.fit(model_params, self.train_data, self.valid_data, self.test_data, **train_params)
         baseline.zip_files(self.get_basedir())
         self._close_reporting_hooks()
