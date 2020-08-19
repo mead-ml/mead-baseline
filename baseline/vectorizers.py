@@ -1,7 +1,7 @@
 import collections
 import tempfile
 import unicodedata
-from typing import Tuple, List, Iterable, Set
+from typing import Tuple, List, Iterable, Set, Dict
 import numpy as np
 from eight_mile.downloads import open_file_or_url, get_file_or_url
 from baseline.utils import exporter, optional_params, listify, register, Offsets, import_user_module, validate_url
@@ -435,8 +435,11 @@ class DictTextNGramVectorizer(TextNGramVectorizer):
             yield self.joiner.join(chunk)
 
 
-
+@export
 class SavableFastBPE:
+    """
+    Use fastBPE for subwords.  If you want to use this class, make sure you have it installed
+    """
     def __init__(self, codes_path, vocab_path):
         from fastBPE import fastBPE
         codes_path = get_file_or_url(codes_path)
@@ -465,10 +468,52 @@ class SavableFastBPE:
         return self.bpe.apply(sentences)
 
 
+@export
+class HasPredefinedVocab:
+    """Define an interface for predefined vocabs.  Using a sub-class of this means readers dont need to collect a vocab
+    """
+
+    def read_vocab(self, file_or_url) -> Dict[str, int]:
+        """Read a pre-defined vocab from a file and give back a vocab of (sub)words to integer values
+
+        If the file is presented as a URL, it will be downloaded first
+
+        :param file_or_url: A file or URL
+        :return: A vocabular of word to indices
+        """
+    @property
+    def vocab(self):
+        pass
+
+    @property
+    def special_tokens(self) -> Set[str]:
+        """Return a set of special tokens"""
+
+
+@export
+class HasSubwordTokens(HasPredefinedVocab):
+
+    @property
+    def subword_sentinel(self):
+        """Indicates the special token used to demarcate subwords
+
+        :return:
+        """
+    def valid_label_indices(self, tokens: Iterable) -> List[int]:
+        """Give back the indices that would contain "valid" labels (i.e. leader tokens)
+
+        When a word is split into sub-words, usually, the first token is used as the indicator for
+        a problem where there is one label per word usually.  This function knows how to get back those
+        indices
+
+        :param tokens:
+        :return:
+        """
+
 # TODO: Most of our classes have the `Vectorizer` part of the name at the end
 @export
 @register_vectorizer(name='bpe1d')
-class BPEVectorizer1D(AbstractVectorizer):
+class BPEVectorizer1D(AbstractVectorizer, HasSubwordTokens):
     """Define a Baseline Vectorizer for BPE using fastBPE (https://github.com/glample/fastBPE)
 
     If you use tokens=bpe, this vectorizer is used, and so then there is a
@@ -485,10 +530,14 @@ class BPEVectorizer1D(AbstractVectorizer):
         self.vocab_file = kwargs.get('vocab_file')
         self.tokenizer = SavableFastBPE(self.model_file, self.vocab_file)
         self.mxlen = kwargs.get('mxlen', -1)
-        self.vocab = {k: i for i, k in enumerate(self.read_vocab(self.vocab_file))}
+        self._vocab = {k: i for i, k in enumerate(self.read_vocab(self.vocab_file))}
         self.emit_begin_toks = listify(kwargs.get('emit_begin_tok', []))
         self.emit_end_toks = listify(kwargs.get('emit_end_tok', []))
         self._special_tokens = {"[CLS]", "<unk>", "<EOS>"}
+
+    @property
+    def vocab(self):
+        return self._vocab
 
     @property
     def special_tokens(self) -> Set[str]:
@@ -514,9 +563,9 @@ class BPEVectorizer1D(AbstractVectorizer):
                     in_subword = False
         return indices
 
-    def read_vocab(self, s):
+    def read_vocab(self, file_or_url):
         vocab = [] + Offsets.VALUES + ['[CLS]', '[MASK]']
-        with open_file_or_url(s, "r") as f:
+        with open_file_or_url(file_or_url, "r") as f:
             for line in f.readlines():
                 token = line.split()[0].strip()
                 vocab.append(token)
@@ -692,7 +741,7 @@ def load_bert_vocab(vocab_file):
     return vocab
 
 
-class FullTokenizer(object):
+class FullTokenizer:
     """Runs end-to-end tokenization."""
 
     def __init__(self, vocab_file, do_lower_case=True):
@@ -716,7 +765,7 @@ class FullTokenizer(object):
         return convert_by_vocab(self.inv_vocab, ids)
 
 
-class BasicTokenizer(object):
+class BasicTokenizer:
     """Runs basic tokenization (punctuation splitting, lower casing, etc.)."""
 
     def __init__(self, do_lower_case=True):
@@ -832,7 +881,7 @@ class BasicTokenizer(object):
 
 
 class WordpieceTokenizer:
-    """Runs WordPiece tokenziation."""
+    """Runs WordPiece tokenization."""
 
     def __init__(self, vocab, unk_token="[UNK]", max_input_chars_per_word=200):
         self.vocab = vocab
@@ -942,17 +991,20 @@ def _is_punctuation(char):
 
 # TODO: Most of our classes have the `Vectorizer` part of the name at the end
 @register_vectorizer(name='wordpiece1d')
-class WordpieceVectorizer1D(AbstractVectorizer):
+class WordpieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
 
     def __init__(self, **kwargs):
         super().__init__(kwargs.get('transform_fn'))
         self.max_seen = 128
-        self.tokenizer = WordpieceTokenizer(load_bert_vocab(kwargs.get('vocab_file')))
+        self.tokenizer = WordpieceTokenizer(self.read_vocab(kwargs.get('vocab_file')))
         self.mxlen = kwargs.get('mxlen', -1)
         self.dtype = kwargs.get('dtype', 'int')
         self._special_tokens = {"[CLS]", "<unk>", "<EOS>"}
         self.emit_begin_toks = listify(kwargs.get('emit_begin_tok', ['[CLS]']))
         self.emit_end_toks = listify(kwargs.get('emit_end_tok', ['[SEP]']))
+
+    def read_vocab(self, file):
+        return load_bert_vocab(file)
 
     @property
     def subword_sentinel(self):
