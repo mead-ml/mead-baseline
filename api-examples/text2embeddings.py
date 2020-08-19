@@ -6,7 +6,6 @@ from eight_mile.utils import read_config_stream
 from baseline.pytorch.embeddings import *
 from baseline.embeddings import *
 from baseline.vectorizers import *
-from baseline.vectorizers import BPEVectorizer1D, WordpieceVectorizer1D
 from mead.utils import convert_path, parse_extra_args, configure_logger, parse_and_merge_overrides, read_config_file_or_json, index_by_label
 import pandas as pd
 logger = logging.getLogger(__file__)
@@ -52,7 +51,8 @@ if 'transform_fn' in vec_params and isinstance(vec_params['transform_fn'], str):
     vec_params['transform_fn'] = eval(vec_params['transform_fn'])
 
 vectorizer = create_vectorizer(**vec_params)
-
+if not isinstance(vectorizer, HasPredefinedVocab):
+    raise Exception("We currently require a vectorizer with a pre-defined vocab to run this script")
 embeddings_index = read_config_stream(args.embeddings)
 embeddings_set = index_by_label(embeddings_index)
 embeddings_params = embeddings_set[args.embed_id]
