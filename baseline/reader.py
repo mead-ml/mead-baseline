@@ -354,7 +354,6 @@ class SeqPredictReader:
 
         ts = []
         texts = self.read_examples(filename)
-
         if sort_key is not None and not sort_key.endswith('_lengths'):
             sort_key += '_lengths'
 
@@ -368,6 +367,7 @@ class SeqPredictReader:
             example['y_lengths'] = lengths
             example['ids'] = i
             ts.append(example)
+
         examples = baseline.data.DictExamples(ts, do_shuffle=shuffle, sort_key=sort_key)
         return baseline.data.ExampleDataFeed(examples, batchsz=batchsz, shuffle=shuffle, trim=self.trim, truncate=self.truncate), texts
 
@@ -426,13 +426,13 @@ class SRLSeqReader(SeqPredictReader):
 
         with codecs.open(tsfile, encoding='utf-8', mode='r') as f:
             for i, line in enumerate(f):
-                pred_surface, labels = re.split("|||", line.strip())
+                pred_surface, labels = line.strip().split("|||")
                 pred_surface = pred_surface.strip().split()
                 labels = labels.strip().split()
                 pred = int(pred_surface[0])
                 surface = pred_surface[1:]
                 if len(surface) > len(labels):
-                    print(pred, surface, labels)
+                    logger.warning("No labels given for line [%s]", line)
                     labels = ['O'] * len(surface)
 
                 tokens = [{'text': s, 'y': l, 'pred': 0} for s, l in zip(surface, labels)]
