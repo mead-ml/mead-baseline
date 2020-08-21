@@ -217,6 +217,18 @@ class Dict1DVectorizer(Token1DVectorizer):
         return _token_iterator(self, tokens)
 
 
+@export
+@register_vectorizer(name='single-item-dict1d')
+class SingleItemDict1DVectorizer(Token1DVectorizer):
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.field = kwargs.get('field', kwargs.get('fields', 'text'))
+
+    def iterable(self, tokens):
+        for tok in tokens:
+            yield tok[self.field]
+
 
 @export
 class AbstractCharVectorizer(AbstractVectorizer):

@@ -706,7 +706,8 @@ class TaggerTask(Task):
 
         if conll_output is not None:
             dir_name = os.path.dirname(conll_output)
-            os.makedirs(dir_name, exist_ok=True)
+            if dir_name:
+                os.makedirs(dir_name, exist_ok=True)
 
         baseline.train.fit(model_params, self.train_data, self.valid_data, self.test_data, **train_params)
         baseline.zip_files(self.get_basedir())

@@ -277,7 +277,6 @@ class MultiFileParallelCorpusReader(ParallelCorpusReader):
                     ts.append(example)
         return baseline.data.Seq2SeqExamples(ts, do_shuffle=do_shuffle, src_sort_key=src_sort_key)
 
-
 @export
 class SeqPredictReader:
 
@@ -355,7 +354,6 @@ class SeqPredictReader:
 
         ts = []
         texts = self.read_examples(filename)
-
         if sort_key is not None and not sort_key.endswith('_lengths'):
             sort_key += '_lengths'
 
@@ -369,6 +367,7 @@ class SeqPredictReader:
             example['y_lengths'] = lengths
             example['ids'] = i
             ts.append(example)
+
         examples = baseline.data.DictExamples(ts, do_shuffle=shuffle, sort_key=sort_key)
         return baseline.data.ExampleDataFeed(examples, batchsz=batchsz, shuffle=shuffle, trim=self.trim, truncate=self.truncate), texts
 
@@ -408,6 +407,38 @@ class CONLLSeqReader(SeqPredictReader):
                     tokens = []
             if len(tokens) > 0:
                 examples.append(tokens)
+        return examples
+
+
+@export
+@register_reader(task='tagger', name='srl')
+class SRLSeqReader(SeqPredictReader):
+    """Read data in the format described by https://github.com/luheng/deep_srl tested on CoNLL2012 SRL data
+
+    """
+    def __init__(self, vectorizers, trim=False, truncate=False, mxlen=-1, **kwargs):
+        super().__init__(vectorizers, trim, truncate, mxlen, **kwargs)
+        self.named_fields = kwargs.get('named_fields', {})
+
+    def read_examples(self, tsfile):
+
+        examples = []
+
+        with codecs.open(tsfile, encoding='utf-8', mode='r') as f:
+            for i, line in enumerate(f):
+                pred_surface, labels = line.strip().split("|||")
+                pred_surface = pred_surface.strip().split()
+                labels = labels.strip().split()
+                pred = int(pred_surface[0])
+                surface = pred_surface[1:]
+                if len(surface) > len(labels):
+                    logger.warning("No labels given for line [%s]", line)
+                    labels = ['O'] * len(surface)
+
+                tokens = [{'text': s, 'y': l, 'pred': 0} for s, l in zip(surface, labels)]
+                tokens[pred]['pred'] = 1
+                if tokens:
+                    examples.append(tokens)
         return examples
 
 
