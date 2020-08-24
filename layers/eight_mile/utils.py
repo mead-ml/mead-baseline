@@ -1712,3 +1712,51 @@ def undo_sentence_piece(seq):
     """
 
     return seq.replace("\u2581", "")
+
+
+def find_cycles(sequence):
+    """Use Tarjan's algorithm to find strongly connected components with at least 2 members in our graph using DFS
+
+    The input is a sequence where the index is for the dependent and the value is the head
+
+    :param sequence:
+    :return:
+    """
+    current = [-1]
+    stack = list()
+    item_on_stack = [False] * len(sequence)
+    index = [-1] * len(sequence)
+    low = [0] * len(sequence)
+    all_cycles = []
+
+    def _dfs(at):
+        # Increment the index count
+        current[-1] += 1
+        # Set both the count and low-level to the current index
+        index[at] = low[at] = current[-1]
+        # Push onto stack
+        stack.append(at)
+        item_on_stack[at] = True
+        for to, head in enumerate(sequence):
+            if head != at:
+                continue
+            if index[to] == -1:
+                _dfs(to)
+                low[at] = min(low[at], low[to])
+            elif item_on_stack[to]:
+                low[at] = min(low[at], low[to])
+
+        if low[at] == index[at]:
+            scc = []
+            while True:
+                pop_idx = stack.pop()
+                item_on_stack[pop_idx] = False
+                scc.append(pop_idx)
+                if pop_idx == at:
+                    break
+            if len(scc) > 1:
+                all_cycles.append(scc)
+    for i in range(len(sequence)):
+        if index[i] == -1:
+            _dfs(i)
+    return all_cycles

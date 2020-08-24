@@ -373,8 +373,144 @@ class SeqPredictReader:
 
 
 @export
+class MultiLabelSeqPredictReader:
+
+    def __init__(self, vectorizers, trim=False, truncate=False, mxlen=-1, **kwargs):
+        super().__init__()
+        self.vectorizers = vectorizers
+        self.trim = trim
+        self.truncate = truncate
+        label_vectorizer_spec_dict = kwargs.get('label_vectorizers', {'y': Dict1DVectorizer(fields='y', mxlen=mxlen)})
+        self.label_vectorizers = {}
+        self.label2index = {}
+        for k, label_vectorizer_spec in label_vectorizer_spec_dict.items():
+            if 'label' not in label_vectorizer_spec:
+                label_vectorizer_spec['label'] = k
+            cache = label_vectorizer_spec.get("data_download_cache", os.path.expanduser("~/.bl-data"))
+            if 'model_file' in label_vectorizer_spec:
+                label_vectorizer_spec['model_file'] = SingleFileDownloader(label_vectorizer_spec['model_file'], cache).download()
+            if 'vocab_file' in label_vectorizer_spec:
+                label_vectorizer_spec['vocab_file'] = SingleFileDownloader(label_vectorizer_spec['vocab_file'], cache).download()
+            label_vectorizer = create_vectorizer(**label_vectorizer_spec)
+
+            self.label_vectorizers[k] = label_vectorizer
+            self.label2index[k] = {
+                Offsets.VALUES[Offsets.PAD]: Offsets.PAD,
+                Offsets.VALUES[Offsets.GO]: Offsets.GO,
+                Offsets.VALUES[Offsets.EOS]: Offsets.EOS
+            }
+
+    def build_vocab(self, files, **kwargs):
+        """For this model, we are not going to support label pre-definitions
+
+        :param files:
+        :param kwargs:
+        :return:
+        """
+        pre_vocabs = None
+        vocabs = {k: Counter() for k in self.vectorizers.keys()}
+        labels = {k: Counter() for k in self.label_vectorizers.keys()}
+
+        vocab_file = kwargs.get('vocab_file')
+
+        if vocab_file:
+            _vocab_allowed(self.vectorizers)
+            pre_vocabs = _build_vocab_for_col(0, listify(vocab_file), self.vectorizers)
+
+        for file in files:
+            if file is None:
+                continue
+
+            examples = self.read_examples(file)
+            for example in examples:
+                for k, vectorizer in self.label_vectorizers.items():
+                    labels[k].update(vectorizer.count(example))
+                for k, vectorizer in self.vectorizers.items():
+                    vocab_example = vectorizer.count(example)
+                    vocabs[k].update(vocab_example)
+
+        vocabs = _filter_vocab(vocabs, kwargs.get('min_f', {}))
+        base_offset = len(Offsets.VALUES)
+
+        for l in labels.keys():
+            labels[l].pop(Offsets.VALUES[Offsets.PAD], None)
+            for i, k in enumerate(labels[l]):
+                self.label2index[l][k] = i + base_offset
+        if pre_vocabs:
+            vocabs = pre_vocabs
+        return vocabs
+
+    def read_examples(self):
+        pass
+
+    def load(self, filename, vocabs, batchsz, shuffle=False, sort_key=None):
+
+        ts = []
+        texts = self.read_examples(filename)
+        if sort_key is not None and not sort_key.endswith('_lengths'):
+            sort_key += '_lengths'
+
+        for i, example_tokens in enumerate(texts):
+            example = {}
+            for k, vectorizer in self.vectorizers.items():
+                example[k], lengths = vectorizer.run(example_tokens, vocabs[k])
+                if lengths is not None:
+                    example['{}_lengths'.format(k)] = lengths
+            for k, vectorizer in self.label_vectorizers.items():
+                example[k], lengths = vectorizer.run(example_tokens, self.label2index[k])
+                if lengths is not None:
+                    example['{}_lengths'.format(k)] = lengths
+            example['ids'] = i
+            if np.max(example['heads']) >= example['word_lengths']:
+                raise Exception("Invalid head", np.max(example['heads']), example['word_lengths'])
+            ts.append(example)
+
+        examples = baseline.data.DictExamples(ts, do_shuffle=shuffle, sort_key=sort_key)
+        return baseline.data.ExampleDataFeed(examples, batchsz=batchsz, shuffle=shuffle, trim=self.trim, truncate=self.truncate), texts
+
+
+@export
 @register_reader(task='tagger', name='default')
 class CONLLSeqReader(SeqPredictReader):
+
+    def __init__(self, vectorizers, trim=False, truncate=False, mxlen=-1, **kwargs):
+        super().__init__(vectorizers, trim, truncate, mxlen, **kwargs)
+        self.named_fields = kwargs.get('named_fields', {})
+
+    def read_examples(self, tsfile):
+
+        tokens = []
+        examples = []
+
+        with codecs.open(tsfile, encoding='utf-8', mode='r') as f:
+            for i, line in enumerate(f):
+                states = re.split("\s", line.strip())
+
+                token = dict()
+                if len(states) > 1:
+                    for j in range(len(states)):
+                        noff = j - len(states)
+                        if noff >= 0:
+                            noff = j
+                        field_name = self.named_fields.get(str(j),
+                                                           self.named_fields.get(str(noff), str(j)))
+                        token[field_name] = states[j]
+                    tokens.append(token)
+
+                else:
+                    if len(tokens) == 0:
+                        raise Exception("Unexpected empty line ({}) in {}".format(i, tsfile))
+                    examples.append(tokens)
+                    tokens = []
+            if len(tokens) > 0:
+                examples.append(tokens)
+        return examples
+
+
+
+@export
+@register_reader(task='deps', name='default')
+class CONLLParserSeqReader(MultiLabelSeqPredictReader):
 
     def __init__(self, vectorizers, trim=False, truncate=False, mxlen=-1, **kwargs):
         super().__init__(vectorizers, trim, truncate, mxlen, **kwargs)

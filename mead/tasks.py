@@ -717,6 +717,123 @@ class TaggerTask(Task):
 
 @export
 @register_task
+class DependencyParserTask(Task):
+
+    def __init__(self, mead_settings_config, **kwargs):
+        super().__init__(mead_settings_config, **kwargs)
+
+    @classmethod
+    def task_name(cls):
+        return 'deps'
+
+    def _create_backend(self, **kwargs):
+        backend = Backend(self.config_params.get('backend', 'tf'), kwargs)
+        if 'preproc' not in self.config_params:
+            self.config_params['preproc'] = {}
+        #if backend.name == 'pytorch':
+        #    self.config_params['preproc']['trim'] = True
+        #else:
+        #    self.config_params['preproc']['trim'] = False
+
+        backend.load(self.task_name())
+
+        return backend
+
+    def initialize(self, embeddings):
+        self.dataset = DataDownloader(self.dataset, self.data_download_cache).download()
+        print_dataset_info(self.dataset)
+        embeddings = read_config_file_or_json(embeddings, 'embeddings')
+        embeddings_set = index_by_label(embeddings)
+        vocab_sources = [self.dataset['train_file'], self.dataset['valid_file']]
+        # TODO: make this optional
+        if 'test_file' in self.dataset:
+            vocab_sources.append(self.dataset['test_file'])
+
+        vocabs = self.reader.build_vocab(vocab_sources, min_f=Task._get_min_f(self.config_params),
+                                         vocab_file
+                                         =self.dataset.get('vocab_file'))
+        self.embeddings, self.feat2index = self._create_embeddings(embeddings_set, vocabs, self.config_params['features'])
+        baseline.save_vocabs(self.get_basedir(), self.feat2index)
+
+    def _reorganize_params(self):
+        train_params = self.config_params['train']
+        train_params['batchsz'] = train_params['batchsz'] if 'batchsz' in train_params else self.config_params['batchsz']
+        train_params['test_batchsz'] = train_params.get('test_batchsz', self.config_params.get('test_batchsz', 1))
+
+        model = self.config_params['model']
+        unif = self.config_params.get('unif', 0.1)
+        model['unif'] = model.get('unif', unif)
+
+        lengths_key = model.get('lengths_key', self.primary_key)
+        if lengths_key is not None:
+            if not lengths_key.endswith('_lengths'):
+                lengths_key = '{}_lengths'.format(lengths_key)
+            model['lengths_key'] = lengths_key
+
+        if self.backend.params is not None:
+            for k, v in self.backend.params.items():
+                model[k] = v
+        #return baseline.model.create_tagger_model(self.embeddings, labels, **self.config_params['model'])
+
+    def _load_dataset(self):
+        # TODO: get rid of sort_key=self.primary_key in favor of something explicit?
+        bsz, vbsz, tbsz = Task._get_batchsz(self.config_params)
+        self.train_data, _ = self.reader.load(
+            self.dataset['train_file'],
+            self.feat2index,
+            bsz,
+            shuffle=True,
+            sort_key='{}_lengths'.format(self.primary_key)
+        )
+        self.valid_data, _ = self.reader.load(
+            self.dataset['valid_file'],
+            self.feat2index,
+            vbsz,
+            sort_key=None
+        )
+        self.test_data = None
+        self.txts = None
+        if 'test_file' in self.dataset:
+            self.test_data, self.txts = self.reader.load(
+                self.dataset['test_file'],
+                self.feat2index,
+                tbsz,
+                shuffle=False,
+                sort_key=None
+            )
+
+    def _get_features(self):
+        return self.embeddings
+
+    def _get_labels(self):
+        return self.reader.label2index
+
+    def train(self, checkpoint=None):
+        self._load_dataset()
+        baseline.save_vectorizers(self.get_basedir(), self.vectorizers)
+        self._reorganize_params()
+        conll_output = self.config_params.get("conll_output", None)
+        model_params = self.config_params['model']
+        model_params['features'] = self._get_features()
+        model_params['labels'] = self._get_labels()
+        model_params['task'] = self.task_name()
+        train_params = self.config_params['train']
+        train_params['checkpoint'] = checkpoint
+        train_params['conll_output'] = conll_output
+        train_params['txts'] = self.txts
+
+        if conll_output is not None:
+            dir_name = os.path.dirname(conll_output)
+            if dir_name:
+                os.makedirs(dir_name, exist_ok=True)
+
+        baseline.train.fit(model_params, self.train_data, self.valid_data, self.test_data, **train_params)
+        baseline.zip_files(self.get_basedir())
+        self._close_reporting_hooks()
+
+
+@export
+@register_task
 class EncoderDecoderTask(Task):
 
     def __init__(self, mead_settings_config, **kwargs):
