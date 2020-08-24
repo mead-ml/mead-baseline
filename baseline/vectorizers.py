@@ -635,6 +635,56 @@ class BPEVectorizer1D(AbstractVectorizer, HasSubwordTokens):
 
 
 @export
+@register_vectorizer(name='bpe-secondary-feature-dict1d')
+class BPESecondaryFeatureDict1DVectorizer(BPEVectorizer1D):
+    """We need to split on the primary feature but use a secondary feature's value
+
+    Some options concern what to do with the non primary index.  For a label, this would typically
+    be a `<PAD>` token in the non first position of a sub-word, but that may not be desirable here
+
+    To support bot ways, there is an optional `apply_all_subwords`, which defaults to True.  If this
+    is turned on, it means that we want to use the feature value of
+
+
+    """
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.field = kwargs.get('fields', kwargs.get('field'))
+        self.primary_feature = kwargs.get('primary_feature', 'text')
+        self.emit_begin_tok = kwargs.get('emit_begin_tok')
+        self.emit_end_tok = kwargs.get('emit_end_tok')
+        self.apply_all_subwords = kwargs.get('apply_all_subwords', True)
+
+    def iterable(self, tokens):
+        if self.emit_begin_tok:
+            yield self.emit_begin_tok
+        for t in tokens:
+            t_word = t[self.primary_feature]
+            t_feature = t[self.field]
+            if t_word in Offsets.VALUES:
+                yield t_feature
+            elif t == '<unk>':
+                yield t_feature
+            elif t == '<eos>':
+                yield t_feature
+            else:
+                subwords = self.tokenizer.apply([t_word])[0].split()
+                if self.apply_all_subwords:
+                    subwords = [t_feature] * len(subwords)
+                else:
+                    subwords = [Offsets.VALUES[Offsets.PAD]] * len(subwords)
+                    subwords[0] = t_feature
+                for x in subwords:
+                    yield x
+        if self.emit_end_tok:
+            yield self.emit_end_tok
+
+    def run(self, tokens, vocab):
+        return super().run(tokens, vocab)
+
+
+
+@export
 @register_vectorizer(name='bpe-label-dict1d')
 class BPELabelDict1DVectorizer(BPEVectorizer1D):
 
@@ -1082,6 +1132,56 @@ class WordpieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
         return self.mxlen,
 
 
+
+@export
+@register_vectorizer(name='wordpiece-secondary-feature-dict1d')
+class WordpieceSecondaryFeatureDict1DVectorizer(WordpieceVectorizer1D):
+    """We need to split on the primary feature but use a secondary feature's value
+
+    Some options concern what to do with the non primary index.  For a label, this would typically
+    be a `<PAD>` token in the non first position of a sub-word, but that may not be desirable here
+
+    To support bot ways, there is an optional `apply_all_subwords`, which defaults to True.  If this
+    is turned on, it means that we want to use the feature value of
+
+
+    """
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.field = kwargs.get('fields', kwargs.get('field'))
+        self.primary_feature = kwargs.get('primary_feature', 'text')
+        self.emit_begin_toks = listify(kwargs.get('emit_begin_tok', [Offsets.VALUES[Offsets.PAD]]))
+        self.emit_end_toks = listify(kwargs.get('emit_end_tok', [Offsets.VALUES[Offsets.PAD]]))
+        self.apply_all_subwords = kwargs.get('apply_all_subwords', True)
+
+    def iterable(self, tokens):
+        for t in self.emit_begin_toks:
+            yield t
+        for t in tokens:
+            t_word = t[self.primary_feature]
+            t_feature = t[self.field]
+            if t_word in Offsets.VALUES:
+                yield t_feature
+            elif t == '<unk>':
+                yield t_feature
+            elif t == '<eos>':
+                yield t_feature
+            else:
+                subwords = self.tokenizer.tokenize(t_word)
+                if self.apply_all_subwords:
+                    subwords = [t_feature] * len(subwords)
+                else:
+                    subwords = [Offsets.VALUES[Offsets.PAD]] * len(subwords)
+                    subwords[0] = t_feature
+                for x in subwords:
+                    yield x
+        for t in self.emit_end_toks:
+            yield t
+
+    def run(self, tokens, vocab):
+        return super().run(tokens, vocab)
+
+
 @register_vectorizer(name='wordpiece-label-dict1d')
 class WordpieceLabelDict1DVectorizer(WordpieceVectorizer1D):
 
@@ -1111,15 +1211,6 @@ class WordpieceLabelDict1DVectorizer(WordpieceVectorizer1D):
 
     def run(self, tokens, vocab):
         return super().run(tokens, vocab)
-
-    def count(self, tokens):
-        seen = 0
-        counter = collections.Counter()
-        for tok in self.iterable(tokens):
-            counter[tok] += 1
-            seen += 1
-        self.max_seen = max(self.max_seen, seen)
-        return counter
 
 
 @register_vectorizer(name='wordpiece-dict1d')
