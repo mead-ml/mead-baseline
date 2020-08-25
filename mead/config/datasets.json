@@ -39,6 +39,16 @@
     "label": "snli1"
   },
   {
+     "train_file": "snli_1.0_train.tok.txt",
+     "valid_file": "snli_1.0_dev.tok.txt",
+     "test_file": "snli_1.0_test.tok.txt",
+     "description": "[SNLI dataset](https://nlp.stanford.edu/projects/snli/) with bottom-up tokenization applied",
+     "label_list": ["entailment", "neutral", "contradiction"],
+     "download": "https://www.dropbox.com/s/ai6pcl11l8zdqlv/snli_1.0-tok.tar.gz?dl=1",
+     "sha1": "f72d58b3d4fb90d3204ead41a29bd0053948fa7b",
+     "label": "snli1-tok"
+  },
+  {
     "train_file": "train.conll",
     "valid_file": "dev.conll",
     "test_file": "test.conll",
