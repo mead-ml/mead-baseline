@@ -479,8 +479,7 @@ def _get_dir(files):
 
 
 @export
-@register_reader(task='classify', name='default')
-class TSVSeqLabelReader(SeqLabelReader):
+class LineSeqLabelReader(SeqLabelReader):
 
     REPLACE = { "'s": " 's ",
                 "'ve": " 've ",
@@ -502,7 +501,8 @@ class TSVSeqLabelReader(SeqLabelReader):
             self.clean_fn = lambda x: x
         self.trim = trim
         self.truncate = truncate
-
+        self.has_header = bool(kwargs.get('has_header', False))
+        self.col_keys = kwargs.get('col_keys', [])
     SPLIT_ON = '[\t\s]+'
 
     @staticmethod
@@ -517,14 +517,14 @@ class TSVSeqLabelReader(SeqLabelReader):
             l = l.replace(k, v)
         return l.strip()
 
-    @staticmethod
-    def label_and_sentence(line, clean_fn):
-        label_text = re.split(TSVSeqLabelReader.SPLIT_ON, line)
-        label = label_text[0]
-        text = label_text[1:]
-        text = ' '.join(list(filter(lambda s: len(s) != 0, [clean_fn(w) for w in text])))
-        text = list(filter(lambda s: len(s) != 0, re.split('\s+', text)))
-        return label, text
+    def label_and_sentence(self, line, clean_fn, header):
+        """This function produces the sample from a line
+
+        :param line: The raw line
+        :param clean_fn: A clean function
+        :param header: An optional header
+        :return: A tuple of the label and text sample
+        """
 
     def build_vocab(self, files, **kwargs):
         """Take a directory (as a string), or an array of files and build a vocabulary
@@ -545,8 +545,9 @@ class TSVSeqLabelReader(SeqLabelReader):
                 label_idx = 0
                 for file_name in files:
                     with codecs.open(file_name, encoding='utf-8', mode='r') as f:
+                        header = next(f) if self.has_header else None
                         for il, line in enumerate(f):
-                            label, _ = TSVSeqLabelReader.label_and_sentence(line, self.clean_fn)
+                            label, _ = self.label_and_sentence(line, self.clean_fn, header)
                             if label not in self.label2index:
                                 self.label2index[label] = label_idx
                                 label_idx += 1
@@ -573,8 +574,9 @@ class TSVSeqLabelReader(SeqLabelReader):
             if file_name is None:
                 continue
             with codecs.open(file_name, encoding='utf-8', mode='r') as f:
+                header = next(f) if self.has_header else None
                 for il, line in enumerate(f):
-                    label, text = TSVSeqLabelReader.label_and_sentence(line, self.clean_fn)
+                    label, text = self.label_and_sentence(line, self.clean_fn, header)
                     if len(text) == 0:
                         continue
 
@@ -606,8 +608,9 @@ class TSVSeqLabelReader(SeqLabelReader):
         examples = []
         texts = []
         with codecs.open(filename, encoding='utf-8', mode='r') as f:
+            header = next(f) if self.has_header else None
             for il, line in enumerate(f):
-                label, text = TSVSeqLabelReader.label_and_sentence(line, self.clean_fn)
+                label, text = self.label_and_sentence(line, self.clean_fn, header)
                 texts.append(text)
                 if len(text) == 0:
                     continue
@@ -637,8 +640,9 @@ class TSVSeqLabelReader(SeqLabelReader):
         examples = []
 
         with codecs.open(filename, encoding='utf-8', mode='r') as f:
+            header = next(f) if self.has_header else None
             for il, line in enumerate(f):
-                label, text = TSVSeqLabelReader.label_and_sentence(line, self.clean_fn)
+                label, text = self.label_and_sentence(line, self.clean_fn, header)
                 if len(text) == 0:
                     continue
                 y = self.label2index[label]
@@ -655,6 +659,30 @@ class TSVSeqLabelReader(SeqLabelReader):
                                                                         sort_key=sort_key),
                                              batchsz=batchsz, shuffle=shuffle, trim=self.trim, truncate=self.truncate)
 
+
+@export
+@register_reader(task='classify', name='default')
+class TSVSeqLabelReader(LineSeqLabelReader):
+
+    def label_and_sentence(self, line, clean_fn, header):
+        if header is None:
+            return self.label_and_sentence_no_header(line, clean_fn)
+        cols = line.strip().split('\t')
+        header = [h.strip() for h in header.split('\t')]
+        col_indices = [header.index(c) for c in self.col_keys]
+        label_sentence = [cols[c] for c in col_indices]
+        label, sentence = label_sentence
+        text = ' '.join(list(filter(lambda s: len(s) != 0, [clean_fn(w) for w in sentence.split()])))
+        return label, text
+
+
+    def label_and_sentence_no_header(self, line, clean_fn):
+        label_text = re.split(TSVSeqLabelReader.SPLIT_ON, line)
+        label = label_text[0]
+        text = label_text[1:]
+        text = ' '.join(list(filter(lambda s: len(s) != 0, [clean_fn(w) for w in text])))
+        text = list(filter(lambda s: len(s) != 0, re.split('\s+', text)))
+        return label, text
 
 class IndexPairLabelReader(SeqLabelReader):
     """Shared vocabulary paired label reader
@@ -710,7 +738,7 @@ class IndexPairLabelReader(SeqLabelReader):
             l = l.replace(k, v)
         return l.strip()
 
-    def index_pair_label(self, line, clean_fn):
+    def index_pair_label(self, line, clean_fn, header):
         """Does the actual work of handling the file format abstractions.
 
         :param line: A line of text fromn the file
