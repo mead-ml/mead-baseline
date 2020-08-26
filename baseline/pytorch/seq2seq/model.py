@@ -63,12 +63,17 @@ class EncoderDecoderModelBase(nn.Module, EncoderDecoderModel):
         """
         torch.save(self, model_file)
 
-    def create_loss(self):
+    def create_loss(self, **kwargs):
         """Create a loss function.
 
         :return:
         """
-        return SequenceCriterion()
+        label_smoothing = kwargs.get("label_smoothing")
+        if label_smoothing is not None:
+            def make(*args, **kwargs):
+                return LabelSmoothingLoss(label_smoothing, *args, **kwargs)
+            return SequenceLoss(make)
+        return SequenceLoss()
 
     @classmethod
     def load(cls, filename, **kwargs):

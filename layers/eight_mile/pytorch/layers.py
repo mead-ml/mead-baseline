@@ -170,6 +170,42 @@ class SequenceLoss(nn.Module):
         return f"reduction={self.avg}"
 
 
+class LabelSmoothingLoss(nn.Module):
+    def __init__(self, label_smoothing, ignore_index=0, reduction="none"):
+        """Use Label smoothing from `Szegedy et. al., 2015`_ to temper model confidence.
+
+        Implements add-gamma smoothing where the probability mass of the gold label distribution
+        is smoothed across classes.
+
+        This implementation is based on `OpenNMT-py`_ but has been adapted to not require the
+        vocabulary size up front.
+
+        .. _Szegedy et. al., 2015: https://arxiv.org/abs/1512.00567
+        .. _OpenNMY-py: https://github.com/OpenNMT/OpenNMT-py/blob/938a4f561b07f4d468647823fab761cfb51f21da/onmt/utils/loss.py#L194
+        """
+        if not (0.0 < label_smoothing <= 1.0):
+            raise ValueError(f"`label_smoothing` must be between 0.0 and 1.0, got {label_smoothing}")
+        super().__init__()
+        self.ignore_index = ignore_index
+        self.label_smoothing = label_smoothing
+        self.confidence = 1.0 - label_smoothing
+        self.reduction = reduction if reduction != "mean" else "batchmean"
+
+    def forward(self, output: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        """
+        :param output: The model outputs, [B, V]
+        :param target: The target labels, [B]
+        """
+        B, V = output.size()
+        smoothed = torch.full((B, V), self.label_smoothing / (V - 2))
+        smoothed[:, self.ignore_index] = 0
+        smoothed = torch.scatter(smoothed, 1, target.unsqueeze(1), self.confidence)
+        smoothed = smoothed.masked_fill_((target == self.ignore_index).unsqueeze(1), 0)
+        return F.kl_div(output, smoothed, reduction=self.reduction)
+
+    def extra_repr(self):
+        return f"label_smoothing={self.label_smoothing}"
+
 class MeanPool1D(nn.Module):
     """Do a mean pool while accounting for the length of a sequence
     """
