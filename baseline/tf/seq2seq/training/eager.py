@@ -13,24 +13,42 @@ from baseline.train import register_training_func, Trainer
 from baseline.tf.seq2seq.training.utils import to_tensors, SHUF_BUF_SZ, NUM_PREFETCH
 
 
-def loss(model, features, labels):
-    # Claims its T, B, H
-    logits = tf.transpose(model(features), [1, 0, 2])
-    # So ok, then transpose this too
-    labels = tf.transpose(labels, [1, 0])
-    # TxB loss mask
-    label_lengths = features['tgt_len']
-    mx_seq_len = tf.reduce_max(label_lengths)-1
-    labels = labels[1:mx_seq_len + 1, :]
-    logits = logits[:mx_seq_len, :, :]
-    losses = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=labels)
-    loss_mask = tf.cast(tf.sequence_mask(label_lengths-1), dtype=tf.float32)
-    losses = losses * tf.transpose(loss_mask, [1, 0])
+class Seq2SeqLoss(tf.keras.layers.Layer):
+    def __init__(self, **kwargs):
+        super().__init__()
+        self.label_smoothing = kwargs.get("label_smoothing")
+        if self.label_smoothing is not None:
+            self.loss_fn = self.smoothed_loss
+        else:
+            self.loss_fn = self.loss
 
-    losses = tf.reduce_sum(losses)
-    losses /= tf.cast(tf.reduce_sum(label_lengths), tf.float32)
-    return losses
+    def smoothed_loss(self, logits, labels):
+        V = get_shape_as_list(logits)[-1]
+        one_hot = tf.one_hot(labels, V)
+        return tf.keras.losses.categorical_crossentropy(
+            y_true=one_hot, y_pred=logits, from_logits=True, label_smoothing=self.label_smoothing
+        )
 
+    def loss(self, logits, labels):
+        return tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=labels)
+
+    def call(self, model, features, labels):
+        # Claims its T, B, H
+        logits = tf.transpose(model(features), [1, 0, 2])
+        # So ok, then transpose this too
+        labels = tf.transpose(labels, [1, 0])
+        # TxB loss mask
+        label_lengths = features['tgt_len']
+        mx_seq_len = tf.reduce_max(label_lengths)-1
+        labels = labels[1:mx_seq_len + 1, :]
+        logits = logits[:mx_seq_len, :, :]
+        losses = self.loss_fn(logits=logits, labels=labels)
+        loss_mask = tf.cast(tf.sequence_mask(label_lengths-1), dtype=tf.float32)
+        losses = losses * tf.transpose(loss_mask, [1, 0])
+
+        losses = tf.reduce_sum(losses)
+        losses /= tf.cast(tf.reduce_sum(label_lengths), tf.float32)
+        return losses
 
 
 class Seq2SeqTrainerEagerTf(Trainer):
@@ -50,7 +68,8 @@ class Seq2SeqTrainerEagerTf(Trainer):
             self.model = model_params
 
         self.tgt_rlut = kwargs['tgt_rlut']
-        self.optimizer = EagerOptimizer(loss, **kwargs)
+        self.loss = Seq2SeqLoss(**kwargs)
+        self.optimizer = EagerOptimizer(self.loss, **kwargs)
         self.nsteps = kwargs.get('nsteps', 500)
         self._checkpoint = tf.train.Checkpoint(optimizer=self.optimizer.optimizer, model=self.model)
         checkpoint_dir = '{}-{}'.format("./tf-seq2seq", os.getpid())
@@ -198,7 +217,7 @@ class Seq2SeqTrainerEagerTf(Trainer):
         for features, tgt in vs:
             features['dst'] = tgt[:, :-1]
             top_preds = self.model.predict(features, beam=1, make_input=False)
-            loss_value = loss(self.model, features, tgt).numpy()
+            loss_value = self.loss(self.model, features, tgt).numpy()
             toks = tf.cast(self._num_toks(features['tgt_len']), tf.float32).numpy()
             total_loss += loss_value * toks
             total_toks += toks
