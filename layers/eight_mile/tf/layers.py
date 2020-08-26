@@ -2930,7 +2930,7 @@ class GreedyTaggerDecoder(TaggerDecoder):
         lengths = tf.cast(lengths, tf.int32)
         max_length = tf.reduce_max(lengths)
         tags = tags[:, :max_length]
-
+        unary = unary[:, :max_length, :]
         mask = tf.sequence_mask(lengths, max_length)
         cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tags, logits=unary)
         cross_entropy *= tf.cast(mask, tf.float32)
