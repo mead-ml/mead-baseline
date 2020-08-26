@@ -250,7 +250,7 @@ class TransformerLMEmbeddings(TensorFlowEmbeddings):
         return z
 
     def get_output(self, inputs, z):
-        return tf.stop_gradient(z)
+        return tf.stop_gradient(z) if self.finetune is False else z
 
     def get_vocab(self):
         return self.vocab
