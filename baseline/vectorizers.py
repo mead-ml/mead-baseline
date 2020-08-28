@@ -458,7 +458,7 @@ class SavableFastBPE:
         vocab_path = get_file_or_url(vocab_path)
         with open(codes_path, 'rb') as rf:
             self.codes = rf.read()
-        with open(vocab_path) as rf:
+        with open(vocab_path, 'rb') as rf:
             self.vocab = rf.read()
         self.bpe = fastBPE(codes_path, vocab_path)
 
