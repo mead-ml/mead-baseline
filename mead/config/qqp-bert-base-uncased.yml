@@ -1,7 +1,7 @@
 backend: pytorch
-basedir: ./mnli-m-bert-base-uncased
+basedir: ./qqp-bert-base-uncased
 batchsz: 32
-dataset: mnli-matched
+dataset: qqp
 features:
 - embeddings:
     word_embed_type: learned-positional
@@ -15,12 +15,12 @@ features:
     mlm: true
   name: bert
   vectorizer:
-    mxlen: 200
+    mxlen: 150
     label: bert-base-uncased-no-cls
 loader:
   reader_type: tsv-paired-shared-vec
   use_token_type: true
-  col_keys: [pairID, sentence1, sentence2, gold_label]
+  col_keys: [id, question1, question2, is_duplicate]
   start_tokens_1: ["[CLS]"]
 model:
   model_type: fine-tune-paired
