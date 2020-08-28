@@ -29,7 +29,7 @@ train:
   early_stopping_metric: acc
   epochs: 3
   warmup_steps: 12
-  eta: 1.0e-5
+  eta: 5.0e-5
   optim: adamw
   weight_decay: 1.0e-8
   lr_scheduler_type: warmup_linear
