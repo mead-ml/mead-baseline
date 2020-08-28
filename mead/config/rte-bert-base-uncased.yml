@@ -1,3 +1,4 @@
+# Single run, 67.5 dev, epoch 10
 backend: pytorch
 basedir: ./rte-bert-base-uncased
 batchsz: 16
@@ -29,7 +30,8 @@ train:
   early_stopping_metric: acc
   epochs: 20
   warmup_steps: 16
-  eta: 2.0e-5
+  patience: 5
+  eta: 5.0e-5
   optim: adamw
   weight_decay: 1.0e-8
   lr_scheduler_type: warmup_linear
