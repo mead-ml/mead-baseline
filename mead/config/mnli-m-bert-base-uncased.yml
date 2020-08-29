@@ -15,7 +15,7 @@ features:
     mlm: true
   name: bert
   vectorizer:
-    mxlen: 200
+    mxlen: 225
     label: bert-base-uncased-no-cls
 loader:
   reader_type: tsv-paired-shared-vec
@@ -27,8 +27,8 @@ model:
 task: classify
 train:
   early_stopping_metric: acc
-  epochs: 3
-  patience: 6
+  epochs: 6
+  patience: 2
   eta: 1.0e-5
   optim: adamw
   weight_decay: 1.0e-8

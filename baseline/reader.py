@@ -919,15 +919,19 @@ class IndexPairLabelReader(SeqLabelReader):
             #f = list(f)
             ##pg = create_progress_bar(len(f), 'tqdm')
             for il, line in enumerate(f):
-                idx, text1, text2, label = self.index_pair_label(line, self.clean_fn, header)
-                if len(text1) < 1 or len(text2) < 1:
-                    raise Exception(f"Invalid line @ {il}: [{line}]")
-                example_dict = self.convert_to_example(vocabs, text1.split(), text2.split())
-                if label not in self.label2index:
-                    continue
-                example_dict['y'] = self.label2index[label]
-                example_dict['idx'] = idx
-                examples.append(example_dict)
+                try:
+                    idx, text1, text2, label = self.index_pair_label(line, self.clean_fn, header)
+                    if len(text1) < 1 or len(text2) < 1:
+                        raise Exception(f"Invalid line @ {il}: [{line}]")
+                    example_dict = self.convert_to_example(vocabs, text1.split(), text2.split())
+                    if label not in self.label2index:
+                        continue
+                    example_dict['y'] = self.label2index[label]
+                    example_dict['idx'] = idx
+                    examples.append(example_dict)
+                except Exception as e:
+                    logger.warning(f'Skipping invalid line {il}')
+
         return baseline.data.ExampleDataFeed(baseline.data.DictExamples(examples,
                                                                         do_shuffle=shuffle,
                                                                         sort_key=sort_key),
@@ -943,6 +947,9 @@ class TSVIndexPairLabelReader(IndexPairLabelReader):
         cols = line.strip().split('\t')
         header = [h.strip() for h in header.split('\t')]
         col_indices = [header.index(c) for c in self.col_keys]
+        # QQP files have some invalid samples
+        #if max(col_indices) > len(cols):
+        #    raise Exception(f"Error: {cols}")
         index_pair_label_list = [cols[c] for c in col_indices]
         index, text1, text2, label = index_pair_label_list
         text1 = ' '.join(list(filter(lambda s: len(s) != 0, [clean_fn(w) for w in text1.split()])))
