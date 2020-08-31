@@ -26,7 +26,7 @@ model:
   model_type: fine-tune-paired
 task: classify
 train:
-  early_stopping_metric: acc
+  early_stopping_metric: avg_f1_acc
   epochs: 3
   patience: 6
   eta: 1.0e-5
