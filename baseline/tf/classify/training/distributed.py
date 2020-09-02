@@ -67,11 +67,18 @@ class ClassifyTrainerDistributedTf(EpochReportingTrainer):
                                                              directory=checkpoint_dir,
                                                              max_to_keep=5)
         strategy_type = kwargs.get('strategy_type', 'mirror')
-        gpus = int(kwargs.get('gpus', 1))
+        self.eval_device = kwargs.get('eval_device', '/device:GPU:0')
+        if strategy_type == 'tpu':
+            self.eval_device = '/device:CPU:0'
+            gpus = 0
+        else:
+            gpus = int(kwargs.get('gpus', 1))
         endpoint = kwargs.get('endpoint')
         self.strategy = create_distribute_strategy(strategy_type, gpus, endpoint)
 
-
+    def reset_strategy_to_eval(self):
+        """TODO: this is pretty awkward, FIXME"""
+        self.strategy = tf.distribute.OneDeviceStrategy(self.eval_device)
 
     def _train(self, loader, steps=0, **kwargs):
         """Train an epoch of data using either the input loader or using `tf.dataset`
@@ -193,7 +200,6 @@ class ClassifyTrainerDistributedTf(EpochReportingTrainer):
             total_loss = tf.Variable(0.0)
             total_acc = tf.Variable(0.0)
             total_norm = tf.Variable(0.0)
-            verbose = kwargs.get("verbose", None)
 
             SET_TRAIN_FLAG(False)
             test_iter = iter(loader)
@@ -332,7 +338,7 @@ def fit_eager_distributed(model_params, ts, vs, es=None, **kwargs):
     if es is not None:
         print('Reloading best checkpoint')
         trainer.recover_last_checkpoint()
-        trainer.strategy = tf.distribute.OneDeviceStrategy('/device:CPU:0')
+        trainer.reset_strategy_to_eval()
         test_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(es, lengths_key))
         test_dataset = test_dataset.batch(test_batchsz, drop_remainder=False)
         test_dataset = test_dataset.prefetch(NUM_PREFETCH)
