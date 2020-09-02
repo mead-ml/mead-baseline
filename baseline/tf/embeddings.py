@@ -186,6 +186,10 @@ class TransformerLMEmbeddings(TensorFlowEmbeddings):
         else:
             self.vocab = load_bert_vocab(kwargs.get('vocab_file'))
 
+        # When we reload, allows skipping restoration of these embeddings
+        # If the embedding wasnt trained with token types, this allows us to add them later
+        self.skippable = set(listify(kwargs.get('skip_restore_embeddings', [])))
+
         self.cls_index = self.vocab['[CLS]']
         self.vsz = max(self.vocab.values()) + 1
         self.d_model = int(kwargs.get('dsz', kwargs.get('d_model', 768)))
@@ -276,7 +280,14 @@ class TransformerLMEmbeddings(TensorFlowEmbeddings):
         else:
         #data_sample_tt = tf.zeros([B, T], dtype=tf.int32)
             _ = c(data_sample)
-        load_tlm_npz(c, embeddings)
+
+        keys_to_restore = set(list(c.embeddings.keys()))
+        filtered_keys = keys_to_restore.difference(c.skippable)
+        if not keys_to_restore:
+            raise Exception("No keys to restore!")
+        if len(filtered_keys) < len(keys_to_restore):
+            logger.warning("Restoring only key [%s]", ' '.join(filtered_keys))
+        load_tlm_npz(c, embeddings, filtered_keys)
         return c
 
     #def detached_ref(self):
