@@ -641,7 +641,7 @@ class FineTunePairedClassifierModel(FineTuneModelClassifier):
     """Fine-tuning model for pairs
 
     This model encodes a pair as a single utterance using some encoding scheme defined in
-    convert_to_input which is fed directly into the fine-tuning model.
+    ``_convert_pair`` which is fed directly into the fine-tuning model.
 
     For BERT, this simply encodes the input key pair as a single utterance while building
     a token-type vector.

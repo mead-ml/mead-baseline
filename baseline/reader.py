@@ -286,7 +286,7 @@ def _try_read_labels(**kwargs):
         pre_labels = Counter(chain(*_read_from_col(0, listify(label_file))))
         label2index = {l: i for i, l in enumerate(pre_labels)}
     elif label_list:
-        label2index = {k: i for i, k in enumerate(label_list)}
+        label2index = {l: i for i, l in enumerate(label_list)}
     return label2index
 
 @export

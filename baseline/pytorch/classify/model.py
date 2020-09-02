@@ -381,7 +381,7 @@ class FineTunePairedClassifierModel(FineTuneModelClassifier):
     """Fine-tuning model for pairs
 
     This model encodes a pair as a single utterance using some encoding scheme defined in
-    convert_to_input which is fed directly into the fine-tuning model.
+    ``_convert_pair`` which is fed directly into the fine-tuning model.
 
     For BERT, this simply encodes the input key pair as a single utterance while building
     a token-type vector.
@@ -412,15 +412,16 @@ class FineTunePairedClassifierModel(FineTuneModelClassifier):
         else:
             example_dict[key] = toks
 
-    def make_input(self, batch_dict, perm=False, numpy_to_tensor=False):
+    def make_input(self, batch_dict: Dict, perm: bool = False, numpy_to_tensor: bool = False):
 
         """Transform a `batch_dict` into something usable in this model
 
-        :param batch_dict: (``dict``) A dictionary containing all inputs to the embeddings for this model
-        :return:
+        :param batch_dict: A dictionary containing all inputs to the embeddings for this model
+        :param perm: Should we permute the batch, this is not supported here
+        :param numpy_to_tensor: Do we need to convert from numpy to a ``torch.Tensor``
+        :return: An example dictionary for processing
         """
         example_dict = dict({})
-        perm_idx = None
         # Allow us to track a length, which is needed for BLSTMs
         for key in self.embeddings.keys():
             self._convert_pair(key, batch_dict, numpy_to_tensor, example_dict)
@@ -429,14 +430,9 @@ class FineTunePairedClassifierModel(FineTuneModelClassifier):
         if y is not None:
             if numpy_to_tensor:
                 y = torch.from_numpy(y)
-            if perm_idx is not None:
-                y = y[perm_idx]
             if self.gpu:
                 y = y.cuda()
             example_dict['y'] = y
-
-        if perm:
-            return example_dict, perm_idx
 
         return example_dict
 
