@@ -675,14 +675,14 @@ class TSVSeqLabelReader(LineSeqLabelReader):
         text = ' '.join(list(filter(lambda s: len(s) != 0, [clean_fn(w) for w in sentence.split()])))
         return label, text
 
-
     def label_and_sentence_no_header(self, line, clean_fn):
         label_text = re.split(TSVSeqLabelReader.SPLIT_ON, line)
         label = label_text[0]
         text = label_text[1:]
         text = ' '.join(list(filter(lambda s: len(s) != 0, [clean_fn(w) for w in text])))
-        text = list(filter(lambda s: len(s) != 0, re.split('\s+', text)))
+        text = TSVSeqLabelReader.splits(text)
         return label, text
+
 
 class IndexPairLabelReader(SeqLabelReader):
     """Shared vocabulary paired label reader
@@ -798,7 +798,6 @@ class IndexPairLabelReader(SeqLabelReader):
                     idx, text1, text2, label = self.index_pair_label(line, self.clean_fn, header)
                     if len(text1) < 1 or len(text2) < 1:
                         raise Exception(f"Invalid line @ {il}: [{line}]")
-
 
                     for k, vectorizer in self.vectorizers.items():
                         vocab_file = vectorizer.count(text1) + vectorizer.count(text2)
