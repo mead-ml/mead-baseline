@@ -181,11 +181,11 @@ class ClassifyTrainerDistributedTf(EpochReportingTrainer):
 
         @tf.function
         def _distributed_test_step(inputs):
-            per_replica_loss, per_replica_batchsz, per_replica_cm = strategy.experimental_run_v2(_replica_test_step, args=(inputs,))
+            per_replica_loss, per_replica_batchsz, per_replica_acc = strategy.experimental_run_v2(_replica_test_step, args=(inputs,))
             step_loss = strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_loss, axis=None)
             step_batchsz = strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_batchsz, axis=None)
             # step_cm
-            step_acc = strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_cm, axis=None)
+            step_acc = strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_acc, axis=None)
             return step_loss, step_batchsz, step_acc #step_cm
 
         with strategy.scope():
