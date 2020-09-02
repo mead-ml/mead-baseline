@@ -1,0 +1,35 @@
+backend: pytorch
+basedir: ./qnli-bert-base-uncased
+batchsz: 32
+dataset: qnli
+features:
+- embeddings:
+    word_embed_type: learned-positional
+    token_type_vsz: 2
+    label: bert-base-uncased-npz
+    type: tlm-words-embed-pooled
+    reduction: sum-layer-norm
+    layer_norms_after: true
+    finetune: true
+    dropout: 0.1
+    mlm: true
+  name: bert
+  vectorizer:
+    mxlen: 200
+    label: bert-base-uncased-no-cls
+loader:
+  reader_type: tsv-paired-shared-vec
+  use_token_type: true
+  col_keys: [index, question, sentence, label]
+  start_tokens_1: ["[CLS]"]
+model:
+  model_type: fine-tune-paired
+task: classify
+train:
+  early_stopping_metric: acc
+  epochs: 3
+  patience: 6
+  eta: 1.0e-5
+  optim: adamw
+  weight_decay: 1.0e-8
+unif: 0.1

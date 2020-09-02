@@ -1,5 +1,6 @@
 import os
 import re
+from typing import List, Dict
 import codecs
 from itertools import chain
 import logging
@@ -8,10 +9,9 @@ import numpy as np
 import baseline.data
 from baseline.vectorizers import Dict1DVectorizer, GOVectorizer, Token1DVectorizer, create_vectorizer, HasPredefinedVocab
 from baseline.utils import import_user_module, revlut, exporter, optional_params, Offsets, listify, SingleFileDownloader
-
+from eight_mile.progress import create_progress_bar
 __all__ = []
 export = exporter(__all__)
-
 
 logger = logging.getLogger('baseline')
 
@@ -277,6 +277,18 @@ class MultiFileParallelCorpusReader(ParallelCorpusReader):
                     ts.append(example)
         return baseline.data.Seq2SeqExamples(ts, do_shuffle=do_shuffle, src_sort_key=src_sort_key)
 
+
+def _try_read_labels(**kwargs):
+    label_file = kwargs.get('label_file')
+    label_list = kwargs.get('label_list')
+    label2index = {}
+    if label_file:
+        pre_labels = Counter(chain(*_read_from_col(0, listify(label_file))))
+        label2index = {l: i for i, l in enumerate(pre_labels)}
+    elif label_list:
+        label2index = {l: i for i, l in enumerate(label_list)}
+    return label2index
+
 @export
 class SeqPredictReader:
 
@@ -303,16 +315,14 @@ class SeqPredictReader:
 
     def build_vocab(self, files, **kwargs):
 
-        label_file = kwargs.get('label_file')
-        if label_file:
-            pre_labels = Counter(chain(*_read_from_col(0, listify(label_file))))
-            self.label2index = {l: i for i, l in enumerate(pre_labels)}
-
-        if label_file and _all_predefined_vocabs(self.vectorizers):
+        # TODO: Im not sure we should even support this option
+        label2index = _try_read_labels(**kwargs)
+        if label2index and _all_predefined_vocabs(self.vectorizers):
+            offset = len(label2index)
+            self.label2index.update({k: v + offset} for k, v in label2index.items())
             logger.info("Skipping building vocabulary.  All vectorizers have predefined vocabs and a label file was given!")
             return {k: v.vocab for k, v in self.vectorizers.items()}
         pre_vocabs = None
-        pre_labels = None
         vocabs = {k: Counter() for k in self.vectorizers.keys()}
 
         vocab_file = kwargs.get('vocab_file')
@@ -320,7 +330,6 @@ class SeqPredictReader:
         if vocab_file:
             _vocab_allowed(self.vectorizers)
             pre_vocabs = _build_vocab_for_col(0, listify(vocab_file), self.vectorizers)
-
 
         labels = Counter()
 
@@ -335,7 +344,7 @@ class SeqPredictReader:
                     vocab_example = vectorizer.count(example)
                     vocabs[k].update(vocab_example)
 
-        if pre_labels and not pre_vocabs:
+        if label2index and not pre_vocabs:
             return vocabs
 
         vocabs = _filter_vocab(vocabs, kwargs.get('min_f', {}))
@@ -470,8 +479,7 @@ def _get_dir(files):
 
 
 @export
-@register_reader(task='classify', name='default')
-class TSVSeqLabelReader(SeqLabelReader):
+class LineSeqLabelReader(SeqLabelReader):
 
     REPLACE = { "'s": " 's ",
                 "'ve": " 've ",
@@ -493,7 +501,8 @@ class TSVSeqLabelReader(SeqLabelReader):
             self.clean_fn = lambda x: x
         self.trim = trim
         self.truncate = truncate
-
+        self.has_header = bool(kwargs.get('has_header', False))
+        self.col_keys = kwargs.get('col_keys', [])
     SPLIT_ON = '[\t\s]+'
 
     @staticmethod
@@ -508,14 +517,14 @@ class TSVSeqLabelReader(SeqLabelReader):
             l = l.replace(k, v)
         return l.strip()
 
-    @staticmethod
-    def label_and_sentence(line, clean_fn):
-        label_text = re.split(TSVSeqLabelReader.SPLIT_ON, line)
-        label = label_text[0]
-        text = label_text[1:]
-        text = ' '.join(list(filter(lambda s: len(s) != 0, [clean_fn(w) for w in text])))
-        text = list(filter(lambda s: len(s) != 0, re.split('\s+', text)))
-        return label, text
+    def label_and_sentence(self, line, clean_fn, header):
+        """This function produces the sample from a line
+
+        :param line: The raw line
+        :param clean_fn: A clean function
+        :param header: An optional header
+        :return: A tuple of the label and text sample
+        """
 
     def build_vocab(self, files, **kwargs):
         """Take a directory (as a string), or an array of files and build a vocabulary
@@ -528,19 +537,17 @@ class TSVSeqLabelReader(SeqLabelReader):
         :return:
         """
         vocab_file = kwargs.get('vocab_file')
-        label_file = kwargs.get('label_file')
-        if label_file:
-            labels = Counter(chain(*_read_from_col(0, listify(label_file))))
-            self.label2index = {l: i for i, l in enumerate(labels)}
+        self.label2index = _try_read_labels(**kwargs)
 
         if _all_predefined_vocabs(self.vectorizers):
-            if not label_file:
-                logger.warning("If you provide a label file, we can skip tabulating the labels from the data!")
+            if not self.label2index:
+                logger.warning("If you provide a label file or list, we can skip tabulating the labels from the data!")
                 label_idx = 0
                 for file_name in files:
                     with codecs.open(file_name, encoding='utf-8', mode='r') as f:
+                        header = next(f) if self.has_header else None
                         for il, line in enumerate(f):
-                            label, _ = TSVSeqLabelReader.label_and_sentence(line, self.clean_fn)
+                            label, _ = self.label_and_sentence(line, self.clean_fn, header)
                             if label not in self.label2index:
                                 self.label2index[label] = label_idx
                                 label_idx += 1
@@ -549,11 +556,9 @@ class TSVSeqLabelReader(SeqLabelReader):
             logger.info("Skipping building vocabulary!")
             return {k: v.vocab for k, v in self.vectorizers.items()}, self.get_labels()
 
-        if vocab_file and label_file:
+        if vocab_file and self.label2index:
             _vocab_allowed(self.vectorizers)
             vocab = _build_vocab_for_col(0, listify(vocab_file), self.vectorizers)
-            labels = Counter(chain(*_read_from_col(0, listify(label_file))))
-            self.label2index = {l: i for i, l in enumerate(labels)}
             return vocab, self.get_labels()
 
         label_idx = len(self.label2index)
@@ -569,8 +574,9 @@ class TSVSeqLabelReader(SeqLabelReader):
             if file_name is None:
                 continue
             with codecs.open(file_name, encoding='utf-8', mode='r') as f:
+                header = next(f) if self.has_header else None
                 for il, line in enumerate(f):
-                    label, text = TSVSeqLabelReader.label_and_sentence(line, self.clean_fn)
+                    label, text = self.label_and_sentence(line, self.clean_fn, header)
                     if len(text) == 0:
                         continue
 
@@ -602,10 +608,13 @@ class TSVSeqLabelReader(SeqLabelReader):
         examples = []
         texts = []
         with codecs.open(filename, encoding='utf-8', mode='r') as f:
+            header = next(f) if self.has_header else None
             for il, line in enumerate(f):
-                label, text = TSVSeqLabelReader.label_and_sentence(line, self.clean_fn)
+                label, text = self.label_and_sentence(line, self.clean_fn, header)
                 texts.append(text)
                 if len(text) == 0:
+                    continue
+                if label not in self.label2index:
                     continue
                 y = self.label2index[label]
                 example_dict = dict()
@@ -629,10 +638,11 @@ class TSVSeqLabelReader(SeqLabelReader):
             sort_key += '_lengths'
     
         examples = []
-    
+
         with codecs.open(filename, encoding='utf-8', mode='r') as f:
+            header = next(f) if self.has_header else None
             for il, line in enumerate(f):
-                label, text = TSVSeqLabelReader.label_and_sentence(line, self.clean_fn)
+                label, text = self.label_and_sentence(line, self.clean_fn, header)
                 if len(text) == 0:
                     continue
                 y = self.label2index[label]
@@ -649,6 +659,318 @@ class TSVSeqLabelReader(SeqLabelReader):
                                                                         sort_key=sort_key),
                                              batchsz=batchsz, shuffle=shuffle, trim=self.trim, truncate=self.truncate)
 
+
+@export
+@register_reader(task='classify', name='default')
+class TSVSeqLabelReader(LineSeqLabelReader):
+
+    def label_and_sentence(self, line, clean_fn, header):
+        if header is None:
+            return self.label_and_sentence_no_header(line, clean_fn)
+        cols = line.strip().split('\t')
+        header = [h.strip() for h in header.split('\t')]
+        col_indices = [header.index(c) for c in self.col_keys]
+        label_sentence = [cols[c] for c in col_indices]
+        label, sentence = label_sentence
+        text = ' '.join(list(filter(lambda s: len(s) != 0, [clean_fn(w) for w in sentence.split()])))
+        return label, text
+
+    def label_and_sentence_no_header(self, line, clean_fn):
+        label_text = re.split(TSVSeqLabelReader.SPLIT_ON, line)
+        label = label_text[0]
+        text = label_text[1:]
+        text = ' '.join(list(filter(lambda s: len(s) != 0, [clean_fn(w) for w in text])))
+        text = TSVSeqLabelReader.splits(text)
+        return label, text
+
+
+class IndexPairLabelReader(SeqLabelReader):
+    """Shared vocabulary paired label reader
+
+    This is a TSV reader like TSVSeqLabelReader, but the vocabulary and vectorizer are used to produce a paired input.
+    This would be useful, for example, if the problem is e.g. NLI classification.
+    In this implementation, we assume that the user wishes to share the vocab and vectorizer for the 2 inputs, and
+    we use them to generate a key that is slightly different from the user key defined.  So for instance, if the user
+    defines the key as `x`, in the `TSVSeqLabelReader` this would produce a vector `x` and `x_lengths`.  In this reader,
+    however, the keys will be generated as `x[0]` and `x[0]_lengths` for the first item in the pair, and index `1` for
+    the second
+    """
+    REPLACE = {"'s": " 's ",
+               "'ve": " 've ",
+               "n't": " n't ",
+               "'re": " 're ",
+               "'d": " 'd ",
+               "'ll": " 'll ",
+               ",": " , ",
+               "!": " ! ",
+               }
+
+    def __init__(self, vectorizers, trim=False, truncate=False, **kwargs):
+        super().__init__()
+
+        self.label2index = {}
+        self.vectorizers = vectorizers
+        self.clean_fn = kwargs.get('clean_fn')
+        if self.clean_fn is None:
+            self.clean_fn = lambda x: x
+        self.trim = trim
+        self.truncate = truncate
+        self.use_token_type = bool(kwargs.get('use_token_type', False))
+        self.start_tokens_1 = kwargs.get('start_tokens_1', [])
+        self.start_tokens_2 = kwargs.get('start_tokens_2', [])
+        self.end_tokens_1 = kwargs.get('end_tokens_1', [])
+        self.end_tokens_2 = kwargs.get('end_tokens_2', [])
+
+        self.col_keys = kwargs.get('col_keys', ['pairID', 'sentence1', 'sentence2', 'gold_label'])
+        example_type = kwargs.get('example_type', 'single')
+        self.convert_to_example = self.convert_to_example_dual if example_type == 'dual' else self.convert_to_example_single
+        self.has_header = True
+
+    @staticmethod
+    def splits(text):
+        return list(filter(lambda s: len(s) != 0, re.split('\s+', text)))
+
+    @staticmethod
+    def do_clean(l):
+        l = l.lower()
+        l = re.sub(r"[^A-Za-z0-9(),!?\'\`]", " ", l)
+        for k, v in IndexPairLabelReader.REPLACE.items():
+            l = l.replace(k, v)
+        return l.strip()
+
+    def index_pair_label(self, line, clean_fn, header):
+        """Does the actual work of handling the file format abstractions.
+
+        :param line: A line of text fromn the file
+        :param clean_fn: A cleaning function to apply
+        :return: A tuple of the shape (index, text1, text2, label)
+        """
+
+    def build_vocab(self, files, **kwargs):
+        """Take a directory (as a string), or an array of files and build a vocabulary
+
+        Take in a directory or an array of individual files (as a list).  If the argument is
+        a string, it may be a directory, in which case, all files in the directory will be loaded
+        to form a vocabulary.
+
+        :param files: Either a directory (str), or an array of individual files
+        :return:
+        """
+        vocab_file = kwargs.get('vocab_file')
+        self.label2index = _try_read_labels(**kwargs)
+        if _all_predefined_vocabs(self.vectorizers):
+            if not self.label2index:
+                logger.warning("If you provide a label file, we can skip tabulating the labels from the data!")
+                label_idx = 0
+                for file_name in files:
+                    with codecs.open(file_name, encoding='utf-8', mode='r') as f:
+                        header = next(f) if self.has_header else None
+                        for il, line in enumerate(f):
+                            idx, text1, text2, label = self.index_pair_label(line, self.clean_fn, header)
+                            if label not in self.label2index:
+                                self.label2index[label] = label_idx
+                                label_idx += 1
+            else:
+                logger.info("Skipping label file and vocabulary!")
+            logger.info("Skipping building vocabulary!")
+            return {k: v.vocab for k, v in self.vectorizers.items()}, self.get_labels()
+
+        if vocab_file is not None and self.label2index:
+            _vocab_allowed(self.vectorizers)
+            vocab = _build_vocab_for_col(0, listify(vocab_file), self.vectorizers)
+            return vocab, self.get_labels()
+
+        label_idx = len(self.label2index)
+        if isinstance(files, str):
+            if os.path.isdir(files):
+                base = files
+                files = filter(os.path.isfile, [os.path.join(base, x) for x in os.listdir(base)])
+            else:
+                files = [files]
+        vocab = {k: Counter() for k in self.vectorizers.keys()}
+
+        for file_name in files:
+            if file_name is None:
+                continue
+            with codecs.open(file_name, encoding='utf-8', mode='r') as f:
+                header = next(f) if self.has_header else None
+                for il, line in enumerate(f):
+                    idx, text1, text2, label = self.index_pair_label(line, self.clean_fn, header)
+                    if len(text1) < 1 or len(text2) < 1:
+                        raise Exception(f"Invalid line @ {il}: [{line}]")
+
+                    for k, vectorizer in self.vectorizers.items():
+                        vocab_file = vectorizer.count(text1) + vectorizer.count(text2)
+                        vocab[k].update(vocab_file)
+
+                    if label not in self.label2index:
+                        self.label2index[label] = label_idx
+                        label_idx += 1
+                    if il > 0 and il % 1000 == 0:
+                        print(il)
+        vocab = _filter_vocab(vocab, kwargs.get('min_f', {}))
+        return vocab, self.get_labels()
+
+    def get_labels(self):
+        labels = [''] * len(self.label2index)
+        for label, index in self.label2index.items():
+            labels[index] = label
+        return labels
+
+    def load_text(self, filename, vocabs, batchsz, **kwargs):
+
+        shuffle = kwargs.get('shuffle', False)
+        sort_key = kwargs.get('sort_key', None)
+        if sort_key is not None and not sort_key.endswith('_lengths'):
+            sort_key += '_lengths'
+
+        examples = []
+        texts = []
+        with codecs.open(filename, encoding='utf-8', mode='r') as f:
+            header = next(f) if self.has_header else None
+            for il, line in enumerate(f):
+                idx, text1, text2, label = self.index_pair_label(line, self.clean_fn, header)
+                if len(text1) < 1 or len(text2) < 1:
+                    raise Exception(f"Invalid line @ {il}: [{line}]")
+                example_dict = self.convert_to_example(vocabs, text1, text2)
+                example_dict['y'] = self.label2index[label]
+                example_dict['idx'] = idx
+                examples.append(example_dict)
+
+        return baseline.data.ExampleDataFeed(baseline.data.DictExamples(examples,
+                                                                        do_shuffle=shuffle,
+                                                                        sort_key=sort_key),
+                                             batchsz=batchsz, shuffle=shuffle, trim=self.trim,
+                                             truncate=self.truncate), texts
+
+    def convert_to_example_dual(self, vocabs: Dict[str, str], text1: List[str], text2: List[str]) -> Dict[str, object]:
+        """Convert to 2 vectors, Useful for dual-encoder-style models
+
+        :param vocabs: Vocabs to use
+        :param text1: First text
+        :param text2: Second text
+        :return: An example dict
+        """
+        text = [text1, text2]
+        example_dict = dict()
+        for pair_idx in range(2):
+            for vec_name, vectorizer in self.vectorizers.items():
+                example_dict[f"{vec_name}[{pair_idx}]"], lengths = vectorizer.run(text[pair_idx], vocabs[vec_name])
+                if lengths is not None:
+                    example_dict[f'{vec_name}[{pair_idx}]_lengths'] = lengths
+        return example_dict
+
+    def convert_to_example_single(self, vocabs: Dict[str, str], text1: List[str], text2: List[str]) -> Dict[str, object]:
+        """Convert to a concatenated vector.  Useful for BERT-style models
+
+        :param vocabs: Vocabs to use
+        :param text1: First text
+        :param text2: Second text
+        :return: An example dict
+        """
+        example_dict = dict()
+
+        for key, vectorizer in self.vectorizers.items():
+            v = vocabs[key]
+            vec_1, lengths = vectorizer.run(text1, v)
+            vec_1 = vec_1[:lengths]
+            vec_2, lengths = vectorizer.run(text2, v)
+            vec_2 = vec_2[:lengths]
+
+            if self.start_tokens_1:
+                vec_1 = np.concatenate([np.array([v[x] for x in self.start_tokens_1]), vec_1])
+            if self.end_tokens_1:
+                vec_1 = np.concatenate([vec_1, np.array([v[x] for x in self.end_tokens_1])])
+
+            if self.start_tokens_2:
+                vec_2 = np.concatenate([np.array([v[x] for x in self.start_tokens_2]), vec_2])
+            if self.end_tokens_2:
+                vec_2 = np.concatenate([vec_2, np.array([v[x] for x in self.end_tokens_2])])
+            lengths_1 = vec_1.shape[-1]
+            lengths_2 = vec_2.shape[-1]
+            total_length = lengths_1 + lengths_2
+            vec = np.concatenate([vec_1, vec_2])
+            extend = vectorizer.mxlen - total_length
+
+            if extend < 0:
+                logger.warning(f"total length {total_length} exceeds allocated vectorizer width of {vectorizer.mxlen}")
+                vec = vec[:vectorizer.mxlen]
+            elif extend > 0:
+                vec = np.concatenate([vec, np.zeros(extend, vec.dtype)])
+
+            example_dict[key] = vec
+            if self.use_token_type:
+                token_type = np.zeros_like(vec)
+                token_type[lengths_1:] = 1
+                example_dict[f"{key}_tt"] = token_type
+        return example_dict
+
+    def load(self, filename, vocabs, batchsz, **kwargs):
+
+        shuffle = kwargs.get('shuffle', False)
+        sort_key = kwargs.get('sort_key', None)
+        if sort_key is not None and not sort_key.endswith('_lengths'):
+            sort_key += '_lengths'
+
+        examples = []
+        with open(filename, encoding='utf-8-sig', mode='r') as f:
+            header = next(f) if self.has_header else None
+            #f = list(f)
+            ##pg = create_progress_bar(len(f), 'tqdm')
+            for il, line in enumerate(f):
+                try:
+                    idx, text1, text2, label = self.index_pair_label(line, self.clean_fn, header)
+                    if len(text1) < 1 or len(text2) < 1:
+                        raise Exception(f"Invalid line @ {il}: [{line}]")
+                    example_dict = self.convert_to_example(vocabs, text1.split(), text2.split())
+                    if label not in self.label2index:
+                        continue
+                    example_dict['y'] = self.label2index[label]
+                    example_dict['idx'] = idx
+                    examples.append(example_dict)
+                except Exception as e:
+                    logger.warning(f'Skipping invalid line {il}')
+
+        return baseline.data.ExampleDataFeed(baseline.data.DictExamples(examples,
+                                                                        do_shuffle=shuffle,
+                                                                        sort_key=sort_key),
+                                             batchsz=batchsz, shuffle=shuffle, trim=self.trim, truncate=self.truncate)
+
+
+
+@export
+@register_reader(task='classify', name='tsv-paired-shared-vec')
+class TSVIndexPairLabelReader(IndexPairLabelReader):
+
+    def index_pair_label(self, line, clean_fn, header):
+        cols = line.strip().split('\t')
+        header = [h.strip() for h in header.split('\t')]
+        col_indices = [header.index(c) for c in self.col_keys]
+        # QQP files have some invalid samples
+        #if max(col_indices) > len(cols):
+        #    raise Exception(f"Error: {cols}")
+        index_pair_label_list = [cols[c] for c in col_indices]
+        index, text1, text2, label = index_pair_label_list
+        text1 = ' '.join(list(filter(lambda s: len(s) != 0, [clean_fn(w) for w in text1.split()])))
+        text2 = ' '.join(list(filter(lambda s: len(s) != 0, [clean_fn(w) for w in text2.split()])))
+        return index, text1, text2, label
+
+
+@export
+@register_reader(task='classify', name='jsonl-paired-shared-vec')
+class JSONLIndexPairLabelReader(IndexPairLabelReader):
+
+    def __init__(self, vectorizers, trim=False, truncate=False, **kwargs):
+        super().__init__(vectorizers, trim, truncate, **kwargs)
+        self.has_header = False
+
+    def index_pair_label(self, line, clean_fn, header):
+        cols = line.split('\t')
+        index_pair_label_list = [cols[c] for c in self.col_indices]
+        index, text1, text2, label = index_pair_label_list
+        text1 = ' '.join(list(filter(lambda s: len(s) != 0, [clean_fn(w) for w in text1.split()])))
+        text2 = ' '.join(list(filter(lambda s: len(s) != 0, [clean_fn(w) for w in text1.split()])))
+        return index, text1, text2, label
 
 @export
 @register_reader(task='lm', name='default')

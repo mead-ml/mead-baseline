@@ -122,7 +122,9 @@ class Task:
 
         :return:
         """
-        pass
+        backend = Backend(self.config_params.get('backend', 'tf'), kwargs)
+        backend.load(self.task_name())
+        return backend
 
     def __init__(self, mead_settings_config=None):
         super().__init__()
@@ -506,12 +508,6 @@ class ClassifierTask(Task):
     def task_name(cls):
         return 'classify'
 
-    def _create_backend(self, **kwargs):
-        backend = Backend(self.config_params.get('backend', 'tf'), kwargs)
-        backend.load(self.task_name())
-
-        return backend
-
     def _setup_task(self, **kwargs):
         super()._setup_task(**kwargs)
         if self.config_params.get('preproc', {}).get('clean', False) is True:
@@ -534,8 +530,7 @@ class ClassifierTask(Task):
 
         vocab, self.labels = self.reader.build_vocab(vocab_sources,
                                                      min_f=Task._get_min_f(self.config_params),
-                                                     vocab_file=self.dataset.get('vocab_file'),
-                                                     label_file=self.dataset.get('label_file'))
+                                                     **self.dataset)
         self.embeddings, self.feat2index = self._create_embeddings(embeddings_set, vocab, self.config_params['features'])
         baseline.save_vocabs(self.get_basedir(), self.feat2index)
 
@@ -598,18 +593,14 @@ class TaggerTask(Task):
     def task_name(cls):
         return 'tagger'
 
-    def _create_backend(self, **kwargs):
-        backend = Backend(self.config_params.get('backend', 'tf'), kwargs)
+    def _setup_task(self, **kwargs):
+        super()._setup_task(**kwargs)
         if 'preproc' not in self.config_params:
             self.config_params['preproc'] = {}
-        if backend.name == 'pytorch':
+        if self.backend.name == 'pytorch':
             self.config_params['preproc']['trim'] = True
         else:
             self.config_params['preproc']['trim'] = False
-
-        backend.load(self.task_name())
-
-        return backend
 
     def initialize(self, embeddings):
         self.dataset = DataDownloader(self.dataset, self.data_download_cache).download()
@@ -621,9 +612,7 @@ class TaggerTask(Task):
         if 'test_file' in self.dataset:
             vocab_sources.append(self.dataset['test_file'])
 
-        vocabs = self.reader.build_vocab(vocab_sources, min_f=Task._get_min_f(self.config_params),
-                                         vocab_file
-                                         =self.dataset.get('vocab_file'))
+        vocabs = self.reader.build_vocab(vocab_sources, min_f=Task._get_min_f(self.config_params), **self.dataset)
         self.embeddings, self.feat2index = self._create_embeddings(embeddings_set, vocabs, self.config_params['features'])
         baseline.save_vocabs(self.get_basedir(), self.feat2index)
 
@@ -753,7 +742,7 @@ class EncoderDecoderTask(Task):
             vocab_sources.append(self.dataset['test_file'])
         vocab1, vocab2 = self.reader.build_vocabs(vocab_sources,
                                                   min_f=Task._get_min_f(self.config_params),
-                                                  vocab_file=self.dataset.get('vocab_file'))
+                                                  **self.dataset)
 
         # To keep the config file simple, share a list between source and destination (tgt)
         features_src = []
@@ -864,13 +853,11 @@ class LanguageModelingTask(Task):
             reader_params['truncate'] = True
         return baseline.reader.create_reader(self.task_name(), self.vectorizers, self.config_params.get('preproc', {}).get('trim', False), **reader_params)
 
-    def _create_backend(self, **kwargs):
-        backend = Backend(self.config_params.get('backend', 'tf'), kwargs)
-        if backend.name == 'pytorch':
-            self.config_params.get('preproc', {})['trim'] = True
+    def _setup_task(self, **kwargs):
+        super()._setup_task(**kwargs)
 
-        backend.load(self.task_name())
-        return backend
+        if self.backend.name == 'pytorch':
+            self.config_params.get('preproc', {})['trim'] = True
 
     def initialize(self, embeddings):
         embeddings = read_config_file_or_json(embeddings, 'embeddings')
@@ -883,7 +870,7 @@ class LanguageModelingTask(Task):
             vocab_sources.append(self.dataset['test_file'])
         vocabs = self.reader.build_vocab(vocab_sources,
                                          min_f=Task._get_min_f(self.config_params),
-                                         vocab_file=self.dataset.get('vocab_file'))
+                                         **self.dataset)
         self.embeddings, self.feat2index = self._create_embeddings(embeddings_set, vocabs, self.config_params['features'])
         baseline.save_vocabs(self.get_basedir(), self.feat2index)
 

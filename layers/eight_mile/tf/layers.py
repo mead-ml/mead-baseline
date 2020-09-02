@@ -1,7 +1,8 @@
 import logging
 import tensorflow as tf
 import numpy as np
-from eight_mile.utils import listify, Offsets, wraps, get_version, is_sequence, transition_mask as transition_mask_np
+import os
+from eight_mile.utils import listify, Offsets, wraps, get_version, is_sequence, transition_mask as transition_mask_np, get_num_gpus_multiworker
 from typing import Optional, Union, List, Dict, Any, Tuple
 import contextlib
 import math
@@ -78,6 +79,37 @@ def TRAIN_FLAG():
     BASELINE_TF_TRAIN_FLAG = tf.compat.v1.placeholder_with_default(False, shape=(), name="TRAIN_FLAG")
     return BASELINE_TF_TRAIN_FLAG
 
+
+def create_distribute_strategy(strategy_name, num_gpus=-1, endpoint=None):
+    if strategy_name == 'tpu':
+        if not endpoint:
+            endpoint = os.environ.get('MEAD_TPU_ADDR')
+        elif endpoint == 'colab':
+            endpoint = 'grpc://' + os.environ['COLAB_TPU_ADDR']
+        if endpoint and not endpoint.startswith('grpc://'):
+            endpoint = f'grpc://{endpoint}'
+        resolver = tf.distribute.cluster_resolver.TPUClusterResolver(tpu=endpoint)
+        tf.config.experimental_connect_to_cluster(resolver)
+        # This is the TPU initialization code that has to be at the beginning.
+        tf.tpu.experimental.initialize_tpu_system(resolver)
+        for tpu in tf.config.list_logical_devices('TPU'):
+            LOGGER.info('Device [%s]', tpu.name)
+        strategy = tf.distribute.experimental.TPUStrategy(resolver)
+    else:
+        if strategy_name == "nccl":
+            strategy = tf.distribute.experimental.MultiWorkerMirroredStrategy(
+                communication=tf.distribute.experimental.CollectiveCommunication.NCCL)
+        elif strategy_name == 'mirror':
+            num_gpus = get_num_gpus_multiworker() if num_gpus < 1 else num_gpus
+            devices = ['/device:GPU:{}'.format(i) for i in range(num_gpus)]
+            strategy = tf.distribute.MirroredStrategy(devices)
+        else:
+            raise Exception(f"Unsupported strategy {strategy_name}")
+
+        for tpu in tf.config.list_logical_devices('GPU'):
+            LOGGER.info('Device [%s]', tpu.name)
+
+    return strategy
 
 def infer_lengths(tensor, axis=1):
     """Infer the lengths of an input based on the idea the Offsets.PAD was used as the padding token.
@@ -1823,10 +1855,16 @@ class EmbeddingsStack(tf.keras.layers.Layer):
         :return: A 3-d vector where the last dimension is the concatenated dimensions of all embeddings
         """
         all_embeddings_out = []
+        i = 0
         for k, embedding in self.embeddings.items():
             x = inputs[k]
-            embeddings_out = embedding(x)
+            # Its a hair faster to do this than using isinstance
+            if x.__class__ == tuple:
+                embeddings_out = embedding(*x)
+            else:
+                embeddings_out = embedding(x)
             all_embeddings_out.append(embeddings_out)
+            i += 1
         word_embeddings = self.reduction(all_embeddings_out)
         return self.dropout(word_embeddings, TRAIN_FLAG())
 

@@ -3,7 +3,7 @@ import numpy as np
 import time
 import tensorflow as tf
 from eight_mile.utils import listify, get_version
-from eight_mile.tf.layers import SET_TRAIN_FLAG, get_shape_as_list
+from eight_mile.tf.layers import SET_TRAIN_FLAG, get_shape_as_list, create_distribute_strategy
 from eight_mile.tf.optz import EagerOptimizer
 from baseline.utils import get_model_file, get_metric_cmp
 from baseline.model import create_model_for
@@ -20,6 +20,7 @@ def loss_with_state(model, h, x, y):
     example_loss = -tf.reduce_sum(one_hots * bt_x_v, axis=-1)
     loss = tf.reduce_mean(example_loss)
     return loss, h_out
+
 
 def loss_without_state(model, x, y):
     # Model will produce a null hidden state
@@ -38,8 +39,6 @@ class LanguageModelTrainerDistributedTf(Trainer):
     """
     def __init__(self, model_params, **kwargs):
         super().__init__()
-        self.gpus = int(kwargs.get('gpus', 1))
-
         if type(model_params) is dict:
             self.model = create_model_for('lm', **model_params)
         else:
@@ -55,8 +54,10 @@ class LanguageModelTrainerDistributedTf(Trainer):
                                                              directory=checkpoint_dir,
                                                              max_to_keep=5)
 
-        devices = ['/device:GPU:{}'.format(i) for i in range(self.gpus)]
-        self.strategy = tf.distribute.MirroredStrategy(devices)
+        strategy_type = kwargs.get('strategy_type', 'mirror')
+        gpus = int(kwargs.get('gpus', 1))
+        endpoint = kwargs.get('endpoint')
+        self.strategy = create_distribute_strategy(strategy_type, gpus, endpoint)
 
     def checkpoint(self):
         """This method saves a checkpoint

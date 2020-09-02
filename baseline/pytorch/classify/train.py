@@ -81,19 +81,20 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
         if output is not None and txts is not None:
             handle = open(output, "w")
 
-        for batch_dict in pg(loader):
-            example = self._make_input(batch_dict)
-            ys = example.pop('y')
-            pred = self.model(example)
-            loss = self.crit(pred, ys)
-            if handle is not None:
-                for p, y in zip(pred, ys):
-                    handle.write('{}\t{}\t{}\n'.format(" ".join(txts[line_number]), self.model.labels[p], self.model.labels[y]))
-                    line_number += 1
-            batchsz = self._get_batchsz(batch_dict)
-            total_loss += loss.item() * batchsz
-            total_norm += batchsz
-            _add_to_cm(cm, ys, pred)
+        with torch.no_grad():
+            for batch_dict in pg(loader):
+                example = self._make_input(batch_dict)
+                ys = example.pop('y')
+                pred = self.model(example)
+                loss = self.crit(pred, ys)
+                if handle is not None:
+                    for p, y in zip(pred, ys):
+                        handle.write('{}\t{}\t{}\n'.format(" ".join(txts[line_number]), self.model.labels[p], self.model.labels[y]))
+                        line_number += 1
+                batchsz = self._get_batchsz(batch_dict)
+                total_loss += loss.item() * batchsz
+                total_norm += batchsz
+                _add_to_cm(cm, ys, pred)
 
         metrics = cm.get_all_metrics()
         metrics['avg_loss'] = total_loss / float(total_norm)

@@ -7,7 +7,7 @@ import tensorflow as tf
 from eight_mile.confusion import ConfusionMatrix
 from baseline.progress import create_progress_bar
 from eight_mile.utils import listify, get_version
-from eight_mile.tf.layers import get_shape_as_list
+from eight_mile.tf.layers import get_shape_as_list, create_distribute_strategy
 from eight_mile.tf.optz import *
 from baseline.utils import get_model_file, get_metric_cmp
 from baseline.tf.tfy import SET_TRAIN_FLAG
@@ -53,8 +53,6 @@ class ClassifyTrainerDistributedTf(EpochReportingTrainer):
 
         """
         super().__init__()
-
-        self.gpus = int(kwargs.get('gpus', 1))
         if type(model_params) is dict:
             self.model = create_model_for('classify', **model_params)
         else:
@@ -63,14 +61,24 @@ class ClassifyTrainerDistributedTf(EpochReportingTrainer):
         self.optimizer = EagerOptimizer(loss, **kwargs)
         self.nsteps = kwargs.get('nsteps', six.MAXSIZE)
         self._checkpoint = tf.train.Checkpoint(optimizer=self.optimizer.optimizer, model=self.model)
-        checkpoint_dir = '{}-{}'.format("./tf-classify", os.getpid())
-
+        checkpoint_dir = kwargs.get('checkpoint_dir', '{}-{}'.format("./tf-classify", os.getpid()))
+        log.warning(f"Checkpoint dir {checkpoint_dir}")
         self.checkpoint_manager = tf.train.CheckpointManager(self._checkpoint,
                                                              directory=checkpoint_dir,
                                                              max_to_keep=5)
-        devices = ['/device:GPU:{}'.format(i) for i in range(self.gpus)]
-        self.strategy = tf.distribute.MirroredStrategy(devices)
+        strategy_type = kwargs.get('strategy_type', 'mirror')
+        self.eval_device = kwargs.get('eval_device', '/device:GPU:0')
+        if strategy_type == 'tpu':
+            self.eval_device = '/device:CPU:0'
+            gpus = 0
+        else:
+            gpus = int(kwargs.get('gpus', 1))
+        endpoint = kwargs.get('endpoint')
+        self.strategy = create_distribute_strategy(strategy_type, gpus, endpoint)
 
+    def reset_strategy_to_eval(self):
+        """TODO: this is pretty awkward, FIXME"""
+        self.strategy = tf.distribute.OneDeviceStrategy(self.eval_device)
 
     def _train(self, loader, steps=0, **kwargs):
         """Train an epoch of data using either the input loader or using `tf.dataset`
@@ -158,53 +166,61 @@ class ClassifyTrainerDistributedTf(EpochReportingTrainer):
         """
 
         strategy = self.strategy
-        cm = ConfusionMatrix(self.model.labels)
-        nc = len(self.model.labels)
+        #cm = ConfusionMatrix(self.model.labels)
+        #nc = len(self.model.labels)
 
         def _replica_test_step(inputs):
             features, y = inputs
             y = tf.cast(y, tf.int64)
-            per_replica_cm = tf.zeros((nc, nc), dtype=tf.int64)
+            ##per_replica_cm = tf.zeros((nc, nc), dtype=tf.int64)
             logits = self.model(features)
             y_ = tf.argmax(logits, axis=1, output_type=tf.int64)
-            indices = tf.stack((y, y_), axis=-1)
-            dense_shape = tf.cast(tf.shape(per_replica_cm), tf.int64)
-            sparse_ups = tf.SparseTensor(indices=indices, values=tf.ones(get_shape_as_list(indices)[0], dtype=tf.int64),
-                                         dense_shape=dense_shape)
-            per_replica_cm = tf.compat.v1.sparse_add(per_replica_cm, sparse_ups)
+            ##indices = tf.stack((y, y_), axis=-1)
+            ##dense_shape = tf.cast(tf.shape(per_replica_cm), tf.int64)
+            ##sparse_ups = tf.SparseTensor(indices=indices, values=tf.ones(get_shape_as_list(indices)[0], dtype=tf.int64),
+            ##                             dense_shape=dense_shape)
+            ##per_replica_cm = tf.compat.v1.sparse_add(per_replica_cm, sparse_ups)
+            per_replica_acc = tf.reduce_sum(tf.cast(y == y_, tf.float32))
             per_replica_loss = tf.compat.v1.losses.sparse_softmax_cross_entropy(labels=y, logits=logits)
             per_replica_batchsz = tf.cast(get_shape_as_list(y)[0], tf.float32)
             per_replica_report_loss = per_replica_loss * per_replica_batchsz
-            return per_replica_report_loss, per_replica_batchsz, per_replica_cm
+            return per_replica_report_loss, per_replica_batchsz, per_replica_acc ##, per_replica_cm
 
         @tf.function
         def _distributed_test_step(inputs):
-            per_replica_loss, per_replica_batchsz, per_replica_cm = strategy.experimental_run_v2(_replica_test_step, args=(inputs,))
+            per_replica_loss, per_replica_batchsz, per_replica_acc = strategy.experimental_run_v2(_replica_test_step, args=(inputs,))
             step_loss = strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_loss, axis=None)
             step_batchsz = strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_batchsz, axis=None)
-            step_cm = strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_cm, axis=None)
-            return step_loss, step_batchsz, step_cm
+            # step_cm
+            step_acc = strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_acc, axis=None)
+            return step_loss, step_batchsz, step_acc #step_cm
 
         with strategy.scope():
 
             total_loss = tf.Variable(0.0)
+            total_acc = tf.Variable(0.0)
             total_norm = tf.Variable(0.0)
-            verbose = kwargs.get("verbose", None)
 
             SET_TRAIN_FLAG(False)
             test_iter = iter(loader)
 
             for i in range(steps):
-                step_loss, step_batchsz, distributed_cm = _distributed_test_step(next(test_iter))
+                #step_loss, step_batchsz, distributed_cm = _distributed_test_step(next(test_iter))
+                step_loss, step_batchsz, distributed_acc = _distributed_test_step(next(test_iter))
+
                 total_loss.assign_add(step_loss)
                 total_norm.assign_add(step_batchsz)
-                cm._cm += distributed_cm.numpy()
+                total_acc.assign_add(distributed_acc)
+                #cm._cm += distributed_cm.numpy()
 
-            metrics = cm.get_all_metrics()
+            #metrics = cm.get_all_metrics()
             total_loss = total_loss.numpy()
             total_norm = total_norm.numpy()
+            total_acc = total_acc.numpy()
+            metrics = {}
             metrics['avg_loss'] = total_loss / float(total_norm)
-            verbose_output(verbose, cm)
+            metrics['acc'] = total_acc / float(total_norm)
+            #verbose_output(verbose, cm)
 
             return metrics
 
@@ -263,7 +279,7 @@ def fit_eager_distributed(model_params, ts, vs, es=None, **kwargs):
     :return: None
     """
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
-    verbose = kwargs.get('verbose', {'console': kwargs.get('verbose_console', False), 'file': kwargs.get('verbose_file', None)})
+    #verbose = kwargs.get('verbose', {'console': kwargs.get('verbose_console', False), 'file': kwargs.get('verbose_file', None)})
     epochs = int(kwargs.get('epochs', 20))
     model_file = get_model_file('classify', 'tf', kwargs.get('basedir'))
 
@@ -303,14 +319,14 @@ def fit_eager_distributed(model_params, ts, vs, es=None, **kwargs):
 
         if do_early_stopping is False:
             trainer.checkpoint()
-            trainer.model.save(model_file)
+            #trainer.model.save(model_file)
 
         elif early_stopping_cmp(test_metrics[early_stopping_metric], best_metric):
             last_improved = epoch
             best_metric = test_metrics[early_stopping_metric]
             print('New best %.3f' % best_metric)
             trainer.checkpoint()
-            trainer.model.save(model_file)
+            #trainer.model.save(model_file)
 
         elif (epoch - last_improved) > patience:
             print('Stopping due to persistent failures to improve')
@@ -322,9 +338,9 @@ def fit_eager_distributed(model_params, ts, vs, es=None, **kwargs):
     if es is not None:
         print('Reloading best checkpoint')
         trainer.recover_last_checkpoint()
-        trainer.strategy = tf.distribute.OneDeviceStrategy('/device:GPU:0')
+        trainer.reset_strategy_to_eval()
         test_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(es, lengths_key))
         test_dataset = test_dataset.batch(test_batchsz, drop_remainder=False)
         test_dataset = test_dataset.prefetch(NUM_PREFETCH)
         test_dataset = trainer.distribute(test_dataset)
-        trainer.test(test_dataset, reporting_fns, phase='Test', verbose=verbose, steps=len(es))
+        trainer.test(test_dataset, reporting_fns, phase='Test', verbose=False, steps=len(es))

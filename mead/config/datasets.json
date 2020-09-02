@@ -30,6 +30,25 @@
     "label": "AG"
   },
   {
+    "train_file": "snli_1.0/snli_1.0_train.txt",
+    "valid_file": "snli_1.0/snli_1.0_dev.txt",
+    "test_file": "snli_1.0/snli_1.0_test.txt",
+    "description": "[SNLI dataset](https://nlp.stanford.edu/projects/snli/)",
+    "label_list": ["entailment", "neutral", "contradiction"],
+    "download": "https://nlp.stanford.edu/projects/snli/snli_1.0.zip",
+    "label": "snli1"
+  },
+  {
+     "train_file": "snli_1.0_train.tok.txt",
+     "valid_file": "snli_1.0_dev.tok.txt",
+     "test_file": "snli_1.0_test.tok.txt",
+     "description": "[SNLI dataset](https://nlp.stanford.edu/projects/snli/) with bottom-up tokenization applied",
+     "label_list": ["entailment", "neutral", "contradiction"],
+     "download": "https://www.dropbox.com/s/ai6pcl11l8zdqlv/snli_1.0-tok.tar.gz?dl=1",
+     "sha1": "f72d58b3d4fb90d3204ead41a29bd0053948fa7b",
+     "label": "snli1-tok"
+  },
+  {
     "train_file": "train.conll",
     "valid_file": "dev.conll",
     "test_file": "test.conll",
@@ -128,12 +147,6 @@
     "download": "https://www.dropbox.com/s/99petw2kdab69cr/iwslt15-en-vi.tar.gz?dl=1",
     "sha1": "e58049478c7814a339c3bd8ec31c79ddacc029fb",
     "label": "iwslt15-en-vi"
-  },
-  {
-    "train_file": "/data/datasets/ner/wnut-gaz/wnut17train.conll",
-    "valid_file": "/data/datasets/ner/wnut-gaz/wnut17dev.conll",
-    "test_file": "/data/datasets/ner/wnut-gaz/wnut17test.conll",
-    "label": "wnut-gaz"
   },
   {
     "train_file": "train",

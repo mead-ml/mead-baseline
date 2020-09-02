@@ -41,7 +41,7 @@ class TensorFlowEmbeddings(tf.keras.layers.Layer):
     def get_weights(self):
         raise NotImplementedError
 
-    def encode(self, x):
+    def encode(self, *x):
         """This defines the computation of the sub-graph for this object and returns the output node
 
         :return:
@@ -79,6 +79,7 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
         # you need to look in code. We are just not passing kwargs for now.
         super().__init__(trainable=trainable, name=name, dtype=dtype, **kwargs)
         self.vsz = kwargs.get("vsz")
+        self.padding_idx = kwargs.get('padding_idx', Offsets.PAD)
         self.dsz = kwargs.get("dsz")
         self.finetune = kwargs.get("finetune", trainable)
         self.scope = kwargs.get("scope", "LUT")
@@ -111,22 +112,27 @@ class LookupTableEmbeddings(TensorFlowEmbeddings):
             )
         super().build(input_shape)
 
-    def encode(self, x):
+    def _embed_w_dropout(self, x):
+        # The ablation table (4) in https://arxiv.org/pdf/1708.02182.pdf shows this has a massive impact
+        embedding_w_dropout = self.drop(self.W, training=TRAIN_FLAG())
+        word_embeddings = tf.nn.embedding_lookup(embedding_w_dropout, x)
+        return word_embeddings
+
+    def encode(self, *x):
         """Build a simple Lookup Table and set as input `x` if it exists, or `self.x` otherwise.
 
         :param x: An optional input sub-graph to bind to this operation or use `self.x` if `None`
         :return: The sub-graph output
         """
-        self.x = x
-        e0 = tf.tensor_scatter_nd_update(
-            self.W, tf.constant(Offsets.PAD, dtype=tf.int32, shape=[1, 1]), tf.zeros(shape=[1, self.dsz])
-        )
-        with tf.control_dependencies([e0]):
-            # The ablation table (4) in https://arxiv.org/pdf/1708.02182.pdf shows this has a massive impact
-            embedding_w_dropout = self.drop(self.W, training=TRAIN_FLAG())
-            word_embeddings = tf.nn.embedding_lookup(embedding_w_dropout, self.x)
-
-        return word_embeddings
+        self.x = x[0]
+        if self.padding_idx is not None:
+            e0 = tf.tensor_scatter_nd_update(
+                self.W, tf.constant(self.padding_idx, dtype=tf.int32, shape=[1, 1]), tf.zeros(shape=[1, self.dsz])
+            )
+            with tf.control_dependencies([e0]):
+                return self._embed_w_dropout(self.x)
+        else:
+            return self._embed_w_dropout(self.x)
 
     def get_vsz(self):
         return self.vsz
@@ -182,8 +188,8 @@ class CharConvEmbeddings(TensorFlowEmbeddings):
     def dsz(self):
         return self.outsz
 
-    def encode(self, x):
-        self.x = x
+    def encode(self, *x):
+        self.x = x[0]
 
         mxlen = tf.shape(self.x)[1]
         mxwlen = tf.shape(self.x)[-1]
@@ -224,9 +230,9 @@ class CharLSTMEmbeddings(TensorFlowEmbeddings):
             name=f"{self.name}/blstm",
         )
 
-    def encode(self, x):
-        self.x = x
-        shape = tf.shape(x)
+    def encode(self, *x):
+        self.x = x[0]
+        shape = tf.shape(self.x)
         B = shape[0]
         T = shape[1]
         W = shape[2]
@@ -283,9 +289,9 @@ class CharTransformerEmbeddings(TensorFlowEmbeddings):
             name=f"{self.name}/transformer",
         )
 
-    def encode(self, x):
-        self.x = x
-        shape = tf.shape(x)
+    def encode(self, *x):
+        self.x = x[0]
+        shape = tf.shape(self.x)
         B = shape[0]
         T = shape[1]
         W = shape[2]
@@ -370,11 +376,11 @@ class PositionalLookupTableEmbeddings(SinusoidalPositionalMixin, LookupTableEmbe
         self.scale = math.sqrt(self.get_dsz())
         self.dropout = tf.keras.layers.Dropout(kwargs.get("dropout", 0.0))
 
-    def encode(self, x):
-        x = super().encode(x) * tf.constant(self.scale)
-        T = tf.shape(x)[1]
+    def encode(self, *x):
+        y = super().encode(*x) * tf.constant(self.scale)
+        T = tf.shape(y)[1]
         pos = self.positional(T)
-        return self.dropout(x + pos, training=TRAIN_FLAG())
+        return self.dropout(y + pos, training=TRAIN_FLAG())
 
 
 class LearnedPositionalLookupTableEmbeddings(LearnedPositionalMixin, LookupTableEmbeddings):
@@ -382,11 +388,11 @@ class LearnedPositionalLookupTableEmbeddings(LearnedPositionalMixin, LookupTable
         super().__init__(name=name, **kwargs)
         self.dropout = tf.keras.layers.Dropout(kwargs.get("dropout", 0.0))
 
-    def encode(self, x):
-        x = super().encode(x)
-        T = tf.shape(x)[1]
+    def encode(self, *x):
+        y = super().encode(*x)
+        T = tf.shape(y)[1]
         pos = self.positional(T)
-        return self.dropout(x + pos, training=TRAIN_FLAG())
+        return self.dropout(y + pos, training=TRAIN_FLAG())
 
 
 class LearnedPositionalLookupTableEmbeddingsWithBias(LearnedPositionalMixin, LookupTableEmbeddings):
@@ -409,12 +415,12 @@ class LearnedPositionalLookupTableEmbeddingsWithBias(LearnedPositionalMixin, Loo
             trainable=self.finetune,
         )
 
-    def encode(self, x):
-        x = super().encode(x)
-        T = tf.shape(x)[1]
+    def encode(self, *x):
+        y = super().encode(*x)
+        T = tf.shape(y)[1]
         pos = self.positional(T)
-        x = x + pos + self.bias
-        return x
+        y = y + pos + self.bias
+        return y
 
 
 class PositionalCharConvEmbeddings(SinusoidalPositionalMixin, CharConvEmbeddings):
@@ -423,11 +429,11 @@ class PositionalCharConvEmbeddings(SinusoidalPositionalMixin, CharConvEmbeddings
         self.scale = math.sqrt(self.get_dsz())
         self.dropout = tf.keras.layers.Dropout(kwargs.get("dropout", 0.0))
 
-    def encode(self, x):
-        x = super().encode(x) * tf.constant(self.scale)
-        T = tf.shape(x)[1]
+    def encode(self, *x):
+        y = super().encode(*x) * tf.constant(self.scale)
+        T = tf.shape(y)[1]
         pos = self.positional(T)
-        return self.dropout(x + pos, training=TRAIN_FLAG())
+        return self.dropout(y + pos, training=TRAIN_FLAG())
 
 
 class LearnedPositionalCharConvEmbeddings(LearnedPositionalMixin, CharConvEmbeddings):
@@ -435,11 +441,11 @@ class LearnedPositionalCharConvEmbeddings(LearnedPositionalMixin, CharConvEmbedd
         super().__init__(name=name, **kwargs)
         self.dropout = tf.keras.layers.Dropout(kwargs.get("dropout", 0.0))
 
-    def encode(self, x):
-        x = super().encode(x)
-        T = tf.shape(x)[1]
+    def encode(self, *x):
+        y = super().encode(*x)
+        T = tf.shape(y)[1]
         pos = self.positional(T)
-        return self.dropout(x + pos, training=TRAIN_FLAG())
+        return self.dropout(y + pos, training=TRAIN_FLAG())
 
 
 class PositionalCharLSTMEmbeddings(SinusoidalPositionalMixin, CharLSTMEmbeddings):
@@ -449,11 +455,11 @@ class PositionalCharLSTMEmbeddings(SinusoidalPositionalMixin, CharLSTMEmbeddings
         self.scale = math.sqrt(self.get_dsz())
         self.dropout = tf.keras.layers.Dropout(kwargs.get("dropout", 0.0))
 
-    def encode(self, x):
-        x = super().encode(x) * tf.constant(self.scale)
-        T = tf.shape(x)[1]
+    def encode(self, *x):
+        y = super().encode(*x) * tf.constant(self.scale)
+        T = tf.shape(y)[1]
         pos = self.positional(T)
-        return self.dropout(x + pos, training=TRAIN_FLAG())
+        return self.dropout(y + pos, training=TRAIN_FLAG())
 
 
 class LearnedPositionalCharLSTMEmbeddings(LearnedPositionalMixin, CharLSTMEmbeddings):
@@ -462,8 +468,8 @@ class LearnedPositionalCharLSTMEmbeddings(LearnedPositionalMixin, CharLSTMEmbedd
         super().__init__(trainable=trainable, name=name, dtype=dtype, **kwargs)
         self.dropout = tf.keras.layers.Dropout(kwargs.get("dropout", 0.0))
 
-    def encode(self, x):
-        x = super().encode(x)
-        T = tf.shape(x)[1]
+    def encode(self, *x):
+        y = super().encode(*x)
+        T = tf.shape(y)[1]
         pos = self.positional(T)
-        return self.dropout(x + pos, training=TRAIN_FLAG())
+        return self.dropout(y + pos, training=TRAIN_FLAG())

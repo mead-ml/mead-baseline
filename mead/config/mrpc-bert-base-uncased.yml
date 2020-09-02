@@ -1,0 +1,38 @@
+# 89.2 average of F1/acc @ epoch 7 on a single run
+backend: pytorch
+basedir: ./mrpc-bert-base-uncased
+batchsz: 16
+dataset: mrpc
+features:
+- embeddings:
+    word_embed_type: learned-positional
+    token_type_vsz: 2
+    label: bert-base-uncased-npz
+    type: tlm-words-embed-pooled
+    reduction: sum-layer-norm
+    layer_norms_after: true
+    finetune: true
+    dropout: 0.1
+    mlm: true
+  name: bert
+  vectorizer:
+    mxlen: 128
+    label: bert-base-uncased-no-cls
+loader:
+  reader_type: tsv-paired-shared-vec
+  use_token_type: true
+  col_keys: ["#1 ID", "#1 String", "#2 String", "Quality"]
+  start_tokens_1: ["[CLS]"]
+model:
+  model_type: fine-tune-paired
+task: classify
+train:
+  early_stopping_metric: avg_f1_acc
+  epochs: 10
+  warmup_steps: 70
+  eta: 5.0e-5
+  optim: adamw
+  weight_decay: 1.0e-8
+  lr_scheduler_type: [warmup_linear, cosine]
+  decay_steps: 2300
+unif: 0.1
