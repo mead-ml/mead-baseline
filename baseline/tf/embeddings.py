@@ -34,12 +34,13 @@ class TensorFlowEmbeddingsMixin(tf.keras.layers.Layer):
             return type(self)(name=self.name, weights=self.init_embed._weights, **self._state)
         raise Exception('You must initialize `weights` in order to use this method')
 
-    def call(self, x):
-        if x is None:
-            x = self.create_placeholder(self.name)
-        self.x = x
+    def call(self, *x):
 
-        return super().encode(x)
+        if x[0] is None:
+            x[0] = self.create_placeholder(self.name)
+        self.x = x[0]
+
+        return super().encode(*x)
 
     @classmethod
     def create_placeholder(cls, name):
@@ -196,8 +197,8 @@ class TransformerLMEmbeddings(TensorFlowEmbeddings):
     def dsz(self):
         return self.embeddings.output_dim
 
-    def embed(self, input):
-        return self.embeddings({'x': input})
+    def embed(self, input, token_type):
+        return self.embeddings({'x': input, 'tt': token_type})
 
     def init_embed(self, **kwargs):
         # If you are using BERT, you probably want to use either
@@ -208,12 +209,12 @@ class TransformerLMEmbeddings(TensorFlowEmbeddings):
 
         embeddings = {'x': x_embedding}
         # This is for BERT support when we are using 2 features
-        #token_type_vsz = kwargs.get('token_type_vsz')
-        #if token_type_vsz:
-        #    tt_embedding = LookupTableEmbeddings(vsz=token_type_vsz, dsz=self.dsz, name='tt')
-        #    embeddings['tt'] = tt_embedding
+        token_type_vsz = kwargs.get('token_type_vsz')
+        if token_type_vsz:
+            tt_embedding = LookupTableEmbeddings(vsz=token_type_vsz, dsz=self.d_model, name='tt', padding_idx=None)
+            embeddings['tt'] = tt_embedding
         # For bert, make sure this is `sum-layer-norm`
-        reduction = kwargs.get('embeddings_reduction', kwargs.get('reduction', 'concat'))
+        reduction = kwargs.get('embeddings_reduction', kwargs.get('reduction', 'sum'))
         embeddings_dropout = kwargs.get('embeddings_dropout', 0.1)
         self.embeddings = EmbeddingsStack(embeddings, dropout_rate=embeddings_dropout, reduction=reduction)
 
@@ -237,13 +238,13 @@ class TransformerLMEmbeddings(TensorFlowEmbeddings):
         self.mlm = kwargs.get('mlm', False)
         self.finetune = kwargs.get('finetune', True)
 
-    def encode(self, x):
+    def encode(self, x, token_type=None):
         # the following line masks out the attention to padding tokens
         input_mask = tf.expand_dims(tf.expand_dims(tf.cast(tf.not_equal(x, 0), tf.float32), 1), 1)
         # A causal LM should have a subsequent mask; and a masked LM should have no mask
         if not self.mlm:
             input_mask = tf.multiply(input_mask, subsequent_mask(x.shape[1]))
-        embedding = self.embed(x)
+        embedding = self.embed(x, token_type)
         embedding = self.proj_to_dsz(embedding)
         transformer_out = self.transformer((embedding, input_mask))
         z = self.get_output(x, transformer_out)
@@ -264,12 +265,17 @@ class TransformerLMEmbeddings(TensorFlowEmbeddings):
     @classmethod
     def load(cls, embeddings, **kwargs):
         c = cls("tlm-words-embed", **kwargs)
+
         # pass random data through to initialize the graph
         B = 1
         T = 8
         data_sample = tf.ones([B, T], dtype=tf.int32)
+        token_type_vsz = kwargs.get('token_type_vsz')
+        if token_type_vsz:
+            _ = c(data_sample, data_sample)
+        else:
         #data_sample_tt = tf.zeros([B, T], dtype=tf.int32)
-        _ = c(data_sample)
+            _ = c(data_sample)
         load_tlm_npz(c, embeddings)
         return c
 

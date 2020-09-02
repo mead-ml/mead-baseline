@@ -286,6 +286,11 @@ class AddonDownloader(Downloader):
                 return path_to_save
         raise RuntimeError("the file [{}] is not in cache and can not be downloaded".format(file_loc))
 
+def _update_md(dataset_description_map, download_dir):
+    updated = {k: v for k, v in dataset_description_map.items()}
+    if download_dir:
+        updated.update({k: os.path.join(download_dir, dataset_description_map[k]) for k in dataset_description_map.keys() if k.endswith('_file')})
+    return updated
 
 @export
 class DataDownloader(Downloader):
@@ -305,8 +310,8 @@ class DataDownloader(Downloader):
                                    self.enc_dec) and not self.cache_ignore:
                 download_dir = dcache[dload_bundle]
                 logger.info("files for {} found in cache, not downloading".format(dload_bundle))
-                return {k: os.path.join(download_dir, self.dataset_desc[k]) for k in self.dataset_desc
-                        if k.endswith("_file")}
+                updated = _update_md(self.dataset_desc, download_dir)
+                return updated
             else:  # try to download the bundle and unzip
                 if not validate_url(dload_bundle):
                     raise RuntimeError("can not download from the given url")
@@ -321,15 +326,14 @@ class DataDownloader(Downloader):
                             raise RuntimeError("The sha1 of the downloaded file does not match with the provided one")
                     dcache.update({dload_bundle: download_dir})
                     write_json(dcache, os.path.join(self.data_download_cache, DATA_CACHE_CONF))
-                    return {k: os.path.join(download_dir, self.dataset_desc[k]) for k in self.dataset_desc
-                            if k.endswith("_file")}
+                    updated = _update_md(self.dataset_desc, download_dir)
+                    return updated
         else:  # we have download links to every file or they exist
+            updated = _update_md(self.dataset_desc, None)
             if not self.enc_dec:
-                return {k: SingleFileDownloader(self.dataset_desc[k], self.data_download_cache).download()
-                        for k in self.dataset_desc if k.endswith("_file") and self.dataset_desc[k]}
-            else:
-                return {k: self.dataset_desc[k] for k in self.dataset_desc if k.endswith("_file")}
-                # these files can not be downloaded because there's a post processing on them.
+                updated.update({k: SingleFileDownloader(self.dataset_desc[k], self.data_download_cache).download()
+                        for k in self.dataset_desc if k.endswith("_file") and self.dataset_desc[k]})
+            return updated
 
 
 @export

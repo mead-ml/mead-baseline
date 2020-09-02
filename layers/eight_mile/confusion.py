@@ -196,6 +196,9 @@ class ConfusionMatrix:
         """
         return self.get_r_k()
 
+    def get_bin_avg_f1_acc(self):
+        return 0.5 * (self.get_acc() + self.get_f(1))
+
     def get_all_metrics(self):
         """Make a map of metrics suitable for reporting, keyed by metric name
 
@@ -207,6 +210,7 @@ class ConfusionMatrix:
             metrics["precision"] = self.get_precision()[1]
             metrics["recall"] = self.get_recall()[1]
             metrics["f1"] = self.get_f(1)
+            metrics["avg_f1_acc"] = self.get_bin_avg_f1_acc()
             metrics["mcc"] = self.get_mcc()
         else:
             metrics["mean_precision"] = self.get_mean_precision()

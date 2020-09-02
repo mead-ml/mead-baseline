@@ -635,6 +635,73 @@ class FineTuneModelClassifier(ClassifierModelBase):
         return self.output_layer(stacked)
 
 
+@register_model(task='classify', name='fine-tune-paired')
+class FineTunePairedClassifierModel(FineTuneModelClassifier):
+
+    """Fine-tuning model for pairs
+
+    This model encodes a pair as a single utterance using some encoding scheme defined in
+    ``_convert_pair`` which is fed directly into the fine-tuning model.
+
+    For BERT, this simply encodes the input key pair as a single utterance while building
+    a token-type vector.
+
+    For the input, we will assume that the vectorizer will be producing a start token and an end token.
+    We will simply remove the start token from the second sentence and concatenate
+    [CLS] this is sentence one [SEP]
+
+    [CLS] this is sentence two [SEP]
+
+
+    """
+    def _convert_pair(self, key, batch_dict, example_dict):
+
+        toks = batch_dict[key]
+        token_type_key = f"{key}_tt"
+        #eager = tf.executing_eagerly()
+        target_key = key  # if eager else f"{key}:0"
+        tt = batch_dict.get(token_type_key)
+        if tt is not None:
+            #if not eager:
+            #    raise Exception("We arent currently supporting non-eager mode with token_types")
+            #else:
+            example_dict[target_key] = (toks, tt)
+        else:
+            example_dict[target_key] = toks
+
+    def call(self, inputs):
+        inputs_for_model = {}
+        for key in self.embeddings.keys():
+            self._convert_pair(key, inputs, inputs_for_model)
+        base_layers = self.embeddings(inputs_for_model)
+        stacked = self.stack_model(base_layers)
+        return self.output_layer(stacked)
+
+    #def make_input(self, batch_dict, train=False):
+    #    """Transform a `batch_dict` into a TensorFlow `feed_dict`
+    #
+    #    :param batch_dict: (``dict``) A dictionary containing all inputs to the embeddings for this model
+    #    :param train: (``bool``) Are we training.  Defaults to False
+    #    :return:
+    #    """
+    #    y = batch_dict.get('y', None)
+    #    if not tf.executing_eagerly():
+    #        batch_for_model = new_placeholder_dict(train)
+    #
+    #        for key in self.embeddings.keys():
+    #            self._convert_pair(key, batch_dict, batch_for_model)
+    #
+    #        if y is not None:
+    #            batch_for_model[self.y] = fill_y(len(self.labels), y)
+    #
+    #    else:
+    #        SET_TRAIN_FLAG(train)
+    #        batch_for_model = {}
+    #        for key in self.embeddings.keys():
+    #            self._convert_pair(key, batch_dict, batch_for_model)
+    #    return batch_for_model
+
+
 @register_model(task='classify', name='composite')
 class CompositePoolingModel(EmbedPoolStackClassifier):
     """Fulfills pooling contract by aggregating pooling from a set of sub-models and concatenates each
