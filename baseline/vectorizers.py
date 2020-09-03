@@ -708,7 +708,7 @@ class BPELabelDict1DVectorizer(BPEVectorizer1D):
             elif t == '<eos>':
                 yield t_label
             else:
-                subwords = self.tokenizer.apply([t_word])[0].split()
+                subwords = self.tokenizer.apply([self.transform_fn(t_word)])[0].split()
                 subwords = [Offsets.VALUES[Offsets.PAD]] * len(subwords)
                 subwords[0] = t_label
                 for x in subwords:
