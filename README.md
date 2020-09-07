@@ -46,7 +46,7 @@ This first installs `mead-layers` AKA 8 mile, a tiny layers API containing PyTor
 ## A Note About Versions
 
 Deep Learning Frameworks are evolving quickly and changes are not always
-backwards compatible. We recommend recent versions of whichever framework is being used underneath.  We currently run on TF versions between 1.13 and 2.2, and we recommend using at least TF 2.1.
+backwards compatible. We recommend recent versions of whichever framework is being used underneath.  We currently run on TF versions between 1.13 and 2.3, and we recommend using at least TF 2.1.
 The PyTorch backend requires at least version 1.3.0, though we recommend using a more recent version.
 
 ## Citing
