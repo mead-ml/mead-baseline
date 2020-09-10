@@ -177,11 +177,11 @@ class DependencyParserModelBase(nn.Module, DependencyParserModel):
         numpy_to_tensor = bool(kwargs.get('numpy_to_tensor', True))
         examples, perm_idx = self.make_input(batch_dict, perm=True, numpy_to_tensor=numpy_to_tensor)
         with torch.no_grad():
-            arcs, rels = self(examples).exp()
-            arcs = unsort_batch(arcs, perm_idx)
-            rels = unsort_batch(rels, perm_idx)
+            arcs, rels = self(examples)
+            arcs = unsort_batch(arcs.exp(), perm_idx)
+            rels = unsort_batch(rels.exp(), perm_idx)
 
-        return rels
+        return arcs, rels
 
     def predict(self, batch_dict: Dict[str, TensorDef], **kwargs):
         """Raw prediction, for non-fancy decoding, use `def decode()` instead
