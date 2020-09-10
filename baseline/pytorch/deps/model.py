@@ -13,8 +13,8 @@ logger = logging.getLogger('baseline')
 class ArcLabelLoss(nn.Module):
     def __init__(self):
         super().__init__()
-        self.loss = nn.CrossEntropyLoss(ignore_index=-1)
-
+        self.arc_loss = nn.CrossEntropyLoss(ignore_index=-1)
+        self.label_loss = nn.CrossEntropyLoss(ignore_index=0)
     def forward(self, arcs_pred, arcs_gold, labels_pred, labels_gold):
         # First, trim gold labels to length of the input
         B = labels_pred.shape[0]
@@ -24,10 +24,8 @@ class ArcLabelLoss(nn.Module):
         flat_labels_gold = labels_gold[:, :T].contiguous().view(-1)
         flat_arcs_gold = arcs_gold[:, :T].contiguous().view(-1)
         flat_labels_pred = flat_labels_pred[torch.arange(len(flat_arcs_gold)), flat_arcs_gold]
-
-        arc_loss = self.loss(flat_arcs_pred, flat_arcs_gold)
-        rel_loss = self.loss(flat_labels_pred, flat_labels_gold)
-
+        arc_loss = self.arc_loss(flat_arcs_pred, flat_arcs_gold)
+        rel_loss = self.label_loss(flat_labels_pred, flat_labels_gold)
         return arc_loss + rel_loss
 
 

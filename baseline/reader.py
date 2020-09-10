@@ -430,7 +430,7 @@ class MultiLabelSeqPredictReader:
                     vocabs[k].update(vocab_example)
 
         vocabs = _filter_vocab(vocabs, kwargs.get('min_f', {}))
-        base_offset = len(Offsets.VALUES)
+        base_offset = len(Offsets.VALUES) - 1  # Dont put UNK in labels
 
         for l in labels.keys():
             labels[l].pop(Offsets.VALUES[Offsets.PAD], None)
