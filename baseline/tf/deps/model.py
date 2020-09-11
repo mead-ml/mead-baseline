@@ -235,6 +235,7 @@ class DependencyParserModelBase(tf.keras.Model, DependencyParserModel):
         model._record_state(embeddings, **kwargs)
         model.pdrop_value = kwargs.get('dropout', 0.5)
         model.labels = labels["labels"]
+        model.punct = labels["labels"].get("punct", Offsets.PAD)
         model.create_layers(embeddings, **kwargs)
         return model
 

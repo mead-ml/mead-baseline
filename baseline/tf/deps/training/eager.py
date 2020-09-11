@@ -5,12 +5,12 @@ import logging
 import tensorflow as tf
 
 from baseline.progress import create_progress_bar
-from eight_mile.utils import listify, get_version
+from eight_mile.utils import listify, get_version, Offsets
 from eight_mile.metrics import LCM, UCM, LAS, UAS
 from eight_mile.tf.layers import get_shape_as_list
 from eight_mile.tf.optz import *
 from baseline.utils import get_model_file, get_metric_cmp
-from baseline.tf.tfy import SET_TRAIN_FLAG
+from baseline.tf.tfy import SET_TRAIN_FLAG, masked_fill
 from baseline.train import EpochReportingTrainer, register_trainer, register_training_func
 from baseline.utils import verbose_output
 from baseline.model import create_model_for
@@ -106,6 +106,7 @@ class DependencyParserTrainerEagerTf(EpochReportingTrainer):
 
         self.optimizer = EagerOptimizer(arc_label_loss, **kwargs)
         self.nsteps = kwargs.get('nsteps', six.MAXSIZE)
+        self.punct_eval = kwargs.get('punct_eval', False)
         self._checkpoint = tf.train.Checkpoint(optimizer=self.optimizer.optimizer, model=self.model)
         checkpoint_dir = '{}-{}'.format("./tf-deps", os.getpid())
 
@@ -203,6 +204,9 @@ class DependencyParserTrainerEagerTf(EpochReportingTrainer):
 
             for i in range(B):
                 for m in metrics:
+                    if self.punct_eval is False:
+                        labels_gold_trimmed[i] = masked_fill(labels_gold_trimmed[i],
+                                                             labels_gold_trimmed[i] == self.model.punct, Offsets.PAD)
                     m.add(greedy_heads_pred[i], heads_gold_trimmed[i], greedy_labels_pred[i], labels_gold_trimmed[i])
 
         metrics = {m.name: m.score for m in metrics}

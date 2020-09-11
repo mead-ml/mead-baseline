@@ -65,7 +65,9 @@ class DependencyParserModelBase(nn.Module, DependencyParserModel):
         model.dropin_values = kwargs.get('dropin', {})
         model.lengths_key = kwargs.get('lengths_key')
         model.gpu = not bool(kwargs.get('nogpu', False))
-        model.labels = labels
+        model.labels = labels["labels"]
+        model.punct = labels["labels"].get("punct", Offsets.PAD)
+
         #model.idx2head = {v: int(k) for k, v in model.labels['heads'].items() if k not in Offsets.VALUES}
         #model.idx2head[0] = -1
         model.create_layers(embeddings, **kwargs)
@@ -235,7 +237,7 @@ class BiAffineDependencyParser(DependencyParserModelBase):
         self.rel_h = self.init_proj(self.pool_model.output_dim, output_dim_rels, **kwargs)
         self.rel_d = self.init_proj(self.pool_model.output_dim, output_dim_rels, **kwargs)
         self.arc_attn = self.init_biaffine(self.arc_h.output_dim, 1, True, False)
-        self.rel_attn = self.init_biaffine(self.rel_h.output_dim, len(self.labels['labels']), True, True)
+        self.rel_attn = self.init_biaffine(self.rel_h.output_dim, len(self.labels), True, True)
         self.primary_key = self.lengths_key.split('_')[0]
 
     def init_embed(self, embeddings: Dict[str, TensorDef], **kwargs) -> BaseLayer:

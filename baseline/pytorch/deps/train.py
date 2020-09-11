@@ -24,6 +24,7 @@ class DependencyParserTrainerPyTorch(EpochReportingTrainer):
         super().__init__()
         if type(model) is dict:
             model = create_model_for('deps', **model)
+        self.punct_eval = kwargs.get('punct_eval', False)
         self.clip = float(kwargs.get('clip', 5))
         self.labels = model.labels
         self.gpus = int(kwargs.get('gpus', 1))
@@ -77,6 +78,8 @@ class DependencyParserTrainerPyTorch(EpochReportingTrainer):
 
                 for i in range(batchsz):
                     for m in metrics:
+                        if self.punct_eval is False:
+                            labels_gold_trimmed[i].masked_fill_(labels_gold_trimmed[i] == self.model.punct, Offsets.PAD)
                         m.add(greedy_heads_pred[i], heads_gold_trimmed[i], greedy_labels_pred[i], labels_gold_trimmed[i])
 
         metrics = {m.name: m.score for m in metrics} 
