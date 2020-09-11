@@ -15,6 +15,7 @@ class ArcLabelLoss(nn.Module):
         super().__init__()
         self.arc_loss = nn.CrossEntropyLoss(ignore_index=-1)
         self.label_loss = nn.CrossEntropyLoss(ignore_index=0)
+
     def forward(self, arcs_pred, arcs_gold, labels_pred, labels_gold):
         # First, trim gold labels to length of the input
         B = labels_pred.shape[0]
