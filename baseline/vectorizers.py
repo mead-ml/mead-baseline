@@ -1192,11 +1192,11 @@ class WordpieceSecondaryFeatureDict1DVectorizer(WordpieceVectorizer1D):
 
     """
     def __init__(self, **kwargs):
-        super().__init__(kwargs.get('transform_fn'),
-                         kwargs.get('emit_begin_tok',
-                                    [Offsets.VALUES[Offsets.PAD]]),
-                         kwargs.get('emit_end_tok',
-                                    [Offsets.VALUES[Offsets.PAD]]))
+        kwargs['emit_begin_tok'] = kwargs.get('emit_begin_tok', [Offsets.VALUES[Offsets.PAD]])
+        kwargs['emit_end_tok'] = kwargs.get('emit_end_tok', [Offsets.VALUES[Offsets.PAD]])
+        super().__init__(**kwargs)
+        self.pad_value = kwargs.get('pad_value', Offsets.VALUES[Offsets.PAD])
+
         self.field = kwargs.get('fields', kwargs.get('field'))
         self.primary_feature = kwargs.get('primary_feature', 'text')
         self.apply_all_subwords = kwargs.get('apply_all_subwords', True)
@@ -1218,7 +1218,7 @@ class WordpieceSecondaryFeatureDict1DVectorizer(WordpieceVectorizer1D):
                 if self.apply_all_subwords:
                     subwords = [t_feature] * len(subwords)
                 else:
-                    subwords = [Offsets.VALUES[Offsets.PAD]] * len(subwords)
+                    subwords = [self.pad_value] * len(subwords)
                     subwords[0] = t_feature
                 for x in subwords:
                     yield x
@@ -1233,9 +1233,9 @@ class WordpieceSecondaryFeatureDict1DVectorizer(WordpieceVectorizer1D):
 class WordpieceLabelDict1DVectorizer(WordpieceVectorizer1D):
 
     def __init__(self, **kwargs):
-        super().__init__(kwargs.get('transform_fn'),
-                         kwargs.get('emit_begin_tok', [Offsets.VALUES[Offsets.PAD]]),
-                         kwargs.get('emit_end_tok', [Offsets.VALUES[Offsets.PAD]]))
+        kwargs['emit_begin_tok'] = kwargs.get('emit_begin_tok', [Offsets.VALUES[Offsets.PAD]])
+        kwargs['emit_end_tok'] = kwargs.get('emit_end_tok', [Offsets.VALUES[Offsets.PAD]])
+        super().__init__(**kwargs)
         self.field = kwargs.get('fields', kwargs.get('field', 'text'))
         self.label = kwargs.get('label', 'label')
 
@@ -1258,6 +1258,32 @@ class WordpieceLabelDict1DVectorizer(WordpieceVectorizer1D):
 
     def run(self, tokens, vocab):
         return super().run(tokens, vocab)
+
+
+
+@export
+@register_vectorizer(name='wordpiece-int-identity-dict1d')
+class WordpieceIntIdentityDict1DVectorizer(WordpieceSecondaryFeatureDict1DVectorizer):
+    """We need to split on the primary feature but use a secondary feature's value
+
+    Some options concern what to do with the non primary index.  For a label, this would typically
+    be a `<PAD>` token in the non first position of a sub-word, but that may not be desirable here
+
+    To support bot ways, there is an optional `apply_all_subwords`, which defaults to True.  If this
+    is turned on, it means that we want to use the feature value of
+
+
+    """
+    def __init__(self, **kwargs):
+        kwargs['emit_begin_tok'] = kwargs.get('emit_begin_tok', [0])
+        kwargs['emit_end_tok'] = kwargs.get('emit_end_tok', [0])
+        kwargs['pad_value'] = kwargs.get('pad_value', 0)
+        super().__init__(**kwargs)
+
+    def _next_element(self, tokens, vocab):
+        for atom in self.iterable(tokens):
+            yield int(atom)
+
 
 
 @register_vectorizer(name='wordpiece-dict1d')

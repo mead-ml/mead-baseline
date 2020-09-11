@@ -265,6 +265,9 @@ class BiAffineDependencyParser(DependencyParserModelBase):
         """
         hsz = kwargs.get('rnnsz', kwargs.get('hsz', 800))
         layers = kwargs.get('layers', 3)
+        #if layers == 0:
+        #    logger.warning("No layers given. Setting up pass-through model")
+        #    return WithoutLength(PassThru(input_dim))
         return BiLSTMEncoderSequence(input_dim, hsz, layers, self.pdrop, batch_first=True)
 
 
@@ -288,7 +291,10 @@ class BiAffineDependencyParser(DependencyParserModelBase):
         """
 
         lengths = inputs.get("lengths")
+        #T = inputs[self.primary_key].shape[1]
+        #mask = sequence_mask(lengths, max_len=T).to(lengths.device)
         mask = sequence_mask(lengths).to(lengths.device)
+
         embedded = self.embeddings(inputs)
         embedded = (embedded, lengths)
         pooled = self.pool_model(embedded)
