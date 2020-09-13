@@ -253,7 +253,7 @@ class BiAffineDependencyParser(DependencyParserModelBase):
           with an additional dimension which is the hidden representation of the input
         """
         reduction = kwargs.get('embeddings_reduction', 'concat')
-        embeddings_dropout = float(kwargs.get('embeddings_dropout', 0.0))
+        embeddings_dropout = float(kwargs.get('embeddings_dropout', self.pdrop))
         return EmbeddingsStack(embeddings, embeddings_dropout, reduction=reduction)
 
     def init_pool(self, input_dim: int, **kwargs) -> BaseLayer:
@@ -278,7 +278,7 @@ class BiAffineDependencyParser(DependencyParserModelBase):
         :param kwargs:
         :return: A stacking operation (or None)
         """
-        return WithDropout(Dense(input_dim, output_dim), pdrop=self.pdrop)
+        return WithDropout(Dense(input_dim, output_dim, activation=kwargs.get('activation', 'relu')), pdrop=self.pdrop)
 
     def init_biaffine(self, input_dim: int, output_dim: int, bias_x: bool, bias_y: bool):
         return BilinearAttention(input_dim, output_dim, bias_x, bias_y)
