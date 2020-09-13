@@ -265,9 +265,9 @@ class BiAffineDependencyParser(DependencyParserModelBase):
         """
         hsz = kwargs.get('rnnsz', kwargs.get('hsz', 800))
         layers = kwargs.get('layers', 3)
-        #if layers == 0:
-        #    logger.warning("No layers given. Setting up pass-through model")
-        #    return WithoutLength(PassThru(input_dim))
+        if layers == 0:
+            logger.warning("No layers given. Setting up pass-through model")
+            return WithoutLength(PassThru(input_dim))
         return BiLSTMEncoderSequence(input_dim, hsz, layers, self.pdrop, batch_first=True)
 
 
@@ -291,9 +291,9 @@ class BiAffineDependencyParser(DependencyParserModelBase):
         """
 
         lengths = inputs.get("lengths")
-        #T = inputs[self.primary_key].shape[1]
-        #mask = sequence_mask(lengths, max_len=T).to(lengths.device)
-        mask = sequence_mask(lengths).to(lengths.device)
+        Tin = inputs[self.primary_key].shape[1]
+        mask = sequence_mask(lengths, max_len=Tin).to(lengths.device)
+        #mask = sequence_mask(lengths).to(lengths.device)
 
         embedded = self.embeddings(inputs)
         embedded = (embedded, lengths)
@@ -302,6 +302,8 @@ class BiAffineDependencyParser(DependencyParserModelBase):
         arcs_d = self.arc_d(pooled)
         rels_h = self.rel_h(pooled)
         rels_d = self.rel_d(pooled)
+        Tout = arcs_h.shape[1]
+        mask = mask[:, :Tout]
         score_arcs = self.arc_attn(arcs_d, arcs_h, mask)
         score_rels = self.rel_attn(rels_d, rels_h, mask.unsqueeze(1)).permute(0, 2, 3, 1)
         return score_arcs, score_rels
