@@ -7,12 +7,10 @@ import tensorflow as tf
 from baseline.progress import create_progress_bar
 from eight_mile.utils import listify, get_version, Offsets
 from eight_mile.metrics import LCM, UCM, LAS, UAS
-from eight_mile.tf.layers import get_shape_as_list
+from eight_mile.tf.layers import SET_TRAIN_FLAG, get_shape_as_list, autograph_options, masked_fill
 from eight_mile.tf.optz import *
 from baseline.utils import get_model_file, get_metric_cmp
-from baseline.tf.tfy import SET_TRAIN_FLAG, masked_fill
 from baseline.train import EpochReportingTrainer, register_trainer, register_training_func
-from baseline.utils import verbose_output
 from baseline.model import create_model_for
 import numpy as np
 
@@ -148,6 +146,8 @@ class DependencyParserTrainerEagerTf(EpochReportingTrainer):
             batchsz = len(y[0])
             report_loss = loss * batchsz
             return report_loss, batchsz
+
+        #with autograph_options({"function_optimization": False, "layout_optimizer": False}):
 
         for inputs in pg(loader):
             step_report_loss, step_batchsz = _train_step(inputs)

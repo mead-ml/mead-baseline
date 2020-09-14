@@ -731,7 +731,7 @@ class DependencyParserTask(Task):
         if 'preproc' not in self.config_params:
             self.config_params['preproc'] = {}
         #if backend.name == 'pytorch':
-        #    self.config_params['preproc']['trim'] = True
+        self.config_params['preproc']['trim'] = True
         #else:
         #    self.config_params['preproc']['trim'] = False
 

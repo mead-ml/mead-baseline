@@ -38,7 +38,14 @@ features:
    embeddings:
      label: [glove-6B-100]
      dropin: 0.1
-
+ - name: word2
+   vectorizer:
+     type: dict1d
+     fields: text
+     emit_begin_tok: "<GO>"
+   embeddings:
+     label: [senna]
+     dropin: 0.1
  - name: pos
    vectorizer:
      type: dict1d
@@ -47,14 +54,14 @@ features:
      emit_begin_tok: "<GO>"
    embeddings:
      dsz: 100
- - name: char
-   vectorizer:
-     type: dict2d
-     emit_begin_tok: "<GO>"
-   embeddings:
-     dsz: 50
-     lstmsz: 100
-     type: char-lstm
+# - name: char
+#   vectorizer:
+#     type: dict2d
+#     emit_begin_tok: "<GO>"
+#   embeddings:
+#     dsz: 50
+#     lstmsz: 100
+#     type: char-lstm
 
 train: 
   epochs: 265

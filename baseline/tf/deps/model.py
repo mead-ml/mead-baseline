@@ -284,33 +284,6 @@ class BiAffineDependencyParser(DependencyParserModelBase):
         self.rel_attn = self.init_biaffine(self.rel_h.output_dim, len(self.labels), True, True)
         self.primary_key = self.lengths_key.split('_')[0]
 
-    def init_embed(self, embeddings: Dict[str, TensorDef], **kwargs) -> BaseLayer:
-        """This method creates the "embedding" layer of the inputs, with an optional reduction
-
-        :param embeddings: A dictionary of embeddings
-
-        :Keyword Arguments: See below
-        * *embeddings_reduction* (defaults to `concat`) An operator to perform on a stack of embeddings
-        * *embeddings_dropout = float(kwargs.get('embeddings_dropout', 0.0))
-
-        :return: The output of the embedding stack followed by its reduction.  This will typically be an output
-          with an additional dimension which is the hidden representation of the input
-        """
-        reduction = kwargs.get('embeddings_reduction', 'concat')
-        embeddings_dropout = float(kwargs.get('embeddings_dropout', 0.0))
-        return EmbeddingsStack(embeddings, embeddings_dropout, reduction=reduction)
-
-    def init_pool(self, input_dim: int, **kwargs) -> BaseLayer:
-        """Produce a pooling operation that will be used in the model
-
-        :param input_dim: The input dimension size
-        :param kwargs:
-        :return: A pooling operation
-        """
-        hsz = kwargs.get('rnnsz', kwargs.get('hsz', 800))
-        layers = kwargs.get('layers', 3)
-        return BiLSTMEncoderSequence(input_dim, hsz, layers, self.pdrop, batch_first=True, variational=True)
-
 
     def init_proj(self, output_dim: int, **kwargs) -> BaseLayer:
         """Produce a stacking operation that will be used in the model
@@ -319,7 +292,7 @@ class BiAffineDependencyParser(DependencyParserModelBase):
         :param kwargs:
         :return: A stacking operation (or None)
         """
-        return WithDropout(tf.keras.layers.Dense(output_dim, activation=kwargs.get('activation', 'leaky_relu')), pdrop=self.pdrop_value)
+        return WithDropout(tf.keras.layers.Dense(output_dim, activation=get_activation(kwargs.get('activation', 'leaky_relu'))), pdrop=self.pdrop_value)
 
     def init_biaffine(self, input_dim: int, output_dim: int, bias_x: bool, bias_y: bool):
         return BilinearAttention(input_dim, output_dim, bias_x, bias_y)
@@ -349,7 +322,7 @@ class BiAffineDependencyParser(DependencyParserModelBase):
         """
         hsz = kwargs.get('rnnsz', kwargs.get('hsz', 800))
         layers = kwargs.get('layers', 3)
-        return BiLSTMEncoderSequence(input_dim, hsz, layers, self.pdrop_value)
+        return BiLSTMEncoderSequence(input_dim, hsz, layers, self.pdrop_value) #, variational=True)
 
     def init_stacked(self, input_dim: int, **kwargs) -> BaseLayer:
         """Produce a stacking operation that will be used in the model
