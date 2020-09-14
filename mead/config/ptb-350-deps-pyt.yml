@@ -54,14 +54,14 @@ features:
      emit_begin_tok: "<GO>"
    embeddings:
      dsz: 100
-# - name: char
-#   vectorizer:
-#     type: dict2d
-#     emit_begin_tok: "<GO>"
-#   embeddings:
-#     dsz: 50
-#     lstmsz: 100
-#     type: char-lstm
+ - name: char
+   vectorizer:
+     type: dict2d
+     emit_begin_tok: "<GO>"
+   embeddings:
+     dsz: 50
+     lstmsz: 100
+     type: char-lstm
 
 train: 
   epochs: 265
