@@ -268,7 +268,7 @@ class BiAffineDependencyParser(DependencyParserModelBase):
         if layers == 0:
             logger.warning("No layers given. Setting up pass-through model")
             return WithoutLength(PassThru(input_dim))
-        return BiLSTMEncoderSequence(input_dim, hsz, layers, self.pdrop, batch_first=True)
+        return BiLSTMEncoderSequence(input_dim, hsz, layers, self.pdrop, batch_first=True, initializer="ortho")
 
 
     def init_proj(self, input_dim: int, output_dim: int, **kwargs) -> BaseLayer:
@@ -278,7 +278,8 @@ class BiAffineDependencyParser(DependencyParserModelBase):
         :param kwargs:
         :return: A stacking operation (or None)
         """
-        return WithDropout(Dense(input_dim, output_dim, activation=kwargs.get('activation', 'relu')), pdrop=self.pdrop)
+        return WithDropout(Dense(input_dim, output_dim, activation=kwargs.get('activation', 'leaky_relu'), initializer="ortho"),
+                           pdrop=self.pdrop)
 
     def init_biaffine(self, input_dim: int, output_dim: int, bias_x: bool, bias_y: bool):
         return BilinearAttention(input_dim, output_dim, bias_x, bias_y)

@@ -319,7 +319,7 @@ class BiAffineDependencyParser(DependencyParserModelBase):
         :param kwargs:
         :return: A stacking operation (or None)
         """
-        return WithDropout(tf.keras.layers.Dense(output_dim), pdrop=self.pdrop_value)
+        return WithDropout(tf.keras.layers.Dense(output_dim, activation=kwargs.get('activation', 'leaky_relu')), pdrop=self.pdrop_value)
 
     def init_biaffine(self, input_dim: int, output_dim: int, bias_x: bool, bias_y: bool):
         return BilinearAttention(input_dim, output_dim, bias_x, bias_y)

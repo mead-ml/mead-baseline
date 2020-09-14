@@ -1930,7 +1930,7 @@ class WithoutLength(nn.Module):
 class WithDropout(nn.Module):
     """Wrapper for any layer that surrounds it with dropout"""
 
-    def __init__(self, layer: nn.Module, pdrop: float = 0.5, variational=False):
+    def __init__(self, layer: nn.Module, pdrop: float = 0.5, variational=False, batch_first=False):
         """Create a dropout wrapper around the given layer
 
         :param layer: Some sort of layer
@@ -1938,7 +1938,7 @@ class WithDropout(nn.Module):
         """
         super().__init__()
         self.layer = layer
-        self.dropout = VariationalDropout(pdrop) if variational else nn.Dropout(pdrop)
+        self.dropout = VariationalDropout(pdrop, batch_first=batch_first) if variational else nn.Dropout(pdrop)
         self.output_dim = self.layer.output_dim if hasattr(self.layer, "output_dim") else 0
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
@@ -3774,8 +3774,8 @@ class BilinearAttention(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self):
-        #nn.init.zeros_(self.weight)
-        nn.init.orthogonal_(self.weight)
+        nn.init.zeros_(self.weight)
+        #nn.init.orthogonal_(self.weight)
 
     def forward(self, x, y, mask):
         r"""
