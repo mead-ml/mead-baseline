@@ -60,8 +60,8 @@ features:
      emit_begin_tok: "<GO>"
    embeddings:
      dsz: 50
-     lstmsz: 100
-     type: char-lstm
+     wsz: 50
+     type: char-conv
 
 train: 
   epochs: 265
