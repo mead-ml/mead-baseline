@@ -1,0 +1,65 @@
+batchsz: 10
+basedir: deps-pyt
+task: deps
+backend: pytorch
+preproc: 
+#  mxlen: 100
+  clean: true
+dataset: deps-sample 
+
+loader:
+    reader_type: default
+    named_fields:
+       "1": text
+       "6": heads
+       "7": labels
+       "-1": y
+    label_vectorizers:
+      heads:
+        emit_begin_tok: 0
+        type: int-identity-dict1d
+        fields: heads
+#        mxlen: 100
+      labels:
+        emit_begin_tok: "<PAD>"
+        type: dict1d
+        fields: labels
+#        mxlen: 100
+
+
+unif: 0.25
+model: 
+  model_type: default
+  dropin:
+    word: 0.1
+
+features:
+ - name: word
+   vectorizer:
+     type: dict1d
+     fields: text
+     transform: baseline.lowercase
+     emit_begin_tok: "<GO>"
+   embeddings:
+     label: [glove-6B-100, senna]
+ - name: char
+   vectorizer:
+     type: dict2d
+     emit_begin_tok: "<GO>"
+   embeddings:
+     dsz: 30
+     wsz: 30
+     cfiltsz: [3]
+     type: char-conv
+
+train: 
+  epochs: 250
+  optim: adam
+  patience: 20
+  #mom: 0.9
+  eta: 0.002
+  early_stopping_metric: uas
+  verbose:
+    console: True
+    file: deps-cm.csv
+

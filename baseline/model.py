@@ -221,6 +221,57 @@ class ClassifierModel:
 
 
 @export
+class DependencyParserModel:
+    """Text classifier
+
+    Provide an interface to DNN dependency parsers
+    """
+    task_name = 'deps'
+
+    def __init__(self, *args, **kwargs):
+        super().__init__()
+
+    def save(self, basename):
+        """Save this model out
+
+        :param basename: Name of the model, not including suffixes
+        :return: None
+        """
+
+    @classmethod
+    def load(cls, basename, **kwargs):
+        """Load the model from a basename, including directory
+
+        :param basename: Name of the model, not including suffixes
+        :param kwargs: Anything that is useful to optimize experience for a specific framework
+        :return: A newly created model
+        """
+
+    def predict(self, batch_dict):
+        """Parse a batch of text with whatever features the model can use from the batch_dict.
+
+        :param batch_dict: Features for prediction
+
+        :return: A tuple of the arcs (heads) and rels
+        """
+
+    def decode(self, batch_dict, **kwargs):
+        """Decode a parse.  This finds the best arcs and rels using some criteria or method
+
+        :param batch_dict:
+        :param kwargs:
+        :return:
+        """
+
+    def get_labels(self):
+        """Return a dictionary of mappings from class to label.  The primary keys are 'heads' and 'labels'
+
+        :return: A list of the labels for the decision
+        """
+        pass
+
+
+@export
 class TaggerModel:
     """Structured prediction classifier, AKA a tagger
 

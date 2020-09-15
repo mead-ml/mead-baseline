@@ -1,0 +1,76 @@
+batchsz: 200
+basedir: ptb-350-deps-pyt
+task: deps
+backend: pytorch
+preproc: {}
+
+dataset: ptb-350-deps
+loader:
+    reader_type: default
+    named_fields:
+       "1": text
+       "3": pos
+       "6": heads
+       "7": labels
+       "-1": y
+    label_vectorizers:
+      heads:
+        emit_begin_tok: 0
+        type: int-identity-dict1d
+        fields: heads
+      labels:
+        emit_begin_tok: "<PAD>"
+        type: dict1d
+        fields: labels
+
+
+unif: 0.25
+model: 
+  model_type: default
+
+features:
+ - name: word
+   vectorizer:
+     type: dict1d
+     fields: text
+     transform: baseline.lowercase
+     emit_begin_tok: "<GO>"
+   embeddings:
+     label: [glove-6B-100]
+     dropin: 0.1
+ - name: word2
+   vectorizer:
+     type: dict1d
+     fields: text
+     emit_begin_tok: "<GO>"
+   embeddings:
+     label: [senna]
+     dropin: 0.1
+ - name: pos
+   vectorizer:
+     type: dict1d
+     fields: pos
+     dropin: 0.1
+     emit_begin_tok: "<GO>"
+   embeddings:
+     dsz: 100
+ - name: char
+   vectorizer:
+     type: dict2d
+     emit_begin_tok: "<GO>"
+   embeddings:
+     dsz: 50
+     wsz: 50
+     type: char-conv
+
+train: 
+  epochs: 265
+  optim: adam
+  patience: 40
+  beta2: 0.9
+  decay_rate: 0.75
+  decay_steps: 50000
+  lr_scheduler_type: exponential
+  eta: 0.002
+  early_stopping_metric: uas
+
