@@ -1791,6 +1791,7 @@ class VectorSequenceAttention(nn.Module):
         attended = torch.tanh(self.W_c(attended))
         return attended
 
+
 def dot_product_attention_weights(query_t: torch.Tensor,
                                   keys_bth: torch.Tensor,
                                   keys_mask: torch.Tensor) -> torch.Tensor:
@@ -1969,7 +1970,7 @@ class WithoutLength(nn.Module):
 class WithDropout(nn.Module):
     """Wrapper for any layer that surrounds it with dropout"""
 
-    def __init__(self, layer: nn.Module, pdrop: float = 0.5, variational=False):
+    def __init__(self, layer: nn.Module, pdrop: float = 0.5, variational=False, batch_first=False):
         """Create a dropout wrapper around the given layer
 
         :param layer: Some sort of layer
@@ -1977,7 +1978,7 @@ class WithDropout(nn.Module):
         """
         super().__init__()
         self.layer = layer
-        self.dropout = VariationalDropout(pdrop) if variational else nn.Dropout(pdrop)
+        self.dropout = VariationalDropout(pdrop, batch_first=batch_first) if variational else nn.Dropout(pdrop)
         self.output_dim = self.layer.output_dim if hasattr(self.layer, "output_dim") else 0
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
@@ -4307,3 +4308,43 @@ def tie_weight(to_layer, from_layer):
     """
     to_layer.weight = from_layer.weight
 
+
+class BilinearAttention(nn.Module):
+
+    def __init__(self, in_hsz, out_hsz=1, bias_x=True, bias_y=True):
+        super().__init__()
+
+        self.in_hsz = in_hsz
+        self.out_hsz = out_hsz
+        self.bias_x = bias_x
+        self.bias_y = bias_y
+        self.weight = nn.Parameter(torch.Tensor(out_hsz, in_hsz + bias_x, in_hsz + bias_y))
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        nn.init.zeros_(self.weight)
+        #nn.init.orthogonal_(self.weight)
+
+    def forward(self, x, y, mask):
+        r"""
+        Args:
+            x: ``[B, T, H]``.
+            y: ``[B, T, H]``.
+        Returns:
+            ~torch.Tensor:
+                A scoring tensor of shape ``[batch_size, n_out, seq_len, seq_len]``.
+                If ``n_out=1``, the dimension for ``n_out`` will be squeezed automatically.
+        """
+        if self.bias_x:
+            ones = torch.ones(x.shape[:-1] + (1,), device=x.device)
+            x = torch.cat([x, ones], -1)
+        if self.bias_y:
+            ones = torch.ones(x.shape[:-1] + (1,), device=y.device)
+            y = torch.cat([y, ones], -1)
+        x = x.unsqueeze(1)
+        y = y.unsqueeze(1)
+        u = x @ self.weight
+        s = u @ y.transpose(-2, -1)
+        s = s.squeeze(1)
+        s = s.masked_fill((mask == MASK_FALSE).unsqueeze(1), -1e9)
+        return s

@@ -54,9 +54,11 @@ def identity_trans_fn(x):
 @export
 class AbstractVectorizer(Vectorizer):
 
-    def __init__(self, transform_fn=None):
+    def __init__(self, transform_fn=None, emit_begin_tok=[], emit_end_tok=[]):
         super().__init__()
         self.transform_fn = identity_trans_fn if transform_fn is None else transform_fn
+        self.emit_begin_tok = listify(emit_begin_tok)
+        self.emit_end_tok = listify(emit_end_tok)
 
     def iterable(self, tokens):
         """Produce an iterable of segmented tokens from an iterable input
@@ -69,8 +71,14 @@ class AbstractVectorizer(Vectorizer):
         :param tokens: An iterable of tokens
         :return: Generator for atoms
         """
+        for t in self.emit_begin_tok:
+            yield t
+
         for tok in tokens:
             yield self.transform_fn(tok)
+
+        for t in self.emit_end_tok:
+            yield t
 
     def _next_element(self, tokens, vocab):
         """This function transforms non "atomic" input to its elements and yields integer values
@@ -108,7 +116,7 @@ class AbstractVectorizer(Vectorizer):
 class Token1DVectorizer(AbstractVectorizer):
 
     def __init__(self, **kwargs):
-        super().__init__(kwargs.get('transform_fn'))
+        super().__init__(kwargs.get('transform_fn'), kwargs.get('emit_begin_tok', []), kwargs.get('emit_end_tok', []))
         self.time_reverse = kwargs.get('rev', False)
         self.mxlen = kwargs.get('mxlen', -1)
         self.max_seen = 0
@@ -214,9 +222,12 @@ class Dict1DVectorizer(Token1DVectorizer):
         self.delim = kwargs.get('token_delim', '@@')
 
     def iterable(self, tokens):
-        return _token_iterator(self, tokens)
-
-
+        for t in self.emit_begin_tok:
+            yield t
+        for t in _token_iterator(self, tokens):
+            yield t
+        for t in self.emit_end_tok:
+            yield t
 @export
 @register_vectorizer(name='single-item-dict1d')
 class SingleItemDict1DVectorizer(Token1DVectorizer):
@@ -226,15 +237,51 @@ class SingleItemDict1DVectorizer(Token1DVectorizer):
         self.field = kwargs.get('field', kwargs.get('fields', 'text'))
 
     def iterable(self, tokens):
+        for t in self.emit_begin_tok:
+            yield t
         for tok in tokens:
             yield tok[self.field]
+        for t in self.emit_end_tok:
+            yield t
+
+
+@export
+@register_vectorizer(name='int-identity-dict1d')
+class IntIdentityDict1DVectorizer(Token1DVectorizer):
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.field = kwargs.get('field', kwargs.get('fields', 'text'))
+
+    def iterable(self, tokens):
+        for t in self.emit_begin_tok:
+            yield t
+        for tok in tokens:
+            yield tok[self.field]
+        for t in self.emit_end_tok:
+            yield t
+
+    def _next_element(self, tokens, vocab):
+        """This function transforms non "atomic" input to its elements and yields integer values
+
+        Because this function requires a vocab, it cannot be used during counting (which is responsible for producing
+        the text atomic words (or subwords) that may be used for vocabulary tabulation
+        :param tokens: An iterable of tokens
+        :param vocab:
+        :return: Generator for integer values that can be directly used in Embeddings
+        """
+        for value in self.iterable(tokens):
+            if value == -1:
+                break
+            yield int(value)
+
 
 
 @export
 class AbstractCharVectorizer(AbstractVectorizer):
 
-    def __init__(self, transform_fn=None):
-        super().__init__(transform_fn)
+    #def __init__(self, transform_fn=None, emit_begin_tok=[], emit_end_tok=[]):
+    #    super().__init__(transform_fn, emit_begin_tok, emit_end_tok)
 
     def _next_element(self, tokens, vocab):
         OOV = vocab['<UNK>']
@@ -256,7 +303,7 @@ class AbstractCharVectorizer(AbstractVectorizer):
 class Char2DVectorizer(AbstractCharVectorizer):
 
     def __init__(self, **kwargs):
-        super().__init__(kwargs.get('transform_fn'))
+        super().__init__(kwargs.get('transform_fn'), kwargs.get('emit_begin_tok', []), kwargs.get('emit_end_tok', []))
         self.mxlen = kwargs.get('mxlen', -1)
         self.mxwlen = kwargs.get('mxwlen', -1)
         self.max_seen_tok = 0
@@ -330,8 +377,12 @@ class Dict2DVectorizer(Char2DVectorizer):
         self.delim = kwargs.get('token_delim', '@@')
 
     def iterable(self, tokens):
-        return _token_iterator(self, tokens)
-
+        for t in self.emit_begin_tok:
+            yield t
+        for t in _token_iterator(self, tokens):
+            yield t
+        for t in self.emit_end_tok:
+            yield t
 
 @export
 @register_vectorizer(name='char1d')
@@ -536,15 +587,13 @@ class BPEVectorizer1D(AbstractVectorizer, HasSubwordTokens):
     """
     def __init__(self, **kwargs):
         """Loads a BPE tokenizer"""
-        super().__init__(kwargs.get('transform_fn'))
+        super().__init__(kwargs.get('transform_fn'), kwargs.get('emit_begin_tok', []), kwargs.get('emit_end_tok', []))
         self.max_seen = 128
         self.model_file = kwargs.get('model_file')
         self.vocab_file = kwargs.get('vocab_file')
         self.tokenizer = SavableFastBPE(self.model_file, self.vocab_file)
         self.mxlen = kwargs.get('mxlen', -1)
         self._vocab = {k: i for i, k in enumerate(self.read_vocab(self.vocab_file))}
-        self.emit_begin_toks = listify(kwargs.get('emit_begin_tok', []))
-        self.emit_end_toks = listify(kwargs.get('emit_end_tok', []))
         self._special_tokens = {"[CLS]", "<unk>", "<EOS>"}
 
     @property
@@ -593,7 +642,7 @@ class BPEVectorizer1D(AbstractVectorizer, HasSubwordTokens):
         return counter
 
     def iterable(self, tokens):
-        for t in self.emit_begin_toks:
+        for t in self.emit_begin_tok:
             yield t
 
         for t in tokens:
@@ -607,7 +656,7 @@ class BPEVectorizer1D(AbstractVectorizer, HasSubwordTokens):
                 subwords = self.tokenizer.apply([self.transform_fn(t)])[0].split()
                 for x in subwords:
                     yield x
-        for t in self.emit_end_toks:
+        for t in self.emit_end_tok:
                 yield t
 
     def _next_element(self, tokens, vocab):
@@ -651,13 +700,11 @@ class BPESecondaryFeatureDict1DVectorizer(BPEVectorizer1D):
         super().__init__(**kwargs)
         self.field = kwargs.get('fields', kwargs.get('field'))
         self.primary_feature = kwargs.get('primary_feature', 'text')
-        self.emit_begin_tok = kwargs.get('emit_begin_tok')
-        self.emit_end_tok = kwargs.get('emit_end_tok')
         self.apply_all_subwords = kwargs.get('apply_all_subwords', True)
 
     def iterable(self, tokens):
-        if self.emit_begin_tok:
-            yield self.emit_begin_tok
+        for t in self.emit_begin_tok:
+            yield t
         for t in tokens:
             t_word = t[self.primary_feature]
             t_feature = t[self.field]
@@ -676,8 +723,8 @@ class BPESecondaryFeatureDict1DVectorizer(BPEVectorizer1D):
                     subwords[0] = t_feature
                 for x in subwords:
                     yield x
-        if self.emit_end_tok:
-            yield self.emit_end_tok
+        for t in self.emit_end_tok:
+            yield t
 
     def run(self, tokens, vocab):
         return super().run(tokens, vocab)
@@ -692,12 +739,12 @@ class BPELabelDict1DVectorizer(BPEVectorizer1D):
         super().__init__(**kwargs)
         self.field = kwargs.get('fields', kwargs.get('field', 'text'))
         self.label = kwargs.get('label', 'label')
-        self.emit_begin_tok = kwargs.get('emit_begin_tok')
-        self.emit_end_tok = kwargs.get('emit_end_tok')
+        #self.emit_begin_tok = kwargs.get('emit_begin_tok')
+        #self.emit_end_tok = kwargs.get('emit_end_tok')
 
     def iterable(self, tokens):
-        if self.emit_begin_tok:
-            yield self.emit_begin_tok
+        for t in self.emit_begin_tok:
+            yield t
         for t in tokens:
             t_word = t[self.field]
             t_label = t[self.label]
@@ -713,8 +760,8 @@ class BPELabelDict1DVectorizer(BPEVectorizer1D):
                 subwords[0] = t_label
                 for x in subwords:
                     yield x
-        if self.emit_end_tok:
-            yield self.emit_end_tok
+        for t in self.emit_end_tok:
+            yield t
 
     def run(self, tokens, vocab):
         return super().run(tokens, vocab)
@@ -1056,14 +1103,12 @@ def _is_punctuation(char):
 class WordpieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
 
     def __init__(self, **kwargs):
-        super().__init__(kwargs.get('transform_fn'))
+        super().__init__(kwargs.get('transform_fn'), kwargs.get('emit_begin_tok', ['[CLS]']), kwargs.get('emit_end_tok', ['[SEP]']))
         self.max_seen = 128
         self.tokenizer = WordpieceTokenizer(self.read_vocab(kwargs.get('vocab_file')))
         self.mxlen = kwargs.get('mxlen', -1)
         self.dtype = kwargs.get('dtype', 'int')
         self._special_tokens = {"[CLS]", "<unk>", "<EOS>"}
-        self.emit_begin_toks = listify(kwargs.get('emit_begin_tok', ['[CLS]']))
-        self.emit_end_toks = listify(kwargs.get('emit_end_tok', ['[SEP]']))
 
     def read_vocab(self, file):
         return load_bert_vocab(file)
@@ -1080,7 +1125,7 @@ class WordpieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
         return [i for i, t in enumerate(tokens) if not t.startswith(self.subword_sentinel) and t not in self.special_tokens]
 
     def iterable(self, tokens):
-        for t in self.emit_begin_toks:
+        for t in self.emit_begin_tok:
             yield t
         for tok in tokens:
             if tok == '<unk>':
@@ -1090,7 +1135,7 @@ class WordpieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
             else:
                 for subtok in self.tokenizer.tokenize(self.transform_fn(tok)):
                     yield subtok
-        for t in self.emit_end_toks:
+        for t in self.emit_end_tok:
             yield t
 
     def count(self, tokens):
@@ -1147,15 +1192,17 @@ class WordpieceSecondaryFeatureDict1DVectorizer(WordpieceVectorizer1D):
 
     """
     def __init__(self, **kwargs):
+        kwargs['emit_begin_tok'] = kwargs.get('emit_begin_tok', [Offsets.VALUES[Offsets.PAD]])
+        kwargs['emit_end_tok'] = kwargs.get('emit_end_tok', [Offsets.VALUES[Offsets.PAD]])
         super().__init__(**kwargs)
+        self.pad_value = kwargs.get('pad_value', Offsets.VALUES[Offsets.PAD])
+
         self.field = kwargs.get('fields', kwargs.get('field'))
         self.primary_feature = kwargs.get('primary_feature', 'text')
-        self.emit_begin_toks = listify(kwargs.get('emit_begin_tok', [Offsets.VALUES[Offsets.PAD]]))
-        self.emit_end_toks = listify(kwargs.get('emit_end_tok', [Offsets.VALUES[Offsets.PAD]]))
         self.apply_all_subwords = kwargs.get('apply_all_subwords', True)
 
     def iterable(self, tokens):
-        for t in self.emit_begin_toks:
+        for t in self.emit_begin_tok:
             yield t
         for t in tokens:
             t_word = t[self.primary_feature]
@@ -1171,11 +1218,11 @@ class WordpieceSecondaryFeatureDict1DVectorizer(WordpieceVectorizer1D):
                 if self.apply_all_subwords:
                     subwords = [t_feature] * len(subwords)
                 else:
-                    subwords = [Offsets.VALUES[Offsets.PAD]] * len(subwords)
+                    subwords = [self.pad_value] * len(subwords)
                     subwords[0] = t_feature
                 for x in subwords:
                     yield x
-        for t in self.emit_end_toks:
+        for t in self.emit_end_tok:
             yield t
 
     def run(self, tokens, vocab):
@@ -1186,14 +1233,14 @@ class WordpieceSecondaryFeatureDict1DVectorizer(WordpieceVectorizer1D):
 class WordpieceLabelDict1DVectorizer(WordpieceVectorizer1D):
 
     def __init__(self, **kwargs):
+        kwargs['emit_begin_tok'] = kwargs.get('emit_begin_tok', [Offsets.VALUES[Offsets.PAD]])
+        kwargs['emit_end_tok'] = kwargs.get('emit_end_tok', [Offsets.VALUES[Offsets.PAD]])
         super().__init__(**kwargs)
         self.field = kwargs.get('fields', kwargs.get('field', 'text'))
         self.label = kwargs.get('label', 'label')
-        self.emit_begin_toks = listify(kwargs.get('emit_begin_tok', [Offsets.VALUES[Offsets.PAD]]))
-        self.emit_end_toks = listify(kwargs.get('emit_end_tok', [Offsets.VALUES[Offsets.PAD]]))
 
     def iterable(self, tokens):
-        for t in self.emit_begin_toks:
+        for t in self.emit_begin_tok:
             yield t
         for t in tokens:
             t_word = t[self.field]
@@ -1206,11 +1253,37 @@ class WordpieceLabelDict1DVectorizer(WordpieceVectorizer1D):
                 subwords[0] = t_label
             for x in subwords:
                 yield x
-        for t in self.emit_end_toks:
+        for t in self.emit_end_tok:
             yield t
 
     def run(self, tokens, vocab):
         return super().run(tokens, vocab)
+
+
+
+@export
+@register_vectorizer(name='wordpiece-int-identity-dict1d')
+class WordpieceIntIdentityDict1DVectorizer(WordpieceSecondaryFeatureDict1DVectorizer):
+    """We need to split on the primary feature but use a secondary feature's value
+
+    Some options concern what to do with the non primary index.  For a label, this would typically
+    be a `<PAD>` token in the non first position of a sub-word, but that may not be desirable here
+
+    To support bot ways, there is an optional `apply_all_subwords`, which defaults to True.  If this
+    is turned on, it means that we want to use the feature value of
+
+
+    """
+    def __init__(self, **kwargs):
+        kwargs['emit_begin_tok'] = kwargs.get('emit_begin_tok', [0])
+        kwargs['emit_end_tok'] = kwargs.get('emit_end_tok', [0])
+        kwargs['pad_value'] = kwargs.get('pad_value', 0)
+        super().__init__(**kwargs)
+
+    def _next_element(self, tokens, vocab):
+        for atom in self.iterable(tokens):
+            yield int(atom)
+
 
 
 @register_vectorizer(name='wordpiece-dict1d')
@@ -1222,7 +1295,7 @@ class WordpieceDict1DVectorizer(WordpieceVectorizer1D):
         self.delim = kwargs.get('token_delim', '~~')
 
     def iterable(self, tokens):
-        for t in self.emit_begin_toks:
+        for t in self.emit_begin_tok:
             yield t
         for t in tokens:
             tok = t[self.field] if isinstance(t, dict) else t
@@ -1233,7 +1306,7 @@ class WordpieceDict1DVectorizer(WordpieceVectorizer1D):
             else:
                 for subtok in self.tokenizer.tokenize(self.transform_fn(tok)):
                     yield subtok
-        for t in self.emit_end_toks:
+        for t in self.emit_end_tok:
             yield t
 
 

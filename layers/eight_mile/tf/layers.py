@@ -2016,8 +2016,10 @@ class WithDropout(tf.keras.layers.Layer):
 
     @property
     def output_dim(self) -> int:
-        return self.layer.output_dim
-
+        try:
+            return self.layer.output_dim
+        except:
+            return self.layer.units
 
 class WithDropoutOnFirst(tf.keras.layers.Layer):
     """Wrapper for any layer that surrounds it with dropout
@@ -3897,6 +3899,53 @@ class BahdanauAttention(VectorSequenceAttention):
         attended = self.W_c(attended)
         return attended
 
+
+class BilinearAttention(tf.keras.layers.Layer):
+
+    def __init__(self, in_hsz, out_hsz=1, bias_x=True, bias_y=True, name=None):
+        super().__init__(True, name)
+
+        self.in_hsz = in_hsz
+        self.out_hsz = out_hsz
+        self.bias_x = bias_x
+        self.bias_y = bias_y
+        self.W = None
+
+    def build(self, input_shape):
+        self.W = self.add_weight(
+                name=f"{self.name}/Weight",
+                shape=(self.out_hsz, self.in_hsz + self.bias_x, self.in_hsz + self.bias_y),
+                initializer=tf.constant_initializer(0.),
+                trainable=True,
+            )
+        super().build(input_shape)
+
+    def call(self, x, y, mask):
+        r"""
+        Args:
+            x: ``[B, T, H]``.
+            y: ``[B, T, H]``.
+        Returns:
+            ~torch.Tensor:
+                A scoring tensor of shape ``[batch_size, n_out, seq_len, seq_len]``.
+                If ``n_out=1``, the dimension for ``n_out`` will be squeezed automatically.
+        """
+        if self.bias_x:
+            shp = get_shape_as_list(x)[:-1]
+            ones = tf.ones(shp + [1])
+            x = tf.concat([x, ones], -1)
+        if self.bias_y:
+            shp = get_shape_as_list(y)[:-1]
+            ones = tf.ones(shp + [1])
+            y = tf.concat([y, ones], -1)
+        x = tf.expand_dims(x, 1)
+        y = tf.expand_dims(y, 1)
+        u = x @ self.W
+        s = u @ tf.transpose(y, [0, 1, 3, 2])
+        if self.out_hsz == 1:
+            s = tf.squeeze(s, 1)
+        s = masked_fill(s, tf.expand_dims(tf.equal(mask, False), 1), -1e9)
+        return s
 
 def subsequent_mask(size: int):
     b = tf.compat.v1.matrix_band_part(tf.ones([size, size]), -1, 0)

@@ -1,5 +1,10 @@
 [
   {
+    "train_file": "/data/datasets/parser/sample-data/train.parses",
+    "valid_file": "/data/datasets/parser/sample-data/test.parses",
+    "label": "deps-sample"
+  },
+  {
     "train_file": "train.txt",
     "valid_file": "valid.txt",
     "test_file": "test.txt",
