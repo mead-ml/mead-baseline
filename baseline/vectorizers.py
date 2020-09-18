@@ -670,8 +670,8 @@ class BPEVectorizer1D(AbstractVectorizer, HasSubwordTokens):
         vec1d = np.zeros(self.mxlen, dtype=np.long)
         for i, atom in enumerate(self._next_element(tokens, vocab)):
             if i == self.mxlen:
-                i -= len(self.emit_end_toks)
-                for j, x in enumerate(self.emit_end_toks):
+                i -= len(self.emit_end_tok)
+                for j, x in enumerate(self.emit_end_tok):
                     vec1d[i + j] = vocab.get(x)
                 i = self.mxlen - 1
                 break
@@ -1160,8 +1160,8 @@ class WordpieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
         vec1d = np.zeros(self.mxlen, dtype=self.dtype)
         for i, atom in enumerate(self._next_element(tokens, vocab)):
             if i == self.mxlen:
-                i -= len(self.emit_end_toks)
-                for j, x in enumerate(self.emit_end_toks):
+                i -= len(self.emit_end_tok)
+                for j, x in enumerate(self.emit_end_tok):
                     vec1d[i + j] = vocab.get(x)
                 i = self.mxlen - 1
                 break
