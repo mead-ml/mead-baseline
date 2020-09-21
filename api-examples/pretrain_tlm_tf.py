@@ -172,7 +172,7 @@ def train():
     parser.add_argument("--lr", type=float, default=4.0e-4, help="Learning rate")
     parser.add_argument("--clip", type=float, default=1.0, help="Clipping gradient norm")
     parser.add_argument("--weight_decay", type=float, default=1.0e-2, help="Weight decay")
-    parser.add_argument("--epochs", type=int, default=32, help="Num training epochs")
+    parser.add_argument("--epochs", type=int, default=-1, help="Num training epochs")
     parser.add_argument("--restart", type=str2bool, help="Option allows you to restart from a previous checkpoint")
     parser.add_argument("--warmup_steps", type=int, default=10000, help="Num warmup steps")
     parser.add_argument("--causal", type=str2bool, default=False, help="Use CLM (causal) instead of MLM")
@@ -234,6 +234,7 @@ def train():
                 batchsz_scale_factor = args.nctx // sub
                 this_batchsz = base_batchsz * batchsz_scale_factor
                 curr_ds = get_dataset(train_curr_dir, args.file_type, args.num_train_workers, causal=args.causal).batch(this_batchsz, drop_remainder=True)
+
                 if ds is None:
                     ds = curr_ds
                 else:
@@ -262,6 +263,7 @@ def train():
                     ds = ds.concatenate(curr_ds)
         else:
             ds = get_dataset(args.valid_dir, args.file_type, args.num_train_workers, shuffle=False, causal=args.causal).batch(base_batchsz)
+
         return ds.shard(
             input_context.num_input_pipelines, input_context.input_pipeline_id
         )
@@ -308,6 +310,7 @@ def train():
             steps_per_epoch += int(num_train_samples[k] // (args.batch_size * (args.nctx / k)))
         for k, v in num_valid_samples.items():
             steps_per_valid_epoch += int(num_valid_samples[k] // (args.batch_size * (args.nctx / k)))
+
     else:
         steps_per_epoch = num_train_samples // args.batch_size
         steps_per_valid_epoch = num_valid_samples // args.batch_size
