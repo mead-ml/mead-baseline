@@ -242,10 +242,10 @@ class WithoutLength(tf.keras.layers.Layer):
 
 
 class ConvEncoder(tf.keras.layers.Layer):
-    def __init__(self, insz: Optional[int], outsz: int, filtsz: int, pdrop: float = 0.0, activation: str = "relu", name=None):
+    def __init__(self, insz: Optional[int], outsz: int, filtsz: int, pdrop: float = 0.0, activation: str = "relu", bias: bool = True, groups: int = 1, name=None):
         super().__init__(name=name)
         self.output_dim = outsz
-        self.conv = tf.keras.layers.Conv1D(filters=outsz, kernel_size=filtsz, padding="same")
+        self.conv = tf.keras.layers.Conv1D(filters=outsz, kernel_size=filtsz, padding="same", use_bias=bias, groups=groups)
         self.act = get_activation(activation)
         self.dropout = tf.keras.layers.Dropout(pdrop)
 
@@ -256,14 +256,14 @@ class ConvEncoder(tf.keras.layers.Layer):
 
 class ConvEncoderStack(tf.keras.layers.Layer):
     def __init__(
-        self, insz: Optional[int], outsz: int, filtsz: int, nlayers: int = 1, pdrop: float = 0.0, activation: str = "relu", name=None
+        self, insz: Optional[int], outsz: int, filtsz: int, nlayers: int = 1, pdrop: float = 0.0, activation: str = "relu",  bias: bool = True, groups: int = 1, name=None
     ):
         super().__init__(name=name)
         self.layers = []
-        first_layer = ConvEncoder(insz, outsz, filtsz, pdrop, activation)
+        first_layer = ConvEncoder(insz, outsz, filtsz, pdrop, activation, bias, groups)
         self.layers.append(first_layer)
         for i in range(nlayers - 1):
-            subsequent_layer = ResidualBlock(ConvEncoder(insz, outsz, filtsz, pdrop, activation))
+            subsequent_layer = ResidualBlock(ConvEncoder(insz, outsz, filtsz, pdrop, activation, bias, groups))
             self.layers.append(subsequent_layer)
 
     def call(self, x):

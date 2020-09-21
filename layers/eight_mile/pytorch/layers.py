@@ -342,20 +342,21 @@ class Conv1DSame(nn.Module):
     of the convolution operation.  Instead, we zeropad the input using the `ConstantPad1d` module
 
     """
-    def __init__(self, in_channels: int, out_channels: int, kernel_size: int, bias: bool = True):
+    def __init__(self, in_channels: int, out_channels: int, kernel_size: int, bias: bool = True, groups: int = 1):
         """Create a 1D conv to produce the same output size as input
 
         :param in_channels: The number of input feature maps
         :param out_channels: The number of output feature maps
         :param kernel_size: The kernel size
         :param bias: Is bias on?
+        :param groups: Number of conv groups
         """
         super().__init__()
         end_pad = kernel_size // 2
         start_pad = end_pad - 1 if kernel_size % 2 == 0 else end_pad
         self.conv = nn.Sequential(
             nn.ConstantPad1d((start_pad, end_pad), 0.),
-            nn.Conv1d(in_channels, out_channels, kernel_size, bias=bias)
+            nn.Conv1d(in_channels, out_channels, kernel_size, bias=bias, groups=groups)
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -377,7 +378,7 @@ class ConvEncoder(nn.Module):
 
     """
 
-    def __init__(self, insz: int, outsz: int, filtsz: int, pdrop: float = 0.0, activation: str = "relu", hidden_last=True):
+    def __init__(self, insz: int, outsz: int, filtsz: int, pdrop: float = 0.0, activation: str = "relu", bias: bool = True, groups: int = 1, hidden_last=True):
         """Construct the encoder with optional dropout, given activation, and orientation
 
         :param insz: The number of input feature maps
@@ -385,12 +386,14 @@ class ConvEncoder(nn.Module):
         :param filtsz: The kernel size
         :param pdrop: The amount of dropout to apply, this defaults to 0
         :param activation: The activation function by name, defaults to `relu`
+        :param bias: Use bias?
+        :param groups: How many conv groups. Defaults to 1
         :param hidden_last: PyTorch only! If `True` the orientatiation is `[B, T, H]`, o.w. `[B, H, T]` expected
         """
         super().__init__()
         self.output_dim = outsz
 
-        conv = Conv1DSame(insz, outsz, filtsz)
+        conv = Conv1DSame(insz, outsz, filtsz, bias=bias, groups=groups)
         act = get_activation(activation)
         dropout = nn.Dropout(pdrop)
 
@@ -414,7 +417,7 @@ class ConvEncoderStack(nn.Module):
     `[B, T, C]`
     """
 
-    def __init__(self, insz: int, outsz: int, filtsz: int, nlayers: int = 1, pdrop: float = 0.0, activation: str = "relu", hidden_last=True):
+    def __init__(self, insz: int, outsz: int, filtsz: int, nlayers: int = 1, pdrop: float = 0.0, activation: str = "relu", bias: bool = True, groups: int = 1, hidden_last=True):
         """Construct the encoder stack
 
         :param insz: The input number of feature maps
@@ -423,16 +426,18 @@ class ConvEncoderStack(nn.Module):
         :param nlayers: The number of layers in the stack (defaults to a single layer)
         :param pdrop: The amount of dropout to apply (defaults to `0`)
         :param activation: The activation function to use as a string, defaults to `relu`
+        :param bias: Use bias?
+        :param groups: How many conv groups. Defaults to 1
         :param hidden_last: PyTorch only! If `True` the orientatiation is `[B, T, H]`, o.w. `[B, H, T]` expected
         """
         super().__init__()
 
         if hidden_last:
-            first_layer = nn.Sequential(BTH2BHT(), ConvEncoder(insz, outsz, filtsz, pdrop, activation, hidden_last=False))
+            first_layer = nn.Sequential(BTH2BHT(), ConvEncoder(insz, outsz, filtsz, pdrop, activation, bias, groups, hidden_last=False))
         else:
-            first_layer = ConvEncoder(insz, outsz, filtsz, pdrop, activation, hidden_last=False)
+            first_layer = ConvEncoder(insz, outsz, filtsz, pdrop, activation, bias, groups, hidden_last=False)
 
-        subsequent_layer = ResidualBlock(ConvEncoder(outsz, outsz, filtsz, pdrop, activation, hidden_last=False))
+        subsequent_layer = ResidualBlock(ConvEncoder(outsz, outsz, filtsz, pdrop, activation, bias, groups, hidden_last=False))
 
         self.layers = nn.ModuleList([first_layer] + [copy.deepcopy(subsequent_layer) for _ in range(nlayers - 1)])
         if hidden_last:
