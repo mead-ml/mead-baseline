@@ -234,7 +234,6 @@ def train():
                 batchsz_scale_factor = args.nctx // sub
                 this_batchsz = base_batchsz * batchsz_scale_factor
                 curr_ds = get_dataset(train_curr_dir, args.file_type, args.num_train_workers, causal=args.causal).batch(this_batchsz, drop_remainder=True)
-
                 if ds is None:
                     ds = curr_ds
                 else:

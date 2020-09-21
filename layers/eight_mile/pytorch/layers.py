@@ -3783,14 +3783,14 @@ class SequenceCriterion(nn.Module):
         return self._norm(loss, inputs)
 
 
-def pytorch_conv1d(in_channels, out_channels, fsz, unif=0, padding=0, initializer=None):
-    c = nn.Conv1d(in_channels, out_channels, fsz, padding=padding)
+def pytorch_conv1d(in_channels, out_channels, fsz, unif=0, padding=0, initializer=None, stride=1, bias=True):
+    c = nn.Conv1d(in_channels, out_channels, fsz, padding=padding, stride=stride, bias=bias)
     if unif > 0:
         c.weight.data.uniform_(-unif, unif)
     elif initializer == "ortho":
-        nn.init.orthogonal(c.weight)
+        nn.init.orthogonal_(c.weight)
     elif initializer == "he" or initializer == "kaiming":
-        nn.init.kaiming_uniform(c.weight)
+        nn.init.kaiming_uniform_(c.weight)
     else:
         nn.init.xavier_uniform_(c.weight)
     return c
