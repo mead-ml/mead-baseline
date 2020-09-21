@@ -351,6 +351,16 @@ class ParallelConv(tf.keras.layers.Layer):
         return False
 
 
+def gumbel_softmax(logits, tau=1, hard=False, eps=1e-10):
+    U = tf.random.uniform(tf.shape(logits), 0, 1)
+    gumbel_samples = -tf.math.log(-tf.math.log(U + eps) + eps)
+    y = tf.nn.softmax((logits + gumbel_samples) / tau)
+    if hard:
+        y_hard = tf.cast(y == tf.reduce_max(y, -1, keepdims=True), tf.float32)
+        y = tf.stop_gradient(y_hard - y) + y
+    return y
+
+
 def lstm_cell(hsz: int, forget_bias: float = 1.0, **kwargs):
     """Produce a single cell with no dropout
     :param hsz: (``int``) The number of hidden units per LSTM
