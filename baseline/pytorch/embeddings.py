@@ -128,7 +128,7 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
         # This is for BERT support when we are using 2 features
         token_type_vsz = kwargs.get('token_type_vsz')
         if token_type_vsz:
-            tt_unif = kwargs.get('token_type_embed_unif', 0.001)
+            tt_unif = float(kwargs.get('token_type_embed_unif', 0.001))
             tt_embedding = LookupTableEmbeddings(weights=torch.randn((token_type_vsz, self.d_model))*tt_unif,
                                                  padding_idx=None)
             embeddings['tt'] = tt_embedding
