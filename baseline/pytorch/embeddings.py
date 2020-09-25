@@ -127,12 +127,10 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
         embeddings = {'x': x_embedding}
         # This is for BERT support when we are using 2 features
         token_type_vsz = kwargs.get('token_type_vsz')
-        zero_init_tt = kwargs.get('token_type_zero_init', True)
         if token_type_vsz:
-            if zero_init_tt:
-                tt_embedding = LookupTableEmbeddings(weights=torch.zeros((token_type_vsz, self.d_model)), padding_idx=None)
-            else:
-                tt_embedding = LookupTableEmbeddings(vsz=token_type_vsz, dsz=self.d_model, padding_idx=None)
+            tt_unif = kwargs.get('token_type_embed_unif', 0.001)
+            tt_embedding = LookupTableEmbeddings(weights=torch.randn((token_type_vsz, self.d_model))*tt_unif,
+                                                 padding_idx=None)
             embeddings['tt'] = tt_embedding
         # For bert, make sure this is `sum-layer-norm`
         reduction = kwargs.get('embeddings_reduction', kwargs.get('reduction', 'sum'))
