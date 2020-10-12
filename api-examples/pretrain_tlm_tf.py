@@ -262,6 +262,7 @@ def train():
                     ds = ds.concatenate(curr_ds)
         else:
             ds = get_dataset(args.valid_dir, args.file_type, args.num_train_workers, shuffle=False, causal=args.causal).batch(base_batchsz)
+
         return ds.shard(
             input_context.num_input_pipelines, input_context.input_pipeline_id
         )
@@ -308,6 +309,7 @@ def train():
             steps_per_epoch += int(num_train_samples[k] // (args.batch_size * (args.nctx / k)))
         for k, v in num_valid_samples.items():
             steps_per_valid_epoch += int(num_valid_samples[k] // (args.batch_size * (args.nctx / k)))
+
     else:
         steps_per_epoch = num_train_samples // args.batch_size
         steps_per_valid_epoch = num_valid_samples // args.batch_size

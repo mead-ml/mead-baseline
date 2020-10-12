@@ -414,6 +414,7 @@ class MultiFileLoader(IterableDataset):
         """
 
 
+
 class NextTurnPredictionFileLoader(MultiFileLoader):
 
     def process_line(self, line):

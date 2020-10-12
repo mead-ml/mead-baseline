@@ -350,6 +350,7 @@ class Conv1DSame(nn.Module):
         :param kernel_size: The kernel size
         :param bias: Is bias on?
         :param groups: Number of conv groups
+
         """
         super().__init__()
         end_pad = kernel_size // 2
@@ -379,6 +380,7 @@ class ConvEncoder(nn.Module):
     """
 
     def __init__(self, insz: int, outsz: int, filtsz: int, pdrop: float = 0.0, activation: str = "relu", bias: bool = True, groups: int = 1, hidden_last=True):
+
         """Construct the encoder with optional dropout, given activation, and orientation
 
         :param insz: The number of input feature maps
@@ -392,7 +394,6 @@ class ConvEncoder(nn.Module):
         """
         super().__init__()
         self.output_dim = outsz
-
         conv = Conv1DSame(insz, outsz, filtsz, bias=bias, groups=groups)
         act = get_activation(activation)
         dropout = nn.Dropout(pdrop)
@@ -4290,14 +4291,14 @@ class SequenceCriterion(nn.Module):
         return self._norm(loss, inputs)
 
 
-def pytorch_conv1d(in_channels, out_channels, fsz, unif=0, padding=0, initializer=None):
-    c = nn.Conv1d(in_channels, out_channels, fsz, padding=padding)
+def pytorch_conv1d(in_channels, out_channels, fsz, unif=0, padding=0, initializer=None, stride=1, bias=True):
+    c = nn.Conv1d(in_channels, out_channels, fsz, padding=padding, stride=stride, bias=bias)
     if unif > 0:
         c.weight.data.uniform_(-unif, unif)
     elif initializer == "ortho":
-        nn.init.orthogonal(c.weight)
+        nn.init.orthogonal_(c.weight)
     elif initializer == "he" or initializer == "kaiming":
-        nn.init.kaiming_uniform(c.weight)
+        nn.init.kaiming_uniform_(c.weight)
     else:
         nn.init.xavier_uniform_(c.weight)
     return c
