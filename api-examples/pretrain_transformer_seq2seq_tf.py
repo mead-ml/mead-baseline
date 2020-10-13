@@ -27,6 +27,16 @@ class TiedEmbeddingsSeq2SeqModel(Seq2SeqModel):
     def __init__(self, tied_embeddings, **kwargs):
         super().__init__(tied_embeddings, tied_embeddings['x'], **kwargs)
 
+        output_bias = kwargs.get('output_bias', False)
+        self.lm_output = WeightTieDense(tied_embeddings, output_bias)
+
+    def call(self, input):
+        src_len = input['src_len']
+        encoder_outputs = self.encode(input, src_len)
+        output = self.decode(encoder_outputs, input['dst'])
+        encoder_outputs = self.lm_output(encoder_outputs)
+        # Return as B x T x H
+        return encoder_outputs, output
 
 
 class Loss:
@@ -35,38 +45,43 @@ class Loss:
         self.nctx = nctx
 
     def __call__(self, model, features, labels):
+
         features['src_len'] = tf.repeat(tf.shape(features['x'])[-1], tf.shape(features['x'])[0])
-        features['dst'] = labels
-        logits = model(features)
+        mlm_labels = labels[0]
+        features['dst'] = labels[1]
+        mlm_logits, logits = model(features)
         labels = labels[:, 1:]
-        loss_mask = tf.cast(labels != 0, tf.float32)
+        gen_loss_mask = tf.cast(labels != 0, tf.float32)
+        mlm_loss_mask = tf.cast(mlm_labels != 0, tf.float32)
         logits = logits[:, :-1, :]
-        losses = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=labels)
-        losses = losses * loss_mask
-        losses = tf.reduce_sum(losses)
-        non_zero = tf.reduce_sum(loss_mask)
-        losses /= non_zero
+        gen_losses = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=labels)
+        mlm_losses = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=mlm_logits, labels=mlm_labels)
+        gen_losses = tf.reduce_sum(gen_losses * gen_loss_mask) / tf.reduce_sum(gen_loss_mask)
+        mlm_losses = tf.reduce_sum(mlm_losses * mlm_loss_mask) / tf.reduce_sum(mlm_loss_mask)
+        losses = gen_losses + mlm_losses
         return losses
 
 
 def _parse_json(example):
     j = json.loads(example.numpy())
-    return tf.constant(j['x'], dtype=tf.int32), tf.constant(j['y'], dtype=tf.int32)
+    return tf.constant(j['x'], dtype=tf.int32), tf.constant(j['mlm'], dtype=tf.int32), tf.constant(j['gen'], dtype=tf.int32)
 
 
 feature_description = {
     'x': tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True, default_value=0),
-    'y': tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True, default_value=0),
+    'mlm': tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True, default_value=0),
+    'gen': tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True, default_value=0),
+
 }
 
 
 def _parse_tf_record(example_proto):
     record = tf.io.parse_single_example(example_proto, feature_description)
-    return record['x'], record['y']
+    return record['x'], record['mlm'], record['gen']
 
 
 def decode_json(example):
-    return tf.py_function(_parse_json, [example], [tf.int32, tf.int32])
+    return tf.py_function(_parse_json, [example], [tf.int32, tf.int32, tf.int32])
 
 
 def get_dataset(directory, file_type, num_parallel_reads=1, shuffle=True):
@@ -278,8 +293,8 @@ def train():
 
     def _replicated_train_step(inputs):
         """This runs on a single replica"""
-        x, y = inputs
-        per_replica_loss = optimizer.update(model, {'x': x}, y, num_replicas)
+        x, mlm, gen = inputs
+        per_replica_loss = optimizer.update(model, {'x': x}, (mlm, gen), num_replicas)
         return per_replica_loss
 
     @tf.function
@@ -296,8 +311,8 @@ def train():
 
     def _replicated_test_step(inputs):
         """This runs on a single replica"""
-        x, y = inputs
-        per_replica_loss = valid_loss_function(model, {'x': x}, y) / num_replicas
+        x, mlm, gen = inputs
+        per_replica_loss = valid_loss_function(model, {'x': x}, (mlm, gen)) / num_replicas
         return per_replica_loss
 
     @tf.function

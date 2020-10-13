@@ -565,12 +565,23 @@ class TiedEmbeddingsSeq2SeqModel(Seq2SeqModel):
 
     def __init__(self, tied_embeddings, **kwargs):
         super().__init__({'x': tied_embeddings}, tied_embeddings, **kwargs)
+        output_bias = kwargs.get('output_bias', False)
+        self.lm_output = WeightTieDense(tied_embeddings, output_bias)
+
 
     def input_tensor(self, key, batch_dict, perm_idx):
         tensor = batch_dict[key]
         tensor = self.drop_inputs(key, tensor)
         tensor = tensor[perm_idx]
         return tensor
+
+    def forward(self, input: Dict[str, torch.Tensor]):
+        src_len = input['src_len']
+        encoder_outputs = self.encode(input, src_len)
+        output = self.decode(encoder_outputs, input['dst'])
+        # Return as B x T x H
+        encoder_outputs = self.lm_output(encoder_outputs)
+        return encoder_outputs, output
 
     def make_input(self, batch_dict, perm=False):
         """Prepare the input.
@@ -608,11 +619,13 @@ class TiedEmbeddingsSeq2SeqModel(Seq2SeqModel):
                 self.model = model
 
             def forward(self, inputs, targets):
+                mlm_targets = targets[0]
+                response_targets = targets[1]
                 lengths = torch.sum(inputs != 0, 1)
-                in_ = self.model.make_input({"x": inputs, "x_lengths": lengths,  "tgt": targets})
+                in_ = self.model.make_input({"x": inputs, "x_lengths": lengths,  "tgt": response_targets})
                 targets = in_['tgt']
-                pred = self.model(in_)
-                return self._loss(pred, targets)
+                lm_head, pred = self.model(in_)
+                return self._loss(pred, targets) + self._loss(lm_head, mlm_targets)
         return LossFn(self, loss)
 
 
