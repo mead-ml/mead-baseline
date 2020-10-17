@@ -21,7 +21,9 @@ import torch.nn.functional as F
 logger = logging.getLogger(__file__)
 
 
-CONV_FEATURES = [(512, 10, 5), (512, 3, 2), (512, 3, 2), (512, 3, 2), (512, 3, 2), (512, 2, 2), (512, 2, 2)]
+CONV_FEATURES_16 = [(512, 10, 5), (512, 3, 2), (512, 3, 2), (512, 3, 2), (512, 3, 2), (512, 2, 2), (512, 2, 2)]
+CONV_FEATURES_8 = [(512, 10, 5), (512, 3, 2), (512, 3, 2), (512, 3, 2), (512, 2, 2), (512, 2, 2)]
+
 START_TEMP = 2
 END_TEMP = 0.5
 TEMP_DECAY_FACTOR = 0.999995

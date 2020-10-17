@@ -3,9 +3,11 @@ import time
 import os
 from argparse import ArgumentParser
 import baseline
+import torch.nn as nn
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader
 from eight_mile.utils import str2bool, write_json, Average, get_num_gpus_multiworker
+from eight_mile.pytorch.serialize import *
 from baseline.pytorch.embeddings import *
 import baseline.embeddings
 from eight_mile.optz import *
@@ -22,6 +24,55 @@ from transformer_utils import (
 
 
 logger = logging.getLogger(__file__)
+
+
+def from_enc_tlm_array(pytorch_tlm: nn.Module, d: Dict, embeddings_keys: List[str] = None, name: str = "TLM"):
+    """Restore a TLM-like model (possibly a `nn.Module` for fine-tuning)
+
+    We just populate the `TransformerEncoderStack` and the embeddings from weights, all other values remain
+    uninitialized
+
+    :param pytorch_tlm: A TLM-like model
+    :param d: A Dict of weights to restore for each layer
+    :param embeddings_keys: Name of embeddings to restore, defaults to `None`, in which case all embeddings are restored
+    :param name: A name for this primitive
+    :return:
+    """
+    ##### FIXME!!
+    #####transformer = pytorch_tlm.transformer if hasattr(pytorch_tlm, 'transformer') else pytorch_tlm.generator
+    transformer = pytorch_tlm.encoder.transformer
+    from_encoder_stack_array(transformer, d, name=f"{name}/TransformerEncoderStack")
+    #####keys_to_restore = embeddings_keys if embeddings_keys else list(pytorch_tlm.embeddings.keys())
+
+    keys_to_restore = embeddings_keys if embeddings_keys else list(pytorch_tlm.src_embeddings.keys())
+
+    for embeddings_key in keys_to_restore:
+        from_embed_array(pytorch_tlm.src_embeddings[embeddings_key], d, f"{name}/Embeddings/{embeddings_key}")
+        if isinstance(pytorch_tlm.src_embeddings[embeddings_key], LearnedPositionalLookupTableEmbeddingsWithBias):
+            tt = LookupTableEmbeddings(vsz=2, dsz=pytorch_tlm.embeddings.output_dim)
+            from_embed_array(tt, d, f"{name}/Embeddings/tt")
+            pytorch_tlm.src_embeddings[embeddings_key].bias = nn.Parameter(tt.embeddings.weight[0])
+        else:
+            from_embed_array(pytorch_tlm.src_embeddings[embeddings_key], d, f"{name}/Embeddings/{embeddings_key}")
+    if hasattr(pytorch_tlm.src_embeddings.reduction, 'ln'):
+        from_weight_array(pytorch_tlm.src_embeddings.reduction.ln, d, f"{name}/Embeddings/reduction/ln")
+
+
+def load_enc_tlm_npz(pytorch_tlm: nn.Module, npz: str, embeddings_keys: List[str] = None, name: str = "TLM"):
+    """Restore a TLM-like model (possibly a `nn.Module` for fine-tuning
+
+    We just populate the `TransformerEncoderStack` and the embeddings from weights, all other values remain
+    uninitialized
+
+    :param pytorch_tlm: A TLM-like model
+    :param npz: A file to restore the weights from
+    :param embeddings_key: Name of embeddings to restore, defaults to `None` in which case we restore all embeddings
+    :param name: A name for this primitive
+    :return:
+    """
+    d = np.load(npz)
+    from_enc_tlm_array(pytorch_tlm, d, embeddings_keys, name)
+
 
 """Pre-train a paired model in PyTorch
 
@@ -190,7 +241,10 @@ def train():
     start_epoch = 0
 
     if args.restart_from:
-        model.load_state_dict(torch.load(args.restart_from))
+        if args.restart_from.endswith('.npz'):
+            load_enc_tlm_npz(model, args.restart_from)
+        else:
+            model.load_state_dict(torch.load(args.restart_from))
         vec = args.restart_from.split("-")
 
         if args.restart_tt:
@@ -229,9 +283,10 @@ def train():
         for i in range(steps_per_epoch):
             batch = next(train_itr)
             steps += 1
-            x, y = batch
+            x, y_mlm, y_gen = batch
             inputs = x.to(args.device)
-            labels = y.to(args.device)
+            labels = (y_mlm.to(args.device), y_gen.to(args.device))
+
             loss = loss_function(inputs, labels)
             loss.backward()
             avg_loss.update(loss.item())
@@ -261,9 +316,9 @@ def train():
             valid_itr = iter(valid_loader)
             for j in range(valid_steps):
                 with torch.no_grad():
-                    x, y = batch
+                    x, y_mlm, y_gen = batch
                     inputs = x.to(args.device)
-                    labels = y.to(args.device)
+                    labels = (y_mlm.to(args.device), y_gen.to(args.device))
                     loss = loss_function(inputs, labels)
                     avg_valid_loss.update(loss.item())
 

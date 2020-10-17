@@ -325,7 +325,7 @@ def load_data_caching(token_type, reader, dataset, file_key, vocabs, caching, lo
 
 class MultiFileLoader(IterableDataset):
 
-    def __init__(self, directory, pattern, vocabs, vectorizer, nctx, last_turn_only=True, distribute=True, shuffle=True):
+    def __init__(self, directory, pattern, vocabs, vectorizer, nctx, last_turn_only=False, distribute=True, shuffle=True):
         super().__init__()
         self.vectorizer = vectorizer
         self.pattern = pattern
@@ -432,16 +432,29 @@ class NextTurnPredictionFileLoader(MultiFileLoader):
                 return None
             q_vec, q_valid_lengths = self.vectorizer.run(q.split(), self.vocab)
         else:
-            q_vec, q_valid_lengths = self.vectorizer.run(reversed(q.split()), self.vocab)
-            q_vec = np.roll(q_vec[::-1], -(self.vectorizer.mxlen - q_valid_lengths))
+
+            q = [self.vectorizer.vocab.get(x, Offsets.UNK) for x in self.vectorizer.iterable(q)]
+            q_valid_lengths = len(q)
+            if q_valid_lengths > self.vectorizer.mxlen:
+                start = q_valid_lengths - self.vectorizer.mxlen
+                q_vec = np.array(q[start:], dtype=np.long)
+            else:
+                q_vec = np.zeros(self.vectorizer.mxlen, dtype=np.long)
+                q_vec[:q_valid_lengths] = np.array(q)
 
         r_vec, r_valid_lengths = self.vectorizer.run(r.split(), self.vocab)
-        return q_vec, r_vec
+        mask_value = self.vocab.get("[MASK]", self.vocab.get("<MASK>", -1))
+        vsz = max(self.vocab.values()) + 1
+        inputs, labels, _ = on_demand_mlm_masking(torch.from_numpy(q_vec).clone(), torch.from_numpy(q_vec), mask_value, vsz)
+        inputs = inputs.detach().numpy()
+        labels = labels.detach().numpy()
+        return inputs, labels, r_vec
 
 
 def on_demand_mlm_masking(inputs, labels, mask_value, vocab_size):
     # Replace 15% of tokens
     masked_indices = torch.bernoulli(torch.full(labels.shape, 0.15)).type(torch.bool)
+    masked_indices = masked_indices & (labels != 0)
     # Anything not masked is 0 so no loss
     labels[~masked_indices] = 0
     # Of the masked items, mask 80% of them with [MASK]
@@ -472,10 +485,7 @@ class PreprocessedFileLoader(MultiFileLoader):
 
     def process_line(self, line):
         obj = json.loads(line)
-        if 'y' in obj.keys():
-            return np.array(obj['x'], dtype=int), np.array(obj['y'], dtype=int)
-        else:
-            return np.array(obj['x'], dtype=int), np.array(obj['x'], dtype=int)
+        return np.array(obj['x'], dtype=int), np.array(obj['y_mlm'], dtype=int), np.array(obj['y_gen'])
 
 
 class NextSequencePredictionFileLoader(MultiFileLoader):
@@ -580,7 +590,7 @@ class TiedEmbeddingsSeq2SeqModel(Seq2SeqModel):
         encoder_outputs = self.encode(input, src_len)
         output = self.decode(encoder_outputs, input['dst'])
         # Return as B x T x H
-        encoder_outputs = self.lm_output(encoder_outputs)
+        encoder_outputs = self.lm_output(encoder_outputs.output)
         return encoder_outputs, output
 
     def make_input(self, batch_dict, perm=False):
