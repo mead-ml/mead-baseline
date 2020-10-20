@@ -4,8 +4,8 @@ import unicodedata
 from typing import Tuple, List, Iterable, Set, Dict
 import numpy as np
 from eight_mile.downloads import open_file_or_url, get_file_or_url
-from baseline.utils import exporter, optional_params, listify, register, Offsets, import_user_module, validate_url
-
+from eight_mile.utils import exporter, optional_params, listify, register, Offsets, is_sequence
+from baseline.utils import import_user_module
 
 __all__ = []
 export = exporter(__all__)
@@ -499,6 +499,81 @@ class DictTextNGramVectorizer(TextNGramVectorizer):
 
 
 @export
+class BPESubwordNMT:
+    """
+    Use subword_nmt for subwords.  If you want to use this class, make sure you have it installed
+    """
+    def __init__(self, codes_path, vocab_path, glossaries=None):
+        from subword_nmt.apply_bpe import BPE, read_vocabulary
+        import codecs
+        import sys
+        import re
+
+        glossaries = glossaries if glossaries else []
+        if not is_sequence(glossaries):
+            glossaries_path = get_file_or_url(glossaries)
+            with open(glossaries_path, 'rb') as rf:
+                glossaries = [l.strip() for l in rf.read()]
+
+        class BPEImpl(BPE):
+            def __init__(self, codes, merges=-1, separator='@@', vocab=None, glossaries=None):
+
+                codes.seek(0)
+                offset = 1
+
+                # check version information
+                firstline = codes.readline()
+                if firstline.startswith('#version:'):
+                    self.version = tuple([int(x) for x in re.sub(r'(\.0+)*$','', firstline.split()[-1]).split(".")])
+                    offset += 1
+                else:
+                    self.version = (0, 2)
+                    codes.seek(0)
+                self.bpe_codes = [tuple(item.strip('\r\n ').split(' ')) for (n, item) in enumerate(codes) if (n < merges or merges == -1)]
+                num_elements = len(self.bpe_codes[0])
+                if num_elements == 2:
+                    self.bpe_codes = dict([(code, i) for (i, code) in reversed(list(enumerate(self.bpe_codes)))])
+
+                else:
+                    self.bpe_codes = dict([((code[0], code[1]), i) for (i,code) in reversed(list(enumerate(self.bpe_codes)))])
+                self.bpe_codes_reverse = dict([(pair[0] + pair[1], pair) for pair, i in self.bpe_codes.items()])
+                self.separator = separator
+                self.vocab = vocab
+                self.glossaries = glossaries if glossaries else []
+                self.glossaries_regex = re.compile('^({})$'.format('|'.join(glossaries))) if glossaries else None
+                self.cache = {}
+        codes_path = get_file_or_url(codes_path)
+        vocab_path = get_file_or_url(vocab_path)
+        bpe_codes_fin = codecs.open(codes_path, encoding='utf-8')
+        bpe_vocab_fin = codecs.open(vocab_path, encoding='utf-8')
+        vocabulary = read_vocabulary(bpe_vocab_fin, threshold=None)
+
+        self.bpe = BPEImpl(bpe_codes_fin, merges=-1, separator='@@', vocab=vocabulary, glossaries=glossaries)
+
+    @property
+    def glossaries(self):
+        return self.bpe.glossaries
+
+    @property
+    def subword_sentinel(self):
+        return "@@"
+
+    def apply(self, sentences):
+        return list(self.apply_gen(sentences))
+
+    def apply_gen(self, sentences):
+        buffer = []
+        for x in self.bpe.segment_tokens(sentences, 0.0):
+            buffer.append(x)
+            if not x.endswith(self.subword_sentinel):
+                v = ' '.join(buffer)
+                buffer = []
+                yield v
+        if buffer:
+            yield ' '.join(buffer)
+
+
+@export
 class SavableFastBPE:
     """
     Use fastBPE for subwords.  If you want to use this class, make sure you have it installed
@@ -577,10 +652,17 @@ class HasSubwordTokens(HasPredefinedVocab):
 @export
 @register_vectorizer(name='bpe1d')
 class BPEVectorizer1D(AbstractVectorizer, HasSubwordTokens):
-    """Define a Baseline Vectorizer for BPE using fastBPE (https://github.com/glample/fastBPE)
+    """Define a Baseline Vectorizer for BPE using fastBPE (https://github.com/glample/fastBPE) or
+    subword-nmt (https://github.com/rsennrich/subword-nmt)
 
     If you use tokens=bpe, this vectorizer is used, and so then there is a
-    dependency on fastBPE
+    dependency on either fastBPE or subword-NMT.  To configure which, set boolean `use_fast_bpe`
+    (defaults to True).  If using subword-NMT, you can make use of out-of-vocabulary glossaries.
+
+    The implementation here subclasses the subword NMT `BPE` class to allow it to read in
+    `fastBPE` files.  The difference is those files have a 3rd column, and they contain do not
+    specify a head of #version 0.2 even though they are v0.2 files.
+    See https://github.com/rsennrich/subword-nmt/issues/76
 
     To use BPE, we assume that a Dictionary of codes and vocab was already created
 
@@ -591,10 +673,20 @@ class BPEVectorizer1D(AbstractVectorizer, HasSubwordTokens):
         self.max_seen = 128
         self.model_file = kwargs.get('model_file')
         self.vocab_file = kwargs.get('vocab_file')
-        self.tokenizer = SavableFastBPE(self.model_file, self.vocab_file)
-        self.mxlen = kwargs.get('mxlen', -1)
-        self._vocab = {k: i for i, k in enumerate(self.read_vocab(self.vocab_file))}
+        use_fast_bpe = kwargs.get('use_fast_bpe', True)
         self._special_tokens = {"[CLS]", "<unk>", "<EOS>"}
+
+        extra_tokens = []
+        if use_fast_bpe:
+            self.tokenizer = SavableFastBPE(self.model_file, self.vocab_file)
+        else:
+            glossaries = kwargs.get('glossaries')
+            self.tokenizer = BPESubwordNMT(self.model_file, self.vocab_file, glossaries)
+            extra_tokens = self.tokenizer.glossaries
+
+        self.mxlen = kwargs.get('mxlen', -1)
+        vocab_list = self.read_vocab(self.vocab_file)
+        self._vocab = {k: i for i, k in enumerate(vocab_list + extra_tokens)}
 
     @property
     def vocab(self):

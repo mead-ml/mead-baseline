@@ -86,6 +86,7 @@ def main():
             'report': ['visdom', 'tensorboard'],
             'yaml': ['pyyaml'],
             'bpe': ['fastBPE'],
+            'bpex': ['fastBPE', 'subword-nmt'],
             'tf2': ['tensorflow_addons'],
             'grpc': ['grpc'],
             'onnx': ['onnxruntime']
