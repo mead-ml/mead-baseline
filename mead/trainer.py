@@ -137,7 +137,7 @@ def main():
     if args.backend:
         config_params['backend'] = normalize_backend(args.backend)
 
-    config_params['modules'] = list(set(chain(config_params.get('modules', []), args.modules)))
+    config_params['modules'] = list(chain(config_params.get('modules', []), args.modules))
 
     cmd_hooks = args.reporting if args.reporting is not None else []
     config_hooks = config_params.get('reporting') if config_params.get('reporting') is not None else []
