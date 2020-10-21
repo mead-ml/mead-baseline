@@ -69,15 +69,15 @@ def _parse_json(example):
 
 feature_description = {
     'x': tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True, default_value=0),
-    'mlm': tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True, default_value=0),
-    'gen': tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True, default_value=0),
+    'y': tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True, default_value=0),
+    'y_gen': tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True, default_value=0),
 
 }
 
 
 def _parse_tf_record(example_proto):
     record = tf.io.parse_single_example(example_proto, feature_description)
-    return record['x'], record['mlm'], record['gen']
+    return record['x'], record['y'], record['y_gen']
 
 
 def decode_json(example):
@@ -197,7 +197,7 @@ def train():
         args.restart = True
 
     if args.basedir is None:
-        args.basedir = '{}-{}-paired-{}-bpe-{}'.format(args.model_type, args.reader_type, args.dataset_key, os.getpid())
+        args.basedir = 's2s-paired-{}-bpe-{}'.format(args.dataset_key, os.getpid())
     logging.basicConfig(level=logging.INFO)
     logger.info(f"Writing results to {args.basedir}")
 
