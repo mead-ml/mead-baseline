@@ -28,13 +28,13 @@ class TiedEmbeddingsSeq2SeqModel(Seq2SeqModel):
         super().__init__(tied_embeddings, tied_embeddings['x'], **kwargs)
 
         output_bias = kwargs.get('output_bias', False)
-        self.lm_output = WeightTieDense(tied_embeddings, output_bias)
+        self.lm_output = WeightTieDense(tied_embeddings['x'], output_bias)
 
     def call(self, input):
         src_len = input['src_len']
         encoder_outputs = self.encode(input, src_len)
         output = self.decode(encoder_outputs, input['dst'])
-        encoder_outputs = self.lm_output(encoder_outputs)
+        encoder_outputs = self.lm_output(encoder_outputs.output)
         # Return as B x T x H
         return encoder_outputs, output
 
@@ -48,13 +48,14 @@ class Loss:
 
         features['src_len'] = tf.repeat(tf.shape(features['x'])[-1], tf.shape(features['x'])[0])
         mlm_labels = labels[0]
-        features['dst'] = labels[1]
+        gen_labels = labels[1]
+        features['dst'] = gen_labels
         mlm_logits, logits = model(features)
-        labels = labels[:, 1:]
-        gen_loss_mask = tf.cast(labels != 0, tf.float32)
+        gen_labels = gen_labels[:, 1:]
+        gen_loss_mask = tf.cast(gen_labels != 0, tf.float32)
         mlm_loss_mask = tf.cast(mlm_labels != 0, tf.float32)
         logits = logits[:, :-1, :]
-        gen_losses = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=labels)
+        gen_losses = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=gen_labels)
         mlm_losses = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=mlm_logits, labels=mlm_labels)
         gen_losses = tf.reduce_sum(gen_losses * gen_loss_mask) / tf.reduce_sum(gen_loss_mask)
         mlm_losses = tf.reduce_sum(mlm_losses * mlm_loss_mask) / tf.reduce_sum(mlm_loss_mask)
