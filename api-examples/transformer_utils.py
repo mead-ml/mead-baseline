@@ -537,6 +537,8 @@ class MultiTFRecordLoader(MultiFileLoader):
                     # not sure about the optimal choice of shuffle_queue_size here:
                     itr = self.tfrecord.iterator_utils.shuffle_iterator(itr, queue_size=128)
                 for d in itr:
+                    if 'y_gen' in d.keys():
+                        yield np.array(d['x'], dtype=int), np.array(d['y'], dtype=int), np.array(d['y_gen'], dtype=int)
                     if 'y' in d.keys():
                         # d['x'] is in np.int32, but pytorch require np.int64
                         yield np.array(d['x'], dtype=int), np.array(d['y'], dtype=int)
