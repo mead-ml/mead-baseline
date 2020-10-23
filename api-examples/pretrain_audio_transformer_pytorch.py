@@ -21,7 +21,9 @@ import torch.nn.functional as F
 logger = logging.getLogger(__file__)
 
 
-CONV_FEATURES = [(512, 10, 5), (512, 3, 2), (512, 3, 2), (512, 3, 2), (512, 3, 2), (512, 2, 2), (512, 2, 2)]
+CONV_FEATURES = {16: [(512, 10, 5), (512, 3, 2), (512, 3, 2), (512, 3, 2), (512, 3, 2), (512, 2, 2), (512, 2, 2)],
+                 8 : [(512, 10, 5), (512, 3, 2), (512, 3, 2), (512, 3, 2), (512, 2, 2), (512, 2, 2)]}
+
 START_TEMP = 2
 END_TEMP = 0.5
 TEMP_DECAY_FACTOR = 0.999995
@@ -521,22 +523,22 @@ class Wav2Vec2Model(nn.Module):
         self.dropout_input = torch.nn.Dropout(dropout_input)
         self.dropout_features = torch.nn.Dropout(dropout_features)
 
-        self.fx = ConvFeatureExtractionModel(conv_features)
+        self.feature_extractor = ConvFeatureExtractionModel(conv_features)
         self.proj_to_input = Dense(fx_dsz, d_model)
-        self.vq = GumbelVectorQuantizer(fx_dsz, num_vq_vars, start_temp, end_temp, temp_decay_factor, num_vq_groups, d_model)
-        self.transformer = AudioTransformerEncoder(num_heads, d_model, dropout, num_layers, d_ff=d_ff)
-        self.project_q = Dense(d_model, final_dim)
+        self.quantizer = GumbelVectorQuantizer(fx_dsz, num_vq_vars, start_temp, end_temp, temp_decay_factor, num_vq_groups, final_dim)
+        self.encoder = AudioTransformerEncoder(num_heads, d_model, dropout, num_layers, d_ff=d_ff)
+        self.project_q = Dense(final_dim, final_dim)
         self.final_proj = Dense(d_model, final_dim)
         self.mask_emb = nn.Parameter(
             torch.FloatTensor(d_model).uniform_()
         )
 
     def set_num_updates(self, s):
-        self.vq.set_num_updates(s)
+        self.quantizer.set_num_updates(s)
 
     def forward(self, x):
 
-        fx = self.fx(x)
+        fx = self.feature_extractor(x)
         features = self.layer_norm(fx)
         unmasked_features = features.clone()
         features = self.proj_to_input(features)
@@ -551,8 +553,8 @@ class Wav2Vec2Model(nn.Module):
         y = unmasked_features[time_mask].view(
             unmasked_features.size(0), -1, unmasked_features.size(-1)
         )
-        x = self.transformer(features)
-        y, vq_probs = self.vq(y)
+        x = self.encoder(features)
+        y, vq_probs = self.quantizer(y)
 
         y = self.project_q(y)
         x = self.final_proj(x)
@@ -599,6 +601,7 @@ def train():
                         help="dataset key for basedir")
     parser.add_argument("--num_vq_vars", type=int, default=320)
     parser.add_argument("--num_vq_groups", type=int, default=2)
+    parser.add_argument("--sr", type=int, choices=[8, 16], default=16)
     parser.add_argument("--d_model", type=int, default=768, help="Model dimension (and embedding dsz)")
     parser.add_argument("--d_ff", type=int, default=3072, help="FFN dimension")
     parser.add_argument("--d_k", type=int, default=None, help="Dimension per head.  Use if num_heads=1 to reduce dims")
@@ -666,7 +669,7 @@ def train():
     valid_loader = DataLoader(valid_set, batch_size=None)
     logger.info("Loaded datasets")
 
-    model = Wav2Vec2Model(CONV_FEATURES, args.num_vq_vars,
+    model = Wav2Vec2Model(CONV_FEATURES[args.sr], args.num_vq_vars,
                           START_TEMP, END_TEMP, TEMP_DECAY_FACTOR, args.num_vq_groups, args.d_model,
                           args.num_heads, args.num_layers,
                           args.dropout, args.d_ff).cuda()
@@ -769,4 +772,3 @@ def train():
 
 if __name__ == "__main__":
     train()
-
