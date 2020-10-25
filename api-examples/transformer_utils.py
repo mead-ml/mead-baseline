@@ -593,6 +593,8 @@ class TiedEmbeddingsSeq2SeqModel(Seq2SeqModel):
         output = self.decode(encoder_outputs, input['dst'])
         # Return as B x T x H
         encoder_outputs = self.lm_output(encoder_outputs.output)
+        B, T, H = encoder_outputs.shape
+        encoder_outputs = torch.log_softmax(encoder_outputs.view(B * T, H), dim=-1).view(B, T, H)
         return encoder_outputs, output
 
     def make_input(self, batch_dict, perm=False):
