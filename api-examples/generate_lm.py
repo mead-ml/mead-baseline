@@ -16,7 +16,6 @@ logger = logging.getLogger(__file__)
 
 
 def decode_sentence(model, vectorizer, query, word2index, index2word, device, end_token='<EOS>', sample=True, sample_temperature=1.0):
-    vectorizer.mxlen = 256
     vec, length = vectorizer.run(query, word2index)
     bpe = [index2word[v] for v in vec if v != 0]
     logger.info('[BPE] ' + ' '.join(bpe))
