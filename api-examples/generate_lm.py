@@ -79,7 +79,7 @@ def run():
     parser = ArgumentParser()
     parser.add_argument("--basedir", type=str)
     parser.add_argument("--checkpoint", type=str, help='Checkpoint name or directory to load')
-    parser.add_argument("--sample", type=str2bool, help='Sample from the decoder?  Defaults to `false`', default=0)
+    parser.add_argument("--sample", type=str2bool, help='Sample from the decoder?  Defaults to `true`', default=True)
     parser.add_argument("--query", type=str, default='hello , <unk> are you today ?')
     parser.add_argument("--dataset_cache", type=str, default=os.path.expanduser('~/.bl-data'),
                         help="Path or url of the dataset cache")
@@ -93,7 +93,6 @@ def run():
                         help="register label of the embeddings, so far support positional or learned-positional")
     parser.add_argument("--subword_model_file", type=str, required=True)
     parser.add_argument("--subword_vocab_file", type=str, required=True)
-    parser.add_argument("--use_cls", type=str2bool, default=False)
     parser.add_argument('--go_token', default='<GO>')
     parser.add_argument('--end_token', default='<EOU>')
     parser.add_argument("--activation", type=str, default='gelu')
@@ -102,10 +101,13 @@ def run():
     parser.add_argument("--device", type=str,
                         default="cuda" if torch.cuda.is_available() else "cpu",
                         help="Device (cuda or cpu)")
-    parser.add_argument('--temperature', help='Sample temperature during generation', default=1.0)
+    parser.add_argument('--temperature', help='Sample temperature during generation', default=1.0, type=float)
 
     args = parser.parse_args()
-
+    if args.sample:
+        logger.info("Sampling with temperature %f", args.temperature)
+    else:
+        logger.info("Sampling is turned off")
     if torch.cuda.device_count() == 1:
         torch.cuda.set_device(0)
         args.device = torch.device("cuda", 0)
@@ -129,7 +131,8 @@ def run():
 
     index2word = revlut(vocab)
     print('[Query]', args.query)
-    bpe_out = decode_sentence(model, vectorizer, args.query.split(), vocab, index2word, args.device, end_token=args.end_token, sample=args.sample)
+    bpe_out = decode_sentence(model, vectorizer, args.query.split(), vocab, index2word, args.device,
+                              end_token=args.end_token, sample=args.sample, sample_temperature=args.temperature)
     unbpe = ' '.join(bpe_out).replace('@@ ', '')
     print('[Response]', unbpe)
 
