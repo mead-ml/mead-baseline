@@ -252,13 +252,17 @@ def train():
         else:
             tick_type = vec[-2]
         step_num = int(vec[-1].split(".")[0])
+
         if tick_type == 'epoch':
             start_epoch = step_num
             global_step = start_epoch * steps_per_epoch
 
-        else:
+        elif tick_type == 'step':
             start_epoch = step_num // steps_per_epoch
             global_step = step_num
+        else:
+            logger.warning(f"The previous tick was {step_num} but command-line specifies to ignore, setting to 0")
+
 
         logger.info("Restarting from a previous checkpoint %s.\n\tStarting at global_step=%d, epoch=%d",
                     args.restart_from, global_step, start_epoch+1)

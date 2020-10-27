@@ -14,7 +14,7 @@ from baseline.vectorizers import Token1DVectorizer, BPEVectorizer1D
 logger = logging.getLogger(__file__)
 
 
-def decode_sentence(model, vectorizer, query, word2index, index2word, device, max_response_length, sou_token, sample=True):
+def decode_sentence(model, vectorizer, query, word2index, index2word, device, max_response_length, sou_token, eou_token, sample=True):
     UNK = word2index.get('<UNK>')
     MASK = word2index.get('[MASK]')
     GO = word2index.get(sou_token)
@@ -26,14 +26,14 @@ def decode_sentence(model, vectorizer, query, word2index, index2word, device, ma
 
     toks = torch.from_numpy(vec).unsqueeze(0).to(device=device)
     length = torch.from_numpy(np.array(length)).unsqueeze(0).to(device=device)
-    EOU = word2index.get('<EOU>')
+    EOU = word2index.get(eou_token)
     response = []
     with torch.no_grad():
         dst = [GO]
         for i in range(max_response_length):
             dst_tensor = torch.zeros_like(toks).squeeze()
             dst_tensor[:len(dst)] = torch.from_numpy(np.array(dst)).to(device=device)
-            predictions = model({'x': toks, 'src_len': length, 'dst': dst_tensor.unsqueeze(0)})
+            _, predictions = model({'x': toks, 'src_len': length, 'dst': dst_tensor.unsqueeze(0)})
             token_offset = len(dst) - 1
             if not sample:
                 output = torch.argmax(predictions, -1).squeeze(0)
@@ -67,7 +67,7 @@ def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, d_k, a
            "src_lengths_key": "x_lengths",
            "d_k": d_k,
            "activation": activation,
-           "rpr_k": rpr_k}
+           "rpr_k": None}
     model = TiedEmbeddingsSeq2SeqModel(embeddings, **hps)
     if checkpoint_name.endswith('npz'):
         load_transformer_seq2seq_npz(model, checkpoint_name)
@@ -99,9 +99,10 @@ def run():
     parser.add_argument("--subword_vocab_file", type=str, required=True)
     parser.add_argument("--activation", type=str, default='relu')
     parser.add_argument('--rpr_k', help='Relative attention positional sizes pass 0 if you dont want relative attention',
-                        type=int, default=[48]*8, nargs='+')
+                        type=int, default=[None], nargs='+')
     parser.add_argument("--use_cls", type=str2bool, default=True)
     parser.add_argument("--go_token", default="<GO>")
+    parser.add_argument("--end_token", default="<EOU>")
     parser.add_argument("--device", type=str,
                         default="cuda" if torch.cuda.is_available() else "cpu",
                         help="Device (cuda or cpu)")
@@ -136,11 +137,11 @@ def run():
 
     cls = None if not args.use_cls else '[CLS]'
     vectorizer = BPEVectorizer1D(model_file=args.subword_model_file, vocab_file=args.subword_vocab_file,
-                                 mxlen=args.nctx, emit_begin_tok=cls)
+                                 mxlen=args.nctx, emit_begin_tok=cls, emit_end_tok='<EOS>')
 
     index2word = revlut(vocab)
     print('[Query]', args.query)
     print('[Response]', ' '.join(decode_sentence(model, vectorizer, args.query.split(), vocab, index2word, args.device,
-                                                 max_response_length=args.nctx, sou_token=args.go_token, sample=args.sample)))
+                                                 max_response_length=args.nctx, sou_token=args.go_token, eou_token=args.end_token, sample=args.sample)))
 
 run()
