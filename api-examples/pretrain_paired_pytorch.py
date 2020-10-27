@@ -263,6 +263,7 @@ def train():
             valid_itr = iter(valid_loader)
             for j in range(valid_steps):
                 with torch.no_grad():
+                    batch = next(valid_itr)
                     x, y = batch
                     inputs = x.to(args.device)
                     labels = y.to(args.device)
