@@ -15,11 +15,11 @@ from transformer_utils import find_latest_checkpoint
 logger = logging.getLogger(__file__)
 
 
-def decode_sentence(model, vectorizer, query, word2index, index2word, device, end_token='<EOS>', sample=True):
+def decode_sentence(model, vectorizer, query, word2index, index2word, device, end_token='<EOS>', sample=True, sample_temperature=1.0):
     vectorizer.mxlen = 256
     vec, length = vectorizer.run(query, word2index)
     bpe = [index2word[v] for v in vec if v != 0]
-    print('[BPE] ' + ' '.join(bpe))
+    logger.info('[BPE] ' + ' '.join(bpe))
     toks = torch.from_numpy(vec).to(device=device)
 
     with torch.no_grad():
@@ -33,7 +33,7 @@ def decode_sentence(model, vectorizer, query, word2index, index2word, device, en
                 output = torch.argmax(predictions[length + i - 1], -1).item()
                 word = index2word[output]
             else:
-                sample_dist = torch.softmax(predictions[length + i - 1], -1)
+                sample_dist = torch.softmax(predictions[length + i - 1] / sample_temperature, -1)
                 output = torch.multinomial(sample_dist, num_samples=1)
                 output = output.squeeze(0).item()
                 word = index2word[output]
@@ -42,7 +42,7 @@ def decode_sentence(model, vectorizer, query, word2index, index2word, device, en
             if word == end_token:
                 break
 
-        return words
+        return words[:-1]
 
 
 def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, d_k, checkpoint_name, activation):
@@ -102,6 +102,8 @@ def run():
     parser.add_argument("--device", type=str,
                         default="cuda" if torch.cuda.is_available() else "cpu",
                         help="Device (cuda or cpu)")
+    parser.add_argument('--temperature', help='Sample temperature during generation', default=1.0)
+
     args = parser.parse_args()
 
     if torch.cuda.device_count() == 1:
@@ -128,7 +130,7 @@ def run():
     index2word = revlut(vocab)
     print('[Query]', args.query)
     bpe_out = decode_sentence(model, vectorizer, args.query.split(), vocab, index2word, args.device, end_token=args.end_token, sample=args.sample)
-
-    print('[Response]', ' '.join(bpe_out))
+    unbpe = ' '.join(bpe_out).replace('@@ ', '')
+    print('[Response]', unbpe)
 
 run()
