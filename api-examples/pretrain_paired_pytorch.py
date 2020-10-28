@@ -202,12 +202,14 @@ def train():
             start_epoch = step_num
             global_step = start_epoch * steps_per_epoch
 
-        else:
+        elif tick_type == 'step':
             start_epoch = step_num // steps_per_epoch
             global_step = step_num
 
-        logger.info("Restarting from a previous checkpoint %s.\n\tStarting at global_step=%d, epoch=%d",
-                    args.restart_from, global_step, start_epoch+1)
+        else:
+            logger.warning(f"The previous tick was {step_num} but command-line specifies to ignore, setting to 0")
+            logger.info("Restarting from a previous checkpoint %s.\n\tStarting at global_step=%d, epoch=%d",
+                        args.restart_from, global_step, start_epoch+1)
     optimizer = OptimizerManager(model, global_step, optim=args.optim, lr=args.lr, lr_function=lr_sched, weight_decay=args.weight_decay)
     logger.info("Model has {:,} parameters".format(sum(p.numel() for p in model.parameters() if p.requires_grad)))
 
@@ -261,6 +263,7 @@ def train():
             valid_itr = iter(valid_loader)
             for j in range(valid_steps):
                 with torch.no_grad():
+                    batch = next(valid_itr)
                     x, y = batch
                     inputs = x.to(args.device)
                     labels = y.to(args.device)
