@@ -325,7 +325,7 @@ def load_data_caching(token_type, reader, dataset, file_key, vocabs, caching, lo
 
 class MultiFileLoader(IterableDataset):
 
-    def __init__(self, directory, pattern, vocabs, vectorizer, nctx, last_turn_only=True, distribute=True, shuffle=True):
+    def __init__(self, directory, pattern, vocabs, vectorizer, nctx, last_turn_only=False, distribute=True, shuffle=True):
         super().__init__()
         self.vectorizer = vectorizer
         self.pattern = pattern
@@ -432,8 +432,15 @@ class NextTurnPredictionFileLoader(MultiFileLoader):
                 return None
             q_vec, q_valid_lengths = self.vectorizer.run(q.split(), self.vocab)
         else:
-            q_vec, q_valid_lengths = self.vectorizer.run(reversed(q.split()), self.vocab)
-            q_vec = np.roll(q_vec[::-1], -(self.vectorizer.mxlen - q_valid_lengths))
+
+            q = [self.vectorizer.vocab.get(x, Offsets.UNK) for x in self.vectorizer.iterable(q)]
+            q_valid_lengths = len(q)
+            if q_valid_lengths > self.vectorizer.mxlen:
+                start = q_valid_lengths - self.vectorizer.mxlen
+                q_vec = np.array(q[start:], dtype=np.long)
+            else:
+                q_vec = np.zeros(self.vectorizer.mxlen, dtype=np.long)
+                q_vec[:q_valid_lengths] = np.array(q)
 
         r_vec, r_valid_lengths = self.vectorizer.run(r.split(), self.vocab)
         return q_vec, r_vec

@@ -14,7 +14,7 @@ from baseline.vectorizers import Token1DVectorizer, BPEVectorizer1D
 logger = logging.getLogger(__file__)
 
 
-def decode_sentence(model, vectorizer, query, word2index, index2word, device, max_response_length, sou_token, sample=True):
+def decode_sentence(model, vectorizer, query, word2index, index2word, device, max_response_length, sou_token, eou_token, sample=True):
     UNK = word2index.get('<UNK>')
     MASK = word2index.get('[MASK]')
     GO = word2index.get(sou_token)
@@ -26,7 +26,7 @@ def decode_sentence(model, vectorizer, query, word2index, index2word, device, ma
 
     toks = torch.from_numpy(vec).unsqueeze(0).to(device=device)
     length = torch.from_numpy(np.array(length)).unsqueeze(0).to(device=device)
-    EOU = word2index.get('<EOU>')
+    EOU = word2index.get(eou_token)
     response = []
     with torch.no_grad():
         dst = [GO]
@@ -100,8 +100,9 @@ def run():
     parser.add_argument("--activation", type=str, default='relu')
     parser.add_argument('--rpr_k', help='Relative attention positional sizes pass 0 if you dont want relative attention',
                         type=int, default=[48]*8, nargs='+')
-    parser.add_argument("--use_cls", type=str2bool, default=True)
+    parser.add_argument("--use_cls", type=str2bool, default=False, help="Prepend a [CLS] token on the encoder?")
     parser.add_argument("--go_token", default="<GO>")
+    parser.add_argument("--end_token", default="<EOU>")
     parser.add_argument("--device", type=str,
                         default="cuda" if torch.cuda.is_available() else "cpu",
                         help="Device (cuda or cpu)")
@@ -141,6 +142,8 @@ def run():
     index2word = revlut(vocab)
     print('[Query]', args.query)
     print('[Response]', ' '.join(decode_sentence(model, vectorizer, args.query.split(), vocab, index2word, args.device,
-                                                 max_response_length=args.nctx, sou_token=args.go_token, sample=args.sample)))
+                                                 max_response_length=args.nctx, sou_token=args.go_token,
+                                                 eou_token=args.end_token,
+                                                 sample=args.sample)))
 
 run()
