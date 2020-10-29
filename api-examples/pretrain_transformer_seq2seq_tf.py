@@ -5,8 +5,7 @@ import os
 from argparse import ArgumentParser
 import baseline
 import baseline.tf
-baseline.tf.set_tf_eager_debug(True)
-
+#baseline.tf.set_tf_eager_debug(True)
 from eight_mile.utils import str2bool, write_json, Average, read_yaml, get_num_gpus_multiworker
 from baseline.tf.embeddings import *
 import baseline.embeddings
