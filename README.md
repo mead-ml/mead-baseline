@@ -43,6 +43,14 @@ pip install -e .
 
 This first installs `mead-layers` AKA 8 mile, a tiny layers API containing PyTorch and TensorFlow primitives, locally and then `mead-baseline`
 
+### Dockerhub
+
+We use Github CI/CD to automatically cut releases for TensorFlow (1.x and 2.x) and PyTorch via this project:
+
+https://github.com/mead-ml/mead-gpu
+
+Links to the latest dockerhub images can be found there
+
 ## A Note About Versions
 
 Deep Learning Frameworks are evolving quickly and changes are not always
