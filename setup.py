@@ -89,7 +89,8 @@ def main():
             'bpex': ['fastBPE', 'subword-nmt'],
             'tf2': ['tensorflow_addons'],
             'grpc': ['grpc'],
-            'onnx': ['onnxruntime']
+            'onnx': ['onnxruntime'],
+            'tfrecord': ['tfrecord']
         },
         entry_points={
             'console_scripts': [
