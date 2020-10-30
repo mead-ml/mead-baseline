@@ -250,7 +250,7 @@ for text in input_files:
         print(f"Reading from {text}...")
         for line in rf:
             to_bpe = line.strip().split()
-            if len(to_bpe) == 0:
+            if not to_bpe:
                 continue
             to_bpe += [args.tok_on_eol]
 
