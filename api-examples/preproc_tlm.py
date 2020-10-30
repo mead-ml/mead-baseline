@@ -32,7 +32,7 @@ def create_record(chunk, str_lookup, prefix, suffix, mask_value, vocab_size, cau
         chunk = [prefix] + chunk
         ignore_prefix = True
     if suffix:
-        chunk = [suffix] + chunk
+        chunk = chunk + [suffix]
         ignore_suffix = True
 
     if causal:
@@ -203,7 +203,7 @@ parser.add_argument("--prefix", type=str, help="Prefix every line with this toke
 parser.add_argument("--suffix", type=str, help="Suffix every line with this token")
 parser.add_argument("--max_file_size", type=int, default=100, help="Shard size, defaults to 100MB")
 parser.add_argument("--stride", type=int, help="Tokens to stride before next read, defaults to `nctx`")
-parser.add_argument("--eos_on_eol", type=baseline.str2bool, default=True)
+parser.add_argument("--tok_on_eol", type=str, default="<EOS>")
 parser.add_argument("--cased", type=baseline.str2bool, default=True)
 parser.add_argument("--causal", type=baseline.str2bool, default=False, help="Generate for CLM, not MLM (X value only)")
 parser.add_argument("--pad_y", type=baseline.str2bool, default=True, help="Replace all non-masked Y values with <PAD>")
@@ -250,8 +250,9 @@ for text in input_files:
         print(f"Reading from {text}...")
         for line in rf:
             to_bpe = line.strip().split()
-            if args.eos_on_eol:
-                to_bpe += ['<EOS>']
+            if not to_bpe:
+                continue
+            to_bpe += [args.tok_on_eol]
 
             output, available = vectorizer.run(to_bpe, vectorizer.vocab)
             while available > 0:
