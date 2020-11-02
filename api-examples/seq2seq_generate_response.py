@@ -46,12 +46,12 @@ def decode_sentence(model, vectorizer, query, word2index, index2word, device, ma
 
             dst.append(output)
             response.append(index2word.get(dst[-1], '<ERROR>'))
-            if output == Offsets.EOS or output == EOU:
+            if output == Offsets.EOS or output == EOU or output == Offsets.PAD:
                 break
     return response
 
 
-def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, d_k, activation, checkpoint_name):
+def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, d_k, activation, checkpoint_name, device):
     if len(rpr_k) == 0 or rpr_k[0] < 1:
         rpr_k = None
     rpr_k = listify(rpr_k)
@@ -72,7 +72,7 @@ def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, d_k, a
     if checkpoint_name.endswith('npz'):
         load_transformer_seq2seq_npz(model, checkpoint_name)
     else:
-        model.load_state_dict(torch.load(checkpoint_name))
+        model.load_state_dict(torch.load(checkpoint_name, map_location=torch.device(device)))
     model.eval()
     print(model)
     return model
@@ -132,7 +132,8 @@ def run():
     embeddings = preproc_data['embeddings']
     vocab = preproc_data['vocab']
     model = create_model(embeddings, d_model=args.d_model, d_ff=args.d_ff, num_heads=args.num_heads, num_layers=args.num_layers,
-                         rpr_k=args.rpr_k, d_k=args.d_k, checkpoint_name=checkpoint, activation=args.activation)
+                         rpr_k=args.rpr_k, d_k=args.d_k, checkpoint_name=checkpoint, activation=args.activation,
+                         device=args.device)
     model.to(args.device)
 
     cls = None if not args.use_cls else '[CLS]'

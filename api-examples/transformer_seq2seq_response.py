@@ -54,7 +54,6 @@ def decode_sentence(model, vectorizer, query, word2index, index2word, device, ma
 def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, d_k, activation, checkpoint_name):
     if len(rpr_k) == 0 or rpr_k[0] < 1:
         rpr_k = None
-    rpr_k = listify(rpr_k)
     logger.info("Creating tied encoder decoder model")
     hps = {"dsz": d_model,
            "hsz": d_model,

@@ -507,8 +507,10 @@ class NextSequencePredictionFileLoader(MultiFileLoader):
 
 class MultiTFRecordLoader(MultiFileLoader):
     """Using module tfrecord to read tfrecord file into PyTorch datasets"""
-    import tfrecord
-
+    try:
+        import tfrecord
+    except:
+        pass
     def __init__(self, directory, pattern, vocabs, vectorizer, nctx, last_turn_only=True, distribute=True, shuffle=True):
         super().__init__(directory, pattern, vocabs, vectorizer, nctx, last_turn_only, distribute, shuffle)
         # create index first
