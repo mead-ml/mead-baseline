@@ -103,6 +103,7 @@ def run():
     parser.add_argument("--use_cls", type=str2bool, default=False, help="Prepend a [CLS] token on the encoder?")
     parser.add_argument("--go_token", default="<GO>")
     parser.add_argument("--end_token", default="<EOU>")
+    parser.add_argument("--show_query", type=str2bool, default=False, help="Show the original query as well")
     parser.add_argument("--device", type=str,
                         default="cuda" if torch.cuda.is_available() else "cpu",
                         help="Device (cuda or cpu)")
@@ -143,10 +144,15 @@ def run():
     index2word = revlut(vocab)
     with open(args.input_file) as rf:
         for query in rf:
+            query = query.strip()
             output = ' '.join(decode_sentence(model, vectorizer, query.split(), vocab, index2word, args.device,
                                               max_response_length=args.nctx, sou_token=args.go_token,
                                               eou_token=args.end_token,
                                               sample=args.sample))
-            print(output.replace('@@ ', ''))
-
+            output = output.replace('@@ ', '')
+            if args.show_query:
+                print(query)
+                print(f"\t{output}")
+            else:
+                print(output)
 run()
