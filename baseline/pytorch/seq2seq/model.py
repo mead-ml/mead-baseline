@@ -132,8 +132,8 @@ class EncoderDecoderModelBase(nn.Module, EncoderDecoderModel):
             lengths = torch.from_numpy(lengths)
         lengths, perm_idx = lengths.sort(0, descending=True)
 
-        if self.gpu:
-            lengths = lengths.cuda()
+        #if self.gpu:
+        #    lengths = lengths.cuda()
         example['src_len'] = lengths
         for key in self.src_embeddings.keys():
             example[key] = self.input_tensor(key, batch_dict, perm_idx, numpy_to_tensor=numpy_to_tensor)

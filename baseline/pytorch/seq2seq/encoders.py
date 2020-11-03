@@ -11,7 +11,7 @@ RNNEncoderOutput = namedtuple("RNNEncoderOutput", ("output", "hidden", "src_mask
 
 def _make_src_mask(output, lengths):
     T = output.shape[1]
-    src_mask = sequence_mask(lengths, T).type_as(lengths.data)
+    src_mask = sequence_mask(lengths, T).type_as(lengths.data).to(device=output.device)
     return src_mask
 
 
@@ -58,7 +58,7 @@ class TransformerEncoderWrapper(torch.nn.Module):
 
     def forward(self, bth, lengths):
         T = bth.shape[1]
-        src_mask = sequence_mask(lengths, T).type_as(lengths.data)
+        src_mask = sequence_mask(lengths, T).type_as(lengths.data).to(bth.device)
         bth = self.proj(bth)
         output = self.transformer((bth, src_mask.unsqueeze(1).unsqueeze(1)))
         return TransformerEncoderOutput(output=output, src_mask=src_mask)
