@@ -433,7 +433,7 @@ class NextTurnPredictionFileLoader(MultiFileLoader):
             q_vec, q_valid_lengths = self.vectorizer.run(q.split(), self.vocab)
         else:
 
-            q = [self.vectorizer.vocab.get(x, Offsets.UNK) for x in self.vectorizer.iterable(q)]
+            q = [self.vectorizer.vocab.get(x, Offsets.UNK) for x in self.vectorizer.iterable(q.split())]
             q_valid_lengths = len(q)
             if q_valid_lengths > self.vectorizer.mxlen:
                 start = q_valid_lengths - self.vectorizer.mxlen
