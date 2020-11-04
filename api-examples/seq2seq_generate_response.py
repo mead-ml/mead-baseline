@@ -46,14 +46,16 @@ def decode_sentence(model, vectorizer, query, word2index, index2word, device, ma
 
             dst.append(output)
             response.append(index2word.get(dst[-1], '<ERROR>'))
-            if output == Offsets.EOS or output == EOU:
+            if output == Offsets.EOS or output == EOU or output == Offsets.PAD:
                 break
     return response
 
 
-def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, d_k, activation, checkpoint_name):
+def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, d_k, activation, checkpoint_name, device):
     if len(rpr_k) == 0 or rpr_k[0] < 1:
-        rpr_k = None
+        rpr_k = [None]
+    else:
+        rpr_k = listify(rpr_k)
     logger.info("Creating tied encoder decoder model")
     hps = {"dsz": d_model,
            "hsz": d_model,
@@ -71,7 +73,7 @@ def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, d_k, a
     if checkpoint_name.endswith('npz'):
         load_transformer_seq2seq_npz(model, checkpoint_name)
     else:
-        model.load_state_dict(torch.load(checkpoint_name))
+        model.load_state_dict(torch.load(checkpoint_name, map_location=torch.device(device)))
     model.eval()
     print(model)
     return model
@@ -81,9 +83,9 @@ def run():
     parser = ArgumentParser()
     parser.add_argument("--basedir", type=str)
     parser.add_argument("--checkpoint", type=str, help='Checkpoint name or directory to load')
-    parser.add_argument("--sample", type=str2bool, help='Sample from the decoder?  Defaults to `true`', default=1)
+    parser.add_argument("--sample", type=str2bool, help='Sample from the decoder?  Defaults to `true`', default=0)
     parser.add_argument("--vocab", type=str, help='Vocab file to load', required=False)
-    parser.add_argument("--query", type=str, default='hello how are you ?')
+    parser.add_argument("--input_file", type=str)
     parser.add_argument("--dataset_cache", type=str, default=os.path.expanduser('~/.bl-data'),
                         help="Path or url of the dataset cache")
     parser.add_argument("--d_model", type=int, default=512, help="Model dimension (and embedding dsz)")
@@ -98,10 +100,11 @@ def run():
     parser.add_argument("--subword_vocab_file", type=str, required=True)
     parser.add_argument("--activation", type=str, default='relu')
     parser.add_argument('--rpr_k', help='Relative attention positional sizes pass 0 if you dont want relative attention',
-                        type=int, default=[48]*8, nargs='+')
+                        type=int, default=[8]*8, nargs='+')
     parser.add_argument("--use_cls", type=str2bool, default=False, help="Prepend a [CLS] token on the encoder?")
     parser.add_argument("--go_token", default="<GO>")
     parser.add_argument("--end_token", default="<EOU>")
+    parser.add_argument("--show_query", type=str2bool, default=False, help="Show the original query as well")
     parser.add_argument("--device", type=str,
                         default="cuda" if torch.cuda.is_available() else "cpu",
                         help="Device (cuda or cpu)")
@@ -131,7 +134,8 @@ def run():
     embeddings = preproc_data['embeddings']
     vocab = preproc_data['vocab']
     model = create_model(embeddings, d_model=args.d_model, d_ff=args.d_ff, num_heads=args.num_heads, num_layers=args.num_layers,
-                         rpr_k=args.rpr_k, d_k=args.d_k, checkpoint_name=checkpoint, activation=args.activation)
+                         rpr_k=args.rpr_k, d_k=args.d_k, checkpoint_name=checkpoint, activation=args.activation,
+                         device=args.device)
     model.to(args.device)
 
     cls = None if not args.use_cls else '[CLS]'
@@ -139,10 +143,17 @@ def run():
                                  mxlen=args.nctx, emit_begin_tok=cls)
 
     index2word = revlut(vocab)
-    print('[Query]', args.query)
-    print('[Response]', ' '.join(decode_sentence(model, vectorizer, args.query.split(), vocab, index2word, args.device,
-                                                 max_response_length=args.nctx, sou_token=args.go_token,
-                                                 eou_token=args.end_token,
-                                                 sample=args.sample)))
-
+    with open(args.input_file) as rf:
+        for query in rf:
+            query = query.strip()
+            output = ' '.join(decode_sentence(model, vectorizer, query.split(), vocab, index2word, args.device,
+                                              max_response_length=args.nctx, sou_token=args.go_token,
+                                              eou_token=args.end_token,
+                                              sample=args.sample))
+            output = output.replace('@@ ', '')
+            if args.show_query:
+                print(query)
+                print(f"\t{output}")
+            else:
+                print(output)
 run()

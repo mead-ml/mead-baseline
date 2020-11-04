@@ -3227,7 +3227,8 @@ class TransformerEncoderStack(nn.Module):
 
         if not is_sequence(rpr_k):
             rpr_k = [rpr_k] * layers
-
+        elif len(rpr_k) == 1:
+            rpr_k = [rpr_k[0]] * layers
         for i in range(layers):
             self.encoders.append(
                 TransformerEncoder(
@@ -3324,7 +3325,8 @@ class TransformerDecoderStack(nn.Module):
 
         if not is_sequence(rpr_k):
             rpr_k = [rpr_k] * layers
-
+        elif len(rpr_k) == 1:
+            rpr_k = [rpr_k[0]] * layers
         for i in range(layers):
             self.decoders.append(
                 TransformerDecoder(num_heads, d_model, pdrop, scale, activation_type, d_ff,
