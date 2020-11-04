@@ -639,7 +639,9 @@ class TiedEmbeddingsSeq2SeqModel(Seq2SeqModel):
                 in_ = self.model.make_input({"x": inputs, "x_lengths": lengths,  "tgt": response_targets})
                 targets = in_['tgt']
                 lm_head, pred = self.model(in_)
-                return self._loss(pred, targets) + self._loss(lm_head, mlm_targets)
+                gen_loss = self._loss(pred, targets)
+                mlm_loss = self._loss(lm_head, mlm_targets)
+                return gen_loss + mlm_loss
         return LossFn(self, loss)
 
 
