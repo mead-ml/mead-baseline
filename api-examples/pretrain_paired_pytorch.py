@@ -32,6 +32,53 @@ This file uses Baseline to train a Transformer model using fastBPE with query-re
   - Seq2Seq model with response generation
   
 """
+
+
+
+def from_enc_tlm_array(pytorch_tlm: nn.Module, d: Dict, embeddings_keys: List[str] = None, name: str = "TLM"):
+    """Restore a TLM-like model (possibly a `nn.Module` for fine-tuning)
+    We just populate the `TransformerEncoderStack` and the embeddings from weights, all other values remain
+    uninitialized
+    :param pytorch_tlm: A TLM-like model
+    :param d: A Dict of weights to restore for each layer
+    :param embeddings_keys: Name of embeddings to restore, defaults to `None`, in which case all embeddings are restored
+    :param name: A name for this primitive
+    :return:
+    """
+    ##### FIXME!!
+    #####transformer = pytorch_tlm.transformer if hasattr(pytorch_tlm, 'transformer') else pytorch_tlm.generator
+    transformer = pytorch_tlm.encoder.transformer
+    from_encoder_stack_array(transformer, d, name=f"{name}/TransformerEncoderStack")
+    #####keys_to_restore = embeddings_keys if embeddings_keys else list(pytorch_tlm.embeddings.keys())
+
+    keys_to_restore = embeddings_keys if embeddings_keys else list(pytorch_tlm.src_embeddings.keys())
+
+    for embeddings_key in keys_to_restore:
+        from_embed_array(pytorch_tlm.src_embeddings[embeddings_key], d, f"{name}/Embeddings/{embeddings_key}")
+        if isinstance(pytorch_tlm.src_embeddings[embeddings_key], LearnedPositionalLookupTableEmbeddingsWithBias):
+            tt = LookupTableEmbeddings(vsz=2, dsz=pytorch_tlm.embeddings.output_dim)
+            from_embed_array(tt, d, f"{name}/Embeddings/tt")
+            pytorch_tlm.src_embeddings[embeddings_key].bias = nn.Parameter(tt.embeddings.weight[0])
+        else:
+            from_embed_array(pytorch_tlm.src_embeddings[embeddings_key], d, f"{name}/Embeddings/{embeddings_key}")
+    if hasattr(pytorch_tlm.src_embeddings.reduction, 'ln'):
+        from_weight_array(pytorch_tlm.src_embeddings.reduction.ln, d, f"{name}/Embeddings/reduction/ln")
+
+
+def load_enc_tlm_npz(pytorch_tlm: nn.Module, npz: str, embeddings_keys: List[str] = None, name: str = "TLM"):
+    """Restore a TLM-like model (possibly a `nn.Module` for fine-tuning
+    We just populate the `TransformerEncoderStack` and the embeddings from weights, all other values remain
+    uninitialized
+    :param pytorch_tlm: A TLM-like model
+    :param npz: A file to restore the weights from
+    :param embeddings_key: Name of embeddings to restore, defaults to `None` in which case we restore all embeddings
+    :param name: A name for this primitive
+    :return:
+    """
+    d = np.load(npz)
+    from_enc_tlm_array(pytorch_tlm, d, embeddings_keys, name)
+
+
 def create_model(embeddings, d_model, d_ff, dropout, num_heads, num_layers, model_type, rpr_k, d_k, reduction_d_k,
                  stacking_layers, ff_pdrop, windowed_ra, logger):
     if model_type == "encoder-decoder":
@@ -193,8 +240,13 @@ def train():
 
     if args.restart_from:
         if args.restart_from.endswith('.npz'):
-            load_transformer_seq2seq_npz(model, args.restart_from)
+            try:
+                load_transformer_seq2seq_npz(model, args.restart_from)
+            except:
+                print('Model file not recognized as seq2seq model, attempting to load as LM for encoder')
+                load_enc_tlm_npz(model, args.restart_from)
         else:
+
             model.load_state_dict(torch.load(args.restart_from))
         vec = args.restart_from.split("-")
 

@@ -112,21 +112,17 @@ def run():
         torch.cuda.set_device(0)
         args.device = torch.device("cuda", 0)
 
-
-    vocab_file = args.vocab
-
     if os.path.isdir(args.checkpoint):
-        if not vocab_file:
-            vocab_file = os.path.join(args.checkpoint, 'vocabs.json')
         checkpoint, _ = find_latest_checkpoint(args.checkpoint)
         logger.warning("Found latest checkpoint %s", checkpoint)
     else:
         checkpoint = args.checkpoint
-        if not vocab_file:
-            vocab_file = os.path.join(os.path.dirname(checkpoint), 'vocabs.json')
 
+    cls = None if not args.use_cls else '[CLS]'
 
-    vocab = read_json(vocab_file)
+    vectorizer = BPEVectorizer1D(model_file=args.subword_model_file, vocab_file=args.subword_vocab_file,
+                                 mxlen=args.nctx, emit_begin_tok=cls, emit_end_tok='<EOS>')
+    vocab = vectorizer.vocab
     # If we are not using chars, then use 'x' for both input and output
     preproc_data = baseline.embeddings.load_embeddings('x', dsz=args.d_model, counts=False, known_vocab=vocab, embed_type=args.embed_type)
     embeddings = preproc_data['embeddings']
@@ -135,9 +131,7 @@ def run():
                          rpr_k=args.rpr_k, d_k=args.d_k, checkpoint_name=checkpoint, activation=args.activation)
     model.to(args.device)
 
-    cls = None if not args.use_cls else '[CLS]'
-    vectorizer = BPEVectorizer1D(model_file=args.subword_model_file, vocab_file=args.subword_vocab_file,
-                                 mxlen=args.nctx, emit_begin_tok=cls, emit_end_tok='<EOS>')
+
 
     index2word = revlut(vocab)
     print('[Query]', args.query)

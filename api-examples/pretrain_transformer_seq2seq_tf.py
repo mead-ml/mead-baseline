@@ -347,6 +347,7 @@ def train():
                     steps = optimizer.global_step.numpy()
                     npz_checkpoint = os.path.join(args.basedir, f'checkpoint-step-{steps}.npz')
                     save_transformer_seq2seq_npz(model, npz_checkpoint)
+                    model.save_weights(npz_checkpoint.replace(".npz", "wgt"))
                     return
 
                 if (i + 1) % report_on == 0:
