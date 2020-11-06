@@ -597,7 +597,7 @@ class TiedEmbeddingsSeq2SeqModel(Seq2SeqModel):
         encoder_outputs = torch.log_softmax(encoder_outputs.view(B * T, H), dim=-1).view(B, T, H)
         return encoder_outputs, output
 
-    def make_input(self, batch_dict, perm=False):
+    def make_input(self, batch_dict, perm=False, **kwargs):
         """Prepare the input.
 
         :param batch_dict: `dict`: The data.
@@ -613,10 +613,23 @@ class TiedEmbeddingsSeq2SeqModel(Seq2SeqModel):
         for key in self.src_embeddings.keys():
             example[key] = self.input_tensor(key, batch_dict, perm_idx)
 
-        if 'tgt' in batch_dict:
-            tgt = batch_dict['tgt']
-            example['dst'] = torch.cat([torch.full((tgt.shape[0], 1), Offsets.GO, device=tgt.device, dtype=tgt.dtype), tgt[:, :-1]], 1)
-            example['tgt'] = tgt
+        tgt = batch_dict.get('tgt')
+        if tgt is not None:
+
+            if kwargs.get('prepend_go_token', False) is True:
+                # With this padding scheme, we prepend <GO> onto the front.  The actual given sentence is the 2nd below
+                # <GO> I    want a   dog
+                #   I  want a    dog <EOS>
+                #
+                # In the TF preproc, we have already prepended our token (presumably), so our input sentence tgt looks like
+                # <GO> I    want a dog <EOS>
+                #
+                # Thus for this scheme we just need to start at the 2nd token for tgt and clip the last token for dst
+                example['dst'] = torch.cat([torch.full((tgt.shape[0], 1), Offsets.GO, device=tgt.device, dtype=tgt.dtype), tgt[:, :-1]], 1)
+                example['tgt'] = tgt
+            else:
+                example['dst'] = tgt[:, :-1]
+                example['tgt'] = tgt[:, 1:]
             example['dst'] = example['dst'][perm_idx]
             example['tgt'] = example['tgt'][perm_idx]
         if perm:
