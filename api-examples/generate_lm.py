@@ -44,7 +44,7 @@ def decode_sentence(model, vectorizer, query, word2index, index2word, device, en
         return words[:-1]
 
 
-def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, d_k, checkpoint_name, activation):
+def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, rpr_value_on, d_k, checkpoint_name, activation):
     rpr_k = listify(rpr_k)
 
     if len(rpr_k) == 0 or rpr_k[0] < 1:
@@ -62,6 +62,7 @@ def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, d_k, c
                                             num_heads=num_heads,
                                             layers=num_layers,
                                             rpr_k=rpr_k,
+                                            rpr_value_on=rpr_value_on,
                                             d_k=d_k,
                                             activation=activation,
                                             src_keys=['x'], tgt_key='x')
@@ -97,6 +98,7 @@ def run():
     parser.add_argument("--activation", type=str, default='gelu')
     parser.add_argument('--rpr_k', help='Relative attention positional sizes pass 0 if you dont want relative attention',
                         type=int, default=[8], nargs='+')
+    parser.add_argument("--rpr_value_on", help="Use different embeddings for RPV key and value", type=str2bool, default=False)
     parser.add_argument("--device", type=str,
                         default="cuda" if torch.cuda.is_available() else "cpu",
                         help="Device (cuda or cpu)")
@@ -125,7 +127,7 @@ def run():
     embeddings = preproc_data['embeddings']
     vocab = preproc_data['vocab']
     model = create_model(embeddings, d_model=args.d_model, d_ff=args.d_ff, num_heads=args.num_heads, num_layers=args.num_layers,
-                         rpr_k=args.rpr_k, d_k=args.d_k, checkpoint_name=checkpoint, activation=args.activation)
+                         rpr_k=args.rpr_k, rpr_value_on=args.rpr_value_on, d_k=args.d_k, checkpoint_name=checkpoint, activation=args.activation)
     model.to(args.device)
 
     index2word = revlut(vocab)
