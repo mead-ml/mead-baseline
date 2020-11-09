@@ -9,6 +9,7 @@ from eight_mile.utils import str2bool, write_json, Average, get_num_gpus_multiwo
 from baseline.pytorch.embeddings import *
 import baseline.embeddings
 from eight_mile.optz import *
+from eight_mile.pytorch.serialize import load_seq2seq_enc_from_tlm_npz, load_transformer_seq2seq_npz
 from eight_mile.pytorch.layers import save_checkpoint, init_distributed
 from eight_mile.pytorch.optz import *
 from transformer_utils import (
@@ -190,7 +191,15 @@ def train():
     start_epoch = 0
 
     if args.restart_from:
-        model.load_state_dict(torch.load(args.restart_from))
+        if args.restart_from.endswith('.npz'):
+            try:
+                load_transformer_seq2seq_npz(model, args.restart_from)
+            except:
+                print('Model file not recognized as seq2seq model, attempting to load as LM for encoder')
+                load_seq2seq_enc_from_tlm_npz(model, args.restart_from)
+        else:
+
+            model.load_state_dict(torch.load(args.restart_from))
         vec = args.restart_from.split("-")
 
         if args.restart_tt:
@@ -198,6 +207,7 @@ def train():
         else:
             tick_type = vec[-2]
         step_num = int(vec[-1].split(".")[0])
+
         if tick_type == 'epoch':
             start_epoch = step_num
             global_step = start_epoch * steps_per_epoch
@@ -205,11 +215,12 @@ def train():
         elif tick_type == 'step':
             start_epoch = step_num // steps_per_epoch
             global_step = step_num
-
         else:
             logger.warning(f"The previous tick was {step_num} but command-line specifies to ignore, setting to 0")
-            logger.info("Restarting from a previous checkpoint %s.\n\tStarting at global_step=%d, epoch=%d",
-                        args.restart_from, global_step, start_epoch+1)
+
+
+        logger.info("Restarting from a previous checkpoint %s.\n\tStarting at global_step=%d, epoch=%d",
+                    args.restart_from, global_step, start_epoch+1)
     optimizer = OptimizerManager(model, global_step, optim=args.optim, lr=args.lr, lr_function=lr_sched, weight_decay=args.weight_decay)
     logger.info("Model has {:,} parameters".format(sum(p.numel() for p in model.parameters() if p.requires_grad)))
 
