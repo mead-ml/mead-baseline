@@ -45,9 +45,10 @@ def decode_sentence(model, vectorizer, query, word2index, index2word, device, ma
 
 
             dst.append(output)
-            response.append(index2word.get(dst[-1], '<ERROR>'))
+
             if output == Offsets.EOS or output == EOU or output == Offsets.PAD:
                 break
+            response.append(index2word.get(dst[-1], '<ERROR>'))
     return response
 
 
@@ -104,6 +105,7 @@ def run():
     parser.add_argument("--use_cls", type=str2bool, default=False, help="Prepend a [CLS] token on the encoder?")
     parser.add_argument("--go_token", default="<GO>")
     parser.add_argument("--end_token", default="<EOU>")
+    parser.add_argument("--target")
     parser.add_argument("--show_query", type=str2bool, default=False, help="Show the original query as well")
     parser.add_argument("--device", type=str,
                         default="cuda" if torch.cuda.is_available() else "cpu",
@@ -143,6 +145,9 @@ def run():
                                  mxlen=args.nctx, emit_begin_tok=cls)
 
     index2word = revlut(vocab)
+    wf = None
+    if args.target:
+        wf = open(args.target, "w")
     with open(args.input_file) as rf:
         for query in rf:
             query = query.strip()
@@ -154,6 +159,11 @@ def run():
             if args.show_query:
                 print(query)
                 print(f"\t{output}")
+            elif wf:
+                wf.write(f'{output}\n')
+                wf.flush()
             else:
                 print(output)
+    if wf:
+        wf.close()
 run()
