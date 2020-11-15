@@ -301,8 +301,17 @@ def train():
     loss_function = Loss(vocab_size, args.nctx)
 
     logger.info("Loaded model and loss")
-    steps_per_epoch = num_train_samples // args.batch_size
-    steps_per_valid_epoch = num_valid_samples // args.batch_size
+    if is_curriculum:
+        steps_per_epoch = 0
+        steps_per_valid_epoch = 0
+        for k, v in num_train_samples.items():
+            steps_per_epoch += int(num_train_samples[k] // (args.batch_size * (args.nctx / k)))
+        for k, v in num_valid_samples.items():
+            steps_per_valid_epoch += int(num_valid_samples[k] // (args.batch_size * (args.nctx / k)))
+
+    else:
+        steps_per_epoch = num_train_samples // args.batch_size
+        steps_per_valid_epoch = num_valid_samples // args.batch_size
     update_on = steps_per_epoch // args.saves_per_epoch
     report_on = max(10, update_on) // 10
     logger.info(f"Steps per epoch: {steps_per_epoch}. Saving checkpoint every {update_on} steps.")
