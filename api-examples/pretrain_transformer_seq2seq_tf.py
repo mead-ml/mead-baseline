@@ -14,6 +14,7 @@ from eight_mile.optz import *
 from eight_mile.tf.optz import *
 from baseline.tf.seq2seq.model import Seq2SeqModel
 from eight_mile.tf.serialize import save_transformer_seq2seq_npz
+from collections.abc import Mapping
 
 logger = logging.getLogger(__file__)
 
@@ -218,26 +219,56 @@ def train():
     vocabs = preproc_data['vocab']
     vocab_size = max(vocabs.values())
 
+    train_md = args.train_md if args.train_md else os.path.join(args.train_dir, 'md.yml')
+    num_train_samples = get_num_samples(train_md)
+    valid_md = args.valid_md if args.valid_md else os.path.join(args.valid_dir, 'md.yml')
+    num_valid_samples = get_num_samples(valid_md)
+    is_curriculum = True if isinstance(num_train_samples, Mapping) else False
+
     def dataset_train_fn(input_context):
-        batch_size = input_context.get_per_replica_batch_size(args.batch_size)
-        ds = get_dataset(args.train_dir, args.file_type, args.num_train_workers).batch(batch_size)
+        global_batchsz = args.batch_size
+        base_batchsz = input_context.get_per_replica_batch_size(global_batchsz)
+        ds = None
+        if is_curriculum:
+            for sub in num_train_samples.keys():
+                train_curr_dir = os.path.join(args.train_dir, str(sub))
+                batchsz_scale_factor = args.nctx // sub
+                this_batchsz = base_batchsz * batchsz_scale_factor
+                curr_ds = get_dataset(train_curr_dir, args.file_type, args.num_train_workers).batch(this_batchsz, drop_remainder=True)
+                if ds is None:
+                    ds = curr_ds
+                else:
+                    ds = ds.concatenate(curr_ds)
+        else:
+            ds = get_dataset(args.train_dir, args.file_type, args.num_train_workers).batch(base_batchsz)
         return ds.shard(
             input_context.num_input_pipelines, input_context.input_pipeline_id
         )
     train_loader = strategy.experimental_distribute_datasets_from_function(dataset_train_fn)
 
     def dataset_test_fn(input_context):
-        batch_size = input_context.get_per_replica_batch_size(args.batch_size)
-        ds = get_dataset(args.valid_dir, args.file_type, args.num_train_workers, shuffle=False).batch(batch_size)
+        global_batchsz = args.batch_size
+        base_batchsz = input_context.get_per_replica_batch_size(global_batchsz)
+        ds = None
+        if is_curriculum:
+            for sub in num_valid_samples.keys():
+                valid_curr_dir = os.path.join(args.valid_dir, str(sub))
+                batchsz_scale_factor = args.nctx // sub
+                this_batchsz = base_batchsz * batchsz_scale_factor
+                curr_ds = get_dataset(valid_curr_dir, args.file_type, args.num_train_workers, causal=args.causal).batch(
+                    this_batchsz, drop_remainder=True)
+                if ds is None:
+                    ds = curr_ds
+                else:
+                    ds = ds.concatenate(curr_ds)
+        else:
+            ds = get_dataset(args.valid_dir, args.file_type, args.num_train_workers, shuffle=False, causal=args.causal).batch(base_batchsz)
+
         return ds.shard(
             input_context.num_input_pipelines, input_context.input_pipeline_id
         )
     valid_loader = strategy.experimental_distribute_datasets_from_function(dataset_test_fn)
 
-    train_md = args.train_md if args.train_md else os.path.join(args.train_dir, 'md.yml')
-    num_train_samples = get_num_samples(train_md)
-    valid_md = args.valid_md if args.valid_md else os.path.join(args.valid_dir, 'md.yml')
-    num_valid_samples = get_num_samples(valid_md)
     os.makedirs(args.basedir, exist_ok=True)
     # We want to make sure to save our input vocab into the basedir for reuse later
     write_json(vocabs, os.path.join(args.basedir, 'vocabs.json'))
