@@ -255,14 +255,14 @@ def train():
                 valid_curr_dir = os.path.join(args.valid_dir, str(sub))
                 batchsz_scale_factor = args.nctx // sub
                 this_batchsz = base_batchsz * batchsz_scale_factor
-                curr_ds = get_dataset(valid_curr_dir, args.file_type, args.num_train_workers, causal=args.causal).batch(
+                curr_ds = get_dataset(valid_curr_dir, args.file_type, args.num_train_workers).batch(
                     this_batchsz, drop_remainder=True)
                 if ds is None:
                     ds = curr_ds
                 else:
                     ds = ds.concatenate(curr_ds)
         else:
-            ds = get_dataset(args.valid_dir, args.file_type, args.num_train_workers, shuffle=False, causal=args.causal).batch(base_batchsz)
+            ds = get_dataset(args.valid_dir, args.file_type, args.num_train_workers, shuffle=False).batch(base_batchsz)
 
         return ds.shard(
             input_context.num_input_pipelines, input_context.input_pipeline_id
