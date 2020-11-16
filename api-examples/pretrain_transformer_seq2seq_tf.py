@@ -182,7 +182,7 @@ def train():
         args.restart = True
 
     if args.basedir is None:
-        args.basedir = '{}-{}-paired-{}-bpe-{}'.format(args.model_type, args.reader_type, args.dataset_key, os.getpid())
+        args.basedir = 'paired-{}-bpe-{}'.format(args.dataset_key, os.getpid())
     logging.basicConfig(level=logging.INFO)
     logger.info(f"Writing results to {args.basedir}")
 
