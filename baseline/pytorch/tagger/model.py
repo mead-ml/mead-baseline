@@ -296,7 +296,7 @@ class AbstractEncoderTaggerModel(TaggerModelBase):
         """
         lengths = inputs["lengths"]
         embedded = self.embeddings(inputs)
-        embedded = (embedded, lengths)
+        embedded = (embedded, lengths.cpu())
         transduced = self.proj_layer(self.encoder(embedded))
         return transduced
 
