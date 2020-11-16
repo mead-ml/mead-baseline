@@ -65,12 +65,12 @@ class Loss:
 
 def _parse_json(example):
     j = json.loads(example.numpy())
-    return tf.constant(j['x'], dtype=tf.int32), tf.constant(j['mlm'], dtype=tf.int32), tf.constant(j['gen'], dtype=tf.int32)
+    return tf.constant(j['x'], dtype=tf.int32), tf.constant(j['y_mlm'], dtype=tf.int32), tf.constant(j['y_gen'], dtype=tf.int32)
 
 
 feature_description = {
     'x': tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True, default_value=0),
-    'y': tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True, default_value=0),
+    'y_mlm': tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True, default_value=0),
     'y_gen': tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True, default_value=0),
 
 }
@@ -78,7 +78,7 @@ feature_description = {
 
 def _parse_tf_record(example_proto):
     record = tf.io.parse_single_example(example_proto, feature_description)
-    return record['x'], record['y'], record['y_gen']
+    return record['x'], record['y_mlm'], record['y_gen']
 
 
 def decode_json(example):
