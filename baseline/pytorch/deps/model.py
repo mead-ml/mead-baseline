@@ -291,7 +291,7 @@ class BiAffineDependencyParser(DependencyParserModelBase):
         :return: A tensor
         """
 
-        lengths = inputs.get("lengths")
+        lengths = inputs.get("lengths").cpu()
         Tin = inputs[self.primary_key].shape[1]
         mask = sequence_mask(lengths, max_len=Tin).to(lengths.device)
         #mask = sequence_mask(lengths).to(lengths.device)
