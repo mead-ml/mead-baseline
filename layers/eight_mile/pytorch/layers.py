@@ -1003,7 +1003,7 @@ class LSTMEncoderSequence(LSTMEncoderBase):
         :return: A tensor of shape `[B, S, H]` or `[S, B, H]` depending on setting of `batch_first`
         """
         tbc, lengths = inputs
-        packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths, batch_first=self.batch_first)
+        packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths.cpu(), batch_first=self.batch_first)
         output, hidden = self.rnn(packed)
         output, _ = torch.nn.utils.rnn.pad_packed_sequence(output, batch_first=self.batch_first)
         return output
@@ -1089,7 +1089,7 @@ class LSTMEncoderAll(LSTMEncoderBase):
         :return: An output tensor `[B, S, H]` or `[B, H, S]` , and tuple of hidden `[L, B, H]` and context `[L, B, H]`
         """
         tbc, lengths = inputs
-        packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths, batch_first=self.batch_first)
+        packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths.cpu(), batch_first=self.batch_first)
         output, hidden = self.rnn(packed)
         output, _ = torch.nn.utils.rnn.pad_packed_sequence(output, batch_first=self.batch_first)
         return output, hidden
@@ -1114,7 +1114,7 @@ class LSTMEncoderHidden(LSTMEncoderBase):
         :return: An output tensor of shape `[B, H]` representing the last RNNs hidden state
         """
         tbc, lengths = inputs
-        packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths, batch_first=self.batch_first)
+        packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths.cpu(), batch_first=self.batch_first)
         output, hidden = self.rnn(packed)
         output, _ = torch.nn.utils.rnn.pad_packed_sequence(output, batch_first=self.batch_first)
         return self.extract_top_state(hidden)[0]
@@ -1124,7 +1124,7 @@ class LSTMEncoderHidden(LSTMEncoderBase):
 class LSTMEncoderSequenceHiddenContext(LSTMEncoderBase):
     def forward(self, inputs: Tuple[torch.Tensor, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
         tbc, lengths = inputs
-        packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths, batch_first=self.batch_first)
+        packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths.cpu(), batch_first=self.batch_first)
         output, hidden = self.rnn(packed)
         output, _ = torch.nn.utils.rnn.pad_packed_sequence(output, batch_first=self.batch_first)
         return output, self.extract_top_state(hidden)
@@ -1203,7 +1203,7 @@ class BiLSTMEncoderBase(nn.Module):
 class BiLSTMEncoderSequenceHiddenContext(BiLSTMEncoderBase):
     def forward(self, inputs: Tuple[torch.Tensor, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
         tbc, lengths = inputs
-        packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths, batch_first=self.batch_first)
+        packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths.cpu(), batch_first=self.batch_first)
         output, hidden = self.rnn(packed)
         output, _ = torch.nn.utils.rnn.pad_packed_sequence(output, batch_first=self.batch_first)
         return output, self.extract_top_state(concat_state_dirs(hidden))
@@ -1227,7 +1227,7 @@ class BiLSTMEncoderAll(BiLSTMEncoderBase):
         :return: An output tensor `[B, S, H] or `[B, H, S]` , and tuple of hidden `[L, B, H]` and context `[L, B, H]`
         """
         tensor, lengths = inputs
-        packed = torch.nn.utils.rnn.pack_padded_sequence(tensor, lengths, batch_first=self.batch_first)
+        packed = torch.nn.utils.rnn.pack_padded_sequence(tensor, lengths.cpu(), batch_first=self.batch_first)
         output, hidden = self.rnn(packed)
         output, _ = torch.nn.utils.rnn.pad_packed_sequence(output, batch_first=self.batch_first)
         return output, concat_state_dirs(hidden)
@@ -1254,7 +1254,7 @@ class BiLSTMEncoderSequence(BiLSTMEncoderBase):
         :return: A tensor of shape `[B, S, H]` or `[S, B, H]` depending on setting of `batch_first`
         """
         tensor, lengths = inputs
-        packed = torch.nn.utils.rnn.pack_padded_sequence(tensor, lengths, batch_first=self.batch_first)
+        packed = torch.nn.utils.rnn.pack_padded_sequence(tensor, lengths.cpu(), batch_first=self.batch_first)
         output, hidden = self.rnn(packed)
         output, _ = torch.nn.utils.rnn.pad_packed_sequence(output, batch_first=self.batch_first)
         return output
@@ -1278,7 +1278,7 @@ class BiLSTMEncoderHidden(BiLSTMEncoderBase):
         :return: An output tensor of shape `[B, H]` representing the last RNNs hidden state
         """
         tensor, lengths = inputs
-        packed = torch.nn.utils.rnn.pack_padded_sequence(tensor, lengths, batch_first=self.batch_first)
+        packed = torch.nn.utils.rnn.pack_padded_sequence(tensor, lengths.cpu(), batch_first=self.batch_first)
         output, hidden = self.rnn(packed)
         output, _ = torch.nn.utils.rnn.pad_packed_sequence(output, batch_first=self.batch_first)
         return self.extract_top_state(concat_state_dirs(hidden))[0]
@@ -1287,7 +1287,7 @@ class BiLSTMEncoderHidden(BiLSTMEncoderBase):
 class BiLSTMEncoderHiddenContext(BiLSTMEncoderBase):
     def forward(self, inputs: Tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
         tbc, lengths = inputs
-        packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths, batch_first=self.batch_first)
+        packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths.cpu(), batch_first=self.batch_first)
         output, hidden = self.rnn(packed)
         output, _ = torch.nn.utils.rnn.pad_packed_sequence(output, batch_first=self.batch_first)
         return self.extract_top_state(concat_state_dirs(hidden))
@@ -1378,7 +1378,7 @@ class GRUEncoderSequence(GRUEncoderBase):
         :return: A sequence tensor of shape `[T, B, H]` or `[B, T, H]`
         """
         tbc, lengths = inputs
-        packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths, batch_first=self.batch_first)
+        packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths.cpu(), batch_first=self.batch_first)
         output, hidden = self.rnn(packed)
         output, _ = torch.nn.utils.rnn.pad_packed_sequence(output, batch_first=self.batch_first)
         return output
@@ -1403,7 +1403,7 @@ class GRUEncoderAll(GRUEncoderBase):
         :return: An output tensor `[B, S, H]` or `[B, H, S]` , and a hidden tensor `[L, B, H]`
         """
         tbc, lengths = inputs
-        packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths, batch_first=self.batch_first)
+        packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths.cpu(), batch_first=self.batch_first)
         output, hidden = self.rnn(packed)
         output, _ = torch.nn.utils.rnn.pad_packed_sequence(output, batch_first=self.batch_first)
         return output, hidden
@@ -1428,7 +1428,7 @@ class GRUEncoderHidden(GRUEncoderBase):
         :return: An output tensor of shape `[B, H]` representing the last RNNs hidden state
         """
         tbc, lengths = inputs
-        packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths, batch_first=self.batch_first)
+        packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths.cpu(), batch_first=self.batch_first)
         output, hidden = self.rnn(packed)
         output, _ = torch.nn.utils.rnn.pad_packed_sequence(output, batch_first=self.batch_first)
         return self.extract_top_state(hidden)
@@ -1506,7 +1506,7 @@ class BiGRUEncoderBase(nn.Module):
 class BiGRUEncoderSequenceHiddenContext(BiGRUEncoderBase):
     def forward(self, inputs: Tuple[torch.Tensor, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
         tbc, lengths = inputs
-        packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths, batch_first=self.batch_first)
+        packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths.cpu(), batch_first=self.batch_first)
         output, hidden = self.rnn(packed)
         output, _ = torch.nn.utils.rnn.pad_packed_sequence(output, batch_first=self.batch_first)
         return output, self.extract_top_state(_cat_dir(hidden))
@@ -1530,7 +1530,7 @@ class BiGRUEncoderAll(BiGRUEncoderBase):
         :return: An output tensor `[B, S, H] or `[B, H, S]` , and a hidden vector `[L, B, H]`
         """
         tbc, lengths = inputs
-        packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths, batch_first=self.batch_first)
+        packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths.cpu(), batch_first=self.batch_first)
         output, hidden = self.rnn(packed)
         output, _ = torch.nn.utils.rnn.pad_packed_sequence(output, batch_first=self.batch_first)
         return output, _cat_dir(hidden)
@@ -1557,7 +1557,7 @@ class BiGRUEncoderSequence(BiGRUEncoderBase):
         :return: A tensor of shape `[B, S, H]` or `[S, B, H]` depending on setting of `batch_first`
         """
         tbc, lengths = inputs
-        packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths, batch_first=self.batch_first)
+        packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths.cpu(), batch_first=self.batch_first)
         output, hidden = self.rnn(packed)
         output, _ = torch.nn.utils.rnn.pad_packed_sequence(output, batch_first=self.batch_first)
         return output
@@ -1581,7 +1581,7 @@ class BiGRUEncoderHidden(BiGRUEncoderBase):
         :return: An output tensor of shape `[B, H]` representing the last RNNs hidden state
         """
         tbc, lengths = inputs
-        packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths, batch_first=self.batch_first)
+        packed = torch.nn.utils.rnn.pack_padded_sequence(tbc, lengths.cpu(), batch_first=self.batch_first)
         output, hidden = self.rnn(packed)
         output, _ = torch.nn.utils.rnn.pad_packed_sequence(output, batch_first=self.batch_first)
         return self.extract_top_state(_cat_dir(hidden))

@@ -215,7 +215,7 @@ class EmbedPoolStackClassifier(ClassifierModelBase):
         :param inputs: An input dictionary containing the features and the primary key length
         :return: A tensor
         """
-        lengths = inputs.get("lengths").cpu()
+        lengths = inputs.get("lengths")
         embedded = self.embeddings(inputs)
         embedded = (embedded, lengths)
         pooled = self.pool_model(embedded)
