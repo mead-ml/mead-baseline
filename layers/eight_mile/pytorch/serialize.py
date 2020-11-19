@@ -69,13 +69,13 @@ BERT_HF_EMBED_MAP = {
 }
 
 
-def convert_transformers_keys(num_layers: int, d: Dict, replace_layer_map: Dict = BERT_HF_LAYER_MAP, replace_embed_map: Dict = BERT_HF_EMBED_MAP) -> Dict:
+def convert_transformers_keys(num_layers: int, d: Dict, nested_layer_map: Dict = BERT_HF_LAYER_MAP, flat_map: Dict = BERT_HF_EMBED_MAP) -> Dict:
     m = {}
     for i in range(num_layers):
-        for k, v in replace_layer_map.items():
+        for k, v in nested_layer_map.items():
             m[v.format(i)] = d[k.format(i)]
 
-    for k, v in replace_embed_map.items():
+    for k, v in flat_map.items():
         m[v] = d[k]
 
 
