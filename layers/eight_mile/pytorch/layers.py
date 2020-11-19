@@ -342,7 +342,7 @@ class Conv1DSame(nn.Module):
     of the convolution operation.  Instead, we zeropad the input using the `ConstantPad1d` module
 
     """
-    def __init__(self, in_channels: int, out_channels: int, kernel_size: int, bias: bool = True, groups: int = 1):
+    def __init__(self, in_channels: int, out_channels: int, kernel_size: int, bias: bool = True, groups: int = 1, unif: float = 0.0, initializer: Optional[str] = None, activation: Optional[str] = None):
         """Create a 1D conv to produce the same output size as input
 
         :param in_channels: The number of input feature maps
@@ -357,7 +357,8 @@ class Conv1DSame(nn.Module):
         start_pad = end_pad - 1 if kernel_size % 2 == 0 else end_pad
         self.conv = nn.Sequential(
             nn.ConstantPad1d((start_pad, end_pad), 0.),
-            nn.Conv1d(in_channels, out_channels, kernel_size, bias=bias, groups=groups)
+            pytorch_conv1d(in_channels, out_channels, kernel_size, unif=unif, initializer=initializer, bias=bias, groups=groups),
+            get_activation(activation)
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -4293,16 +4294,26 @@ class SequenceCriterion(nn.Module):
         return self._norm(loss, inputs)
 
 
-def pytorch_conv1d(in_channels, out_channels, fsz, unif=0, padding=0, initializer=None, stride=1, bias=True):
-    c = nn.Conv1d(in_channels, out_channels, fsz, padding=padding, stride=stride, bias=bias)
+def pytorch_conv1d(in_channels, out_channels, fsz, unif=0, padding=0, initializer=None, stride=1, bias=True, groups=1):
+    c = nn.Conv1d(in_channels, out_channels, fsz, padding=padding, stride=stride, bias=bias, groups=groups)
     if unif > 0:
         c.weight.data.uniform_(-unif, unif)
     elif initializer == "ortho":
         nn.init.orthogonal_(c.weight)
+        if bias:
+            nn.init.constant_(c.bias, 0)
     elif initializer == "he" or initializer == "kaiming":
         nn.init.kaiming_uniform_(c.weight)
+        if bias:
+            nn.init.constant_(c.bias, 0)
+    elif initializer == "normal":
+        nn.init.normal(mean=0, std=unif)
+        if bias:
+            nn.init.constant_(c.bias, 0)
     else:
         nn.init.xavier_uniform_(c.weight)
+        if bias:
+            nn.init.constant_(c.bias, 0)
     return c
 
 

@@ -14,10 +14,11 @@ from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader, IterableDataset
 from eight_mile.utils import str2bool, write_json, Average, get_num_gpus_multiworker
 from eight_mile.optz import *
-from eight_mile.pytorch.layers import save_checkpoint, init_distributed, ConvEncoder, TransformerEncoderStack, Dense, pytorch_conv1d
+from eight_mile.pytorch.layers import save_checkpoint, init_distributed, Conv1DSame, TransformerEncoderStack, Dense, pytorch_conv1d
 from eight_mile.pytorch.optz import *
-from eight_mile.pytorch.serialize import load_tlm_npz
+from eight_mile.pytorch.serialize import convert_transformers_keys
 import torch.nn.functional as F
+from typing import Dict
 logger = logging.getLogger(__file__)
 
 
@@ -29,6 +30,75 @@ END_TEMP = 0.5
 TEMP_DECAY_FACTOR = 0.999995
 XE_WGT = 0.1
 DIVERSITY_WGT = 10
+
+
+W2V2_FAIRSEQ_NESTED_LAYERS_MAP = {
+    'encoder.layers.{}.self_attn.k_proj.weight':     'encoder.transformer.encoders.{}.self_attn.w_K.layer.weight',
+    'encoder.layers.{}.self_attn.k_proj.bias':       'encoder.transformer.encoders.{}.self_attn.w_K.layer.bias',
+    'encoder.layers.{}.self_attn.v_proj.weight':     'encoder.transformer.encoders.{}.self_attn.w_V.layer.weight',
+    'encoder.layers.{}.self_attn.v_proj.bias':       'encoder.transformer.encoders.{}.self_attn.w_V.layer.bias',
+    'encoder.layers.{}.self_attn.q_proj.weight':     'encoder.transformer.encoders.{}.self_attn.w_Q.layer.weight',
+    'encoder.layers.{}.self_attn.q_proj.bias':       'encoder.transformer.encoders.{}.self_attn.w_Q.layer.bias',
+    'encoder.layers.{}.self_attn.out_proj.weight':   'encoder.transformer.encoders.{}.self_attn.w_O.layer.weight',
+    'encoder.layers.{}.self_attn.out_proj.bias':     'encoder.transformer.encoders.{}.self_attn.w_O.layer.bias',
+    # Wav2vec2 ref impl is run with LN first
+    'encoder.layers.{}.self_attn_layer_norm.weight': 'encoder.transformer.encoders.{}.ln1.weight',
+    'encoder.layers.{}.self_attn_layer_norm.bias':   'encoder.transformer.encoders.{}.ln1.bias',
+    'encoder.layers.{}.fc1.weight': 'encoder.transformer.encoders.{}.ffn.0.layer.weight',
+    'encoder.layers.{}.fc1.bias':   'encoder.transformer.encoders.{}.ffn.0.layer.bias',
+    'encoder.layers.{}.fc2.weight': 'encoder.transformer.encoders.{}.ffn.3.layer.weight',
+    'encoder.layers.{}.fc2.bias':   'encoder.transformer.encoders.{}.ffn.3.layer.bias',
+    'encoder.layers.{}.final_layer_norm.weight':  'encoder.transformer.encoders.{}.ln2.weight',
+    'encoder.layers.{}.final_layer_norm.bias':   'encoder.transformer.encoders.{}.ln2.bias'
+
+}
+
+# We use a primitive from 8mi called Dense which owns the linear as a sub-layer, so convert those
+W2V2_FAIRSEQ_FLAT_MAP = {
+    'post_extract_proj.weight': 'proj_to_input.layer.weight',
+    'post_extract_proj.bias': 'proj_to_input.layer.bias',
+    'project_q.weight': 'project_q.layer.weight',
+    'project_q.bias': 'project_q.layer.bias',
+    'final_proj.weight': 'final_proj.layer.weight',
+    'final_proj.bias': 'final_proj.layer.bias',
+    'encoder.layer_norm.weight': 'encoder.transformer.ln.weight',
+    'encoder.layer_norm.bias': 'encoder.transformer.ln.bias',
+    'encoder.pos_conv.0.bias': 'encoder.pos_conv.conv.1.bias',
+    'encoder.pos_conv.0.weight_g': 'encoder.pos_conv.conv.1.weight_g',
+    'encoder.pos_conv.0.weight_v': 'encoder.pos_conv.conv.1.weight_v',
+    #'layer_norm.weight': 'encoder.ln.weight',
+    #'layer_norm.bias': 'encoder.ln.bias'
+}
+
+
+
+def convert_keys(num_layers: int, d: Dict, nested_layer_map: Dict = W2V2_FAIRSEQ_NESTED_LAYERS_MAP, flat_map: Dict = W2V2_FAIRSEQ_FLAT_MAP) -> Dict:
+
+    m = {}
+    for i in range(num_layers):
+        for k, v in nested_layer_map.items():
+            key = k.format(i)
+            m[v.format(i)] = d.pop(key)
+
+    for k, v in flat_map.items():
+        m[v] = d.pop(k)
+
+    for k, v in d.items():
+        m[k] = v
+
+
+
+    return m
+
+def load_fairseq_bin(w2v: nn.Module, bin_file: str, nested_layer_map=W2V2_FAIRSEQ_NESTED_LAYERS_MAP, flat_map=W2V2_FAIRSEQ_FLAT_MAP):
+
+    d = torch.load(bin_file)["model"]
+    transformer = w2v.encoder.transformer
+    num_layers = len(transformer.encoders)
+    mapped_keys = convert_keys(num_layers, d, nested_layer_map, flat_map)
+    unknown_keys = w2v.load_state_dict(mapped_keys, strict=False)
+    missing_keys = [key for key in unknown_keys.missing_keys]
+    return {'missing': missing_keys, 'unexpected': unknown_keys.unexpected_keys}
 
 
 class AudioFileDataset(IterableDataset):
@@ -472,25 +542,28 @@ class AudioTransformerEncoder(nn.Module):
             **kwargs):
         super().__init__()
         self.d_model = d_model
-        self.conv_pos_kernel = kwargs.get('conv_pos_kernel', 512)
+        self.conv_pos_kernel = kwargs.get('conv_pos_kernel', 128)
         self.conv_groups = kwargs.get('conv_groups', 16)
         self.dropout = nn.Dropout(pdrop)
-        self.pos_conv = ConvEncoder(d_model, d_model, self.conv_pos_kernel, activation="gelu", groups=self.conv_groups)
+
+        std = math.sqrt((4 * (1.0 - pdrop)) / (self.conv_pos_kernel * self.d_model))
+        self.pos_conv = Conv1DSame(d_model, d_model, self.conv_pos_kernel, activation="gelu", groups=self.conv_groups, unif=std, initializer="normal")
+        self.pos_conv.conv[1] = nn.utils.weight_norm(self.pos_conv.conv[1], name="weight", dim=2)
         if not d_ff:
             d_ff = 4*d_model
 
         self.transformer = TransformerEncoderStack(num_heads=num_heads,
                                                    d_model=d_model,
                                                    pdrop=pdrop,
-                                                   num_layers=layers,
+                                                   layers=layers,
                                                    activation=activation,
                                                    layer_norms_after=False,
                                                    d_ff=d_ff)
-        self.ln = nn.LayerNorm(self.d_model)
+        #self.ln = nn.LayerNorm(self.d_model)
 
     def forward(self, x, padding_mask=None):
         x = self.extract_features(x, padding_mask)
-        x = self.ln(x)
+        #x = self.ln(x)
         return x
 
     def extract_features(self, x, padding_mask=None):
@@ -498,20 +571,16 @@ class AudioTransformerEncoder(nn.Module):
         if padding_mask is not None:
             x[padding_mask] = 0
 
-        x_conv = self.pos_conv(x)
+        x_conv = self.pos_conv(x.transpose(1, 2))
+        x_conv = x_conv.transpose(1, 2)
+
+        #x_conv = self.pos_conv(x)
         x += x_conv
         x = self.dropout(x)
         self.transformer((x, padding_mask))
 
         return x
 
-    def max_positions(self):
-        """Maximum output length supported by the encoder."""
-        return self.args.max_positions
-
-    def upgrade_state_dict_named(self, state_dict, name):
-        """Upgrade a (possibly old) state dict for new versions of fairseq."""
-        return state_dict
 
 
 class Wav2Vec2Model(nn.Module):
@@ -690,14 +759,14 @@ def train():
     global_step = 0
     if args.restart_from:
 
-        if args.restart_from.endswith('npz'):
-            load_tlm_npz(model, args.restart_from)
+        if args.restart_from.endswith('.pt'):
+            print(load_fairseq_bin(model, args.restart_from))
         else:
             model.load_state_dict(torch.load(args.restart_from))
-        vec = args.restart_from.split("-")
-        global_step = int(vec[-1].split(".")[0])
-        logger.info("Restarting from a previous checkpoint %s.\n\tStarting at global_step=%d",
-                    args.restart_from, global_step)
+            vec = args.restart_from.split("-")
+            global_step = int(vec[-1].split(".")[0])
+            logger.info("Restarting from a previous checkpoint %s.\n\tStarting at global_step=%d",
+                        args.restart_from, global_step)
 
     optimizer = OptimizerManager(model, global_step, optim=args.optim, lr=args.lr, lr_function=lr_sched, weight_decay=args.weight_decay)
     logger.info("Model has {:,} parameters".format(sum(p.numel() for p in model.parameters() if p.requires_grad)))
