@@ -40,9 +40,8 @@ class TiedEmbeddingsSeq2SeqModel(Seq2SeqModel):
 
 
 class Loss:
-    def __init__(self, vocab_size, nctx):
+    def __init__(self, vocab_size):
         self.vocab_size = vocab_size
-        self.nctx = nctx
 
     def __call__(self, model, features, labels):
 
@@ -171,6 +170,7 @@ def train():
     parser.add_argument("--distribute", type=str, default="mirror", choices=["mirror", "tpu", "nccl"])
     parser.add_argument("--tpu_ep", type=str, help="The TPU endpoint if using `distribute=tpu`")
     parser.add_argument("--nctx", type=int, default=256, help="Max input length")
+    parser.add_argument("--gen_ctx", type=int, default=64, help="Max output length")
     parser.add_argument("--file_type", default='tfrecord', choices=['json', 'tfrecord'], help="Glob pattern for data")
     parser.add_argument("--batch_size", type=int, default=256, help="Batch Size")
     parser.add_argument("--subword_model_file", type=str, help="The BPE model file", required=True)
@@ -232,7 +232,7 @@ def train():
         if is_curriculum:
             for sub in num_train_samples.keys():
                 train_curr_dir = os.path.join(args.train_dir, str(sub))
-                batchsz_scale_factor = args.nctx // sub
+                batchsz_scale_factor = (args.nctx + args.gen_ctx) // sub
                 this_batchsz = base_batchsz * batchsz_scale_factor
                 curr_ds = get_dataset(train_curr_dir, args.file_type, args.num_train_workers).batch(this_batchsz, drop_remainder=True)
                 if ds is None:
@@ -253,7 +253,7 @@ def train():
         if is_curriculum:
             for sub in num_valid_samples.keys():
                 valid_curr_dir = os.path.join(args.valid_dir, str(sub))
-                batchsz_scale_factor = args.nctx // sub
+                batchsz_scale_factor = (args.nctx + args.gen_ctx) // sub
                 this_batchsz = base_batchsz * batchsz_scale_factor
                 curr_ds = get_dataset(valid_curr_dir, args.file_type, args.num_train_workers).batch(
                     this_batchsz, drop_remainder=True)
@@ -298,16 +298,16 @@ def train():
            "rpr_k": rpr_k}
     model = TiedEmbeddingsSeq2SeqModel(embeddings, **hps)
 
-    loss_function = Loss(vocab_size, args.nctx)
+    loss_function = Loss(vocab_size)
 
     logger.info("Loaded model and loss")
     if is_curriculum:
         steps_per_epoch = 0
         steps_per_valid_epoch = 0
         for k, v in num_train_samples.items():
-            steps_per_epoch += int(num_train_samples[k] // (args.batch_size * (args.nctx / k)))
+            steps_per_epoch += int(num_train_samples[k] // (args.batch_size * ((args.nctx + args.gen_ctx) / k)))
         for k, v in num_valid_samples.items():
-            steps_per_valid_epoch += int(num_valid_samples[k] // (args.batch_size * (args.nctx / k)))
+            steps_per_valid_epoch += int(num_valid_samples[k] // (args.batch_size * ((args.nctx + args.gen_ctx) / k)))
 
     else:
         steps_per_epoch = num_train_samples // args.batch_size
@@ -347,7 +347,7 @@ def train():
         per_replica_loss = strategy.experimental_run_v2(_replicated_train_step, args=(inputs,))
         return strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_loss, axis=None)
 
-    valid_loss_function = Loss(vocab_size, args.nctx)
+    valid_loss_function = Loss(vocab_size)
 
     def _replicated_test_step(inputs):
         """This runs on a single replica"""
