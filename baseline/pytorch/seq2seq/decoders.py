@@ -368,8 +368,8 @@ class TransformerDecoderWrapper(torch.nn.Module):
         embed_out_bth = self.proj_to_hsz(embed_out_bth)
         context_bth = encoder_output.output
         T = embed_out_bth.shape[1]
-        dst_mask = subsequent_mask(T).type_as(embed_out_bth)
-        src_mask = encoder_output.src_mask.unsqueeze(1).unsqueeze(1)
+        dst_mask = subsequent_mask(T).type_as(embed_out_bth)  # [B, 1, T_q, T_q]
+        src_mask = encoder_output.src_mask.unsqueeze(1).unsqueeze(1)  # [B, 1, 1, T_k]
         output = self.transformer_decoder((embed_out_bth, context_bth, src_mask, dst_mask))
         output = self.proj_to_dsz(output)
         prob = self.output(output)
