@@ -78,7 +78,6 @@ jobs:
       max-parallel: 4
       matrix:
         tf-version:
-        - 2.2.0
         - 2.3.0
     container: tensorflow/tensorflow:${{matrix.tf-version}}
     steps:
