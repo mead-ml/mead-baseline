@@ -11,7 +11,7 @@ import baseline.embeddings
 from baseline.vectorizers import BPEVectorizer1D
 from eight_mile.utils import Average, get_num_gpus_multiworker, read_yaml
 from eight_mile.optz import *
-from eight_mile.tf.layers import get_shape_as_list, TransformerDiscriminator, SET_TRAIN_FLAG
+from eight_mile.tf.layers import get_shape_as_list, TransformerDiscriminator, SET_TRAIN_FLAG, create_distribute_strategy
 from eight_mile.tf.optz import *
 from eight_mile.tf.serialize import save_tlm_npz
 import tensorflow as tf
@@ -88,34 +88,6 @@ def get_dataset(directory, file_type, num_parallel_reads=1, shuffle=True):
 def get_num_samples(sample_md):
     yml = read_yaml(sample_md)
     return yml['num_samples']
-
-
-def create_distribute_strategy(strategy_name, endpoint=None):
-    if strategy_name == 'tpu':
-        if endpoint == 'colab':
-            endpoint = 'grpc://' + os.environ['COLAB_TPU_ADDR']
-        resolver = tf.distribute.cluster_resolver.TPUClusterResolver(tpu=endpoint)
-        tf.config.experimental_connect_to_cluster(resolver)
-        # This is the TPU initialization code that has to be at the beginning.
-        tf.tpu.experimental.initialize_tpu_system(resolver)
-        for tpu in tf.config.list_logical_devices('TPU'):
-            logger.info('Device [%s]', tpu.name)
-        strategy = tf.distribute.experimental.TPUStrategy(resolver)
-    else:
-        if strategy_name == "nccl":
-            strategy = tf.distribute.experimental.MultiWorkerMirroredStrategy(
-                communication=tf.distribute.experimental.CollectiveCommunication.NCCL)
-        elif strategy_name == 'mirror':
-            num_gpus = get_num_gpus_multiworker()
-            devices = ['/device:GPU:{}'.format(i) for i in range(num_gpus)]
-            strategy = tf.distribute.MirroredStrategy(devices)
-        else:
-            raise Exception(f"Unsupported strategy {strategy_name}")
-
-        for tpu in tf.config.list_logical_devices('GPU'):
-            logger.info('Device [%s]', tpu.name)
-
-    return strategy
 
 
 def train():
@@ -263,7 +235,7 @@ def train():
         :param inputs:
         :return:
         """
-        per_replica_loss = strategy.experimental_run_v2(_replicated_train_step, args=(inputs,))
+        per_replica_loss = strategy.run(_replicated_train_step, args=(inputs,))
         return strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_loss, axis=None)
 
     valid_loss_function = model.create_loss()
@@ -281,7 +253,7 @@ def train():
         :param inputs:
         :return:
         """
-        per_replica_loss = strategy.experimental_run_v2(_replicated_test_step, args=(inputs,))
+        per_replica_loss = strategy.run(_replicated_test_step, args=(inputs,))
         return strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_loss, axis=None)
 
     # This is the training loop

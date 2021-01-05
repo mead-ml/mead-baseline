@@ -36,6 +36,11 @@ def set_tf_eager_debug(debug: bool = False):
         if debug:
             tf.config.experimental_run_functions_eagerly(debug)
 
+def patch_dist_strategy(strategy):
+    TF_VERSION = get_version(tf)
+    if TF_VERSION < 2.2:
+        strategy.run = strategy.experimental_run_v2
+
 
 def set_tf_log_level(ll):
     # 0     | DEBUG            | [Default] Print all messages
@@ -80,7 +85,7 @@ def TRAIN_FLAG():
     return BASELINE_TF_TRAIN_FLAG
 
 
-def create_distribute_strategy(strategy_name, num_gpus=-1, endpoint=None):
+def create_distribute_strategy(strategy_name, endpoint=None, num_gpus=-1):
     if strategy_name == 'tpu':
         if not endpoint:
             endpoint = os.environ.get('MEAD_TPU_ADDR')
@@ -109,6 +114,7 @@ def create_distribute_strategy(strategy_name, num_gpus=-1, endpoint=None):
         for tpu in tf.config.list_logical_devices('GPU'):
             LOGGER.info('Device [%s]', tpu.name)
 
+    patch_dist_strategy(strategy)
     return strategy
 
 def infer_lengths(tensor, axis=1):

@@ -57,7 +57,7 @@ class LanguageModelTrainerDistributedTf(Trainer):
         strategy_type = kwargs.get('strategy_type', 'mirror')
         gpus = int(kwargs.get('gpus', 1))
         endpoint = kwargs.get('endpoint')
-        self.strategy = create_distribute_strategy(strategy_type, gpus, endpoint)
+        self.strategy = create_distribute_strategy(strategy_type, endpoint, gpus)
 
     def checkpoint(self):
         """This method saves a checkpoint
@@ -118,14 +118,14 @@ class LanguageModelTrainerDistributedTf(Trainer):
 
             @tf.function
             def _distributed_train_no_state(inputs):
-                per_replica_loss, per_replica_toks = strategy.experimental_run_v2(_replicated_train_step_no_state, args=(inputs,))
+                per_replica_loss, per_replica_toks = strategy.run(_replicated_train_step_no_state, args=(inputs,))
                 return strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_loss, axis=None), strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_toks, axis=None)
 
 
             @tf.function
             def _distributed_train_with_state(inputs, hidden):
 
-                h, per_replica_loss, per_replica_toks = strategy.experimental_run_v2(_replicated_train_step_with_state, args=(inputs, hidden,))
+                h, per_replica_loss, per_replica_toks = strategy.run(_replicated_train_step_with_state, args=(inputs, hidden,))
                 step_loss = strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_loss, axis=None)
                 step_toks = strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_toks, axis=None)
                 return h, step_loss, step_toks
@@ -208,13 +208,13 @@ class LanguageModelTrainerDistributedTf(Trainer):
 
             @tf.function
             def _distributed_test_no_state(inputs):
-                per_replica_loss, per_replica_toks = strategy.experimental_run_v2(_replicated_test_step_no_state, args=(inputs,))
+                per_replica_loss, per_replica_toks = strategy.run(_replicated_test_step_no_state, args=(inputs,))
                 return strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_loss, axis=None), strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_toks, axis=None)
 
             @tf.function
             def _distributed_test_with_state(inputs, hidden):
 
-                h, per_replica_loss, per_replica_toks = strategy.experimental_run_v2(_replicated_test_step_with_state, args=(inputs, hidden,))
+                h, per_replica_loss, per_replica_toks = strategy.run(_replicated_test_step_with_state, args=(inputs, hidden,))
                 step_loss = strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_loss, axis=None)
                 step_toks = strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_toks, axis=None)
                 return h, step_loss, step_toks
