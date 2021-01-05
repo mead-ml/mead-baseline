@@ -74,7 +74,7 @@ class ClassifyTrainerDistributedTf(EpochReportingTrainer):
         else:
             gpus = int(kwargs.get('gpus', 1))
         endpoint = kwargs.get('endpoint')
-        self.strategy = create_distribute_strategy(strategy_type, gpus, endpoint)
+        self.strategy = create_distribute_strategy(strategy_type, endpoint, gpus)
 
     def reset_strategy_to_eval(self):
         """TODO: this is pretty awkward, FIXME"""
@@ -119,7 +119,7 @@ class ClassifyTrainerDistributedTf(EpochReportingTrainer):
 
             @tf.function
             def _distributed_train_step(inputs):
-                per_replica_loss, per_replica_batchsz = strategy.experimental_run_v2(_replicated_train_step, args=(inputs,))
+                per_replica_loss, per_replica_batchsz = strategy.run(_replicated_train_step, args=(inputs,))
                 return strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_loss, axis=None), strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_batchsz, axis=None)
 
             train_iter = iter(loader)
@@ -188,7 +188,7 @@ class ClassifyTrainerDistributedTf(EpochReportingTrainer):
 
         @tf.function
         def _distributed_test_step(inputs):
-            per_replica_loss, per_replica_batchsz, per_replica_acc = strategy.experimental_run_v2(_replica_test_step, args=(inputs,))
+            per_replica_loss, per_replica_batchsz, per_replica_acc = strategy.run(_replica_test_step, args=(inputs,))
             step_loss = strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_loss, axis=None)
             step_batchsz = strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_batchsz, axis=None)
             # step_cm

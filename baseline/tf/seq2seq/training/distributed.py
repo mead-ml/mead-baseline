@@ -55,7 +55,7 @@ class Seq2SeqTrainerDistributedTf(Trainer):
         strategy_type = kwargs.get('strategy_type', 'mirror')
         gpus = int(kwargs.get('gpus', 1))
         endpoint = kwargs.get('endpoint')
-        self.strategy = create_distribute_strategy(strategy_type, gpus, endpoint)
+        self.strategy = create_distribute_strategy(strategy_type, endpoint, gpus)
         self.bleu_n_grams = int(kwargs.get("bleu_n_grams", 4))
 
     def checkpoint(self):
@@ -111,7 +111,7 @@ class Seq2SeqTrainerDistributedTf(Trainer):
 
             @tf.function
             def _distributed_train_step(inputs):
-                per_replica_loss, per_replica_toks = strategy.experimental_run_v2(_replicated_train_step, args=(inputs,))
+                per_replica_loss, per_replica_toks = strategy.run(_replicated_train_step, args=(inputs,))
                 total_step_loss = strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_loss, axis=None)
                 total_toks = strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_toks, axis=None)
                 return total_step_loss, total_toks
@@ -224,7 +224,7 @@ class Seq2SeqTrainerDistributedTf(Trainer):
             for i in range(steps):
                 features, tgt = next(test_iter)
                 inputs = (features, tgt)
-                per_replica_loss, per_replica_toks, _ = strategy.experimental_run_v2(_replicated_valid_step, args=(inputs,))
+                per_replica_loss, per_replica_toks, _ = strategy.run(_replicated_valid_step, args=(inputs,))
                 total_loss.assign_add(strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_loss, axis=None))
                 total_toks.assign_add(strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_toks, axis=None))
                 # Not sure a good way to get top preds merged yet
