@@ -2644,9 +2644,9 @@ class SequenceSequenceAttention(nn.Module):
         In the case of self-attention, the key and query (used to create the attention weights)
         and values are all low order projections of the same input.
 
-        :param a: The attention weights [B, H, T, T]
-        :param values: The values [B, H, T, D]
-        :returns: A tensor of shape [B, H, T, D]
+        :param a: The attention weights [B, H, T_q, T_k]
+        :param values: The values [B, H, T_k, D]
+        :returns: A tensor of shape [B, H, T_q, D]
         """
         return torch.matmul(a, value)
 
@@ -2667,11 +2667,11 @@ class SeqScaledDotProductAttention(SequenceSequenceAttention):
         :param mask: masking (for destination) to prevent seeing what we shouldnt
         :return: A tensor that is (BxHxTxT)
         """
-        # (., H, T, T) = (., H, T, D) x (., H, D, T)
+        # (., H, T_q, T_k) = (., H, T_q, D) x (., H, D, T_k)
         d_k = query.size(-1)
         scores = torch.matmul(query, key.transpose(-2, -1)) / math.sqrt(d_k)
         if mask is not None:
-            scores = scores.masked_fill(mask == MASK_FALSE, -1e9)
+            scores = scores.masked_fill(mask == MASK_FALSE, -1e9)  # [B, 1, 1, T_k] broadcast to [B, 1, T_q, T_k]
         return F.softmax(scores, dim=-1)
 
 
@@ -2722,17 +2722,17 @@ class SequenceSequenceRelativeAttention(nn.Module):
         In the case of self-attention, the key and query (used to create the attention weights)
         and values are all low order projections of the same input.
 
-        :param a: The attention weights [B, H, T, T]
-        :param value: The values [B, H, T, D]
-        :param edge_value: The edge values [T, T, D]
+        :param a: The attention weights [B, H, T_q, T_k]
+        :param value: The values [B, H, T_k, D]
+        :param edge_value: The edge values [T_q, T_k, D]
         :returns: A tensor of shape [B, H, T, D]
         """
-        B, H, T, D = value.shape
-        updated_values = torch.matmul(a, value)
+        B, H, T_k, D = value.shape
+        updated_values = torch.matmul(a, value)  # [B, H, T_q, D]
         if edges_value is not None:
-            a = a.view(B * H, T, T).transpose(0, 1)  # (T, BxH, T)
-            t = torch.matmul(a, edges_value)  # (T, BxH, D)
-            update_edge_values = t.transpose(0, 1).view(B, H, T, D)
+            a = a.view(B * H, -1, T_k).transpose(0, 1)  # (T_q, BxH, T_k)
+            t = torch.matmul(a, edges_value)  # (T_q, BxH, D)
+            update_edge_values = t.transpose(0, 1).view(B, H, -1, D)
             return updated_values + update_edge_values
         else:
             return updated_values
@@ -2754,16 +2754,17 @@ class SeqScaledDotProductRelativeAttention(SequenceSequenceRelativeAttention):
         :param query: a query for alignment. Can come from self in case of self-attn or decoder in case of E/D
         :param key: a set of keys from encoder or self
         :param mask: masking (for destination) to prevent seeing what we shouldnt
-        :param edges_key: a matrix of relative embeddings between each word in a sequence [TxTxD]
-        :return: A tensor that is (BxHxTxT)
+        :param edges_key: a matrix of relative embeddings between each word in a sequence [T_q x T_k x D]
+        :return: A tensor that is (B x H x T_q x T_k)
         """
-        # (., H, T, T) = (., H, T, D) x (., H, D, T)
-        B, H, T, d_k = query.shape
+        B, H, T_q, d_k = query.shape  # (., H, T_q, T_k) = (., H, T_q, D) x (., H, D, T_k)
         scores_qk = torch.matmul(query, key.transpose(-2, -1))
-        tbhd = query.reshape(B * H, T, d_k).transpose(0, 1)
-        scores_qek = torch.matmul(tbhd, edges_key.transpose(-2, -1))
-        scores_qek = scores_qek.transpose(0, 1).view(B, H, T, T)
+        tbhd = query.reshape(B * H, T_q, d_k).transpose(0, 1)  # [T_q, B*H, d_k]
+        scores_qek = torch.matmul(tbhd, edges_key.transpose(-2, -1))  # [T_q, B*H, T_k]
+        scores_qek = scores_qek.transpose(0, 1).view(B, H, T_q, -1)  # [B, H, T_q, T_k]
         scores = (scores_qk + scores_qek) / math.sqrt(d_k)
+        # only for cross-attention T_q != T_k. for such case, mask should be src_mask, which is a sequence_mask with
+        # dimension [B, 1, 1, T_k], and will be broadcast to dim of scores:
         if mask is not None:
             scores = scores.masked_fill(mask == MASK_FALSE, -1e9)
         return F.softmax(scores, dim=-1)
@@ -2776,11 +2777,11 @@ class SeqDotProductRelativeAttention(SequenceSequenceRelativeAttention):
     def _attention(
         self, query: torch.Tensor, key: torch.Tensor, edges_key: torch.Tensor, mask: Optional[torch.Tensor] = None
     ) -> torch.Tensor:
-        B, H, T, d_k = query.shape
+        B, H, T_q, d_k = query.shape
         scores_qk = torch.matmul(query, key.transpose(-2, -1))
-        tbhd = query.reshape(B * H, T, d_k).transpose(0, 1)
+        tbhd = query.reshape(B * H, T_q, d_k).transpose(0, 1)
         scores_qek = torch.matmul(tbhd, edges_key.transpose(-2, -1))
-        scores_qek = scores_qek.transpose(0, 1).view(B, H, T, T)
+        scores_qek = scores_qek.transpose(0, 1).view(B, H, T_q, -1)
         scores = scores_qk + scores_qek
         if mask is not None:
             scores = scores.masked_fill(mask == MASK_FALSE, -1e9)
@@ -3036,15 +3037,16 @@ class MultiHeadedRelativeAttention(nn.Module):
             self.attn_fn = SeqDotProductRelativeAttention(dropout)
         self.attn = None
 
-    def make_rpr(self, seq_len, device) -> Tuple[torch.Tensor, torch.Tensor]:
+    def make_rpr(self, q_len, k_len, device) -> Tuple[torch.Tensor, torch.Tensor]:
         """Create a matrix shifted by self.rpr_k and bounded between 0 and 2*self.rpr_k to provide 0-based indexing for embedding
         """
-        seq = torch.arange(seq_len).to(device)
+        q_seq = torch.arange(q_len).to(device)
+        k_seq = torch.arange(k_len).to(device)
         window_len = 2 * self.rpr_k
-        edges = seq.view(1, -1) - seq.view(-1, 1) + self.rpr_k
+        edges = k_seq.view(1, -1) - q_seq.view(-1, 1) + self.rpr_k  # [q_len, k_len]
         edges = torch.clamp(edges, 0, window_len)
         if self.rpr_value_on:
-            return self.rpr_key(edges), self.rpr_value(edges)
+            return self.rpr_key(edges), self.rpr_value(edges)  # [q_len, k_len, d_k]
         else:
             return self.rpr_key(edges), None
 
@@ -3067,7 +3069,8 @@ class MultiHeadedRelativeAttention(nn.Module):
         """
         query, key, value, mask = qkvm
         batchsz = query.size(0)
-        seq_len = query.size(1)
+        query_len = query.size(1)
+        key_len = key.size(1)  # key and value have the same length, but query can have a different length
 
         # (B, H, T, D)
         query = self.w_Q(query).view(batchsz, -1, self.h, self.d_k).transpose(1, 2)
@@ -3077,7 +3080,7 @@ class MultiHeadedRelativeAttention(nn.Module):
         if self.windowed_ra:
             rpr_key, rpr_value = self.make_windowed_rpr(query.device)
         else:
-            rpr_key, rpr_value = self.make_rpr(seq_len, query.device)
+            rpr_key, rpr_value = self.make_rpr(query_len, key_len, query.device)
         x = self.attn_fn((query, key, value, rpr_key, rpr_value, mask))
         self.attn = self.attn_fn.attn
 
