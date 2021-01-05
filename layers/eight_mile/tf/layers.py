@@ -2158,9 +2158,9 @@ class SequenceSequenceAttention(tf.keras.layers.Layer):
         In the case of self-attention, the key and query (used to create the attention weights)
         and values are all low order projections of the same input.
 
-        :param a: The attention weights [B, H, T, T]
-        :param values: The values [B, H, T, D]
-        :returns: A tensor of shape [B, H, T, D]
+        :param a: The attention weights [B, H, T_q, T_k]
+        :param values: The values [B, H, T_k, D]
+        :returns: A tensor of shape [B, H, T_q, D]
         """
         return tf.matmul(a, value)
 
@@ -2218,19 +2218,19 @@ class SequenceSequenceRelativeAttention(tf.keras.layers.Layer):
         In the case of self-attention, the key and query (used to create the attention weights)
         and values are all low order projections of the same input.
 
-        :param a: The attention weights [B, H, T, T]
-        :param value: The values [B, H, T, D]
-        :param edge_value: The edge values [T, T, D]
-        :returns: A tensor of shape [B, H, T, D]
+        :param a: The attention weights [B, H, T_q, T_k]
+        :param value: The values [B, H, T_k, D]
+        :param edge_value: The edge values [T_q, T_k, D]
+        :returns: A tensor of shape [B, H, T_q, D]
         """
-        B, H, T, D = get_shape_as_list(value)
-        updated_values = tf.matmul(a, value)
+        B, H, T_k, D = get_shape_as_list(value)
+        updated_values = tf.matmul(a, value)  # [B, H, T_q, D]
         if edges_value is not None:
             # (T, BxH, T)
-            a = tf.transpose(tf.reshape(a, [B * H, T, T]), [1, 0, 2])
-            t = tf.matmul(a, edges_value)  # (T, BxH, D)
+            a = tf.transpose(tf.reshape(a, [B * H, -1, T_k]), [1, 0, 2])  # [T_q, BxH, T_k]
+            t = tf.matmul(a, edges_value)  # (T_q, BxH, D)
             t = tf.transpose(t, [1, 0, 2])
-            update_edge_values = tf.reshape(t, [B, H, T, D])
+            update_edge_values = tf.reshape(t, [B, H, -1, D])
             return updated_values + update_edge_values
         else:
             return updated_values
@@ -2250,17 +2250,16 @@ class SeqScaledDotProductRelativeAttention(SequenceSequenceRelativeAttention):
         :param query: a query for alignment. Can come from self in case of self-attn or decoder in case of E/D
         :param key: a set of keys from encoder or self
         :param mask: masking (for destination) to prevent seeing what we shouldnt
-        :param edges_key: a matrix of relative embeddings between each word in a sequence [TxTxD]
-        :return: A tensor that is (BxHxTxT)
+        :param edges_key: a matrix of relative embeddings between each word in a sequence [T_q x T_k x D]
+        :return: A tensor that is (B x H x T_q x T_k)
         """
-        # (., H, T, T) = (., H, T, D) x (., H, D, T)
-        B, H, T, d_k = get_shape_as_list(query)
-        scores_qk = tf.matmul(query, key, transpose_b=True)
+        B, H, T_q, d_k = get_shape_as_list(query)
+        scores_qk = tf.matmul(query, key, transpose_b=True)  # (., H, T_q, T_k) = (., H, T_q, D) x (., H, D, T_k)
 
-        tbhd = tf.transpose(tf.reshape(query, [B * H, T, d_k]), [1, 0, 2])
-        scores_qek = tf.matmul(tbhd, edges_key, transpose_b=True)
+        tbhd = tf.transpose(tf.reshape(query, [B * H, T_q, d_k]), [1, 0, 2])  # [T_q, B*H, D]
+        scores_qek = tf.matmul(tbhd, edges_key, transpose_b=True)  # [T_q, B*H, T_k]
         scores_qek = tf.transpose(scores_qek, [1, 0, 2])
-        scores_qek = tf.reshape(scores_qek, [B, H, T, T])
+        scores_qek = tf.reshape(scores_qek, [B, H, T_q, -1])  # [B, H, T_q, T_k]
         scores = (scores_qk + scores_qek) / math.sqrt(d_k)
 
         if mask is not None:
@@ -2286,14 +2285,13 @@ class SeqDotProductRelativeAttention(SequenceSequenceRelativeAttention):
         :param edges_key: a matrix of relative embeddings between each word in a sequence [TxTxD]
         :return: A tensor that is (BxHxTxT)
         """
-        # (., H, T, T) = (., H, T, D) x (., H, D, T)
-        B, H, T, d_k = get_shape_as_list(query)
-        scores_qk = tf.matmul(query, key, transpose_b=True)
+        B, H, T_q, d_k = get_shape_as_list(query)
+        scores_qk = tf.matmul(query, key, transpose_b=True)  # (., H, T_q, T_k) = (., H, T_q, D) x (., H, D, T_k)
 
-        tbhd = tf.transpose(tf.reshape(query, [B * H, T, d_k]), [1, 0, 2])
-        scores_qek = tf.matmul(tbhd, edges_key, transpose_b=True)
+        tbhd = tf.transpose(tf.reshape(query, [B * H, T_q, d_k]), [1, 0, 2])  # [T_q, B*H, D]
+        scores_qek = tf.matmul(tbhd, edges_key, transpose_b=True)  # [T_q, B*H, T_k]
         scores_qek = tf.transpose(scores_qek, [1, 0, 2])
-        scores_qek = tf.reshape(scores_qek, [B, H, T, T])
+        scores_qek = tf.reshape(scores_qek, [B, H, T_q, -1])  # [B, H, T_q, T_k]
         scores = scores_qk + scores_qek
 
         if mask is not None:
@@ -2535,15 +2533,16 @@ class MultiHeadedRelativeAttention(tf.keras.layers.Layer):
             self.attn_fn = SeqDotProductRelativeAttention(dropout)
         self.attn = None
 
-    def make_rpr(self, seq_len: int):
+    def make_rpr(self, q_len: int, k_len: int):
         """Create a matrix shifted by self.rpr_k and bounded between 0 and 2*self.rpr_k to provide 0-based indexing for embedding
         """
-        seq = tf.range(seq_len)
+        q_seq = tf.range(q_len)
+        k_seq = tf.range(k_len)
         window_len = 2 * self.rpr_k
-        edges = tf.reshape(seq, [1, -1]) - tf.reshape(seq, [-1, 1]) + self.rpr_k
+        edges = tf.reshape(k_seq, [1, -1]) - tf.reshape(q_seq, [-1, 1]) + self.rpr_k  # [q_len, k_len]
         edges = tf.clip_by_value(edges, 0, window_len)
         if self.rpr_value_on:
-            return self.rpr_key(edges), self.rpr_value(edges)
+            return self.rpr_key(edges), self.rpr_value(edges)  # [q_len, k_len, d_k]
         else:
             return self.rpr_key(edges), None
 
@@ -2567,7 +2566,8 @@ class MultiHeadedRelativeAttention(tf.keras.layers.Layer):
         query, key, value, mask = qkvm
         shp = get_shape_as_list(query)
         batchsz = shp[0]
-        seq_len = shp[1]
+        query_len = shp[1]
+        key_len = get_shape_as_list(key)[1]  # key and value have the same length, but query can have a different length
 
         # (B, T, H, D) -> (B, H, T, D)
         query = tf.transpose(tf.reshape(self.w_Q(query), [batchsz, -1, self.h, self.d_k]), [0, 2, 1, 3])
@@ -2577,7 +2577,7 @@ class MultiHeadedRelativeAttention(tf.keras.layers.Layer):
         if self.windowed_ra:
             rpr_key, rpr_value = self.make_windowed_rpr()
         else:
-            rpr_key, rpr_value = self.make_rpr(seq_len)
+            rpr_key, rpr_value = self.make_rpr(query_len, key_len)
         x = self.attn_fn((query, key, value, rpr_key, rpr_value, mask))
         self.attn = self.attn_fn.attn
         # (B, H, T, D) -> (B, T, H, D) -> (B, T, H*D)
