@@ -73,5 +73,5 @@ batched = [texts[i:i+args.batchsz] for i in range(0, len(texts), args.batchsz)]
 for texts in batched:
     for sen in m.predict(texts, export_mapping=create_export_mapping(args.export_mapping)):
         for word_tag in sen:
-            print("{} {}".format(word_tag['text'], word_tag['label'], word_tag['head']))
+            print("{} {} {}".format(word_tag['text'], word_tag['label'], word_tag['head']))
         print()
