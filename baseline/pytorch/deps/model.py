@@ -63,12 +63,6 @@ class DependencyParserModelBase(nn.Module, DependencyParserModel):
         model.gpu = False if device == 'cpu' else model.gpu
         return model
 
-    #def arc_lookup(self, arc_keys):
-    #    shape = arc_keys.shape
-    #    arc_keys = arc_keys.view(-1)
-    #    t = torch.tensor([self.idx2head[k.item()] for k in arc_keys])
-    #    return t.view(shape)
-
     def save(self, outname: str):
         logger.info('saving %s' % outname)
         torch.save(self, outname)
@@ -85,9 +79,6 @@ class DependencyParserModelBase(nn.Module, DependencyParserModel):
         model.gpu = not bool(kwargs.get('nogpu', False))
         model.labels = labels["labels"]
         model.punct = labels["labels"].get("punct", Offsets.PAD)
-
-        #model.idx2head = {v: int(k) for k, v in model.labels['heads'].items() if k not in Offsets.VALUES}
-        #model.idx2head[0] = -1
         model.create_layers(embeddings, **kwargs)
         logger.info(model)
         return model
@@ -162,12 +153,6 @@ class DependencyParserModelBase(nn.Module, DependencyParserModel):
 
         y = batch_dict.get('heads')
         if y is not None:
-            #y = self.arc_lookup(y)
-
-            #for b_y, b_l in zip(y, lengths):
-            #    mx_by = max(b_y).item()
-            #    if mx_by >= b_l.item():
-            #        raise Exception("Invalid head", mx_by, b_l.item())
             if numpy_to_tensor:
                 y = torch.from_numpy(y)
 
@@ -320,6 +305,4 @@ class BiAffineDependencyParser(DependencyParserModelBase):
         mask = truncate_mask_over_time(mask, arcs_h)
         score_arcs = self.arc_attn(arcs_d, arcs_h, mask)
         score_rels = self.rel_attn(rels_d, rels_h, mask.unsqueeze(1)).permute(0, 2, 3, 1)
-        #if not self.training:
-        #    return decode_results(score_arcs, score_rels)
         return score_arcs, score_rels
