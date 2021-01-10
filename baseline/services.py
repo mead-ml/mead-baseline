@@ -660,7 +660,7 @@ class DependencyParserService(Service):
     def predict(self, tokens, **kwargs):
         """
         Utility function to convert lists of sentence tokens to integer value one-hots which
-        are then passed to the tagger.  The resultant output is then converted back to label and token
+        are then passed to the parser.  The resultant output is then converted back to label and token
         to be printed.
 
         This method is not aware of any input features other than words and characters (and lengths).  If you
@@ -669,23 +669,18 @@ class DependencyParserService(Service):
         :param tokens: (``list``) A list of tokens
 
         """
-        preproc = kwargs.get('preproc', None)
-        if preproc is not None:
-            logger.warning("Warning: Passing `preproc` to `TaggerService.predict` is deprecated.")
         export_mapping = kwargs.get('export_mapping', {})  # if empty dict argument was passed
         if not export_mapping:
             export_mapping = {'tokens': 'text'}
         label_field = kwargs.get('label', 'label')
         tokens_batch = self.batch_input(tokens)
         self.prepare_vectorizers(tokens_batch)
-        # TODO: here we allow vectorizers even for preproc=server to get `word_lengths`.
-        # vectorizers should not be available when preproc=server.
         examples = self.vectorize(tokens_batch)
         if self.preproc == 'server':
             unfeaturized_examples = {}
             for exporter_field in export_mapping:
                 unfeaturized_examples[exporter_field] = np.array([" ".join([y[export_mapping[exporter_field]]
-                                                                   for y in x]) for x in tokens_batch])
+                                                                            for y in x]) for x in tokens_batch])
             unfeaturized_examples[self.model.lengths_key] = examples[self.model.lengths_key]  # remote model
             examples = unfeaturized_examples
 
@@ -693,7 +688,6 @@ class DependencyParserService(Service):
         return self.format_output(outcomes, tokens_batch=tokens_batch, label_field=label_field, vectorized_examples=examples)
 
     def format_output(self, predicted, tokens_batch=None, label_field='label', arc_field='head', vectorized_examples=None, **kwargs):
-        """This code got very messy dealing with BPE/WP outputs."""
         assert tokens_batch is not None
         assert vectorized_examples is not None
         outputs = []
