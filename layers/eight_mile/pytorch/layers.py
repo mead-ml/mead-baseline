@@ -37,6 +37,32 @@ def sequence_mask(lengths: torch.Tensor, max_len: int = -1) -> torch.Tensor:
     mask = row < col
     return mask
 
+def sequence_mask_mxlen(lengths: torch.Tensor, max_len: int) -> torch.Tensor:
+    """Generate a sequence mask of shape `BxT` based on the given lengths, with a maximum value
+
+    This function primarily exists to make ONNX tracing work better
+    :param lengths: A `B` tensor containing the lengths of each example
+    :param max_len: The maximum width (length) allowed in this mask (default to None)
+    :return: A mask
+    """
+    lens = lengths.cpu()
+    max_len_v = max_len
+    # 1 x T
+    row = torch.arange(0, max_len_v).type_as(lens).view(1, -1)
+    # B x 1
+    col = lens.view(-1, 1)
+    # Broadcast to B x T, compares increasing number to max
+    mask = row < col
+    return mask
+
+
+@torch.jit.script
+def truncate_mask_over_time(mask: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+
+    Tout = x.shape[1]
+    mask = mask[:, :Tout]
+    #mask = mask.narrow(1, 0, arcs_h.shape[1])
+    return mask
 
 def vec_log_sum_exp(vec: torch.Tensor, dim: int) -> torch.Tensor:
     """Vectorized version of log-sum-exp
@@ -4333,13 +4359,19 @@ def tie_weight(to_layer, from_layer):
 
 class BilinearAttention(nn.Module):
 
-    def __init__(self, in_hsz, out_hsz=1, bias_x=True, bias_y=True):
+    def __init__(self, in_hsz: int, out_hsz: int = 1, bias_x: bool = True, bias_y: bool = True):
         super().__init__()
 
         self.in_hsz = in_hsz
         self.out_hsz = out_hsz
         self.bias_x = bias_x
         self.bias_y = bias_y
+        a1 = in_hsz
+        a2 = in_hsz
+        if self.bias_x:
+            a1 += 1
+        if self.bias_y:
+            a2 += 1
         self.weight = nn.Parameter(torch.Tensor(out_hsz, in_hsz + bias_x, in_hsz + bias_y))
         self.reset_parameters()
 
@@ -4357,16 +4389,17 @@ class BilinearAttention(nn.Module):
                 A scoring tensor of shape ``[batch_size, n_out, seq_len, seq_len]``.
                 If ``n_out=1``, the dimension for ``n_out`` will be squeezed automatically.
         """
-        if self.bias_x:
+        if self.bias_x is True:
             ones = torch.ones(x.shape[:-1] + (1,), device=x.device)
             x = torch.cat([x, ones], -1)
-        if self.bias_y:
+        if self.bias_y is True:
             ones = torch.ones(x.shape[:-1] + (1,), device=y.device)
             y = torch.cat([y, ones], -1)
         x = x.unsqueeze(1)
         y = y.unsqueeze(1)
         u = x @ self.weight
         s = u @ y.transpose(-2, -1)
-        s = s.squeeze(1)
-        s = s.masked_fill((mask == MASK_FALSE).unsqueeze(1), -1e9)
+        if self.out_hsz == 1:
+            s = s.squeeze(1)
+        s = s.masked_fill((mask.bool() == MASK_FALSE).unsqueeze(1), -1e9)
         return s

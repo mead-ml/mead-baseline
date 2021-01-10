@@ -1,13 +1,31 @@
 import logging
 from baseline.model import DependencyParserModel, register_model
 from baseline.pytorch.torchy import *
+from eight_mile.pytorch.layers import sequence_mask_mxlen, truncate_mask_over_time
 from baseline.utils import listify, write_json, revlut
 from eight_mile.pytorch.layers import *
 import torch.backends.cudnn as cudnn
+import torch.jit as jit
 import os
 cudnn.benchmark = True
 
 logger = logging.getLogger('baseline')
+
+
+def decode_results(heads_pred: TensorDef, labels_pred: TensorDef) -> Tuple[TensorDef, TensorDef]:
+    # Just do a quick greedy decode, pick the argmax of the heads, and for that head, pick the
+    # argmax of the label
+    B = labels_pred.shape[0]
+    T = labels_pred.shape[1]
+
+    # If there is padding, rip it off to the max sequence length so the tensors are the same size
+    greedy_heads_pred = torch.argmax(heads_pred, -1).view(-1)
+    greedy_labels_pred = labels_pred.reshape(B * T, T, -1)[
+        torch.arange(len(greedy_heads_pred)), greedy_heads_pred].view(B, T, -1)
+
+    greedy_labels_pred = torch.argmax(greedy_labels_pred, -1)
+    greedy_heads_pred = greedy_heads_pred.view(B, T)
+    return greedy_heads_pred, greedy_labels_pred
 
 
 class ArcLabelLoss(nn.Module):
@@ -45,12 +63,6 @@ class DependencyParserModelBase(nn.Module, DependencyParserModel):
         model.gpu = False if device == 'cpu' else model.gpu
         return model
 
-    #def arc_lookup(self, arc_keys):
-    #    shape = arc_keys.shape
-    #    arc_keys = arc_keys.view(-1)
-    #    t = torch.tensor([self.idx2head[k.item()] for k in arc_keys])
-    #    return t.view(shape)
-
     def save(self, outname: str):
         logger.info('saving %s' % outname)
         torch.save(self, outname)
@@ -67,9 +79,6 @@ class DependencyParserModelBase(nn.Module, DependencyParserModel):
         model.gpu = not bool(kwargs.get('nogpu', False))
         model.labels = labels["labels"]
         model.punct = labels["labels"].get("punct", Offsets.PAD)
-
-        #model.idx2head = {v: int(k) for k, v in model.labels['heads'].items() if k not in Offsets.VALUES}
-        #model.idx2head[0] = -1
         model.create_layers(embeddings, **kwargs)
         logger.info(model)
         return model
@@ -144,12 +153,6 @@ class DependencyParserModelBase(nn.Module, DependencyParserModel):
 
         y = batch_dict.get('heads')
         if y is not None:
-            #y = self.arc_lookup(y)
-
-            #for b_y, b_l in zip(y, lengths):
-            #    mx_by = max(b_y).item()
-            #    if mx_by >= b_l.item():
-            #        raise Exception("Invalid head", mx_by, b_l.item())
             if numpy_to_tensor:
                 y = torch.from_numpy(y)
 
@@ -176,11 +179,18 @@ class DependencyParserModelBase(nn.Module, DependencyParserModel):
 
     def predict_batch(self, batch_dict: Dict[str, TensorDef], **kwargs) -> TensorDef:
         numpy_to_tensor = bool(kwargs.get('numpy_to_tensor', True))
+        decode = bool(kwargs.get('decode', True))
         examples, perm_idx = self.make_input(batch_dict, perm=True, numpy_to_tensor=numpy_to_tensor)
         with torch.no_grad():
-            arcs, rels = self(examples)
-            arcs = unsort_batch(arcs.exp(), perm_idx)
-            rels = unsort_batch(rels.exp(), perm_idx)
+            if decode:
+                arcs, rels = self.decode(examples)
+
+            else:
+                arcs, rels = self(examples)
+                arcs.exp_()
+                rels.exp_()
+            arcs = unsort_batch(arcs, perm_idx)
+            rels = unsort_batch(rels, perm_idx)
 
         return arcs, rels
 
@@ -210,19 +220,8 @@ class DependencyParserModelBase(nn.Module, DependencyParserModel):
 
     def decode(self, example, **kwargs):
         heads_pred, labels_pred = self(example)
-        # Just do a quick greedy decode, pick the argmax of the heads, and for that head, pick the
-        # argmax of the label
-        B = labels_pred.shape[0]
-        T = labels_pred.shape[1]
+        return decode_results(heads_pred, labels_pred)
 
-        # If there is padding, rip it off to the max sequence length so the tensors are the same size
-        greedy_heads_pred = torch.argmax(heads_pred, -1).view(-1)
-        greedy_labels_pred = labels_pred.reshape(B * T, T, -1)[
-            torch.arange(len(greedy_heads_pred)), greedy_heads_pred].view(B, T, -1)
-
-        greedy_labels_pred = torch.argmax(greedy_labels_pred, -1)
-        greedy_heads_pred = greedy_heads_pred.view(B, T)
-        return greedy_heads_pred, greedy_labels_pred
 
 @register_model(task='deps', name='default')
 class BiAffineDependencyParser(DependencyParserModelBase):
@@ -284,6 +283,8 @@ class BiAffineDependencyParser(DependencyParserModelBase):
     def init_biaffine(self, input_dim: int, output_dim: int, bias_x: bool, bias_y: bool):
         return BilinearAttention(input_dim, output_dim, bias_x, bias_y)
 
+
+
     def forward(self, inputs: Dict[str, TensorDef]) -> TensorDef:
         """Forward execution of the model.  Sub-classes typically shouldnt need to override
 
@@ -293,9 +294,7 @@ class BiAffineDependencyParser(DependencyParserModelBase):
 
         lengths = inputs.get("lengths")
         Tin = inputs[self.primary_key].shape[1]
-        mask = sequence_mask(lengths, max_len=Tin).to(lengths.device)
-        #mask = sequence_mask(lengths).to(lengths.device)
-
+        mask = sequence_mask_mxlen(lengths, max_len=Tin).to(lengths.device)
         embedded = self.embeddings(inputs)
         embedded = (embedded, lengths)
         pooled = self.pool_model(embedded)
@@ -303,8 +302,7 @@ class BiAffineDependencyParser(DependencyParserModelBase):
         arcs_d = self.arc_d(pooled)
         rels_h = self.rel_h(pooled)
         rels_d = self.rel_d(pooled)
-        Tout = arcs_h.shape[1]
-        mask = mask[:, :Tout]
+        mask = truncate_mask_over_time(mask, arcs_h)
         score_arcs = self.arc_attn(arcs_d, arcs_h, mask)
         score_rels = self.rel_attn(rels_d, rels_h, mask.unsqueeze(1)).permute(0, 2, 3, 1)
         return score_arcs, score_rels

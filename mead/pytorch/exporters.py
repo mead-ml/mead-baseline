@@ -106,7 +106,9 @@ class PytorchONNXExporter(Exporter):
         return ['output']
 
     def create_dynamic_axes(self, model, vectorizers, inputs, outputs):
-        dynamics = {'output': {1: 'sequence'}}
+        dynamics = {}#'output': {1: 'sequence'}}
+        for name in outputs:
+            dynamics[name] = {1: 'sequence'}
         for k, _ in model.embeddings.items():
             if k == 'char':
                 dynamics[k] = {1: 'sequence', 2: 'chars'}
@@ -157,6 +159,7 @@ class PytorchONNXExporter(Exporter):
                           input_names=inputs,
                           output_names=outputs,
                           opset_version=self.onnx_opset,
+                          #propagate=True,
                           example_outputs=example_output)
 
         logger.info("Saving metadata.")
@@ -200,4 +203,26 @@ class TaggerPytorchONNXExporter(PytorchONNXExporter):
                     model.decoder.viterbi.start_idx,
                     model.decoder.viterbi.end_idx
                 )
+        return model
+
+
+@export
+@register_exporter(task='deps', name='default')
+class DependencyParserPytorchONNXExporter(PytorchONNXExporter):
+    def __init__(self, task, **kwargs):
+        super().__init__(task)
+        self.sig_name = 'deps_text'
+
+    def create_example_output(self, model):
+        return torch.ones(1, self.default_size, self.default_size), torch.ones(1, self.default_size, len(model.labels))
+
+    def create_model_outputs(self, model):
+        return ['arcs', 'labels']
+
+    def apply_model_patches(self, model):
+        for _, e in model.embeddings.items():
+            #  Turn off dropin flag, unsupported
+            # https://github.com/pytorch/pytorch/issues/49001
+            if hasattr(e, 'dropin'):
+                e.dropin = 0
         return model
