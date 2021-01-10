@@ -70,7 +70,6 @@ class DependencyParserTrainerPyTorch(EpochReportingTrainer):
                 labels_gold = example.pop('labels')
                 heads_gold = example.pop('heads')
                 batchsz = self._get_batchsz(batch_dict)
-                # The predicted heads has an additional T dimension
                 greedy_heads_pred, greedy_labels_pred = self.model.decode(example)
                 T = greedy_labels_pred.shape[1]
                 labels_gold_trimmed = labels_gold[:, :T]
