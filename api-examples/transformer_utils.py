@@ -35,6 +35,42 @@ class TripletLoss(nn.Module):
         return score
 
 
+class ContrastiveLoss(nn.Module):
+    def __init__(self, model, t=1.0):
+        super().__init__()
+        self.model = model
+        self.t = nn.Parameter(torch.tensor(t).float())
+
+    def forward(self, inputs, targets):
+        query = self.model.encode_query(inputs) # [B, H]
+        response = self.model.encode_response(targets) # [B, H]
+        query = F.normalize(query, p=2, dim=1)
+        response = F.normalize(response, p=2, dim=1)
+        labels = torch.arange(query.shape[0], device=query.device)
+        logits = torch.mm(query, response.T) * self.t.exp()
+        loss = F.cross_entropy(logits, labels)
+        return loss
+
+
+class SymmetricContrastiveLoss(nn.Module):
+    def __init__(self, model, t=1.0):
+        super().__init__()
+        self.t = nn.Parameter(torch.tensor(t))
+        self.model = model
+
+    def forward(self, inputs, targets):
+        query = self.model.encode_query(inputs) # [B, H]
+        response = self.model.encode_response(targets) # [B, H]
+        query = F.normalize(query, p=2, dim=1)
+        response = F.normalize(response, p=2, dim=1)
+        labels = torch.arange(query.shape[0], device=query.device)
+        logits = torch.mm(query, response.T) * self.t.exp()
+        loss_1 = F.cross_entropy(logits, labels)
+        loss_2 = F.cross_entropy(logits.T, labels)
+        loss = (loss_1 + loss_2) * 0.5
+        return loss
+
+
 class AllLoss(nn.Module):
     def __init__(self, model, warmup_steps=10000):
         r"""Loss from here https://arxiv.org/pdf/1705.00652.pdf see section 4
@@ -203,6 +239,11 @@ class PairedModel(nn.Module):
     def create_loss(self, loss_type='all'):
         if loss_type == 'all':
             return AllLoss(self)
+        elif loss_type == 'contrastive':
+            return ContrastiveLoss(self)
+        elif loss_type == 'symmetric':
+            return SymmetricContrastiveLoss(self)
+
         return TripletLoss(self)
 
 
@@ -536,7 +577,9 @@ class MultiTFRecordLoader(MultiFileLoader):
                     # not sure about the optimal choice of shuffle_queue_size here:
                     itr = self.tfrecord.iterator_utils.shuffle_iterator(itr, queue_size=128)
                 for d in itr:
-                    if 'y' in d.keys():
+                    if 'y_gen' in d.keys():
+                        yield np.array(d['x'], dtype=int), np.array(d['y_gen'], dtype=int)
+                    elif 'y' in d.keys():
                         # d['x'] is in np.int32, but pytorch require np.int64
                         yield np.array(d['x'], dtype=int), np.array(d['y'], dtype=int)
                     else:

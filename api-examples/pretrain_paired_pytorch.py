@@ -18,6 +18,8 @@ from transformer_utils import (
     PairedModel,
     TripletLoss,
     AllLoss,
+    ContrastiveLoss,
+    SymmetricContrastiveLoss,
     TiedEmbeddingsSeq2SeqModel,
 )
 
@@ -99,10 +101,10 @@ def train():
                         help="Hidden sizes of the dense stack (ff2 from the convert paper)")
     parser.add_argument("--ff_pdrop", type=float, default=0.1, help="Dropout in the dense stack")
 
-    parser.add_argument("--reader_type", type=str, default='preprocessed', choices=['ntp', 'nsp', 'preprocessed'])
+    parser.add_argument("--reader_type", type=str, default='preprocessed', choices=['ntp', 'nsp', 'preprocessed', 'tfrecord'])
 
     parser.add_argument("--model_type", default="dual-encoder", choices=["dual-encoder", "encoder-decoder"])
-    parser.add_argument("--loss", type=str, default='all', choices=['triplet', 'all'])
+    parser.add_argument("--loss", type=str, default='all', choices=['triplet', 'all', 'contrastive', 'symmetric'])
     parser.add_argument('--rpr_k',
                         help='Relative attention positional sizes pass 0 if you dont want relative attention',
                         type=int, default=[8], nargs='+')
