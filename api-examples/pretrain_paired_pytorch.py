@@ -71,13 +71,13 @@ def train():
     parser.add_argument("--d_model", type=int, default=512, help="Model dimension (and embedding dsz)")
     parser.add_argument("--d_ff", type=int, default=2048, help="FFN dimension")
     parser.add_argument("--d_k", type=int, default=None, help="Dimension per head.  Use if num_heads=1 to reduce dims")
-
     parser.add_argument("--num_heads", type=int, default=8, help="Number of heads")
     parser.add_argument("--num_layers", type=int, default=8, help="Number of layers")
     parser.add_argument("--windowed_ra", type=str2bool, default=False, help="whether prevent attention beyond rpr_k")
     parser.add_argument("--num_train_workers", type=int, default=4, help="Number train workers")
     parser.add_argument("--nctx", type=int, default=256, help="Max input length")
-    parser.add_argument("--pattern", default='*.json', help="Glob pattern for data")
+    parser.add_argument("--file_type", default='json', help="Suffix for data")
+    parser.add_argument("--record_keys", default=['x', 'y'], nargs='+')
     parser.add_argument("--batch_size", type=int, default=256, help="Batch Size")
     parser.add_argument("--subword_model_file", type=str, help="The BPE model file", required=True)
     parser.add_argument("--subword_vocab_file", type=str, help="The BPE subword vocab", required=True)
@@ -134,8 +134,8 @@ def train():
         args.device, updated_local_rank = init_distributed(args.local_rank)
         args.local_rank = updated_local_rank
 
-    reader = MultiFileDatasetReader(args.nctx, args.subword_model_file, args.subword_vocab_file, args.pattern,
-                                    reader_type=args.reader_type)
+    reader = MultiFileDatasetReader(args.nctx, args.subword_model_file, args.subword_vocab_file, args.file_type,
+                                    reader_type=args.reader_type, record_keys=args.record_keys)
 
     vocab = reader.build_vocab()
     # If we are not using chars, then use 'x' for both input and output

@@ -552,9 +552,17 @@ class MultiTFRecordLoader(MultiFileLoader):
         import tfrecord
     except:
         pass
-    def __init__(self, directory, pattern, vocabs, vectorizer, nctx, last_turn_only=True, distribute=True, shuffle=True):
-        super().__init__(directory, pattern, vocabs, vectorizer, nctx, last_turn_only, distribute, shuffle)
+    def __init__(self, directory, vocabs, vectorizer, nctx, last_turn_only=True, distribute=True, shuffle=True, record_keys=None):
+        super().__init__(directory, "*.tfrecord", vocabs, vectorizer, nctx, last_turn_only, distribute, shuffle)
         # create index first
+        if not record_keys:
+            self.x = 'x'
+            self.y = 'y'
+        elif len(record_keys) < 2:
+            self.x = record_keys[0]
+            self.y = record_keys[0]
+        else:
+            self.x, self.y = record_keys
         files = list(glob.glob(os.path.join(directory, '*.tfrecord')))
         for f in files:
             idx_file = '.'.join(f.split('.')[:-1]) + '.index'
@@ -577,22 +585,17 @@ class MultiTFRecordLoader(MultiFileLoader):
                     # not sure about the optimal choice of shuffle_queue_size here:
                     itr = self.tfrecord.iterator_utils.shuffle_iterator(itr, queue_size=128)
                 for d in itr:
-                    if 'y_gen' in d.keys():
-                        yield np.array(d['x'], dtype=int), np.array(d['y_gen'], dtype=int)
-                    elif 'y' in d.keys():
-                        # d['x'] is in np.int32, but pytorch require np.int64
-                        yield np.array(d['x'], dtype=int), np.array(d['y'], dtype=int)
-                    else:
-                        yield np.array(d['x'], dtype=int), np.array(d['x'], dtype=int)
+                    yield np.array(d[self.x], dtype=int), np.array(d[self.y], dtype=int)
 
 class MultiFileDatasetReader:
     """Provide a base-class to do operations that are independent of token representation
     """
 
-    def __init__(self, nctx=64, model_file=None, vocab_file=None, pattern='*.txt', reader_type="ntp"):
+    def __init__(self, nctx=64, model_file=None, vocab_file=None, file_type='txt', reader_type="ntp", record_keys=None):
         self.nctx = nctx
-        self.pattern = pattern
+        self.pattern = f'*.{file_type}'
         self.reader_type = reader_type
+        self.record_keys = record_keys if record_keys else ['x', 'y']
         self.vectorizer = BPEVectorizer1D(model_file=model_file, vocab_file=vocab_file, mxlen=nctx)
 
     def build_vocab(self, _=None):
@@ -609,7 +612,7 @@ class MultiFileDatasetReader:
             return SequencePredictionFileLoader(directory, self.pattern, vocabs, self.vectorizer, self.nctx, distribute=distribute, shuffle=shuffle)
         elif reader_type == 'tfrecord':
             print("Reading data in .tfrecord format using the tfrecord module")
-            return MultiTFRecordLoader(directory, self.pattern, vocabs, self.vectorizer, self.nctx, distribute=distribute, shuffle=shuffle)
+            return MultiTFRecordLoader(directory, vocabs, self.vectorizer, self.nctx, distribute=distribute, shuffle=shuffle, record_keys=self.record_keys)
         return PreprocessedFileLoader(directory, self.pattern, vocabs, self.vectorizer, self.nctx, distribute=distribute, shuffle=shuffle)
 
 
