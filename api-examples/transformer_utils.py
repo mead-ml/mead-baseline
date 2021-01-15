@@ -35,6 +35,42 @@ class TripletLoss(nn.Module):
         return score
 
 
+class ContrastiveLoss(nn.Module):
+    def __init__(self, model, t=1.0):
+        super().__init__()
+        self.model = model
+        self.t = nn.Parameter(torch.tensor(t).float())
+
+    def forward(self, inputs, targets):
+        query = self.model.encode_query(inputs) # [B, H]
+        response = self.model.encode_response(targets) # [B, H]
+        query = F.normalize(query, p=2, dim=1)
+        response = F.normalize(response, p=2, dim=1)
+        labels = torch.arange(query.shape[0], device=query.device)
+        logits = torch.mm(query, response.T) * self.t.exp()
+        loss = F.cross_entropy(logits, labels)
+        return loss
+
+
+class SymmetricContrastiveLoss(nn.Module):
+    def __init__(self, model, t=1.0):
+        super().__init__()
+        self.t = nn.Parameter(torch.tensor(t))
+        self.model = model
+
+    def forward(self, inputs, targets):
+        query = self.model.encode_query(inputs) # [B, H]
+        response = self.model.encode_response(targets) # [B, H]
+        query = F.normalize(query, p=2, dim=1)
+        response = F.normalize(response, p=2, dim=1)
+        labels = torch.arange(query.shape[0], device=query.device)
+        logits = torch.mm(query, response.T) * self.t.exp()
+        loss_1 = F.cross_entropy(logits, labels)
+        loss_2 = F.cross_entropy(logits.T, labels)
+        loss = (loss_1 + loss_2) * 0.5
+        return loss
+
+
 class AllLoss(nn.Module):
     def __init__(self, model, warmup_steps=10000):
         r"""Loss from here https://arxiv.org/pdf/1705.00652.pdf see section 4
@@ -99,6 +135,7 @@ class TwoHeadConcat(nn.Module):
         :return: concatenation of the two 1-head attention
         """
         super().__init__()
+        self.output_dim = 2*d_model
         self.reduction1 = SingleHeadReduction(d_model, dropout, scale=scale, d_k=d_k)
         self.reduction2 = SingleHeadReduction(d_model, dropout, scale=scale, d_k=d_k)
 
@@ -153,22 +190,30 @@ class PairedModel(nn.Module):
                  weight_std=0.02,
                  rpr_k=None,
                  reduction_d_k=64,
-                 ff_pdrop=0.1,
-                 windowed_ra=False):
+                 ffn_pdrop=0.1,
+                 windowed_ra=False,
+                 rpr_value_on=False):
         super().__init__()
-        if stacking_layers is None:
-            stacking_layers = [d_model] * 3
 
         self.weight_std = weight_std
-        stacking_layers = listify(stacking_layers)
-        transformer = TransformerEncoderStack(num_heads=num_heads, d_model=d_model,
-                                              pdrop=dropout, layers=num_layers, activation='gelu', d_ff=d_ff,
-                                              d_k=d_k, rpr_k=rpr_k, windowed_ra=windowed_ra)
-        self.attention_layer = TwoHeadConcat(d_model, dropout, scale=False, d_k=reduction_d_k)
-        self.transformer_layers = transformer
-        self.embedding_layers = embeddings
-        self.ff1 = ConveRTFFN(2*d_model, stacking_layers, d_out, ff_pdrop)
-        self.ff2 = ConveRTFFN(2*d_model, stacking_layers, d_out, ff_pdrop)
+
+        self.transformer = TransformerEncoderStack(num_heads=num_heads, d_model=d_model,
+                                                   pdrop=dropout, layers=num_layers, activation='gelu', d_ff=d_ff,
+                                                   ffn_pdrop=ffn_pdrop,
+                                                   d_k=d_k, rpr_k=rpr_k, windowed_ra=windowed_ra, rpr_value_on=rpr_value_on)
+        self.reduction_layer = TwoHeadConcat(d_model, dropout, scale=False, d_k=reduction_d_k)
+        self.embeddings = EmbeddingsStack({'x': embeddings})
+        if stacking_layers:
+            stacking_layers = listify(stacking_layers)
+        if stacking_layers:
+            self.ff1 = ConveRTFFN(self.reduction_layer.output_dim, stacking_layers, d_out, ffn_pdrop)
+            self.ff2 = ConveRTFFN(self.reduction_layer.output_dim, stacking_layers, d_out, ffn_pdrop)
+        elif self.reduction_layer.output_dim != d_out:
+            self.ff1 = nn.Linear(self.reduction_layer.output_dim, d_out)
+            self.ff2 = nn.Linear(self.reduction_layer.output_dim, d_out)
+        else:
+            self.ff1 = nn.Identity()
+            self.ff2 = nn.Identity()
         self.apply(self.init_layer_weights)
 
     def init_layer_weights(self, module):
@@ -180,18 +225,18 @@ class PairedModel(nn.Module):
     def encode_query(self, query):
         query_mask = (query != Offsets.PAD)
         att_mask = query_mask.unsqueeze(1).unsqueeze(1)
-        embedded = self.embedding_layers(query)
-        encoded_query = self.transformer_layers((embedded, att_mask))
-        encoded_query = self.attention_layer((encoded_query, encoded_query, encoded_query, att_mask))
+        embedded = self.embeddings({'x': query})
+        encoded_query = self.transformer((embedded, att_mask))
+        encoded_query = self.reduction_layer((encoded_query, encoded_query, encoded_query, att_mask))
         encoded_query = self.ff1(encoded_query)
         return encoded_query
 
     def encode_response(self, response):
         response_mask = (response != Offsets.PAD)
         att_mask = response_mask.unsqueeze(1).unsqueeze(1)
-        embedded = self.embedding_layers(response)
-        encoded_response = self.transformer_layers((embedded, att_mask))
-        encoded_response = self.attention_layer((encoded_response, encoded_response, encoded_response, att_mask))
+        embedded = self.embeddings({'x': response})
+        encoded_response = self.transformer((embedded, att_mask))
+        encoded_response = self.reduction_layer((encoded_response, encoded_response, encoded_response, att_mask))
         encoded_response = self.ff2(encoded_response)
         return encoded_response
 
@@ -203,6 +248,11 @@ class PairedModel(nn.Module):
     def create_loss(self, loss_type='all'):
         if loss_type == 'all':
             return AllLoss(self)
+        elif loss_type == 'contrastive':
+            return ContrastiveLoss(self)
+        elif loss_type == 'symmetric':
+            return SymmetricContrastiveLoss(self)
+
         return TripletLoss(self)
 
 
@@ -511,9 +561,17 @@ class MultiTFRecordLoader(MultiFileLoader):
         import tfrecord
     except:
         pass
-    def __init__(self, directory, pattern, vocabs, vectorizer, nctx, last_turn_only=True, distribute=True, shuffle=True):
-        super().__init__(directory, pattern, vocabs, vectorizer, nctx, last_turn_only, distribute, shuffle)
+    def __init__(self, directory, vocabs, vectorizer, nctx, last_turn_only=True, distribute=True, shuffle=True, record_keys=None):
+        super().__init__(directory, "*.tfrecord", vocabs, vectorizer, nctx, last_turn_only, distribute, shuffle)
         # create index first
+        if not record_keys:
+            self.x = 'x'
+            self.y = 'y'
+        elif len(record_keys) < 2:
+            self.x = record_keys[0]
+            self.y = record_keys[0]
+        else:
+            self.x, self.y = record_keys
         files = list(glob.glob(os.path.join(directory, '*.tfrecord')))
         for f in files:
             idx_file = '.'.join(f.split('.')[:-1]) + '.index'
@@ -536,20 +594,17 @@ class MultiTFRecordLoader(MultiFileLoader):
                     # not sure about the optimal choice of shuffle_queue_size here:
                     itr = self.tfrecord.iterator_utils.shuffle_iterator(itr, queue_size=128)
                 for d in itr:
-                    if 'y' in d.keys():
-                        # d['x'] is in np.int32, but pytorch require np.int64
-                        yield np.array(d['x'], dtype=int), np.array(d['y'], dtype=int)
-                    else:
-                        yield np.array(d['x'], dtype=int), np.array(d['x'], dtype=int)
+                    yield np.array(d[self.x], dtype=int), np.array(d[self.y], dtype=int)
 
 class MultiFileDatasetReader:
     """Provide a base-class to do operations that are independent of token representation
     """
 
-    def __init__(self, nctx=64, model_file=None, vocab_file=None, pattern='*.txt', reader_type="ntp"):
+    def __init__(self, nctx=64, model_file=None, vocab_file=None, file_type='txt', reader_type="ntp", record_keys=None):
         self.nctx = nctx
-        self.pattern = pattern
+        self.pattern = f'*.{file_type}'
         self.reader_type = reader_type
+        self.record_keys = record_keys if record_keys else ['x', 'y']
         self.vectorizer = BPEVectorizer1D(model_file=model_file, vocab_file=vocab_file, mxlen=nctx)
 
     def build_vocab(self, _=None):
@@ -566,7 +621,7 @@ class MultiFileDatasetReader:
             return SequencePredictionFileLoader(directory, self.pattern, vocabs, self.vectorizer, self.nctx, distribute=distribute, shuffle=shuffle)
         elif reader_type == 'tfrecord':
             print("Reading data in .tfrecord format using the tfrecord module")
-            return MultiTFRecordLoader(directory, self.pattern, vocabs, self.vectorizer, self.nctx, distribute=distribute, shuffle=shuffle)
+            return MultiTFRecordLoader(directory, vocabs, self.vectorizer, self.nctx, distribute=distribute, shuffle=shuffle, record_keys=self.record_keys)
         return PreprocessedFileLoader(directory, self.pattern, vocabs, self.vectorizer, self.nctx, distribute=distribute, shuffle=shuffle)
 
 

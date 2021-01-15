@@ -4191,7 +4191,7 @@ class SingleHeadReduction(nn.Module):
         :param d_k: The low-order project per head.  This is normally `d_model // num_heads` unless set explicitly
         """
         super().__init__()
-        self.d_model = d_model
+        self.output_dim = d_model
         if d_k is None:
             self.d_k = d_model
         else:
@@ -4225,7 +4225,7 @@ class SingleHeadReduction(nn.Module):
         # (B, H, T, D), still have num_heads = 1 to use the attention function defined in eight_miles
         query = self.w_Q(query).view(batchsz, -1, 1, self.d_k).transpose(1, 2)
         key = self.w_K(key).view(batchsz, -1, 1, self.d_k).transpose(1, 2)
-        value = value.view(batchsz, -1, 1, self.d_model).transpose(1, 2)
+        value = value.view(batchsz, -1, 1, self.output_dim).transpose(1, 2)
         x = self.attn_fn((query, key, value, mask))  # [B, 1, T, D]
         self.attn = self.attn_fn.attn
 

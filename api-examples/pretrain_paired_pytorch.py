@@ -18,6 +18,8 @@ from transformer_utils import (
     PairedModel,
     TripletLoss,
     AllLoss,
+    ContrastiveLoss,
+    SymmetricContrastiveLoss,
     TiedEmbeddingsSeq2SeqModel,
 )
 
@@ -32,7 +34,7 @@ This file uses Baseline to train a Transformer model using fastBPE with query-re
   
 """
 def create_model(embeddings, d_model, d_ff, dropout, num_heads, num_layers, model_type, rpr_k, d_k, reduction_d_k,
-                 stacking_layers, ff_pdrop, windowed_ra, logger):
+                 stacking_layers, ff_pdrop, windowed_ra, logger, checkpoint_name=None):
     if model_type == "encoder-decoder":
         logger.info("Creating tied encoder decoder model")
         hps = {"dsz": d_model,
@@ -49,8 +51,10 @@ def create_model(embeddings, d_model, d_ff, dropout, num_heads, num_layers, mode
         model = TiedEmbeddingsSeq2SeqModel(embeddings, **hps)
     else:
         model = PairedModel(embeddings, d_model, d_ff, dropout, num_heads, num_layers, rpr_k=rpr_k, d_k=d_k,
-                            reduction_d_k=reduction_d_k, stacking_layers=stacking_layers, ff_pdrop=ff_pdrop,
+                            reduction_d_k=reduction_d_k, stacking_layers=stacking_layers, ffn_pdrop=ff_pdrop,
                             windowed_ra=windowed_ra)
+        if checkpoint_name:
+            load_tlm_npz(model, checkpoint_name)
 
     logger.info(model)
     return model
@@ -69,16 +73,17 @@ def train():
     parser.add_argument("--d_model", type=int, default=512, help="Model dimension (and embedding dsz)")
     parser.add_argument("--d_ff", type=int, default=2048, help="FFN dimension")
     parser.add_argument("--d_k", type=int, default=None, help="Dimension per head.  Use if num_heads=1 to reduce dims")
-
     parser.add_argument("--num_heads", type=int, default=8, help="Number of heads")
     parser.add_argument("--num_layers", type=int, default=8, help="Number of layers")
     parser.add_argument("--windowed_ra", type=str2bool, default=False, help="whether prevent attention beyond rpr_k")
     parser.add_argument("--num_train_workers", type=int, default=4, help="Number train workers")
     parser.add_argument("--nctx", type=int, default=256, help="Max input length")
-    parser.add_argument("--pattern", default='*.json', help="Glob pattern for data")
+    parser.add_argument("--file_type", default='json', help="Suffix for data")
+    parser.add_argument("--record_keys", default=['x', 'y'], nargs='+')
     parser.add_argument("--batch_size", type=int, default=256, help="Batch Size")
     parser.add_argument("--subword_model_file", type=str, help="The BPE model file", required=True)
     parser.add_argument("--subword_vocab_file", type=str, help="The BPE subword vocab", required=True)
+    parser.add_argument("--checkpoint", type=str, help="TLM Checkpoint to start training from (if dual encoder)")
     parser.add_argument("--dropout", type=float, default=0.1, help="Dropout")
     parser.add_argument("--lr_scheduler", type=str, default='cosine', help="The type of learning rate decay scheduler")
     parser.add_argument("--lr_decay_steps", type=int, help="decay steps of lr scheduler")
@@ -95,14 +100,14 @@ def train():
     parser.add_argument("--saves_per_epoch", type=int, default=10, help="The number of checkpoints to save per epoch")
     parser.add_argument("--reduction_d_k", type=int, default=64, help="Dimensions of Key and Query in the single headed"
                                                                       "reduction layers")
-    parser.add_argument("--stacking_layers", type=int, nargs='+', default=[1024, 1024, 1024],
+    parser.add_argument("--stacking_layers", type=int, nargs='+', default=[],
                         help="Hidden sizes of the dense stack (ff2 from the convert paper)")
     parser.add_argument("--ff_pdrop", type=float, default=0.1, help="Dropout in the dense stack")
 
-    parser.add_argument("--reader_type", type=str, default='preprocessed', choices=['ntp', 'nsp', 'preprocessed'])
+    parser.add_argument("--reader_type", type=str, default='preprocessed', choices=['ntp', 'nsp', 'preprocessed', 'tfrecord'])
 
     parser.add_argument("--model_type", default="dual-encoder", choices=["dual-encoder", "encoder-decoder"])
-    parser.add_argument("--loss", type=str, default='all', choices=['triplet', 'all'])
+    parser.add_argument("--loss", type=str, default='all', choices=['triplet', 'all', 'contrastive', 'symmetric'])
     parser.add_argument('--rpr_k',
                         help='Relative attention positional sizes pass 0 if you dont want relative attention',
                         type=int, default=[8], nargs='+')
@@ -132,8 +137,8 @@ def train():
         args.device, updated_local_rank = init_distributed(args.local_rank)
         args.local_rank = updated_local_rank
 
-    reader = MultiFileDatasetReader(args.nctx, args.subword_model_file, args.subword_vocab_file, args.pattern,
-                                    reader_type=args.reader_type)
+    reader = MultiFileDatasetReader(args.nctx, args.subword_model_file, args.subword_vocab_file, args.file_type,
+                                    reader_type=args.reader_type, record_keys=args.record_keys)
 
     vocab = reader.build_vocab()
     # If we are not using chars, then use 'x' for both input and output
@@ -167,7 +172,7 @@ def train():
                          num_heads=args.num_heads, num_layers=args.num_layers,
                          model_type=args.model_type, rpr_k=rpr_k, d_k=args.d_k, reduction_d_k=args.reduction_d_k,
                          stacking_layers=args.stacking_layers, ff_pdrop=args.ff_pdrop, windowed_ra=args.windowed_ra,
-                         logger=logger)
+                         logger=logger, checkpoint_name=args.checkpoint)
 
     model.to(args.device)
     loss_function = model.create_loss(args.loss)

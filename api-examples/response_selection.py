@@ -1,45 +1,75 @@
 import argparse
 import os
-from transformer_utils import *
-from baseline.pytorch.lm import TransformerLanguageModel
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import baseline.embeddings
+import baseline.pytorch.embeddings
+from transformer_utils import PairedModel, MultiFileDatasetReader
 from eight_mile.progress import create_progress_bar
 from eight_mile.utils import str2bool
+from eight_mile.pytorch.layers import find_latest_checkpoint
 from torch.utils.data import DataLoader
 import logging
 logger = logging.getLogger("baseline")
 
+def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, d_k, reduction_d_k,
+                 stacking_layers, windowed_ra, logger):
 
-parser = argparse.ArgumentParser("Load a dual-encoder model (conveRT) and do response selection on testing data")
+    model = PairedModel(embeddings, d_model, d_ff, 0, num_heads, num_layers, rpr_k=rpr_k, d_k=d_k,
+                        reduction_d_k=reduction_d_k, stacking_layers=stacking_layers,
+                        windowed_ra=windowed_ra)
+
+    logger.info(model)
+    return model
+
+parser = argparse.ArgumentParser("Load a dual-encoder model and do response selection on testing data")
+parser.add_argument("--embed_type", type=str, default='default',
+                    choices=["default", "positional", "learned-positional"],
+                    help="register label of the embeddings")
 parser.add_argument("--d_model", type=int, default=512, help="Model dimension (and embedding dsz)")
 parser.add_argument("--d_ff", type=int, default=2048, help="FFN dimension")
 parser.add_argument("--d_k", type=int, default=None, help="Dimension per head.  Use if num_heads=1 to reduce dims")
 parser.add_argument("--num_heads", type=int, default=8, help="Number of heads")
-parser.add_argument("--num_ft_workers", type=int, default=4, help="Number train workers")
-parser.add_argument("--num_test_workers", type=int, default=2, help="Number valid workers")
-parser.add_argument("--num_layers", type=int, default=6, help="Number of layers")
-parser.add_argument("--nctx", type=int, default=64, help="Max context length (for both encoder and decoder)")
-parser.add_argument("--embed_type", type=str, default='positional',
-                    help="register label of the embeddings, so far support positional or learned-positional")
-parser.add_argument("--stacking_layers", type=int, nargs='+', default=[1024, 1024, 1024])
-parser.add_argument('--rpr_k', help='Relative attention positional sizes pass 0 if you dont want relative attention',
-                    type=int, default=[3, 5, 48, 48, 48, 48], nargs='+')
+parser.add_argument("--num_layers", type=int, default=8, help="Number of layers")
+parser.add_argument("--windowed_ra", type=str2bool, default=False, help="whether prevent attention beyond rpr_k")
+parser.add_argument("--num_train_workers", type=int, default=4, help="Number train workers")
+parser.add_argument("--nctx", type=int, default=256, help="Max input length")
+parser.add_argument("--file_type", default='json', help="Suffix for data")
+parser.add_argument("--record_keys", default=['x', 'y'], nargs='+')
+parser.add_argument("--batch_size", type=int, default=256, help="Batch Size")
+parser.add_argument("--subword_model_file", type=str, help="The BPE model file", required=True)
+parser.add_argument("--subword_vocab_file", type=str, help="The BPE subword vocab", required=True)
 parser.add_argument("--reduction_d_k", type=int, default=64, help="Dimensions of Key and Query in the single headed"
                                                                   "reduction layers")
-parser.add_argument("--ckpt", type=str, help="path to the model checkpoint")
-parser.add_argument("--test_file", type=str, help="path to the testing data")
-parser.add_argument("--subword_model_file", type=str, required=True)
-parser.add_argument("--subword_vocab_file", type=str, required=True)
-parser.add_argument("--recall_k", type=int, default=100, help="select the response from how many candidates")
-parser.add_argument("--recall_top", type=int, default=1, help="whether the correct response is ranked top x")
+parser.add_argument("--stacking_layers", type=int, nargs='+',
+                    help="Hidden sizes of the dense stack (ff2 from the convert paper)")
+
+parser.add_argument("--reader_type", type=str, default='preprocessed', choices=['ntp', 'nsp', 'preprocessed', 'tfrecord'])
+parser.add_argument("--output_file", type=str)
+parser.add_argument('--rpr_k',
+                    help='Relative attention positional sizes pass 0 if you dont want relative attention',
+                    type=int, default=[8], nargs='+')
 parser.add_argument("--device", type=str,
                     default="cuda" if torch.cuda.is_available() else "cpu",
                     help="Device (cuda or cpu)")
+parser.add_argument("--num_test_workers", type=int, default=2, help="Number valid workers")
+parser.add_argument("--ckpt", type=str, help="path to the model checkpoint", required=True)
+parser.add_argument("--test_file", type=str, help="path to the testing data")
+parser.add_argument("--recall_k", type=int, default=100, help="select the response from how many candidates")
+parser.add_argument("--recall_top", type=int, default=1, help="whether the correct response is ranked top x")
+parser.add_argument("--num_batches", type=int, default=1_000_000)
 args = parser.parse_args()
 
-reader = MultiFileDatasetReader(args.nctx, args.subword_model_file, args.subword_vocab_file, '*.txt', 'ntp')
-vocab = reader.build_vocab()
+reader = MultiFileDatasetReader(args.nctx, args.subword_model_file, args.subword_vocab_file, args.file_type,
+                                reader_type=args.reader_type, record_keys=args.record_keys)
 
-preproc_data = baseline.embeddings.load_embeddings('x', dsz=args.d_model, known_vocab=vocab['x'], embed_type=args.embed_type)
+vocab = reader.build_vocab()
+# If we are not using chars, then use 'x' for both input and output
+preproc_data = baseline.embeddings.load_embeddings('x', dsz=args.d_model, known_vocab=vocab['x'],
+                                                   preserve_vocab_indices=True,
+                                                   embed_type=args.embed_type)
+
 vocabs = preproc_data['vocab']
 embeddings = preproc_data['embeddings']
 logger.info("Loaded embeddings")
@@ -50,19 +80,10 @@ ind2tok = {ind: tok for tok, ind in vocabs.items()}
 # use other samples in a batch as negative samples. Don't shuffle to compare with conveRT benchmarks
 test_loader = DataLoader(test_set, batch_size=args.recall_k, num_workers=args.num_test_workers)
 logger.info("Loaded datasets")
-
-model = create_model(embeddings,
-                     model_type='dual-encoder',
-                     d_model=args.d_model,
-                     d_ff=args.d_ff,
-                     num_heads=args.num_heads,
-                     num_layers=args.num_layers,
-                     stacking_layers=args.stacking_layers,
-                     dropout=0.,
-                     rpr_k=args.rpr_k,
-                     d_k=args.d_k,
-                     reduction_d_k=args.reduction_d_k,
-                     ff_pdrop=0.,
+model = create_model(embeddings, d_model=args.d_model, d_ff=args.d_ff,
+                     num_heads=args.num_heads, num_layers=args.num_layers,
+                     rpr_k=args.rpr_k, d_k=args.d_k, reduction_d_k=args.reduction_d_k,
+                     stacking_layers=args.stacking_layers, windowed_ra=args.windowed_ra,
                      logger=logger)
 
 if os.path.isdir(args.ckpt):
@@ -76,20 +97,21 @@ model.to(args.device)
 numerator = 0
 denominator = 0
 model.eval()
-pg = create_progress_bar(len(test_loader)//args.recall_k)
-for batch in test_loader:
-    if batch[0].shape[0] != args.recall_k:
+num_batches = min(len(test_loader), args.num_batches)
+pg = create_progress_bar(num_batches)
+for i, batch in enumerate(test_loader):
+    if i >= num_batches or batch[0].shape[0] != args.recall_k:
         break
     with torch.no_grad():
         x, y = batch
         inputs = x.to(args.device)
         targets = y.to(args.device)
+
         query = model.encode_query(inputs).unsqueeze(1)  # [B, 1, H]
         response = model.encode_response(targets).unsqueeze(0)  # [1, B, H]
-        all_score = nn.CosineSimilarity(dim=-1)(query, response).to('cpu')
-
+        all_score = nn.CosineSimilarity(dim=-1)(query, response)
         _, indices = torch.topk(all_score, args.recall_top, dim=1)
-        correct = (indices == torch.arange(args.recall_k).unsqueeze(1).expand(-1, args.recall_top)).sum()
+        correct = (indices == torch.arange(args.recall_k, device=all_score.device).unsqueeze(1).expand(-1, args.recall_top)).sum()
         numerator += correct
         print(f"Selected {correct} correct responses out of {args.recall_k}")
         denominator += args.recall_k
@@ -98,5 +120,7 @@ pg.done()
 acc = float(numerator)/denominator
 
 print(f"{args.recall_top}@{args.recall_k} acc: {acc}")
-with open('./results.txt', 'a') as wf:
-    wf.write(f"Checkpoint: {checkpoint}; {args.recall_top}@{args.recall_k} accuracy: {acc}\n")
+
+if args.output_file:
+    with open(args.output_file, 'a') as wf:
+        wf.write(f"Checkpoint: {checkpoint}; {args.recall_top}@{args.recall_k} accuracy: {acc}\n")
