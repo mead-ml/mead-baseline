@@ -192,19 +192,19 @@ class PairedModel(nn.Module):
                  ff_pdrop=0.1,
                  windowed_ra=False):
         super().__init__()
-        if stacking_layers is None:
-            stacking_layers = [d_model] * 3
 
         self.weight_std = weight_std
-        stacking_layers = listify(stacking_layers)
+
         transformer = TransformerEncoderStack(num_heads=num_heads, d_model=d_model,
                                               pdrop=dropout, layers=num_layers, activation='gelu', d_ff=d_ff,
                                               d_k=d_k, rpr_k=rpr_k, windowed_ra=windowed_ra)
         self.attention_layer = TwoHeadConcat(d_model, dropout, scale=False, d_k=reduction_d_k)
         self.transformer_layers = transformer
         self.embedding_layers = embeddings
-        self.ff1 = ConveRTFFN(2*d_model, stacking_layers, d_out, ff_pdrop)
-        self.ff2 = ConveRTFFN(2*d_model, stacking_layers, d_out, ff_pdrop)
+        if stacking_layers:
+            stacking_layers = listify(stacking_layers)
+        self.ff1 = ConveRTFFN(2*d_model, stacking_layers, d_out, ff_pdrop) if stacking_layers else nn.Identity()
+        self.ff2 = ConveRTFFN(2*d_model, stacking_layers, d_out, ff_pdrop) if stacking_layers else nn.Identity()
         self.apply(self.init_layer_weights)
 
     def init_layer_weights(self, module):
