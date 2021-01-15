@@ -135,6 +135,7 @@ class TwoHeadConcat(nn.Module):
         :return: concatenation of the two 1-head attention
         """
         super().__init__()
+        self.output_dim = 2*d_model
         self.reduction1 = SingleHeadReduction(d_model, dropout, scale=scale, d_k=d_k)
         self.reduction2 = SingleHeadReduction(d_model, dropout, scale=scale, d_k=d_k)
 
@@ -189,22 +190,30 @@ class PairedModel(nn.Module):
                  weight_std=0.02,
                  rpr_k=None,
                  reduction_d_k=64,
-                 ff_pdrop=0.1,
-                 windowed_ra=False):
+                 ffn_pdrop=0.1,
+                 windowed_ra=False,
+                 rpr_value_on=False):
         super().__init__()
 
         self.weight_std = weight_std
 
-        transformer = TransformerEncoderStack(num_heads=num_heads, d_model=d_model,
-                                              pdrop=dropout, layers=num_layers, activation='gelu', d_ff=d_ff,
-                                              d_k=d_k, rpr_k=rpr_k, windowed_ra=windowed_ra)
-        self.attention_layer = TwoHeadConcat(d_model, dropout, scale=False, d_k=reduction_d_k)
-        self.transformer_layers = transformer
-        self.embedding_layers = embeddings
+        self.transformer = TransformerEncoderStack(num_heads=num_heads, d_model=d_model,
+                                                   pdrop=dropout, layers=num_layers, activation='gelu', d_ff=d_ff,
+                                                   ffn_pdrop=ffn_pdrop,
+                                                   d_k=d_k, rpr_k=rpr_k, windowed_ra=windowed_ra, rpr_value_on=rpr_value_on)
+        self.reduction_layer = TwoHeadConcat(d_model, dropout, scale=False, d_k=reduction_d_k)
+        self.embeddings = EmbeddingsStack({'x': embeddings})
         if stacking_layers:
             stacking_layers = listify(stacking_layers)
-        self.ff1 = ConveRTFFN(2*d_model, stacking_layers, d_out, ff_pdrop) if stacking_layers else nn.Identity()
-        self.ff2 = ConveRTFFN(2*d_model, stacking_layers, d_out, ff_pdrop) if stacking_layers else nn.Identity()
+        if stacking_layers:
+            self.ff1 = ConveRTFFN(self.reduction_layer.output_dim, stacking_layers, d_out, ffn_pdrop)
+            self.ff2 = ConveRTFFN(self.reduction_layer.output_dim, stacking_layers, d_out, ffn_pdrop)
+        elif self.reduction_layer.output_dim != d_out:
+            self.ff1 = nn.Linear(self.reduction_layer.output_dim, d_out)
+            self.ff2 = nn.Linear(self.reduction_layer.output_dim, d_out)
+        else:
+            self.ff1 = nn.Identity()
+            self.ff2 = nn.Identity()
         self.apply(self.init_layer_weights)
 
     def init_layer_weights(self, module):
@@ -216,18 +225,18 @@ class PairedModel(nn.Module):
     def encode_query(self, query):
         query_mask = (query != Offsets.PAD)
         att_mask = query_mask.unsqueeze(1).unsqueeze(1)
-        embedded = self.embedding_layers(query)
-        encoded_query = self.transformer_layers((embedded, att_mask))
-        encoded_query = self.attention_layer((encoded_query, encoded_query, encoded_query, att_mask))
+        embedded = self.embeddings({'x': query})
+        encoded_query = self.transformer((embedded, att_mask))
+        encoded_query = self.reduction_layer((encoded_query, encoded_query, encoded_query, att_mask))
         encoded_query = self.ff1(encoded_query)
         return encoded_query
 
     def encode_response(self, response):
         response_mask = (response != Offsets.PAD)
         att_mask = response_mask.unsqueeze(1).unsqueeze(1)
-        embedded = self.embedding_layers(response)
-        encoded_response = self.transformer_layers((embedded, att_mask))
-        encoded_response = self.attention_layer((encoded_response, encoded_response, encoded_response, att_mask))
+        embedded = self.embeddings({'x': response})
+        encoded_response = self.transformer((embedded, att_mask))
+        encoded_response = self.reduction_layer((encoded_response, encoded_response, encoded_response, att_mask))
         encoded_response = self.ff2(encoded_response)
         return encoded_response
 

@@ -34,7 +34,7 @@ This file uses Baseline to train a Transformer model using fastBPE with query-re
   
 """
 def create_model(embeddings, d_model, d_ff, dropout, num_heads, num_layers, model_type, rpr_k, d_k, reduction_d_k,
-                 stacking_layers, ff_pdrop, windowed_ra, logger):
+                 stacking_layers, ff_pdrop, windowed_ra, logger, checkpoint_name=None):
     if model_type == "encoder-decoder":
         logger.info("Creating tied encoder decoder model")
         hps = {"dsz": d_model,
@@ -51,8 +51,10 @@ def create_model(embeddings, d_model, d_ff, dropout, num_heads, num_layers, mode
         model = TiedEmbeddingsSeq2SeqModel(embeddings, **hps)
     else:
         model = PairedModel(embeddings, d_model, d_ff, dropout, num_heads, num_layers, rpr_k=rpr_k, d_k=d_k,
-                            reduction_d_k=reduction_d_k, stacking_layers=stacking_layers, ff_pdrop=ff_pdrop,
+                            reduction_d_k=reduction_d_k, stacking_layers=stacking_layers, ffn_pdrop=ff_pdrop,
                             windowed_ra=windowed_ra)
+        if checkpoint_name:
+            load_tlm_npz(model, checkpoint_name)
 
     logger.info(model)
     return model
@@ -81,6 +83,7 @@ def train():
     parser.add_argument("--batch_size", type=int, default=256, help="Batch Size")
     parser.add_argument("--subword_model_file", type=str, help="The BPE model file", required=True)
     parser.add_argument("--subword_vocab_file", type=str, help="The BPE subword vocab", required=True)
+    parser.add_argument("--checkpoint", type=str, help="TLM Checkpoint to start training from (if dual encoder)")
     parser.add_argument("--dropout", type=float, default=0.1, help="Dropout")
     parser.add_argument("--lr_scheduler", type=str, default='cosine', help="The type of learning rate decay scheduler")
     parser.add_argument("--lr_decay_steps", type=int, help="decay steps of lr scheduler")
@@ -97,7 +100,7 @@ def train():
     parser.add_argument("--saves_per_epoch", type=int, default=10, help="The number of checkpoints to save per epoch")
     parser.add_argument("--reduction_d_k", type=int, default=64, help="Dimensions of Key and Query in the single headed"
                                                                       "reduction layers")
-    parser.add_argument("--stacking_layers", type=int, nargs='+', default=[1024, 1024, 1024],
+    parser.add_argument("--stacking_layers", type=int, nargs='+', default=[],
                         help="Hidden sizes of the dense stack (ff2 from the convert paper)")
     parser.add_argument("--ff_pdrop", type=float, default=0.1, help="Dropout in the dense stack")
 
@@ -169,7 +172,7 @@ def train():
                          num_heads=args.num_heads, num_layers=args.num_layers,
                          model_type=args.model_type, rpr_k=rpr_k, d_k=args.d_k, reduction_d_k=args.reduction_d_k,
                          stacking_layers=args.stacking_layers, ff_pdrop=args.ff_pdrop, windowed_ra=args.windowed_ra,
-                         logger=logger)
+                         logger=logger, checkpoint_name=args.checkpoint)
 
     model.to(args.device)
     loss_function = model.create_loss(args.loss)
