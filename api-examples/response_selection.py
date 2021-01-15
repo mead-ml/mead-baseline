@@ -42,7 +42,7 @@ parser.add_argument("--subword_model_file", type=str, help="The BPE model file",
 parser.add_argument("--subword_vocab_file", type=str, help="The BPE subword vocab", required=True)
 parser.add_argument("--reduction_d_k", type=int, default=64, help="Dimensions of Key and Query in the single headed"
                                                                   "reduction layers")
-parser.add_argument("--stacking_layers", type=int, nargs='+', default=[1024, 1024, 1024],
+parser.add_argument("--stacking_layers", type=int, nargs='+',
                     help="Hidden sizes of the dense stack (ff2 from the convert paper)")
 
 parser.add_argument("--reader_type", type=str, default='preprocessed', choices=['ntp', 'nsp', 'preprocessed', 'tfrecord'])
