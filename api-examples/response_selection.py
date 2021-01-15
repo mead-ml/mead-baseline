@@ -110,12 +110,6 @@ for i, batch in enumerate(test_loader):
         query = model.encode_query(inputs).unsqueeze(1)  # [B, 1, H]
         response = model.encode_response(targets).unsqueeze(0)  # [1, B, H]
         all_score = nn.CosineSimilarity(dim=-1)(query, response)
-        #query = model.encode_query(inputs)
-        #response = model.encode_response(targets)
-        #query = F.normalize(query, p=2, dim=1)
-        #response = F.normalize(response, p=2, dim=1)
-        #labels = torch.arange(query.shape[0], device=query.device)
-        #all_score2 = torch.mm(query, response.T)
         _, indices = torch.topk(all_score, args.recall_top, dim=1)
         correct = (indices == torch.arange(args.recall_k, device=all_score.device).unsqueeze(1).expand(-1, args.recall_top)).sum()
         numerator += correct
