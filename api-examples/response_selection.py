@@ -13,6 +13,26 @@ from torch.utils.data import DataLoader
 import logging
 logger = logging.getLogger("baseline")
 
+
+def get_next_k(l, k):
+    next_batch_x = []
+    next_batch_y = []
+    seen_y = set()
+    for (xs, ys) in l:
+        for x, y in zip(xs, ys):
+            s_y = str(y)
+            if s_y not in seen_y:
+                seen_y.add(s_y)
+                next_batch_x.append(x)
+                next_batch_y.append(y)
+                if len(next_batch_x) == k:
+                    seen_y = set()
+                    b_x = torch.stack(next_batch_x)
+                    b_y = torch.stack(next_batch_y)
+                    next_batch_x = []
+                    next_batch_y = []
+                    yield b_x, b_y
+
 def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, d_k, reduction_d_k,
                  stacking_layers, windowed_ra, logger):
 
@@ -53,7 +73,7 @@ parser.add_argument('--rpr_k',
 parser.add_argument("--device", type=str,
                     default="cuda" if torch.cuda.is_available() else "cpu",
                     help="Device (cuda or cpu)")
-parser.add_argument("--num_test_workers", type=int, default=2, help="Number valid workers")
+parser.add_argument("--num_test_workers", type=int, default=1, help="Number valid workers")
 parser.add_argument("--ckpt", type=str, help="path to the model checkpoint", required=True)
 parser.add_argument("--test_file", type=str, help="path to the testing data")
 parser.add_argument("--recall_k", type=int, default=100, help="select the response from how many candidates")
@@ -78,7 +98,7 @@ test_set = reader.load(args.test_file, vocabs)
 ind2tok = {ind: tok for tok, ind in vocabs.items()}
 
 # use other samples in a batch as negative samples. Don't shuffle to compare with conveRT benchmarks
-test_loader = DataLoader(test_set, batch_size=args.recall_k, num_workers=args.num_test_workers)
+test_loader = DataLoader(test_set, batch_size=args.batch_size, num_workers=args.num_test_workers)
 logger.info("Loaded datasets")
 model = create_model(embeddings, d_model=args.d_model, d_ff=args.d_ff,
                      num_heads=args.num_heads, num_layers=args.num_layers,
@@ -99,13 +119,16 @@ denominator = 0
 model.eval()
 num_batches = min(len(test_loader), args.num_batches)
 pg = create_progress_bar(num_batches)
-for i, batch in enumerate(test_loader):
+
+for i, batch in enumerate(get_next_k(test_loader, args.recall_k)):
+
     if i >= num_batches or batch[0].shape[0] != args.recall_k:
         break
+    uniq = set()
     with torch.no_grad():
-        x, y = batch
-        inputs = x.to(args.device)
-        targets = y.to(args.device)
+        inputs, targets = batch
+        inputs = inputs.to(args.device)
+        targets = targets.to(args.device)
 
         query = model.encode_query(inputs).unsqueeze(1)  # [B, 1, H]
         response = model.encode_response(targets).unsqueeze(0)  # [1, B, H]
