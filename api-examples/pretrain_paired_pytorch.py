@@ -10,16 +10,14 @@ from baseline.pytorch.embeddings import *
 import baseline.embeddings
 from eight_mile.optz import *
 from eight_mile.pytorch.serialize import load_seq2seq_enc_from_tlm_npz, load_transformer_seq2seq_npz
-from eight_mile.pytorch.layers import save_checkpoint, init_distributed
+from eight_mile.pytorch.layers import (
+    save_checkpoint, init_distributed,
+    PairedModel
+)
 from eight_mile.pytorch.optz import *
 from transformer_utils import (
     MultiFileDatasetReader,
     get_lr_decay,
-    PairedModel,
-    TripletLoss,
-    AllLoss,
-    ContrastiveLoss,
-    SymmetricContrastiveLoss,
     TiedEmbeddingsSeq2SeqModel,
 )
 

@@ -4403,3 +4403,245 @@ class BilinearAttention(nn.Module):
             s = s.squeeze(1)
         s = s.masked_fill((mask.bool() == MASK_FALSE).unsqueeze(1), -1e9)
         return s
+
+
+class TripletLoss(nn.Module):
+    """Provide a Triplet Loss using the reversed batch for negatives"""
+    def __init__(self, model):
+        super().__init__()
+        self.score = nn.CosineSimilarity(dim=1)
+        self.model = model
+
+    def forward(self, inputs, targets):
+        # reverse the batch and use as a negative example
+        neg = targets.flip(0)
+        query = self.model.encode_query(inputs)
+        response = self.model.encode_response(targets)
+        neg_response = self.model.encode_response(neg)
+        pos_score = self.score(query, response)
+        neg_score = self.score(query, neg_response)
+        score = neg_score - pos_score
+        score = score.masked_fill(score < 0.0, 0.0).sum(0)
+        return score
+
+
+class ContrastiveLoss(nn.Module):
+    def __init__(self, model, t=1.0):
+        super().__init__()
+        self.model = model
+        self.t = nn.Parameter(torch.tensor(t).float())
+
+    def forward(self, inputs, targets):
+        query = self.model.encode_query(inputs) # [B, H]
+        response = self.model.encode_response(targets) # [B, H]
+        query = F.normalize(query, p=2, dim=1)
+        response = F.normalize(response, p=2, dim=1)
+        labels = torch.arange(query.shape[0], device=query.device)
+        logits = torch.mm(query, response.T) * self.t.exp()
+        loss = F.cross_entropy(logits, labels)
+        return loss
+
+
+class SymmetricContrastiveLoss(nn.Module):
+    def __init__(self, model, t=1.0):
+        super().__init__()
+        self.t = nn.Parameter(torch.tensor(t))
+        self.model = model
+
+    def forward(self, inputs, targets):
+        query = self.model.encode_query(inputs) # [B, H]
+        response = self.model.encode_response(targets) # [B, H]
+        query = F.normalize(query, p=2, dim=1)
+        response = F.normalize(response, p=2, dim=1)
+        labels = torch.arange(query.shape[0], device=query.device)
+        logits = torch.mm(query, response.T) * self.t.exp()
+        loss_1 = F.cross_entropy(logits, labels)
+        loss_2 = F.cross_entropy(logits.T, labels)
+        loss = (loss_1 + loss_2) * 0.5
+        return loss
+
+
+class AllLoss(nn.Module):
+    def __init__(self, model, warmup_steps=10000):
+        r"""Loss from here https://arxiv.org/pdf/1705.00652.pdf see section 4
+
+        We want to minimize the negative log prob of y given x
+
+        -log P(y|x)
+
+        P(y|x) P(x) = P(x, y)                             Chain Rule of Probability
+        P(y|x) = P(x, y) / P(x)                           Algebra
+        P(y|x) = P(x, y) / \sum_\hat(y) P(x, y = \hat(y)) Marginalize over all possible ys to get the probability of x
+        P_approx(y|x) = P(x, y) / \sum_i^k P(x, y_k)      Approximate the Marginalization by just using the ys in the batch
+
+        S(x, y) is the score (cosine similarity between x and y in this case) from our neural network
+        P(x, y) = e^S(x, y)
+
+        P(y|x) = e^S(x, y) / \sum_i^k e^S(x, y_k)
+        log P(y|x) = log( e^S(x, y) / \sum_i^k e^S(x, y_k))
+        log P(y|x) = S(x, y) - log \sum_i^k e^S(x, y_k)
+        -log P(y|x) = -(S(x, y) - log \sum_i^k e^S(x, y_k))
+        """
+        super().__init__()
+        self.score = nn.CosineSimilarity(dim=-1)
+        self.model = model
+        self.max_scale = math.sqrt(self.model.embedding_layers.get_dsz())
+        self.steps = 0
+        self.warmup_steps = warmup_steps
+
+    def forward(self, inputs, targets):
+        # This is the cosine distance annealing referred to in https://arxiv.org/pdf/1911.03688.pdf
+        fract = min(self.steps / self.warmup_steps, 1)
+        c = (self.max_scale-1) * fract + 1
+        self.steps += 1
+        # These will get broadcast to [B, B, H]
+        query = self.model.encode_query(inputs).unsqueeze(1)  # [B, 1, H]
+        response = self.model.encode_response(targets).unsqueeze(0)  # [1, B, H]
+        # all_scores is now a batch x batch matrix where index (i, j) is the score between
+        # the i^th x vector and the j^th y vector
+        all_score = c * self.score(query, response)  # [B, B]
+        # The diagonal has the scores of correct pair, (i, i)
+        pos_score = torch.diag(all_score)
+        # vec_log_sum_exp will calculate the batched log_sum_exp in a numerically stable way
+        # the result is a [B, 1] vector which we squeeze to make it [B] to match the diag
+        # Because we are minimizing the negative log we turned the division into a subtraction here
+        loss = pos_score - vec_log_sum_exp(all_score, -1).squeeze()
+        # Batch loss
+        loss = torch.sum(loss)
+        # minimize the negative loss
+        return -loss
+
+
+class TwoHeadConcat(nn.Module):
+    """Use two parallel SingleHeadReduction, and concatenate the outputs. It is used in the conveRT
+    paper (https://arxiv.org/pdf/1911.03688.pdf)"""
+
+    def __init__(self, d_model, dropout, scale=False, d_k=None):
+        """Two parallel 1-head self-attention, then concatenate the output
+        :param d_model: dim of the self-attention
+        :param dropout: dropout of the self-attention
+        :param scale: scale fo the self-attention
+        :param d_k: d_k of the self-attention
+        :return: concatenation of the two 1-head attention
+        """
+        super().__init__()
+        self.output_dim = 2*d_model
+        self.reduction1 = SingleHeadReduction(d_model, dropout, scale=scale, d_k=d_k)
+        self.reduction2 = SingleHeadReduction(d_model, dropout, scale=scale, d_k=d_k)
+
+    def forward(self, inputs: torch.Tensor):
+        x = inputs
+        encoding1 = self.reduction1(x)
+        encoding2 = self.reduction2(x)
+        x = torch.cat([encoding1, encoding2], dim=-1)
+        return x
+
+
+class ConveRTFFN(nn.Module):
+    """Implementation of the FFN layer from the convert paper (https://arxiv.org/pdf/1911.03688.pdf)"""
+    def __init__(self, insz, hszs, outsz, pdrop):
+        """
+        :param insz: input dim
+        :param hszs: list of hidden sizes
+        :param outsz: output dim
+        :param pdrop: dropout of each hidden layer
+        """
+        super().__init__()
+        self.dense_stack = DenseStack(insz,
+                                      hszs,
+                                      activation='gelu',
+                                      pdrop_value=pdrop,
+                                      skip_connect=True,
+                                      layer_norm=True)
+        self.final = Dense(hszs[-1], outsz)
+        self.proj = Dense(insz, outsz) if insz != outsz else nn.Identity()
+        self.ln1 = nn.LayerNorm(insz, eps=1e-6)
+        self.ln2 = nn.LayerNorm(outsz, eps=1e-6)
+
+    def forward(self, inputs):
+        x = self.ln1(inputs)
+        x = self.dense_stack(x)
+        x = self.final(x)
+        x = x + self.proj(inputs)
+        return self.ln2(x)
+
+
+class PairedModel(nn.Module):
+
+    def __init__(self, embeddings,
+                 d_model,
+                 d_ff,
+                 dropout,
+                 num_heads,
+                 num_layers,
+                 stacking_layers=None,
+                 d_out=512,
+                 d_k=None,
+                 weight_std=0.02,
+                 rpr_k=None,
+                 reduction_d_k=64,
+                 ffn_pdrop=0.1,
+                 windowed_ra=False,
+                 rpr_value_on=False):
+        super().__init__()
+
+        self.weight_std = weight_std
+
+        self.transformer = TransformerEncoderStack(num_heads=num_heads, d_model=d_model,
+                                                   pdrop=dropout, layers=num_layers, activation='gelu', d_ff=d_ff,
+                                                   ffn_pdrop=ffn_pdrop,
+                                                   d_k=d_k, rpr_k=rpr_k, windowed_ra=windowed_ra, rpr_value_on=rpr_value_on)
+        self.reduction_layer = TwoHeadConcat(d_model, dropout, scale=False, d_k=reduction_d_k)
+        self.embeddings = EmbeddingsStack({'x': embeddings})
+        if stacking_layers:
+            stacking_layers = listify(stacking_layers)
+        if stacking_layers:
+            self.ff1 = ConveRTFFN(self.reduction_layer.output_dim, stacking_layers, d_out, ffn_pdrop)
+            self.ff2 = ConveRTFFN(self.reduction_layer.output_dim, stacking_layers, d_out, ffn_pdrop)
+        elif self.reduction_layer.output_dim != d_out:
+            self.ff1 = nn.Linear(self.reduction_layer.output_dim, d_out)
+            self.ff2 = nn.Linear(self.reduction_layer.output_dim, d_out)
+        else:
+            self.ff1 = nn.Identity()
+            self.ff2 = nn.Identity()
+        self.apply(self.init_layer_weights)
+
+    def init_layer_weights(self, module):
+        if isinstance(module, (nn.Linear, nn.Embedding, nn.LayerNorm)):
+            module.weight.data.normal_(mean=0.0, std=self.weight_std)
+        if isinstance(module, (nn.Linear, nn.LayerNorm)) and module.bias is not None:
+            module.bias.data.zero_()
+
+    def encode_query(self, query):
+        query_mask = (query != Offsets.PAD)
+        att_mask = query_mask.unsqueeze(1).unsqueeze(1)
+        embedded = self.embeddings({'x': query})
+        encoded_query = self.transformer((embedded, att_mask))
+        encoded_query = self.reduction_layer((encoded_query, encoded_query, encoded_query, att_mask))
+        encoded_query = self.ff1(encoded_query)
+        return encoded_query
+
+    def encode_response(self, response):
+        response_mask = (response != Offsets.PAD)
+        att_mask = response_mask.unsqueeze(1).unsqueeze(1)
+        embedded = self.embeddings({'x': response})
+        encoded_response = self.transformer((embedded, att_mask))
+        encoded_response = self.reduction_layer((encoded_response, encoded_response, encoded_response, att_mask))
+        encoded_response = self.ff2(encoded_response)
+        return encoded_response
+
+    def forward(self, query, response):
+        encoded_query = self.encode_query(query)
+        encoded_response = self.encode_response(response)
+        return encoded_query, encoded_response
+
+    def create_loss(self, loss_type='all'):
+        if loss_type == 'all':
+            return AllLoss(self)
+        elif loss_type == 'contrastive':
+            return ContrastiveLoss(self)
+        elif loss_type == 'symmetric':
+            return SymmetricContrastiveLoss(self)
+
+        return TripletLoss(self)
+
