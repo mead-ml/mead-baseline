@@ -5,10 +5,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 import baseline.embeddings
 import baseline.pytorch.embeddings
-from transformer_utils import PairedModel, MultiFileDatasetReader
+from transformer_utils import MultiFileDatasetReader
 from eight_mile.progress import create_progress_bar
 from eight_mile.utils import str2bool
-from eight_mile.pytorch.layers import find_latest_checkpoint
+from eight_mile.pytorch.layers import find_latest_checkpoint, PairedModel
 from torch.utils.data import DataLoader
 import logging
 logger = logging.getLogger("baseline")
