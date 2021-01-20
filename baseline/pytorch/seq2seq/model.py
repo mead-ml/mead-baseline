@@ -183,7 +183,7 @@ class EncoderDecoderModelBase(nn.Module, EncoderDecoderModel):
             outs = unsort_batch(outs, perm_idx)
             lengths = unsort_batch(lengths, perm_idx)
             scores = unsort_batch(scores, perm_idx)
-        return outs.cpu().numpy()
+        return outs.cpu().numpy(), scores.cpu().numpy()
 
 
 @register_model(task='seq2seq', name=['default', 'attn'])

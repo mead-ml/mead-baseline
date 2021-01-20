@@ -998,7 +998,7 @@ class EncoderDecoderService(Service):
         examples = self.vectorize(tokens_batch)
 
         kwargs['beam'] = int(kwargs.get('beam', K))
-        outcomes = self.model.predict(examples, **kwargs)
+        outcomes, scores = self.model.predict(examples, **kwargs)
         return self.format_output(outcomes, K=K)
 
     def format_output(self, predicted, K=1, **kwargs):

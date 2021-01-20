@@ -81,7 +81,7 @@ class Seq2SeqTrainerPyTorch(Trainer):
             toks = self._num_toks(tgt_lens)
             total_loss += loss.item() * toks
             total_toks += toks
-            greedy_preds = [p[0] for p in self._predict(input_, beam=1, make_input=False)]
+            greedy_preds = [p[0] for p in self._predict(input_, beam=1, make_input=False)[0]]
             preds.extend(convert_seq2seq_preds(greedy_preds, self.tgt_rlut))
             golds.extend(convert_seq2seq_golds(tgt.cpu().numpy(), tgt_lens, self.tgt_rlut))
 
@@ -102,7 +102,7 @@ class Seq2SeqTrainerPyTorch(Trainer):
         for batch_dict in pg(es):
             tgt = batch_dict['tgt']
             tgt_lens = batch_dict['tgt_lengths']
-            pred = [p[0] for p in self._predict(batch_dict, numpy_to_tensor=False, **kwargs)]
+            pred = [p[0] for p in self._predict(batch_dict, numpy_to_tensor=False, **kwargs)[0]]
             preds.extend(convert_seq2seq_preds(pred, self.tgt_rlut))
             golds.extend(convert_seq2seq_golds(tgt, tgt_lens, self.tgt_rlut))
         metrics = {'bleu': bleu(preds, golds, self.bleu_n_grams)[0]}

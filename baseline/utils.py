@@ -417,7 +417,7 @@ def _try_user_cmp(user_cmp):
 
 @export
 def show_examples(model, es, rlut1, rlut2, vocab, mxlen, sample, prob_clip, max_examples, reverse):
-    """Expects model.predict to return [B, K, T]."""
+    """Expects model.predict to return (preds [B, K, T], scores [B, K])."""
     try:
         si = np.random.randint(0, len(es))
         batch_dict = es[si]
@@ -441,7 +441,7 @@ def show_examples(model, es, rlut1, rlut2, vocab, mxlen, sample, prob_clip, max_
         logger.info('[OP] %s' % sent)
         sent = lookup_sentence(rlut2, example['tgt'].squeeze())
         logger.info('[Actual] %s' % sent)
-        dst_i = model.predict(example)[0][0]
+        dst_i = model.predict(example)[0][0][0]
         sent = lookup_sentence(rlut2, dst_i)
         logger.info('Guess: %s' % sent)
         logger.info('------------------------------------------------------------------------')
