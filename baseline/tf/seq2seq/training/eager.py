@@ -178,7 +178,7 @@ class Seq2SeqTrainerEagerTf(Trainer):
         for features, tgt in es:
             features['dst'] = tgt[:, :-1]
             tgt_lens = features.pop('tgt_len')
-            top_preds = self.model.predict(features, make_input=False, **kwargs)
+            top_preds = self.model.predict(features, make_input=False, **kwargs)[0]
             preds.extend(convert_seq2seq_preds(top_preds[:, 0, :], self.tgt_rlut))
             golds.extend(convert_seq2seq_golds(tgt, tgt_lens, self.tgt_rlut))
         metrics = {'bleu': bleu(preds, golds, self.bleu_n_grams)[0]}
@@ -216,7 +216,7 @@ class Seq2SeqTrainerEagerTf(Trainer):
         start = time.time()
         for features, tgt in vs:
             features['dst'] = tgt[:, :-1]
-            top_preds = self.model.predict(features, beam=1, make_input=False)
+            top_preds = self.model.predict(features, beam=1, make_input=False)[0]
             loss_value = self.loss(self.model, features, tgt).numpy()
             toks = tf.cast(self._num_toks(features['tgt_len']), tf.float32).numpy()
             total_loss += loss_value * toks

@@ -208,7 +208,7 @@ if not tf.executing_eagerly():
                 # Add a fake K
                 vec = np.expand_dims(vec, axis=2)
             # convert to (B x K x T)
-            return vec.transpose(1, 2, 0)
+            return vec.transpose(1, 2, 0), np.zeros(vec.shape[:2], dtype=np.float32)
 
         def step(self, batch_dict):
             """
@@ -482,7 +482,7 @@ else:
             #outs = self.greedy_decode(encoder_outputs, **kwargs)
             #return outs
             outs, lengths, scores = self.decoder.beam_search(encoder_outputs, **kwargs)
-            return outs.numpy()
+            return outs.numpy(), scores.numpy()
 
         def greedy_decode(self, encoder_outputs, **kwargs):
             mxlen = kwargs.get('mxlen', 100)
