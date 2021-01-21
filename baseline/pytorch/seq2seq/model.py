@@ -93,6 +93,12 @@ class EncoderDecoderModelBase(nn.Module, EncoderDecoderModel):
     @classmethod
     def create(cls, src_embeddings, tgt_embedding, **kwargs):
         model = cls(src_embeddings, tgt_embedding, **kwargs)
+        checkpoint_name = kwargs.get('checkpoint')
+        if checkpoint_name is not None:
+            if checkpoint_name.endswith('npz'):
+                load_transformer_seq2seq_npz(lm, checkpoint_name)
+            else:
+                lm.load_state_dict(torch.load(checkpoint_name))
         logger.info(model)
         return model
 
