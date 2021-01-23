@@ -75,7 +75,7 @@ class Seq2SeqTrainerPyTorch(Trainer):
         for batch_dict in pg(vs):
             input_ = self._input(batch_dict)
             tgt = input_['tgt']
-            tgt_lens = batch_dict['tgt_lengths']
+            tgt_lens = input_['tgt_len']
             pred = self.model(input_)
             loss = self.crit(pred, tgt)
             toks = self._num_toks(tgt_lens)

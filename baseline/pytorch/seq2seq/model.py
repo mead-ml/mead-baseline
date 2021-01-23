@@ -135,6 +135,7 @@ class EncoderDecoderModelBase(nn.Module, EncoderDecoderModel):
         example = dict({})
 
         lengths = batch_dict[self.src_lengths_key]
+        tgt_lengths = batch_dict['tgt_lengths']
         if numpy_to_tensor:
             lengths = torch.from_numpy(lengths)
         lengths, perm_idx = lengths.sort(0, descending=True)
@@ -151,8 +152,10 @@ class EncoderDecoderModelBase(nn.Module, EncoderDecoderModel):
                 tgt = torch.from_numpy(tgt)
             example['dst'] = tgt[:, :-1]
             example['tgt'] = tgt[:, 1:]
+            example['tgt_len'] = tgt_lengths - 1
             example['dst'] = example['dst'][perm_idx]
             example['tgt'] = example['tgt'][perm_idx]
+            example['tgt_len'] = example['tgt_len'][perm_idx]
             if self.gpu:
                 example['dst'] = example['dst'].cuda()
                 example['tgt'] = example['tgt'].cuda()
