@@ -48,6 +48,17 @@ class Seq2SeqTrainerPyTorch(Trainer):
     def _num_toks(tgt_lens):
         return torch.sum(tgt_lens).item()
 
+    @staticmethod
+    def _acc(preds, golds):
+        """Calculate the accuracy of exact matching between preds and golds. This metric is particularly useful when
+        using Seq2SeqModel for prediction."""
+        total = len(preds)
+        correct = 0
+        for pred, gold in zip(preds, golds):
+            if pred == gold[0]:
+                correct += 1
+        return float(correct)/total
+
     def save(self, model_file):
         self._get_pytorch_model().save(model_file)
 
@@ -87,6 +98,7 @@ class Seq2SeqTrainerPyTorch(Trainer):
 
         metrics = self.calc_metrics(total_loss, total_toks)
         metrics['bleu'] = bleu(preds, golds, self.bleu_n_grams)[0]
+        metrics['acc'] = self._acc(preds, golds)
         self.report(
             self.valid_epochs, metrics, start,
             phase, 'EPOCH', reporting_fns
@@ -106,6 +118,7 @@ class Seq2SeqTrainerPyTorch(Trainer):
             preds.extend(convert_seq2seq_preds(pred, self.tgt_rlut))
             golds.extend(convert_seq2seq_golds(tgt, tgt_lens, self.tgt_rlut))
         metrics = {'bleu': bleu(preds, golds, self.bleu_n_grams)[0]}
+        metrics['acc'] = self._acc(preds, golds)
         self.report(
             0, metrics, start, 'Test', 'EPOCH', reporting_fns
         )
