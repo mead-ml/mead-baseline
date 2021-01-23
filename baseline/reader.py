@@ -7,7 +7,7 @@ import logging
 from collections import Counter
 import numpy as np
 import baseline.data
-from baseline.vectorizers import Dict1DVectorizer, GOVectorizer, Token1DVectorizer, create_vectorizer, HasPredefinedVocab
+from baseline.vectorizers import Dict1DVectorizer, Token1DVectorizer, create_vectorizer, HasPredefinedVocab
 from baseline.utils import import_user_module, revlut, exporter, optional_params, Offsets, listify, SingleFileDownloader
 from eight_mile.progress import create_progress_bar
 __all__ = []
@@ -155,7 +155,11 @@ class ParallelCorpusReader(object):
         self.tgt_vectorizer = None
         for k, vectorizer in vectorizers.items():
             if k == 'tgt':
-                self.tgt_vectorizer = GOVectorizer(vectorizer)
+                self.tgt_vectorizer = vectorizer
+                if not self.tgt_vectorizer.emit_begin_tok:
+                    self.tgt_vectorizer.emit_begin_tok.append('<GO>')
+                if not self.tgt_vectorizer.emit_end_tok:
+                    self.tgt_vectorizer.emit_end_tok.append('<EOS>')
             else:
                 self.src_vectorizers[k] = vectorizer
         self.trim = trim
@@ -185,7 +189,7 @@ class TSVParallelCorpusReader(ParallelCorpusReader):
     def build_vocabs(self, files, **kwargs):
         if _all_predefined_vocabs(self.src_vectorizers) and isinstance(self.tgt_vectorizer, HasPredefinedVocab):
             logger.info("Skipping building vocabulary.  All vectorizers have predefined vocabs!")
-            return {k: v.vocab for k, v in self.src_vectorizers.items()}, {'tgt': self.tgt_vectorizer.vocab}
+            return {k: v.vocab for k, v in self.src_vectorizers.items()}, self.tgt_vectorizer.vocab
         vocab_file = kwargs.get('vocab_file')
         if vocab_file is not None:
             all_vects = self.src_vectorizers.copy()
@@ -241,7 +245,7 @@ class MultiFileParallelCorpusReader(ParallelCorpusReader):
     def build_vocabs(self, files, **kwargs):
         if _all_predefined_vocabs(self.src_vectorizers) and isinstance(self.tgt_vectorizer, HasPredefinedVocab):
             logger.info("Skipping building vocabulary.  All vectorizers have predefined vocabs!")
-            return {k: v.vocab for k, v in self.src_vectorizers.items()}, {'tgt': self.tgt_vectorizer.vocab}
+            return {k: v.vocab for k, v in self.src_vectorizers.items()}, self.tgt_vectorizer.vocab
         vocab_file = kwargs.get('vocab_file')
         if vocab_file is not None:
             all_vects = self.src_vectorizers.copy()

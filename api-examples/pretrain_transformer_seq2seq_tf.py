@@ -29,7 +29,6 @@ class TiedEmbeddingsSeq2SeqModel(Seq2SeqModel):
         super().__init__(tied_embeddings, tied_embeddings['x'], **kwargs)
 
 
-
 class Loss:
     def __init__(self, vocab_size, nctx):
         self.vocab_size = vocab_size

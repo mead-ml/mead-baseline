@@ -444,60 +444,6 @@ class TransformerBoWPairedModel(DualEncoderModel):
         return self.reduction_layer_2((embedded, response_lengths))
         return encoded_response
 
-class TiedEmbeddingsSeq2SeqModel(Seq2SeqModel):
-
-    def __init__(self, tied_embeddings, **kwargs):
-        super().__init__({'x': tied_embeddings}, tied_embeddings, **kwargs)
-
-    def input_tensor(self, key, batch_dict, perm_idx):
-        tensor = batch_dict[key]
-        tensor = self.drop_inputs(key, tensor)
-        tensor = tensor[perm_idx]
-        return tensor
-
-    def make_input(self, batch_dict, perm=False):
-        """Prepare the input.
-
-        :param batch_dict: `dict`: The data.
-        :param perm: `bool`: If True return the permutation index
-            so that you can undo the sort if you want.
-        """
-        example = dict({})
-
-        lengths = batch_dict[self.src_lengths_key]
-        lengths, perm_idx = lengths.sort(0, descending=True)
-
-        example['src_len'] = lengths
-        for key in self.src_embeddings.keys():
-            example[key] = self.input_tensor(key, batch_dict, perm_idx)
-
-        if 'tgt' in batch_dict:
-            tgt = batch_dict['tgt']
-            example['dst'] = torch.cat([torch.full((tgt.shape[0], 1), Offsets.GO, device=tgt.device, dtype=tgt.dtype), tgt[:, :-1]], 1)
-            example['tgt'] = tgt
-            example['dst'] = example['dst'][perm_idx]
-            example['tgt'] = example['tgt'][perm_idx]
-        if perm:
-            return example, perm_idx
-        return example
-
-    def create_loss(self, _=None):
-        loss = super().create_loss()
-
-        class LossFn(nn.Module):
-            def __init__(self, model: nn.Module, l: nn.Module):
-                super().__init__()
-                self._loss = l
-                self.model = model
-
-            def forward(self, inputs, targets):
-                lengths = torch.sum(inputs != 0, 1)
-                in_ = self.model.make_input({"x": inputs, "x_lengths": lengths,  "tgt": targets})
-                targets = in_['tgt']
-                pred = self.model(in_)
-                return self._loss(pred, targets)
-        return LossFn(self, loss)
-
 
 def get_lr_decay(sched_type, lr, steps_per_epoch, n_epochs, logger, decay_steps=None, decay_rate=None, alpha=None):
     if sched_type == 'cosine':

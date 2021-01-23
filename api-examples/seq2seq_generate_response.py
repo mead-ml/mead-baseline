@@ -6,7 +6,8 @@ import os
 import glob
 from argparse import ArgumentParser
 import baseline
-from transformer_utils import TiedEmbeddingsSeq2SeqModel, find_latest_checkpoint
+from transformer_utils import find_latest_checkpoint
+from baseline.pytorch.seq2seq.model import TiedEmbeddingsSeq2SeqModel
 from eight_mile.pytorch.serialize import load_transformer_seq2seq_npz
 from eight_mile.utils import str2bool, read_json, Offsets, revlut
 from baseline.vectorizers import Token1DVectorizer, BPEVectorizer1D
@@ -70,7 +71,7 @@ def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, d_k, a
            "d_k": d_k,
            "activation": activation,
            "rpr_k": rpr_k}
-    model = TiedEmbeddingsSeq2SeqModel(embeddings, **hps)
+    model = TiedEmbeddingsSeq2SeqModel({'x': embeddings}, None, **hps)
     if checkpoint_name.endswith('npz'):
         load_transformer_seq2seq_npz(model, checkpoint_name)
     else:

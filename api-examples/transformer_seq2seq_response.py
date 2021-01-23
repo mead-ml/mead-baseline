@@ -6,7 +6,8 @@ import os
 import glob
 from argparse import ArgumentParser
 import baseline
-from transformer_utils import TiedEmbeddingsSeq2SeqModel, find_latest_checkpoint
+from transformer_utils import find_latest_checkpoint
+from baseline.pytorch.seq2seq.model import TiedEmbeddingsSeq2SeqModel
 from eight_mile.pytorch.serialize import load_transformer_seq2seq_npz
 from eight_mile.utils import str2bool, read_json, Offsets, revlut
 from baseline.vectorizers import Token1DVectorizer, BPEVectorizer1D

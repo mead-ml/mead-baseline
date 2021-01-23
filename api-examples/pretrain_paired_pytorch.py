@@ -14,11 +14,11 @@ from eight_mile.pytorch.layers import (
     save_checkpoint, init_distributed,
     PairedModel
 )
+from baseline.pytorch.seq2seq.model import TiedEmbeddingsSeq2SeqModel
 from eight_mile.pytorch.optz import *
 from transformer_utils import (
     MultiFileDatasetReader,
     get_lr_decay,
-    TiedEmbeddingsSeq2SeqModel,
     TransformerBoWPairedModel
 )
 
@@ -48,7 +48,7 @@ def create_model(embeddings, d_model, d_ff, dropout, num_heads, num_layers, mode
                "src_lengths_key": "x_lengths",
                "d_k": d_k,
                "rpr_k": rpr_k}
-        model = TiedEmbeddingsSeq2SeqModel(embeddings, **hps)
+        model = TiedEmbeddingsSeq2SeqModel({'x': embeddings}, None, **hps)
     elif model_type == 'transformer-bow':
         model = TransformerBoWPairedModel(embeddings, d_model, d_ff, dropout, num_heads, num_layers, rpr_k=rpr_k, d_k=d_k,
                                           reduction_d_k=reduction_d_k, stacking_layers=stacking_layers, ffn_pdrop=ff_pdrop, windowed_ra=windowed_ra)
@@ -251,9 +251,10 @@ def train():
             batch = next(train_itr)
             steps += 1
             x, y = batch
-            inputs = x.to(args.device)
-            labels = y.to(args.device)
-            loss = loss_function(inputs, labels)
+            x_lengths = torch.sum(x != 0, 1)
+            inputs = model.make_input({'x': x, 'x_lengths': x_lengths, 'tgt': y})
+            pred = model(inputs)
+            loss = loss_function(pred, y)
             loss.backward()
             avg_loss.update(loss.item())
 
@@ -284,9 +285,10 @@ def train():
                 with torch.no_grad():
                     batch = next(valid_itr)
                     x, y = batch
-                    inputs = x.to(args.device)
-                    labels = y.to(args.device)
-                    loss = loss_function(inputs, labels)
+                    x_lengths = torch.sum(x != 0, 1)
+                    inputs = model.make_input({'x': x, 'x_lengths': x_lengths, 'tgt': y})
+                    pred = model(inputs)
+                    loss = loss_function(pred, y)
                     avg_valid_loss.update(loss.item())
 
             valid_avg_loss = avg_valid_loss.avg

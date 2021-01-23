@@ -6,6 +6,7 @@ from baseline.pytorch.transformer import *
 from baseline.model import EncoderDecoderModel, register_model, create_seq2seq_encoder, create_seq2seq_decoder
 from baseline.pytorch.seq2seq.encoders import *
 from baseline.pytorch.seq2seq.decoders import *
+from eight_mile.pytorch.serialize import load_transformer_seq2seq_npz
 
 logger = logging.getLogger('baseline')
 
@@ -96,9 +97,9 @@ class EncoderDecoderModelBase(nn.Module, EncoderDecoderModel):
         checkpoint_name = kwargs.get('checkpoint')
         if checkpoint_name is not None:
             if checkpoint_name.endswith('npz'):
-                load_transformer_seq2seq_npz(lm, checkpoint_name)
+                load_transformer_seq2seq_npz(model, checkpoint_name)
             else:
-                lm.load_state_dict(torch.load(checkpoint_name))
+                model.load_state_dict(torch.load(checkpoint_name))
         logger.info(model)
         return model
 
@@ -204,3 +205,10 @@ class Seq2SeqModel(EncoderDecoderModelBase):
         :param kwargs:
         """
         super().__init__(src_embeddings, tgt_embedding, **kwargs)
+
+
+@register_model(task='seq2seq', name='tied-embed')
+class TiedEmbeddingsSeq2SeqModel(Seq2SeqModel):
+
+    def __init__(self, tied_embeddings, _, **kwargs):
+        super().__init__(tied_embeddings, tied_embeddings['x'], **kwargs)
