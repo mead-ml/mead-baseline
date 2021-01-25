@@ -80,7 +80,8 @@ def train():
     parser.add_argument("--num_layers", type=int, default=8, help="Number of layers")
     parser.add_argument("--windowed_ra", type=str2bool, default=False, help="whether prevent attention beyond rpr_k")
     parser.add_argument("--num_train_workers", type=int, default=4, help="Number train workers")
-    parser.add_argument("--nctx", type=int, default=256, help="Max input length")
+    parser.add_argument("--src_nctx", type=int, default=256, help="Max input length")
+    parser.add_argument("--tgt_nctx", type=int, default=64, help="Max input length")
     parser.add_argument("--file_type", default='json', help="Suffix for data")
     parser.add_argument("--record_keys", default=['x', 'y'], nargs='+')
     parser.add_argument("--batch_size", type=int, default=256, help="Batch Size")
@@ -108,8 +109,11 @@ def train():
     parser.add_argument("--ff_pdrop", type=float, default=0.1, help="Dropout in the dense stack")
 
     parser.add_argument("--reader_type", type=str, default='preprocessed', choices=['ntp', 'nsp', 'preprocessed', 'tfrecord'])
-
     parser.add_argument("--model_type", default="dual-encoder", choices=["dual-encoder", "encoder-decoder", "transformer-bow"])
+    parser.add_argument("--src_begin_tok", type=str, nargs='+', default=[])
+    parser.add_argument("--src_end_tok", type=str, nargs='+', default=['<EOS>'])
+    parser.add_argument("--tgt_begin_tok", type=str, nargs='+', default=['<GO>'])
+    parser.add_argument("--tgt_end_tok", type=str, nargs='+', default=['<EOS>'])
     parser.add_argument("--loss", type=str, default='all', choices=['triplet', 'all', 'contrastive', 'symmetric'])
     parser.add_argument('--rpr_k',
                         help='Relative attention positional sizes pass 0 if you dont want relative attention',
@@ -140,8 +144,9 @@ def train():
         args.device, updated_local_rank = init_distributed(args.local_rank)
         args.local_rank = updated_local_rank
 
-    reader = MultiFileDatasetReader(args.nctx, args.subword_model_file, args.subword_vocab_file, args.file_type,
-                                    reader_type=args.reader_type, record_keys=args.record_keys)
+    reader = MultiFileDatasetReader(args.src_nctx, args.tgt_nctx, args.src_begin_tok, args.src_end_tok, args.tgt_begin_tok,
+                                    args.tgt_end_tok, args.subword_model_file, args.subword_vocab_file,
+                                    args.file_type, reader_type=args.reader_type, record_keys=args.record_keys)
 
     vocab = reader.build_vocab()
     # If we are not using chars, then use 'x' for both input and output
@@ -183,8 +188,6 @@ def train():
 
     logger.info("Loaded model and loss")
 
-    # according to pytorch, len(train_loader) will return len(train_set) when train_set is IterableDataset, so manually
-    # correct it here
     steps_per_epoch = len(train_loader) // num_gpus
     valid_steps = len(valid_loader)
     update_on = steps_per_epoch // args.saves_per_epoch
@@ -251,10 +254,15 @@ def train():
             batch = next(train_itr)
             steps += 1
             x, y = batch
-            x_lengths = torch.sum(x != 0, 1)
-            inputs = model.make_input({'x': x, 'x_lengths': x_lengths, 'tgt': y})
-            pred = model(inputs)
-            loss = loss_function(pred, y)
+            if args.model_type == 'encoder-decoder':
+                x_lengths = torch.sum(x != 0, 1)
+                inputs = model.make_input({'x': x, 'x_lengths': x_lengths, 'tgt': y})
+                pred = model(inputs)
+                loss = loss_function(pred, y)
+            else:
+                inputs = x.to(args.device)
+                labels = y.to(args.device)
+                loss = loss_function(inputs, labels)
             loss.backward()
             avg_loss.update(loss.item())
 
@@ -285,11 +293,16 @@ def train():
                 with torch.no_grad():
                     batch = next(valid_itr)
                     x, y = batch
-                    x_lengths = torch.sum(x != 0, 1)
-                    inputs = model.make_input({'x': x, 'x_lengths': x_lengths, 'tgt': y})
-                    pred = model(inputs)
-                    loss = loss_function(pred, y)
-                    avg_valid_loss.update(loss.item())
+                    if args.model_type == 'encoder-decoder':
+                        x_lengths = torch.sum(x != 0, 1)
+                        inputs = model.make_input({'x': x, 'x_lengths': x_lengths, 'tgt': y})
+                        pred = model(inputs)
+                        loss = loss_function(pred, y)
+                    else:
+                        inputs = x.to(args.device)
+                        labels = y.to(args.device)
+                        loss = loss_function(inputs, labels)
+                avg_valid_loss.update(loss.item())
 
             valid_avg_loss = avg_valid_loss.avg
 
