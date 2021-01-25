@@ -4128,10 +4128,16 @@ class PairedModel(DualEncoderModel):
                  reduction_d_k=64,
                  ffn_pdrop=0.1,
                  windowed_ra=False,
-                 rpr_value_on=False):
+                 rpr_value_on=False,
+                 reduction_type="2HA"):
         super().__init__(d_model, stacking_layers, d_out, ffn_pdrop)
 
-        self.reduction_layer = TwoHeadConcat(d_model, dropout, scale=False, d_k=reduction_d_k)
+        if reduction_type == "2HA":
+            self.reduction_layer = TwoHeadConcat(d_model, dropout, scale=False, d_k=reduction_d_k)
+        elif reduction_type == "SHA":
+            self.reduction_layer = SingleHeadReduction(d_model, dropout, scale=False, d_k=reduction_d_k)
+        else:
+            raise Exception("Unknown exception type")
         self.weight_std = weight_std
         self.transformer = TransformerEncoderStack(num_heads=num_heads, d_model=d_model,
                                                    pdrop=dropout, layers=num_layers, activation='gelu', d_ff=d_ff,
