@@ -3924,8 +3924,8 @@ class ContrastiveLoss(nn.Module):
         self.t = nn.Parameter(torch.tensor(t).float())
 
     def forward(self, inputs, targets):
-        query = self.model.encode_query(inputs) # [B, H]
-        response = self.model.encode_response(targets) # [B, H]
+        query = self.model.encode_query(inputs)  # [B, H]
+        response = self.model.encode_response(targets)  # [B, H]
         query = F.normalize(query, p=2, dim=1)
         response = F.normalize(response, p=2, dim=1)
         labels = torch.arange(query.shape[0], device=query.device)
@@ -3941,8 +3941,8 @@ class SymmetricContrastiveLoss(nn.Module):
         self.model = model
 
     def forward(self, inputs, targets):
-        query = self.model.encode_query(inputs) # [B, H]
-        response = self.model.encode_response(targets) # [B, H]
+        query = self.model.encode_query(inputs)  # [B, H]
+        response = self.model.encode_response(targets)  # [B, H]
         query = F.normalize(query, p=2, dim=1)
         response = F.normalize(response, p=2, dim=1)
         labels = torch.arange(query.shape[0], device=query.device)
@@ -3977,7 +3977,7 @@ class AllLoss(nn.Module):
         super().__init__()
         self.score = nn.CosineSimilarity(dim=-1)
         self.model = model
-        self.max_scale = math.sqrt(self.model.embedding_layers.get_dsz())
+        self.max_scale = math.sqrt(self.model.embeddings.output_dim)
         self.steps = 0
         self.warmup_steps = warmup_steps
 
@@ -4058,69 +4058,43 @@ class ConveRTFFN(nn.Module):
         return self.ln2(x)
 
 
-class PairedModel(nn.Module):
+class DualEncoderModel(nn.Module):
 
-    def __init__(self, embeddings,
-                 d_model,
-                 d_ff,
-                 dropout,
-                 num_heads,
-                 num_layers,
-                 stacking_layers=None,
-                 d_out=512,
-                 d_k=None,
-                 weight_std=0.02,
-                 rpr_k=None,
-                 reduction_d_k=64,
-                 ffn_pdrop=0.1,
-                 windowed_ra=False,
-                 rpr_value_on=False):
+    """Abstract base for dual encoders
+
+    We can assume that our dual encoder needs to end up in the same output plane between the encoders, and we can define
+    the set of losses here that we are likely to need for most.
+
+
+    """
+    def __init__(self, in_sz: int, stacking_layers: Union[int, List[int]] = None, d_out: int = 512, ffn_pdrop=0.1):
         super().__init__()
 
-        self.weight_std = weight_std
-
-        self.transformer = TransformerEncoderStack(num_heads=num_heads, d_model=d_model,
-                                                   pdrop=dropout, layers=num_layers, activation='gelu', d_ff=d_ff,
-                                                   ffn_pdrop=ffn_pdrop,
-                                                   d_k=d_k, rpr_k=rpr_k, windowed_ra=windowed_ra, rpr_value_on=rpr_value_on)
-        self.reduction_layer = TwoHeadConcat(d_model, dropout, scale=False, d_k=reduction_d_k)
-        self.embeddings = EmbeddingsStack({'x': embeddings})
         if stacking_layers:
             stacking_layers = listify(stacking_layers)
         if stacking_layers:
-            self.ff1 = ConveRTFFN(self.reduction_layer.output_dim, stacking_layers, d_out, ffn_pdrop)
-            self.ff2 = ConveRTFFN(self.reduction_layer.output_dim, stacking_layers, d_out, ffn_pdrop)
-        elif self.reduction_layer.output_dim != d_out:
-            self.ff1 = nn.Linear(self.reduction_layer.output_dim, d_out)
-            self.ff2 = nn.Linear(self.reduction_layer.output_dim, d_out)
+            self.ff1 = ConveRTFFN(in_sz, stacking_layers, d_out, ffn_pdrop)
+            self.ff2 = ConveRTFFN(in_sz, stacking_layers, d_out, ffn_pdrop)
+        elif in_sz != d_out:
+            self.ff1 = nn.Linear(in_sz, d_out)
+            self.ff2 = nn.Linear(in_sz, d_out)
         else:
             self.ff1 = nn.Identity()
             self.ff2 = nn.Identity()
-        self.apply(self.init_layer_weights)
 
-    def init_layer_weights(self, module):
-        if isinstance(module, (nn.Linear, nn.Embedding, nn.LayerNorm)):
-            module.weight.data.normal_(mean=0.0, std=self.weight_std)
-        if isinstance(module, (nn.Linear, nn.LayerNorm)) and module.bias is not None:
-            module.bias.data.zero_()
+    def encode_query_base(self):
+        pass
 
-    def encode_query(self, query):
-        query_mask = (query != Offsets.PAD)
-        att_mask = query_mask.unsqueeze(1).unsqueeze(1)
-        embedded = self.embeddings({'x': query})
-        encoded_query = self.transformer((embedded, att_mask))
-        encoded_query = self.reduction_layer((encoded_query, encoded_query, encoded_query, att_mask))
-        encoded_query = self.ff1(encoded_query)
-        return encoded_query
+    def encode_response_base(self):
+        pass
 
-    def encode_response(self, response):
-        response_mask = (response != Offsets.PAD)
-        att_mask = response_mask.unsqueeze(1).unsqueeze(1)
-        embedded = self.embeddings({'x': response})
-        encoded_response = self.transformer((embedded, att_mask))
-        encoded_response = self.reduction_layer((encoded_response, encoded_response, encoded_response, att_mask))
-        encoded_response = self.ff2(encoded_response)
-        return encoded_response
+    def encode_query(self, query: torch.Tensor) -> torch.Tensor:
+        tensor = self.encode_query_base(query)
+        return self.ff1(tensor)
+
+    def encode_response(self, response: torch.Tensor) -> torch.Tensor:
+        tensor = self.encode_response_base(response)
+        return self.ff2(tensor)
 
     def forward(self, query, response):
         encoded_query = self.encode_query(query)
@@ -4137,3 +4111,55 @@ class PairedModel(nn.Module):
 
         return TripletLoss(self)
 
+
+class PairedModel(DualEncoderModel):
+
+    def __init__(self, embeddings,
+                 d_model,
+                 d_ff,
+                 dropout,
+                 num_heads,
+                 num_layers,
+                 stacking_layers=None,
+                 d_out=512,
+                 d_k=None,
+                 weight_std=0.02,
+                 rpr_k=None,
+                 reduction_d_k=64,
+                 ffn_pdrop=0.1,
+                 windowed_ra=False,
+                 rpr_value_on=False):
+        super().__init__(d_model, stacking_layers, d_out, ffn_pdrop)
+
+        self.reduction_layer = TwoHeadConcat(d_model, dropout, scale=False, d_k=reduction_d_k)
+        self.weight_std = weight_std
+        self.transformer = TransformerEncoderStack(num_heads=num_heads, d_model=d_model,
+                                                   pdrop=dropout, layers=num_layers, activation='gelu', d_ff=d_ff,
+                                                   ffn_pdrop=ffn_pdrop,
+                                                   d_k=d_k, rpr_k=rpr_k, windowed_ra=windowed_ra, rpr_value_on=rpr_value_on)
+
+        self.embeddings = EmbeddingsStack({'x': embeddings})
+
+        self.apply(self.init_layer_weights)
+
+    def init_layer_weights(self, module):
+        if isinstance(module, (nn.Linear, nn.Embedding, nn.LayerNorm)):
+            module.weight.data.normal_(mean=0.0, std=self.weight_std)
+        if isinstance(module, (nn.Linear, nn.LayerNorm)) and module.bias is not None:
+            module.bias.data.zero_()
+
+    def encode_query_base(self, query):
+        query_mask = (query != Offsets.PAD)
+        att_mask = query_mask.unsqueeze(1).unsqueeze(1)
+        embedded = self.embeddings({'x': query})
+        encoded_query = self.transformer((embedded, att_mask))
+        encoded_query = self.reduction_layer((encoded_query, encoded_query, encoded_query, att_mask))
+        return encoded_query
+
+    def encode_response_base(self, response):
+        response_mask = (response != Offsets.PAD)
+        att_mask = response_mask.unsqueeze(1).unsqueeze(1)
+        embedded = self.embeddings({'x': response})
+        encoded_response = self.transformer((embedded, att_mask))
+        encoded_response = self.reduction_layer((encoded_response, encoded_response, encoded_response, att_mask))
+        return encoded_response
