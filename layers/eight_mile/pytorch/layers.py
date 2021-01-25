@@ -3669,7 +3669,25 @@ def init_distributed(local_rank):
     return device, local_rank
 
 
-class SingleHeadReduction(nn.Module):
+class AttentionReduction(nn.Module):
+    """
+    This is a reduction that is given Q, K, V and a mask vector.  Different from base reductions, which get an embedding stack
+    """
+
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, qkvm: Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]) -> torch.Tensor:
+        """Inputs are the same as for a normal attention function, but the output here is a single tensor, ``[B, H]``
+        :param query: a query for alignment. Can come from self in case of self-attn or decoder in case of E/D
+        :param key: a set of keys from encoder or self
+        :param value: a set of values from encoder or self
+        :param mask: masking (for destination) to prevent seeing what we shouldnt
+        :return: sentence-level encoding with dim [B, d_model]
+        """
+
+
+class SingleHeadReduction(AttentionReduction):
     """
     Implementation of the "self_attention_head" layer from the conveRT paper (https://arxiv.org/pdf/1911.03688.pdf)
     """
@@ -4004,7 +4022,7 @@ class AllLoss(nn.Module):
         return -loss
 
 
-class TwoHeadConcat(nn.Module):
+class TwoHeadConcat(AttentionReduction):
     """Use two parallel SingleHeadReduction, and concatenate the outputs. It is used in the conveRT
     paper (https://arxiv.org/pdf/1911.03688.pdf)"""
 
