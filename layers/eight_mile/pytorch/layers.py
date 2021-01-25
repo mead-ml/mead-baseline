@@ -4219,7 +4219,7 @@ class SingleHeadReduction(nn.Module):
         """
         query, key, value, mask = qkvm
         batchsz = query.size(0)
-        seq_mask = mask.squeeze()  # [B, T]
+        seq_mask = mask.squeeze(1).squeeze(1)  # [B, T]
         seq_lengths = seq_mask.sum(dim=1)
 
         # (B, H, T, D), still have num_heads = 1 to use the attention function defined in eight_miles
