@@ -19,69 +19,12 @@ from transformer_utils import (
     MultiFileDatasetReader,
     get_lr_decay,
     TiedEmbeddingsSeq2SeqModel,
+    TransformerBoWPairedModel
 )
 
 
 logger = logging.getLogger(__file__)
 
-
-class TransformerBoWPairedModel(DualEncoderModel):
-    """2 Encoders (E1, E2).  E1 is a Transformer followed by attention reduction.  E2 is just a pooling of embeddings
-
-    """
-    def __init__(self, embeddings,
-                 d_model,
-                 d_ff,
-                 dropout,
-                 num_heads,
-                 num_layers,
-                 stacking_layers=None,
-                 d_out=512,
-                 d_k=None,
-                 weight_std=0.02,
-                 rpr_k=None,
-                 reduction_d_k=64,
-                 ffn_pdrop=0.1,
-                 windowed_ra=False,
-                 rpr_value_on=False,
-                 reduction_type_1="2HA"):
-        super().__init__(d_model, stacking_layers, d_out, ffn_pdrop)
-
-        if reduction_type_1 == "2HA":
-            self.reduction_layer_1 = TwoHeadConcat(d_model, dropout, scale=False, d_k=reduction_d_k)
-        elif reduction_type_1 == "SHA":
-            self.reduction_layer_1 = SingleHeadReduction(d_model, dropout, scale=False, d_k=reduction_d_k)
-        else:
-            raise Exception("Unknown exception type")
-        self.weight_std = weight_std
-        self.transformer = TransformerEncoderStack(num_heads=num_heads, d_model=d_model,
-                                                   pdrop=dropout, layers=num_layers, activation='gelu', d_ff=d_ff,
-                                                   ffn_pdrop=ffn_pdrop,
-                                                   d_k=d_k, rpr_k=rpr_k, windowed_ra=windowed_ra, rpr_value_on=rpr_value_on)
-
-        self.embeddings = EmbeddingsStack({'x': embeddings})
-        self.reduction_layer_2 = MeanPool1D(d_out)
-        self.apply(self.init_layer_weights)
-
-    def init_layer_weights(self, module):
-        if isinstance(module, (nn.Linear, nn.Embedding, nn.LayerNorm)):
-            module.weight.data.normal_(mean=0.0, std=self.weight_std)
-        if isinstance(module, (nn.Linear, nn.LayerNorm)) and module.bias is not None:
-            module.bias.data.zero_()
-
-    def encode_query_base(self, query):
-        query_mask = (query != Offsets.PAD)
-        att_mask = query_mask.unsqueeze(1).unsqueeze(1)
-        embedded = self.embeddings({'x': query})
-        encoded_query = self.transformer((embedded, att_mask))
-        encoded_query = self.reduction_layer((encoded_query, encoded_query, encoded_query, att_mask))
-        return encoded_query
-
-    def encode_response_base(self, response):
-        response_mask = torch.sum(response != Offsets.PAD)
-        embedded = self.embeddings({'x': response})
-        return self.reduction_layer_2(embedded, response_mask)
-        return encoded_response
 
 """Pre-train a paired model in PyTorch
 
