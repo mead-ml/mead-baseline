@@ -183,7 +183,10 @@ def train():
                          logger=logger, checkpoint_name=args.checkpoint)
 
     model.to(args.device)
-    loss_function = model.create_loss(args.loss)
+    if args.model_type=='dual-encoder':
+        loss_function = model.create_loss(args.loss)
+    else:
+        loss_function = model.create_loss()
     loss_function.to(args.device)
 
     logger.info("Loaded model and loss")
@@ -256,9 +259,10 @@ def train():
             x, y = batch
             if args.model_type == 'encoder-decoder':
                 x_lengths = torch.sum(x != 0, 1)
-                inputs = model.make_input({'x': x, 'x_lengths': x_lengths, 'tgt': y})
+                y_lengths = torch.sum(y != 0, 1)
+                inputs = model.make_input({'x': x, 'x_lengths': x_lengths, 'tgt': y, 'tgt_lengths': y_lengths})
                 pred = model(inputs)
-                loss = loss_function(pred, y)
+                loss = loss_function(pred, inputs['tgt'])
             else:
                 inputs = x.to(args.device)
                 labels = y.to(args.device)
@@ -295,9 +299,10 @@ def train():
                     x, y = batch
                     if args.model_type == 'encoder-decoder':
                         x_lengths = torch.sum(x != 0, 1)
-                        inputs = model.make_input({'x': x, 'x_lengths': x_lengths, 'tgt': y})
+                        y_lengths = torch.sum(y != 0, 1)
+                        inputs = model.make_input({'x': x, 'x_lengths': x_lengths, 'tgt': y, 'tgt_lengths': y_lengths})
                         pred = model(inputs)
-                        loss = loss_function(pred, y)
+                        loss = loss_function(pred, inputs['tgt'])
                     else:
                         inputs = x.to(args.device)
                         labels = y.to(args.device)
