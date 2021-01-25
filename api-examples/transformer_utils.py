@@ -439,7 +439,7 @@ class TransformerBoWPairedModel(DualEncoderModel):
         return encoded_query
 
     def encode_response_base(self, response):
-        response_lengths = torch.sum(response != Offsets.PAD)
+        response_lengths = torch.sum(response != Offsets.PAD, dim=1)
         embedded = self.embeddings({'x': response})
         return self.reduction_layer_2((embedded, response_lengths))
         return encoded_response
