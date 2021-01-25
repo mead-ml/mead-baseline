@@ -19,10 +19,12 @@ from transformer_utils import (
     MultiFileDatasetReader,
     get_lr_decay,
     TiedEmbeddingsSeq2SeqModel,
+    TransformerBoWPairedModel
 )
 
 
 logger = logging.getLogger(__file__)
+
 
 """Pre-train a paired model in PyTorch
 
@@ -47,6 +49,9 @@ def create_model(embeddings, d_model, d_ff, dropout, num_heads, num_layers, mode
                "d_k": d_k,
                "rpr_k": rpr_k}
         model = TiedEmbeddingsSeq2SeqModel(embeddings, **hps)
+    elif model_type == 'transformer-bow':
+        model = TransformerBoWPairedModel(embeddings, d_model, d_ff, dropout, num_heads, num_layers, rpr_k=rpr_k, d_k=d_k,
+                                          reduction_d_k=reduction_d_k, stacking_layers=stacking_layers, ffn_pdrop=ff_pdrop, windowed_ra=windowed_ra)
     else:
         model = PairedModel(embeddings, d_model, d_ff, dropout, num_heads, num_layers, rpr_k=rpr_k, d_k=d_k,
                             reduction_d_k=reduction_d_k, stacking_layers=stacking_layers, ffn_pdrop=ff_pdrop,
@@ -104,7 +109,7 @@ def train():
 
     parser.add_argument("--reader_type", type=str, default='preprocessed', choices=['ntp', 'nsp', 'preprocessed', 'tfrecord'])
 
-    parser.add_argument("--model_type", default="dual-encoder", choices=["dual-encoder", "encoder-decoder"])
+    parser.add_argument("--model_type", default="dual-encoder", choices=["dual-encoder", "encoder-decoder", "transformer-bow"])
     parser.add_argument("--loss", type=str, default='all', choices=['triplet', 'all', 'contrastive', 'symmetric'])
     parser.add_argument('--rpr_k',
                         help='Relative attention positional sizes pass 0 if you dont want relative attention',
@@ -123,7 +128,7 @@ def train():
 
     args = parser.parse_args()
 
-    if args.basedir is None:
+    if args.basedir is None: 
         args.basedir = '{}-{}-paired-{}-bpe-{}'.format(args.model_type, args.reader_type, args.dataset_key, os.getpid())
     logging.basicConfig(level=logging.INFO if args.local_rank in [-1, 0] else logging.WARN)
 
