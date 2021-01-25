@@ -4173,7 +4173,7 @@ class PairedModel(DualEncoderModel):
                  windowed_ra=False,
                  rpr_value_on=False,
                  reduction_type="2HA"):
-        super().__init__(d_model, stacking_layers, d_out, ffn_pdrop)
+        super().__init__(2*d_model if reduction_type == "2HA" else d_model, stacking_layers, d_out, ffn_pdrop)
 
         if reduction_type == "2HA":
             self.reduction_layer = TwoHeadConcat(d_model, dropout, scale=False, d_k=reduction_d_k)
