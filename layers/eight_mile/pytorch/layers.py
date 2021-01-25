@@ -4100,10 +4100,10 @@ class DualEncoderModel(nn.Module):
             self.ff1 = nn.Identity()
             self.ff2 = nn.Identity()
 
-    def encode_query_base(self):
+    def encode_query_base(self, query: torch.Tensor) -> torch.Tensor:
         pass
 
-    def encode_response_base(self):
+    def encode_response_base(self, response: torch.Tensor) -> torch.Tensor:
         pass
 
     def encode_query(self, query: torch.Tensor) -> torch.Tensor:
@@ -4130,8 +4130,33 @@ class DualEncoderModel(nn.Module):
         return TripletLoss(self)
 
 
-class PairedModel(DualEncoderModel):
+class AbstractDualEncoderModel(nn.Module):
+    """A simple encoder where the encoders are injected and supply the `encode_query_base` and `encode_response_base`
 
+    """
+
+    def __init__(self, encoder_1: nn.Module, encoder_2: nn.Module, stacking_layers: Union[int, List[int]] = None, d_out: int = 512, ffn_pdrop=0.1):
+        super().__init__(encoder_1.output_dim, stacking_layers, d_out, ffn_pdrop)
+        self.encoder_1 = encoder_1
+        self.encoder_2 = encoder_2
+
+    def encode_query_base(self, query: torch.Tensor) -> torch.Tensor:
+        return self.encoder_1(query)
+
+    def encode_response_base(self, response: torch.Tensor) -> torch.Tensor:
+        return self.encoder_2(response)
+
+
+class PairedModel(DualEncoderModel):
+    """Legacy model for transformer-based dual encoder
+
+    This is a dual-encoder transformer model which shares the lower layer encoder transformer sub-graph
+    The reduction layer is attention based and takes the same input as the transformer layers.  It pools the reprs
+    Finally, the feed-forward stacks are applied via subclassing.
+
+    Note that this model predates the more abstract `AbstractDualEncoder` which could accomplish the same thing
+    by injecting the same `nn.Module` for encoder_1 and encoder_2 consisting of the transformer and reduction
+    """
     def __init__(self, embeddings,
                  d_model,
                  d_ff,
