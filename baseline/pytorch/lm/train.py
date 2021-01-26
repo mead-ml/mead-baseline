@@ -16,7 +16,7 @@ class LanguageModelTrainerPyTorch(Trainer):
     def __init__(self, model, **kwargs):
         super().__init__()
         if type(model) is dict:
-            model = create_model_for('lm', **model)
+            model = create_model_for('lm', checkpoint=kwargs.get('checkpoint'), **model)
         self.model = model
         self.clip = float(kwargs.get('clip', 5))
         self.gpus = kwargs.get('gpus', 1)

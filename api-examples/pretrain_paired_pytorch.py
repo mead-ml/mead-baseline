@@ -14,11 +14,11 @@ from eight_mile.pytorch.layers import (
     save_checkpoint, init_distributed,
     PairedModel
 )
+from baseline.pytorch.seq2seq.model import TiedEmbeddingsSeq2SeqModel
 from eight_mile.pytorch.optz import *
 from transformer_utils import (
     MultiFileDatasetReader,
     get_lr_decay,
-    TiedEmbeddingsSeq2SeqModel,
     TransformerBoWPairedModel
 )
 
@@ -48,7 +48,7 @@ def create_model(embeddings, d_model, d_ff, dropout, num_heads, num_layers, mode
                "src_lengths_key": "x_lengths",
                "d_k": d_k,
                "rpr_k": rpr_k}
-        model = TiedEmbeddingsSeq2SeqModel(embeddings, **hps)
+        model = TiedEmbeddingsSeq2SeqModel({'x': embeddings}, None, **hps)
     elif model_type == 'transformer-bow':
         model = TransformerBoWPairedModel(embeddings, d_model, d_ff, dropout, num_heads, num_layers, rpr_k=rpr_k, d_k=d_k,
                                           reduction_d_k=reduction_d_k, stacking_layers=stacking_layers, ffn_pdrop=ff_pdrop, windowed_ra=windowed_ra)
@@ -61,6 +61,22 @@ def create_model(embeddings, d_model, d_ff, dropout, num_heads, num_layers, mode
 
     logger.info(model)
     return model
+
+
+def run_step_dual(x, y, model, loss_function, device):
+    inputs = x.to(device)
+    labels = y.to(device)
+    loss = loss_function(inputs, labels)
+    return loss
+
+
+def run_step_s2s(x, y, model, loss_function, device):
+    x_lengths = torch.sum(x != 0, 1)
+    y_lengths = torch.sum(y != 0, 1)
+    inputs = model.make_input({'x': x, 'x_lengths': x_lengths, 'tgt': y, 'tgt_lengths': y_lengths})
+    pred = model(inputs)
+    loss = loss_function(pred, inputs['tgt'])
+    return loss
 
 
 def train():
@@ -81,6 +97,7 @@ def train():
     parser.add_argument("--windowed_ra", type=str2bool, default=False, help="whether prevent attention beyond rpr_k")
     parser.add_argument("--num_train_workers", type=int, default=4, help="Number train workers")
     parser.add_argument("--nctx", type=int, default=256, help="Max input length")
+    parser.add_argument("--tgt_nctx", type=int, help="Max output length, default to args.nctx")
     parser.add_argument("--file_type", default='json', help="Suffix for data")
     parser.add_argument("--record_keys", default=['x', 'y'], nargs='+')
     parser.add_argument("--batch_size", type=int, default=256, help="Batch Size")
@@ -108,8 +125,11 @@ def train():
     parser.add_argument("--ff_pdrop", type=float, default=0.1, help="Dropout in the dense stack")
 
     parser.add_argument("--reader_type", type=str, default='preprocessed', choices=['ntp', 'nsp', 'preprocessed', 'tfrecord'])
-
     parser.add_argument("--model_type", default="dual-encoder", choices=["dual-encoder", "encoder-decoder", "transformer-bow"])
+    parser.add_argument("--src_begin_tok", type=str, nargs='+', default=[])
+    parser.add_argument("--src_end_tok", type=str, nargs='+', default=['<EOS>'])
+    parser.add_argument("--tgt_begin_tok", type=str, nargs='+', default=['<GO>'])
+    parser.add_argument("--tgt_end_tok", type=str, nargs='+', default=['<EOS>'])
     parser.add_argument("--loss", type=str, default='all', choices=['triplet', 'all', 'contrastive', 'symmetric'])
     parser.add_argument('--rpr_k',
                         help='Relative attention positional sizes pass 0 if you dont want relative attention',
@@ -140,8 +160,11 @@ def train():
         args.device, updated_local_rank = init_distributed(args.local_rank)
         args.local_rank = updated_local_rank
 
-    reader = MultiFileDatasetReader(args.nctx, args.subword_model_file, args.subword_vocab_file, args.file_type,
-                                    reader_type=args.reader_type, record_keys=args.record_keys)
+    if not args.tgt_nctx:
+        args.tgt_nctx = args.nctx
+    reader = MultiFileDatasetReader(args.nctx, args.tgt_nctx, args.src_begin_tok, args.src_end_tok, args.tgt_begin_tok,
+                                    args.tgt_end_tok, args.subword_model_file, args.subword_vocab_file,
+                                    args.file_type, reader_type=args.reader_type, record_keys=args.record_keys)
 
     vocab = reader.build_vocab()
     # If we are not using chars, then use 'x' for both input and output
@@ -178,13 +201,12 @@ def train():
                          logger=logger, checkpoint_name=args.checkpoint)
 
     model.to(args.device)
-    loss_function = model.create_loss(args.loss)
+    loss_function = model.create_loss(loss_type=args.loss)
     loss_function.to(args.device)
+    run_step = run_step_dual if args.model_type == 'dual-encoder' else run_step_s2s
 
     logger.info("Loaded model and loss")
 
-    # according to pytorch, len(train_loader) will return len(train_set) when train_set is IterableDataset, so manually
-    # correct it here
     steps_per_epoch = len(train_loader) // num_gpus
     valid_steps = len(valid_loader)
     update_on = steps_per_epoch // args.saves_per_epoch
@@ -251,9 +273,7 @@ def train():
             batch = next(train_itr)
             steps += 1
             x, y = batch
-            inputs = x.to(args.device)
-            labels = y.to(args.device)
-            loss = loss_function(inputs, labels)
+            loss = run_step(x, y, model, loss_function, args.device)
             loss.backward()
             avg_loss.update(loss.item())
 
@@ -284,10 +304,8 @@ def train():
                 with torch.no_grad():
                     batch = next(valid_itr)
                     x, y = batch
-                    inputs = x.to(args.device)
-                    labels = y.to(args.device)
-                    loss = loss_function(inputs, labels)
-                    avg_valid_loss.update(loss.item())
+                    loss = run_step(x, y, model, loss_function, args.device)
+                avg_valid_loss.update(loss.item())
 
             valid_avg_loss = avg_valid_loss.avg
 

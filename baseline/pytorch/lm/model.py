@@ -1,6 +1,7 @@
 from baseline.pytorch.torchy import *
 from baseline.pytorch.transformer import TransformerEncoderStack, subsequent_mask, MultiHeadedAttention
 from baseline.model import LanguageModel, register_model
+from eight_mile.pytorch.serialize import load_tlm_npz
 import torch.autograd
 import os
 
@@ -65,6 +66,12 @@ class LanguageModelBase(nn.Module, LanguageModel):
 
         lm.src_keys = kwargs.get('src_keys', embeddings.keys())
         lm.create_layers(embeddings, **kwargs)
+        checkpoint_name = kwargs.get('checkpoint')
+        if checkpoint_name is not None:
+            if checkpoint_name.endswith('npz'):
+                load_tlm_npz(lm, checkpoint_name)
+            else:
+                lm.load_state_dict(torch.load(checkpoint_name))
         return lm
 
     def create_layers(self, embeddings, **kwargs):
