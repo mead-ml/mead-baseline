@@ -87,7 +87,7 @@ def run():
     parser.add_argument("--checkpoint", type=str, help='Checkpoint name or directory to load')
     parser.add_argument("--sample", type=str2bool, help='Sample from the decoder?  Defaults to `true`', default=0)
     parser.add_argument("--vocab", type=str, help='Vocab file to load', required=False)
-    parser.add_argument("--input_file", type=str)
+    parser.add_argument("--input", type=str, default='hello how are you ?')
     parser.add_argument("--dataset_cache", type=str, default=os.path.expanduser('~/.bl-data'),
                         help="Path or url of the dataset cache")
     parser.add_argument("--d_model", type=int, default=512, help="Model dimension (and embedding dsz)")
@@ -105,8 +105,8 @@ def run():
                         type=int, default=[8]*8, nargs='+')
     parser.add_argument("--use_cls", type=str2bool, default=False, help="Prepend a [CLS] token on the encoder?")
     parser.add_argument("--go_token", default="<GO>")
-    parser.add_argument("--end_token", default="<EOU>")
-    parser.add_argument("--target")
+    parser.add_argument("--end_token", default="<EOS>")
+    parser.add_argument("--output_file", type=str)
     parser.add_argument("--show_query", type=str2bool, default=False, help="Show the original query as well")
     parser.add_argument("--device", type=str,
                         default="cuda" if torch.cuda.is_available() else "cpu",
@@ -147,24 +147,31 @@ def run():
 
     index2word = revlut(vocab)
     wf = None
-    if args.target:
-        wf = open(args.target, "w")
-    with open(args.input_file) as rf:
-        for query in rf:
-            query = query.strip()
-            output = ' '.join(decode_sentence(model, vectorizer, query.split(), vocab, index2word, args.device,
-                                              max_response_length=args.nctx, sou_token=args.go_token,
-                                              eou_token=args.end_token,
-                                              sample=args.sample))
-            output = output.replace('@@ ', '')
-            if args.show_query:
-                print(query)
-                print(f"\t{output}")
-            elif wf:
-                wf.write(f'{output}\n')
-                wf.flush()
-            else:
-                print(output)
+    if args.output_file:
+        wf = open(args.output_file, "w")
+
+    queries = []
+    if os.path.exists(args.input) and os.path.isfile(args.input):
+        with open(args.input) as rf:
+            for line in rf:
+                queries.append(line.strip())
+    else:
+        queries.append(args.input)
+
+    for query in queries:
+        output = ' '.join(decode_sentence(model, vectorizer, query.split(), vocab, index2word, args.device,
+                                          max_response_length=args.nctx, sou_token=args.go_token,
+                                          eou_token=args.end_token,
+                                          sample=args.sample))
+        output = output.replace('@@ ', '')
+        if args.show_query:
+            print(f"[Query] {query}")
+            print(f"[Response] {output}")
+        elif wf:
+            wf.write(f'{output}\n')
+            wf.flush()
+        else:
+            print(output)
     if wf:
         wf.close()
 run()
