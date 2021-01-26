@@ -23,6 +23,7 @@ parser.add_argument('--export_mapping', help='mapping between features and the f
                     default=[], nargs='+')
 parser.add_argument('--prefer_eager', help="If running in TensorFlow, should we prefer eager model", type=str2bool)
 parser.add_argument('--batchsz', default=64, help="How many examples to run through the model at once", type=int)
+parser.add_argument('--labels_only', type=str2bool, default=False)
 
 args = parser.parse_args()
 
@@ -71,7 +72,11 @@ m = bl.TaggerService.load(args.model, backend=args.backend, remote=args.remote,
 batched = [texts[i:i+args.batchsz] for i in range(0, len(texts), args.batchsz)]
 
 for texts in batched:
-    for sen in m.predict(texts, export_mapping=create_export_mapping(args.export_mapping)):
+    for sen in m.predict(texts, export_mapping=create_export_mapping(args.export_mapping), valid_labels_only=not args.labels_only):
         for word_tag in sen:
-            print("{} {}".format(word_tag['text'], word_tag['label']))
+            if args.labels_only:
+                print(f"{word_tag['label']}")
+            else:
+                print(f"{word_tag['text']} {word_tag['label']}")
+
         print()
