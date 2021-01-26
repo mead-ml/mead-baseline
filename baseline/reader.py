@@ -157,9 +157,9 @@ class ParallelCorpusReader(object):
             if k == 'tgt':
                 self.tgt_vectorizer = vectorizer
                 if not self.tgt_vectorizer.emit_begin_tok:
-                    self.tgt_vectorizer.emit_begin_tok.append('<GO>')
+                    self.tgt_vectorizer.emit_begin_tok.append(Offsets.VALUES[Offsets.GO])
                 if not self.tgt_vectorizer.emit_end_tok:
-                    self.tgt_vectorizer.emit_end_tok.append('<EOS>')
+                    self.tgt_vectorizer.emit_end_tok.append(Offsets.VALUES[Offsets.EOS])
             else:
                 self.src_vectorizers[k] = vectorizer
         self.trim = trim
