@@ -183,10 +183,7 @@ def train():
                          logger=logger, checkpoint_name=args.checkpoint)
 
     model.to(args.device)
-    if args.model_type=='dual-encoder':
-        loss_function = model.create_loss(args.loss)
-    else:
-        loss_function = model.create_loss()
+    loss_function = model.create_loss(loss_type=args.loss)
     loss_function.to(args.device)
 
     logger.info("Loaded model and loss")
