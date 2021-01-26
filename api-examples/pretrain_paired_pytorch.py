@@ -185,8 +185,8 @@ def train():
 
     # according to pytorch, len(train_loader) will return len(train_set) when train_set is IterableDataset, so manually
     # correct it here
-    steps_per_epoch = len(train_loader) // (args.batch_size * num_gpus)
-    valid_steps = len(valid_loader) // args.batch_size
+    steps_per_epoch = len(train_loader) // num_gpus
+    valid_steps = len(valid_loader)
     update_on = steps_per_epoch // args.saves_per_epoch
     report_on = max(10, update_on) // 10
     logger.info(f"Steps per epoch per GPU: {steps_per_epoch}. Saving checkpoint every {update_on} steps.")
