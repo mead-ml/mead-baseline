@@ -19,7 +19,6 @@ from baseline.utils import (
 )
 from baseline.model import load_model_for
 from baseline.vectorizers import (
-    GOVectorizer,
     Dict1DVectorizer,
     Char2DVectorizer,
     Dict2DVectorizer,
@@ -40,7 +39,6 @@ logger = logging.getLogger('mead')
 
 VECTORIZER_SHAPE_MAP = {
     Token1DVectorizer: [1, 100],
-    GOVectorizer: [1, 100],
     Dict1DVectorizer: [1, 100],
     Char2DVectorizer: [1, 100, 50],
     Dict2DVectorizer: [1, 100, 50],

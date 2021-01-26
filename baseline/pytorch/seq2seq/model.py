@@ -6,6 +6,7 @@ from baseline.pytorch.transformer import *
 from baseline.model import EncoderDecoderModel, register_model, create_seq2seq_encoder, create_seq2seq_decoder
 from baseline.pytorch.seq2seq.encoders import *
 from baseline.pytorch.seq2seq.decoders import *
+from eight_mile.pytorch.serialize import load_transformer_seq2seq_npz
 
 logger = logging.getLogger('baseline')
 
@@ -93,6 +94,12 @@ class EncoderDecoderModelBase(nn.Module, EncoderDecoderModel):
     @classmethod
     def create(cls, src_embeddings, tgt_embedding, **kwargs):
         model = cls(src_embeddings, tgt_embedding, **kwargs)
+        checkpoint_name = kwargs.get('checkpoint')
+        if checkpoint_name is not None:
+            if checkpoint_name.endswith('npz'):
+                load_transformer_seq2seq_npz(model, checkpoint_name)
+            else:
+                model.load_state_dict(torch.load(checkpoint_name))
         logger.info(model)
         return model
 
@@ -128,6 +135,7 @@ class EncoderDecoderModelBase(nn.Module, EncoderDecoderModel):
         example = dict({})
 
         lengths = batch_dict[self.src_lengths_key]
+        tgt_lengths = batch_dict['tgt_lengths']
         if numpy_to_tensor:
             lengths = torch.from_numpy(lengths)
         lengths, perm_idx = lengths.sort(0, descending=True)
@@ -144,8 +152,10 @@ class EncoderDecoderModelBase(nn.Module, EncoderDecoderModel):
                 tgt = torch.from_numpy(tgt)
             example['dst'] = tgt[:, :-1]
             example['tgt'] = tgt[:, 1:]
+            example['tgt_len'] = tgt_lengths - 1
             example['dst'] = example['dst'][perm_idx]
             example['tgt'] = example['tgt'][perm_idx]
+            example['tgt_len'] = example['tgt_len'][perm_idx]
             if self.gpu:
                 example['dst'] = example['dst'].cuda()
                 example['tgt'] = example['tgt'].cuda()
@@ -198,3 +208,10 @@ class Seq2SeqModel(EncoderDecoderModelBase):
         :param kwargs:
         """
         super().__init__(src_embeddings, tgt_embedding, **kwargs)
+
+
+@register_model(task='seq2seq', name='tied-embed')
+class TiedEmbeddingsSeq2SeqModel(Seq2SeqModel):
+
+    def __init__(self, tied_embeddings, _, **kwargs):
+        super().__init__(tied_embeddings, tied_embeddings['x'], **kwargs)

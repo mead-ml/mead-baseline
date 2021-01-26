@@ -151,7 +151,11 @@ def test_vocab_col_uses_text():
 
 class VectMock(MagicMock):
     def count(self, x):
-        return Counter(x)
+        counter = Counter(x)
+        if self.emit_begin_tok is not None:
+            for tok in self.emit_begin_tok:
+                counter[tok] += 1
+        return counter
 
 
 def test_tsv_unstruct_build_vocab():
@@ -168,14 +172,14 @@ GOLD_TARGET = {'b': 3, 'd': 2, 'f': 1, '<GO>': 3}
 
 
 def test_tsv_parallel_build_vocab():
-    reader = TSVParallelCorpusReader(vectorizers={'tgt': VectMock(), 'src': VectMock()})
+    reader = TSVParallelCorpusReader(vectorizers={'tgt': VectMock(emit_begin_tok=[]), 'src': VectMock()})
     src_vocab, tgt_vocab = reader.build_vocabs([os.path.join(TEST_LOC, 'tsv_parallel.tsv')])
     assert src_vocab['src'] == GOLD_SOURCE
     assert tgt_vocab == GOLD_TARGET
 
 
 def test_parallel_multifile_build_vocab():
-    reader = MultiFileParallelCorpusReader(vectorizers={'tgt': VectMock(), 'src': VectMock()}, pair_suffix=['1', '2'])
+    reader = MultiFileParallelCorpusReader(vectorizers={'tgt': VectMock(emit_begin_tok=[]), 'src': VectMock()}, pair_suffix=['1', '2'])
     files = os.path.join(TEST_LOC, 'multi_parallel')
     src_vocab, tgt_vocab = reader.build_vocabs([files])
     assert src_vocab['src'] == GOLD_SOURCE

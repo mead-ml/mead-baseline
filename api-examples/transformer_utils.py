@@ -135,11 +135,11 @@ def load_data_caching(token_type, reader, dataset, file_key, vocabs, caching, lo
 
 class MultiFileLoader(IterableDataset):
 
-    def __init__(self, directory, pattern, vocabs, vectorizer, nctx, last_turn_only=False, distribute=True, shuffle=True):
+    def __init__(self, directory, pattern, vocabs, src_vectorizer, tgt_vectorizer, last_turn_only=False, distribute=True, shuffle=True):
         super().__init__()
-        self.vectorizer = vectorizer
+        self.src_vectorizer = src_vectorizer
+        self.tgt_vectorizer = tgt_vectorizer
         self.pattern = pattern
-        self.nctx = nctx
         self.directory = directory
         self.vocab = vocabs
         self.samples = 0
@@ -185,7 +185,6 @@ class MultiFileLoader(IterableDataset):
             node_worker_id = worker_info.id
         all_workers = (self.world_size * num_workers_per_node)
         offset = self.rank * num_workers_per_node + node_worker_id
-        self.vectorizer.mxlen = self.nctx
         read_file_order = list(range(offset, len(files), all_workers))
         if not read_file_order:
             if offset > 0:
@@ -239,19 +238,19 @@ class NextTurnPredictionFileLoader(MultiFileLoader):
             q = turns[-1] if turns[-1].strip() != '' else turns[-2]
             if q.strip() == '':
                 return None
-            q_vec, q_valid_lengths = self.vectorizer.run(q.split(), self.vocab)
+            q_vec, q_valid_lengths = self.src_vectorizer.run(q.split(), self.vocab)
         else:
 
-            q = [self.vectorizer.vocab.get(x, Offsets.UNK) for x in self.vectorizer.iterable(q.split())]
+            q = [self.src_vectorizer.vocab.get(x, Offsets.UNK) for x in self.src_vectorizer.iterable(q.split())]
             q_valid_lengths = len(q)
-            if q_valid_lengths > self.vectorizer.mxlen:
-                start = q_valid_lengths - self.vectorizer.mxlen
+            if q_valid_lengths > self.src_vectorizer.mxlen:
+                start = q_valid_lengths - self.src_vectorizer.mxlen
                 q_vec = np.array(q[start:], dtype=np.long)
             else:
-                q_vec = np.zeros(self.vectorizer.mxlen, dtype=np.long)
+                q_vec = np.zeros(self.src_vectorizer.mxlen, dtype=np.long)
                 q_vec[:q_valid_lengths] = np.array(q)
 
-        r_vec, r_valid_lengths = self.vectorizer.run(r.split(), self.vocab)
+        r_vec, r_valid_lengths = self.tgt_vectorizer.run(r.split(), self.vocab)
         return q_vec, r_vec
 
 
@@ -278,7 +277,7 @@ class SequencePredictionFileLoader(MultiFileLoader):
         if not line:
             return None
 
-        vec, valid_lengths = self.vectorizer.run(line.split(), self.vocab)
+        vec, valid_lengths = self.src_vectorizer.run(line.split(), self.vocab)
         if valid_lengths < 2:
             return None
         return vec, vec
@@ -300,10 +299,10 @@ class NextSequencePredictionFileLoader(MultiFileLoader):
         line = line.strip()
         if not line:
             return None
-        vec, valid_lengths = self.vectorizer.run(line.split(), self.vocab)
+        vec, valid_lengths = self.src_vectorizer.run(line.split(), self.vocab)
         if valid_lengths < 2:
             return None
-        pair_entry_length = self.vectorizer.mxlen//2
+        pair_entry_length = self.src_vectorizer.mxlen//2
         end_of_query = min(valid_lengths//2, pair_entry_length)
         # Front half is all tokens up until the half_way marker
         # Create a new query vector
@@ -320,8 +319,8 @@ class MultiTFRecordLoader(MultiFileLoader):
         import tfrecord
     except:
         pass
-    def __init__(self, directory, vocabs, vectorizer, nctx, last_turn_only=True, distribute=True, shuffle=True, record_keys=None):
-        super().__init__(directory, "*.tfrecord", vocabs, vectorizer, nctx, last_turn_only, distribute, shuffle)
+    def __init__(self, directory, vocabs, src_vectorizer, tgt_vectorizer, last_turn_only=True, distribute=True, shuffle=True, record_keys=None):
+        super().__init__(directory, "*.tfrecord", vocabs, src_vectorizer, tgt_vectorizer, last_turn_only, distribute, shuffle)
         # create index first
         if not record_keys:
             self.x = 'x'
@@ -360,29 +359,36 @@ class MultiFileDatasetReader:
     """Provide a base-class to do operations that are independent of token representation
     """
 
-    def __init__(self, nctx=64, model_file=None, vocab_file=None, file_type='txt', reader_type="ntp", record_keys=None):
-        self.nctx = nctx
+    def __init__(self, src_nctx=64, tgt_nctx=64, src_begin_tok=[], src_end_tok=['<EOS>'], tgt_begin_tok=['<GO>'],
+                 tgt_end_tok=['<EOS>'], model_file=None, vocab_file=None, file_type='txt', reader_type="ntp", record_keys=None):
+        self.src_nctx = src_nctx
+        self.tgt_nctx = tgt_nctx
         self.pattern = f'*.{file_type}'
         self.reader_type = reader_type
+        if not src_begin_tok and self.reader_type == 'lang':
+            src_begin_tok = ['[CLS]']
         self.record_keys = record_keys if record_keys else ['x', 'y']
-        self.vectorizer = BPEVectorizer1D(model_file=model_file, vocab_file=vocab_file, mxlen=nctx)
+        self.src_vectorizer = BPEVectorizer1D(model_file=model_file, vocab_file=vocab_file, mxlen=src_nctx,
+                                              emit_begin_tok=src_begin_tok, emit_end_tok=src_end_tok)
+        self.tgt_vectorizer = BPEVectorizer1D(model_file=model_file, vocab_file=vocab_file, mxlen=tgt_nctx,
+                                              emit_begin_tok=tgt_begin_tok, emit_end_tok=tgt_end_tok)
 
     def build_vocab(self, _=None):
-        return {'x': self.vectorizer.vocab}
+        return {'x': self.src_vectorizer.vocab}
 
     def load(self, directory, vocabs, distribute=True, shuffle=True):
         reader_type = self.reader_type.lower()
         if reader_type == "ntp":
-            return NextTurnPredictionFileLoader(directory, self.pattern, vocabs, self.vectorizer, self.nctx, distribute=distribute, shuffle=shuffle)
+            return NextTurnPredictionFileLoader(directory, self.pattern, vocabs, self.src_vectorizer, self.tgt_vectorizer, distribute=distribute, shuffle=shuffle)
         elif reader_type == "nsp":
-            return NextSequencePredictionFileLoader(directory, self.pattern, vocabs, self.vectorizer, 2*self.nctx, distribute=distribute, shuffle=shuffle)
+            return NextSequencePredictionFileLoader(directory, self.pattern, vocabs, self.src_vectorizer, self.tgt_vectorizer, distribute=distribute, shuffle=shuffle)
         elif reader_type == "lang":
             print("Using files as an LM")
-            return SequencePredictionFileLoader(directory, self.pattern, vocabs, self.vectorizer, self.nctx, distribute=distribute, shuffle=shuffle)
+            return SequencePredictionFileLoader(directory, self.pattern, vocabs, self.src_vectorizer, self.tgt_vectorizer, distribute=distribute, shuffle=shuffle)
         elif reader_type == 'tfrecord':
             print("Reading data in .tfrecord format using the tfrecord module")
-            return MultiTFRecordLoader(directory, vocabs, self.vectorizer, self.nctx, distribute=distribute, shuffle=shuffle, record_keys=self.record_keys)
-        return PreprocessedFileLoader(directory, self.pattern, vocabs, self.vectorizer, self.nctx, distribute=distribute, shuffle=shuffle)
+            return MultiTFRecordLoader(directory, vocabs, self.src_vectorizer, self.tgt_vectorizer, distribute=distribute, shuffle=shuffle, record_keys=self.record_keys)
+        return PreprocessedFileLoader(directory, self.pattern, vocabs, self.src_vectorizer, self.tgt_vectorizer, distribute=distribute, shuffle=shuffle)
 
 
 class TransformerBoWPairedModel(DualEncoderModel):
@@ -443,60 +449,6 @@ class TransformerBoWPairedModel(DualEncoderModel):
         embedded = self.embeddings({'x': response})
         return self.reduction_layer_2((embedded, response_lengths))
         return encoded_response
-
-class TiedEmbeddingsSeq2SeqModel(Seq2SeqModel):
-
-    def __init__(self, tied_embeddings, **kwargs):
-        super().__init__({'x': tied_embeddings}, tied_embeddings, **kwargs)
-
-    def input_tensor(self, key, batch_dict, perm_idx):
-        tensor = batch_dict[key]
-        tensor = self.drop_inputs(key, tensor)
-        tensor = tensor[perm_idx]
-        return tensor
-
-    def make_input(self, batch_dict, perm=False):
-        """Prepare the input.
-
-        :param batch_dict: `dict`: The data.
-        :param perm: `bool`: If True return the permutation index
-            so that you can undo the sort if you want.
-        """
-        example = dict({})
-
-        lengths = batch_dict[self.src_lengths_key]
-        lengths, perm_idx = lengths.sort(0, descending=True)
-
-        example['src_len'] = lengths
-        for key in self.src_embeddings.keys():
-            example[key] = self.input_tensor(key, batch_dict, perm_idx)
-
-        if 'tgt' in batch_dict:
-            tgt = batch_dict['tgt']
-            example['dst'] = torch.cat([torch.full((tgt.shape[0], 1), Offsets.GO, device=tgt.device, dtype=tgt.dtype), tgt[:, :-1]], 1)
-            example['tgt'] = tgt
-            example['dst'] = example['dst'][perm_idx]
-            example['tgt'] = example['tgt'][perm_idx]
-        if perm:
-            return example, perm_idx
-        return example
-
-    def create_loss(self, _=None):
-        loss = super().create_loss()
-
-        class LossFn(nn.Module):
-            def __init__(self, model: nn.Module, l: nn.Module):
-                super().__init__()
-                self._loss = l
-                self.model = model
-
-            def forward(self, inputs, targets):
-                lengths = torch.sum(inputs != 0, 1)
-                in_ = self.model.make_input({"x": inputs, "x_lengths": lengths,  "tgt": targets})
-                targets = in_['tgt']
-                pred = self.model(in_)
-                return self._loss(pred, targets)
-        return LossFn(self, loss)
 
 
 def get_lr_decay(sched_type, lr, steps_per_epoch, n_epochs, logger, decay_steps=None, decay_rate=None, alpha=None):
