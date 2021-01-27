@@ -34,7 +34,7 @@ This file uses Baseline to train a Transformer model using fastBPE with query-re
   
 """
 def create_model(embeddings, d_model, d_ff, dropout, num_heads, num_layers, model_type, rpr_k, d_k, reduction_d_k,
-                 stacking_layers, ff_pdrop, windowed_ra, logger, checkpoint_name=None):
+                 stacking_layers, ff_pdrop, windowed_ra, logger):
     if model_type == "encoder-decoder":
         logger.info("Creating tied encoder decoder model")
         hps = {"dsz": d_model,
@@ -56,8 +56,6 @@ def create_model(embeddings, d_model, d_ff, dropout, num_heads, num_layers, mode
         model = PairedModel(embeddings, d_model, d_ff, dropout, num_heads, num_layers, rpr_k=rpr_k, d_k=d_k,
                             reduction_d_k=reduction_d_k, stacking_layers=stacking_layers, ffn_pdrop=ff_pdrop,
                             windowed_ra=windowed_ra)
-        if checkpoint_name:
-            load_tlm_npz(model, checkpoint_name)
 
     logger.info(model)
     return model
@@ -103,7 +101,6 @@ def train():
     parser.add_argument("--batch_size", type=int, default=256, help="Batch Size")
     parser.add_argument("--subword_model_file", type=str, help="The BPE model file", required=True)
     parser.add_argument("--subword_vocab_file", type=str, help="The BPE subword vocab", required=True)
-    parser.add_argument("--checkpoint", type=str, help="TLM Checkpoint to start training from (if dual encoder)")
     parser.add_argument("--dropout", type=float, default=0.1, help="Dropout")
     parser.add_argument("--lr_scheduler", type=str, default='cosine', help="The type of learning rate decay scheduler")
     parser.add_argument("--lr_decay_steps", type=int, help="decay steps of lr scheduler")
@@ -198,7 +195,7 @@ def train():
                          num_heads=args.num_heads, num_layers=args.num_layers,
                          model_type=args.model_type, rpr_k=rpr_k, d_k=args.d_k, reduction_d_k=args.reduction_d_k,
                          stacking_layers=args.stacking_layers, ff_pdrop=args.ff_pdrop, windowed_ra=args.windowed_ra,
-                         logger=logger, checkpoint_name=args.checkpoint)
+                         logger=logger)
 
     model.to(args.device)
     loss_function = model.create_loss(loss_type=args.loss)
@@ -221,34 +218,7 @@ def train():
     start_epoch = 0
 
     if args.restart_from:
-        if args.restart_from.endswith('.npz'):
-            try:
-                load_transformer_seq2seq_npz(model, args.restart_from)
-            except:
-                print('Model file not recognized as seq2seq model, attempting to load as LM for encoder')
-                load_seq2seq_enc_from_tlm_npz(model, args.restart_from)
-        else:
-
-            model.load_state_dict(torch.load(args.restart_from))
-        vec = args.restart_from.split("-")
-
-        if args.restart_tt:
-            tick_type = args.restart_tt
-        else:
-            tick_type = vec[-2]
-        step_num = int(vec[-1].split(".")[0])
-
-        if tick_type == 'epoch':
-            start_epoch = step_num
-            global_step = start_epoch * steps_per_epoch
-
-        elif tick_type == 'step':
-            start_epoch = step_num // steps_per_epoch
-            global_step = step_num
-        else:
-            logger.warning(f"The previous tick was {step_num} but command-line specifies to ignore, setting to 0")
-
-
+        global_step, start_epoch = reload_from_checkpoint(args.model_type, args.restart_from, args.restart_tt, model, steps_per_epoch)
         logger.info("Restarting from a previous checkpoint %s.\n\tStarting at global_step=%d, epoch=%d",
                     args.restart_from, global_step, start_epoch+1)
     optimizer = OptimizerManager(model, global_step, optim=args.optim, lr=args.lr, lr_function=lr_sched, weight_decay=args.weight_decay)
@@ -315,6 +285,46 @@ def train():
             metrics['average_valid_loss'] = valid_avg_loss
             logger.info(metrics)
             save_checkpoint(model, model_base, epoch, tick_type='epoch')
+
+
+def reload_from_checkpoint(model_type, restart_from, restart_tick_type, model, steps_per_epoch):
+    if os.path.isdir(restart_from):
+        restart_from, _ = find_latest_checkpoint(restart_from)
+        print(f'Latest checkpoint: {restart_from}')
+    vec = restart_from.split("-")
+    step_num = int(vec[-1].split(".")[0])
+    start_epoch = 0
+    if restart_tick_type:
+        tick_type = restart_tick_type
+    else:
+        tick_type = vec[-2]
+    if restart_from.endswith('.npz'):
+        # If its a seq2seq load either from a seq2seq or from a TLM encoder
+        if model_type == 'encoder-decoder':
+            try:
+                load_transformer_seq2seq_npz(model, restart_from)
+            except:
+                print('Model file not recognized as seq2seq model, attempting to load as LM for encoder, reset step')
+                load_seq2seq_enc_from_tlm_npz(model, restart_from)
+                step_num = 0
+                tick_type = 'ignore'
+        # If its a dual-encoder, assuming we have model.transformer and model.embeddings, we can load directly
+        # from a Transformer Language Model
+        else:
+            load_tlm_npz(model, restart_from)
+            step_num = 0
+            tick_type = 'ignore'
+    else:
+        model.load_state_dict(torch.load(restart_from))
+    if tick_type == 'epoch':
+        start_epoch = step_num
+        step_num = start_epoch * steps_per_epoch
+
+    elif tick_type == 'step':
+        start_epoch = step_num // steps_per_epoch
+    else:
+        logger.warning(f"The previous tick was {step_num} but command-line specifies to ignore, setting to 0")
+    return step_num, start_epoch
 
 
 if __name__ == "__main__":
