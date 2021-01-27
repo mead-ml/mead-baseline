@@ -3610,10 +3610,10 @@ def rm_old_checkpoints(base_path, current_epoch, last_n=10):
                 os.remove(checkpoint_name)
 
 
-def find_latest_checkpoint(checkpoint_dir: str, wildcard="checkpoint") -> str:
+def find_latest_checkpoint(checkpoint_dir: str, wildcard="checkpoint") -> Tuple[str, int]:
     step_num = 0
     for f in glob.glob(os.path.join(checkpoint_dir, f"{wildcard}*")):
-        last = f.split("-")[-1]
+        last = os.path.basename(f).split("-")[-1]
         for x in ('.pth', '.npz'):
             last = last.replace(x, '', -1)
         this_step_num = int(last)
