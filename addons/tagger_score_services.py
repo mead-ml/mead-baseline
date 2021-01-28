@@ -22,6 +22,7 @@ class TaggerSequenceScoreService(TaggerService):
         preproc = kwargs.get('preproc', None)
         if preproc is not None:
             logger.warning("Warning: Passing `preproc` to `TaggerService.predict` is deprecated.")
+        valid_labels_only = kwargs.get('valid_labels_only', True)
         export_mapping = kwargs.get('export_mapping', {})  # if empty dict argument was passed
         if not export_mapping:
             export_mapping = {'tokens': 'text'}
@@ -49,7 +50,8 @@ class TaggerSequenceScoreService(TaggerService):
         paths = unsort_batch(paths, perm_idx)
         scores = unsort_batch(scores, perm_idx)
 
-        return self.format_output(paths, tokens_batch=tokens_batch, label_field=label_field, vectorized_examples=examples), scores
+        return self.format_output(paths, tokens_batch=tokens_batch, label_field=label_field,
+                                  vectorized_examples=examples, valid_labels_only=valid_labels_only), scores
 
 
 class TaggerPosteriorDistributionScoreService(TaggerService):
@@ -68,6 +70,8 @@ class TaggerPosteriorDistributionScoreService(TaggerService):
         preproc = kwargs.get('preproc', None)
         if preproc is not None:
             logger.warning("Warning: Passing `preproc` to `TaggerService.predict` is deprecated.")
+        valid_labels_only = kwargs.get('valid_labels_only', True)
+
         export_mapping = kwargs.get('export_mapping', {})  # if empty dict argument was passed
         if not export_mapping:
             export_mapping = {'tokens': 'text'}
@@ -93,8 +97,8 @@ class TaggerPosteriorDistributionScoreService(TaggerService):
 
         paths = unsort_batch(paths, perm_idx)
         scores = unsort_batch(scores, perm_idx)
-
-        return self.format_output(paths, tokens_batch=tokens_batch, label_field=label_field, vectorized_examples=examples), scores
+        return self.format_output(paths, tokens_batch=tokens_batch, label_field=label_field,
+                                  vectorized_examples=examples, valid_labels_only=valid_labels_only), scores
 
 
 class TaggerTransducedDistributionScoreService(TaggerService):
@@ -113,6 +117,8 @@ class TaggerTransducedDistributionScoreService(TaggerService):
         preproc = kwargs.get('preproc', None)
         if preproc is not None:
             logger.warning("Warning: Passing `preproc` to `TaggerService.predict` is deprecated.")
+        valid_labels_only = kwargs.get('valid_labels_only', True)
+
         export_mapping = kwargs.get('export_mapping', {})  # if empty dict argument was passed
         if not export_mapping:
             export_mapping = {'tokens': 'text'}
@@ -141,5 +147,5 @@ class TaggerTransducedDistributionScoreService(TaggerService):
         scores = F.softmax(scores, dim=-1)
         mask = sequence_mask(inputs['lengths']).to(scores.device).unsqueeze(-1)
         scores = scores.masked_fill(mask == MASK_FALSE, 0.0)
-
-        return self.format_output(paths, tokens_batch=tokens_batch, label_field=label_field, vectorized_examples=examples), scores
+        return self.format_output(paths, tokens_batch=tokens_batch, label_field=label_field,
+                                  vectorized_examples=examples, valid_labels_only=valid_labels_only), scores

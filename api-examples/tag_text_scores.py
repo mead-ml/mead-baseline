@@ -4,6 +4,7 @@ import baseline as bl
 import argparse
 import os
 from eight_mile.utils import str2bool, read_conll
+from addons import tagger_score_services as tss
 
 
 parser = argparse.ArgumentParser(description='Tag text with a model')
@@ -16,6 +17,7 @@ parser.add_argument('--backend', help='backend', default='tf')
 parser.add_argument('--device', help='device')
 parser.add_argument('--remote', help='(optional) remote endpoint', type=str) # localhost:8500
 parser.add_argument('--name', help='(optional) signature name', type=str)
+parser.add_argument('--score_type', help='What type of score to use', choices=[])
 parser.add_argument('--preproc', help='(optional) where to perform preprocessing', choices={'client', 'server'}, default='client')
 parser.add_argument('--export_mapping', help='mapping between features and the fields in the grpc/ REST '
                                                          'request, eg: token:word ner:ner. This should match with the '
@@ -65,17 +67,20 @@ if os.path.exists(args.text) and os.path.isfile(args.text):
 else:
     texts = [args.text.split()]
 
-m = bl.TaggerService.load(args.model, backend=args.backend, remote=args.remote,
-                          name=args.name, preproc=args.preproc, device=args.device)
+m = tss.TaggerPosteriorDistributionScoreService.load(args.model, backend=args.backend, remote=args.remote,
+                                                     name=args.name, preproc=args.preproc, device=args.device)
 
 batched = [texts[i:i+args.batchsz] for i in range(0, len(texts), args.batchsz)]
 
 for texts in batched:
-    for sen in m.predict(texts, export_mapping=create_export_mapping(args.export_mapping),
-                         valid_labels_only=not args.labels_only):
-        for word_tag in sen:
+    batch_sen, batch_score = m.predict(texts, export_mapping=create_export_mapping(args.export_mapping), valid_labels_only=not args.labels_only)
+    for sen, score in zip(batch_sen, batch_score):
+
+        for word_tag, word_score in zip(sen, score):
             if args.labels_only:
                 print(f"{word_tag['label']}")
             else:
                 print(f"{word_tag['text']} {word_tag['label']}")
+            print({m.label_vocab[i]: w for i, w in enumerate(word_score.detach().cpu().numpy())})
+
         print()

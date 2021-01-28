@@ -465,6 +465,7 @@ class TaggerService(Service):
         preproc = kwargs.get('preproc', None)
         if preproc is not None:
             logger.warning("Warning: Passing `preproc` to `TaggerService.predict` is deprecated.")
+        valid_labels_only = kwargs.get('valid_labels_only', True)
         export_mapping = kwargs.get('export_mapping', {})  # if empty dict argument was passed
         if not export_mapping:
             export_mapping = {'tokens': 'text'}
@@ -483,9 +484,11 @@ class TaggerService(Service):
             examples = unfeaturized_examples
 
         outcomes = self.model.predict(examples)
-        return self.format_output(outcomes, tokens_batch=tokens_batch, label_field=label_field, vectorized_examples=examples)
+        return self.format_output(outcomes, tokens_batch=tokens_batch, label_field=label_field,
+                                  vectorized_examples=examples, valid_labels_only=valid_labels_only)
 
-    def format_output(self, predicted, tokens_batch=None, label_field='label', vectorized_examples=None, **kwargs):
+    def format_output(self, predicted, tokens_batch=None, label_field='label', vectorized_examples=None,
+                  valid_labels_only=True, **kwargs):
         """This code got very messy dealing with BPE/WP outputs."""
         assert tokens_batch is not None
         assert vectorized_examples is not None
@@ -497,12 +500,15 @@ class TaggerService(Service):
             output = []
             # Extract the vectorized example for this batch element and the key we are choosing
             vectorized_example = vectorized_examples[key][i]
-            # Convert back into strings, these will now be broken into subwords
-            tokenized_text = [self.rev_vocab[key][t] for t in vectorized_example]
-            new_outcome = [
-                outcome[j] if self.return_labels else self.label_vocab[outcome[j].item()]
-                for j in self.vectorizers[key].valid_label_indices(tokenized_text)
-            ]
+            if valid_labels_only:
+                # Convert back into strings, these will now be broken into subwords
+                tokenized_text = [self.rev_vocab[key][t] for t in vectorized_example]
+                new_outcome = [
+                    outcome[j] if self.return_labels else self.label_vocab[outcome[j].item()]
+                    for j in self.vectorizers[key].valid_label_indices(tokenized_text)
+                ]
+            else:
+                new_outcome = [self.label_vocab[outcome_i.item()] for outcome_i in outcome]
             # Loop through the (now aligned) og tokens and the labels
             for token, label in zip(tokens_batch[i], new_outcome):
                 new_token = deepcopy(token)
