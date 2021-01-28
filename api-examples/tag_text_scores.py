@@ -17,7 +17,6 @@ parser.add_argument('--backend', help='backend', default='tf')
 parser.add_argument('--device', help='device')
 parser.add_argument('--remote', help='(optional) remote endpoint', type=str) # localhost:8500
 parser.add_argument('--name', help='(optional) signature name', type=str)
-parser.add_argument('--score_type', help='What type of score to use', choices=[])
 parser.add_argument('--preproc', help='(optional) where to perform preprocessing', choices={'client', 'server'}, default='client')
 parser.add_argument('--export_mapping', help='mapping between features and the fields in the grpc/ REST '
                                                          'request, eg: token:word ner:ner. This should match with the '
@@ -25,6 +24,7 @@ parser.add_argument('--export_mapping', help='mapping between features and the f
                     default=[], nargs='+')
 parser.add_argument('--prefer_eager', help="If running in TensorFlow, should we prefer eager model", type=str2bool)
 parser.add_argument('--batchsz', default=64, help="How many examples to run through the model at once", type=int)
+parser.add_argument('--score_type', default='sentence', choices=['sentence', 'unaries', 'posterior'])
 parser.add_argument('--labels_only', type=str2bool, default=False)
 args = parser.parse_args()
 
@@ -67,20 +67,37 @@ if os.path.exists(args.text) and os.path.isfile(args.text):
 else:
     texts = [args.text.split()]
 
-m = tss.TaggerPosteriorDistributionScoreService.load(args.model, backend=args.backend, remote=args.remote,
-                                                     name=args.name, preproc=args.preproc, device=args.device)
+TaggerType = tss.TaggerSequenceScoreService
+if args.score_type == 'unaries':
+    TaggerType = tss.TaggerTransducedDistributionScoreService
+elif args.score_type == 'posterior':
+    TaggerType = tss.TaggerPosteriorDistributionScoreService
+
+m = TaggerType.load(args.model, backend=args.backend, remote=args.remote, name=args.name, preproc=args.preproc, device=args.device)
 
 batched = [texts[i:i+args.batchsz] for i in range(0, len(texts), args.batchsz)]
 
 for texts in batched:
-    batch_sen, batch_score = m.predict(texts, export_mapping=create_export_mapping(args.export_mapping), valid_labels_only=not args.labels_only)
-    for sen, score in zip(batch_sen, batch_score):
+    batch_sen, batch_score = m.predict(texts, export_mapping=create_export_mapping(args.export_mapping),
+                                       valid_labels_only=not args.labels_only)
+    if args.score_type == 'sentence':
+        for i, sen in enumerate(batch_sen):
+            print('Sentence score: ', batch_score[i].item())
+            for word_tag in sen:
+                if args.labels_only:
+                    print(f"{word_tag['label']}")
+                else:
+                    print(f"{word_tag['text']} {word_tag['label']}")
+            print()
+    else:
 
-        for word_tag, word_score in zip(sen, score):
-            if args.labels_only:
-                print(f"{word_tag['label']}")
-            else:
-                print(f"{word_tag['text']} {word_tag['label']}")
-            print({m.label_vocab[i]: w for i, w in enumerate(word_score.detach().cpu().numpy())})
+        for sen, score in zip(batch_sen, batch_score):
 
-        print()
+            for word_tag, word_score in zip(sen, score):
+                if args.labels_only:
+                    print(f"{word_tag['label']}")
+                else:
+                    print(f"{word_tag['text']} {word_tag['label']}")
+                print({m.label_vocab[i]: w for i, w in enumerate(word_score.detach().cpu().numpy())})
+
+            print()
