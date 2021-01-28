@@ -24,7 +24,7 @@ parser.add_argument('--export_mapping', help='mapping between features and the f
                     default=[], nargs='+')
 parser.add_argument('--prefer_eager', help="If running in TensorFlow, should we prefer eager model", type=str2bool)
 parser.add_argument('--batchsz', default=64, help="How many examples to run through the model at once", type=int)
-parser.add_argument('--score_type', default='sentence', choices=['sentence', 'unaries', 'posterior'])
+parser.add_argument('--score_type', default='sentence', choices=['sentence', 'dist', 'posterior'])
 parser.add_argument('--labels_only', type=str2bool, default=False)
 args = parser.parse_args()
 
@@ -68,7 +68,7 @@ else:
     texts = [args.text.split()]
 
 TaggerType = tss.TaggerSequenceScoreService
-if args.score_type == 'unaries':
+if args.score_type == 'dist':
     TaggerType = tss.TaggerTransducedDistributionScoreService
 elif args.score_type == 'posterior':
     TaggerType = tss.TaggerPosteriorDistributionScoreService
@@ -89,8 +89,20 @@ for texts in batched:
                 else:
                     print(f"{word_tag['text']} {word_tag['label']}")
             print()
+    elif args.score_type == 'dist':
+        for sen, score in zip(batch_sen, batch_score):
+            score = score[:len(sen)]
+            for word_tag, word_score in zip(sen, score):
+                if args.labels_only:
+                    print(f"{word_tag['label']}")
+                else:
+                    print(f"{word_tag['text']} {word_tag['label']}")
+                print({m.label_vocab[i]: w for i, w in enumerate(word_score.detach().cpu().numpy())})
+
+            print()
     else:
 
+        assert len(batch_sen) == len(batch_score)
         for sen, score in zip(batch_sen, batch_score):
 
             for word_tag, word_score in zip(sen, score):
