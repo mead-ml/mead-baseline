@@ -200,7 +200,7 @@ def train():
     model.to(args.device)
     loss_function = model.create_loss(loss_type=args.loss)
     loss_function.to(args.device)
-    run_step = run_step_dual if args.model_type == 'dual-encoder' else run_step_s2s
+    run_step = run_step_s2s if args.model_type == 'encoder-decoder' else run_step_dual
 
     logger.info("Loaded model and loss")
 
