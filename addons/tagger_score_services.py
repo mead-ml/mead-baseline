@@ -143,9 +143,10 @@ class TaggerTransducedDistributionScoreService(TaggerService):
 
         paths = unsort_batch(paths, perm_idx)
         scores = unsort_batch(transduced, perm_idx)
+        input_lengths = unsort_batch(inputs['lengths'], perm_idx)
 
         scores = F.softmax(scores, dim=-1)
-        mask = sequence_mask(inputs['lengths']).to(scores.device).unsqueeze(-1)
+        mask = sequence_mask(input_lengths).to(scores.device).unsqueeze(-1)
         scores = scores.masked_fill(mask == MASK_FALSE, 0.0)
         return self.format_output(paths, tokens_batch=tokens_batch, label_field=label_field,
                                   vectorized_examples=examples, valid_labels_only=valid_labels_only), scores
