@@ -29,7 +29,7 @@ parser.add_argument('--export_mapping', help='mapping between features and the f
                     default=[], nargs='+')
 parser.add_argument('--prefer_eager', help="If running in TensorFlow, should we prefer eager model", type=str2bool)
 parser.add_argument('--batchsz', default=64, help="How many examples to run through the model at once", type=int)
-parser.add_argument('--score_type', default='posterior', choices=['sentence', 'dist', 'posterior'])
+parser.add_argument('--score_type', default='sentence', choices=['sentence', 'dist', 'posterior'])
 parser.add_argument('--labels_only', type=str2bool, default=False)
 args = parser.parse_args()
 
