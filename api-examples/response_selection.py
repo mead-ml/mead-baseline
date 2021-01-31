@@ -89,7 +89,8 @@ parser.add_argument("--recall_top", type=int, default=1, help="whether the corre
 parser.add_argument("--num_batches", type=int, default=1_000_000)
 args = parser.parse_args()
 
-reader = MultiFileDatasetReader(args.nctx, args.subword_model_file, args.subword_vocab_file, args.file_type,
+reader = MultiFileDatasetReader(args.nctx, args.nctx, model_file=args.subword_model_file,
+                                vocab_file=args.subword_vocab_file, file_type=args.file_type,
                                 reader_type=args.reader_type, record_keys=args.record_keys)
 
 vocab = reader.build_vocab()
