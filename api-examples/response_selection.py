@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import baseline.embeddings
 import baseline.pytorch.embeddings
-from transformer_utils import MultiFileDatasetReader
+from transformer_utils import MultiFileDatasetReader, TransformerBoWPairedModel
 from eight_mile.progress import create_progress_bar
 from eight_mile.utils import str2bool
 from eight_mile.pytorch.layers import find_latest_checkpoint, PairedModel
@@ -33,12 +33,19 @@ def get_next_k(l, k):
                     next_batch_y = []
                     yield b_x, b_y
 
-def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, d_k, reduction_d_k,
+def create_model(model_type, embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, d_k, reduction_d_k,
                  stacking_layers, windowed_ra, logger):
 
-    model = PairedModel(embeddings, d_model, d_ff, 0, num_heads, num_layers, rpr_k=rpr_k, d_k=d_k,
-                        reduction_d_k=reduction_d_k, stacking_layers=stacking_layers,
-                        windowed_ra=windowed_ra)
+    if model_type == 'transformer-bow':
+        model = TransformerBoWPairedModel(embeddings, d_model, d_ff, 0, num_heads, num_layers, rpr_k=rpr_k, d_k=d_k,
+                                          reduction_d_k=reduction_d_k, stacking_layers=stacking_layers, ffn_pdrop=0,
+                                          windowed_ra=windowed_ra)
+
+
+    else:
+        model = PairedModel(embeddings, d_model, d_ff, 0, num_heads, num_layers, rpr_k=rpr_k, d_k=d_k,
+                            reduction_d_k=reduction_d_k, stacking_layers=stacking_layers,
+                            windowed_ra=windowed_ra)
 
     logger.info(model)
     return model
@@ -57,6 +64,7 @@ parser.add_argument("--num_train_workers", type=int, default=4, help="Number tra
 parser.add_argument("--nctx", type=int, default=256, help="Max input length")
 parser.add_argument("--file_type", default='json', help="Suffix for data")
 parser.add_argument("--record_keys", default=['x', 'y'], nargs='+')
+parser.add_argument("--model_type", default="dual-encoder", choices=["dual-encoder", "transformer-bow"])
 parser.add_argument("--batch_size", type=int, default=256, help="Batch Size")
 parser.add_argument("--subword_model_file", type=str, help="The BPE model file", required=True)
 parser.add_argument("--subword_vocab_file", type=str, help="The BPE subword vocab", required=True)
@@ -100,7 +108,8 @@ ind2tok = {ind: tok for tok, ind in vocabs.items()}
 # use other samples in a batch as negative samples. Don't shuffle to compare with conveRT benchmarks
 test_loader = DataLoader(test_set, batch_size=args.batch_size, num_workers=args.num_test_workers)
 logger.info("Loaded datasets")
-model = create_model(embeddings, d_model=args.d_model, d_ff=args.d_ff,
+model = create_model(args.model_type,
+                     embeddings, d_model=args.d_model, d_ff=args.d_ff,
                      num_heads=args.num_heads, num_layers=args.num_layers,
                      rpr_k=args.rpr_k, d_k=args.d_k, reduction_d_k=args.reduction_d_k,
                      stacking_layers=args.stacking_layers, windowed_ra=args.windowed_ra,
