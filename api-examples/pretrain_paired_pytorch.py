@@ -61,18 +61,22 @@ def create_model(embeddings, d_model, d_ff, dropout, num_heads, num_layers, mode
     return model
 
 
-def run_step_dual(x, y, model, loss_function, device):
+def run_step_dual(x, y, model, loss_function, device, distributed):
     inputs = x.to(device)
     labels = y.to(device)
     loss = loss_function(inputs, labels)
     return loss
 
 
-def run_step_s2s(x, y, model, loss_function, device):
+def run_step_s2s(x, y, model, loss_function, device, distributed):
     x_lengths = torch.sum(x != 0, 1)
     y_lengths = torch.sum(y != 0, 1)
-    inputs = model.make_input({'x': x, 'x_lengths': x_lengths, 'tgt': y, 'tgt_lengths': y_lengths})
-    pred = model(inputs)
+    if distributed:
+        inputs = model.module.make_input({'x': x, 'x_lengths': x_lengths, 'tgt': y, 'tgt_lengths': y_lengths})
+        pred = model.module(inputs)
+    else:
+        inputs = model.make_input({'x': x, 'x_lengths': x_lengths, 'tgt': y, 'tgt_lengths': y_lengths})
+        pred = model(inputs)
     loss = loss_function(pred, inputs['tgt'])
     return loss
 
@@ -243,7 +247,7 @@ def train():
             batch = next(train_itr)
             steps += 1
             x, y = batch
-            loss = run_step(x, y, model, loss_function, args.device)
+            loss = run_step(x, y, model, loss_function, args.device, args.distributed)
             loss.backward()
             avg_loss.update(loss.item())
 
@@ -274,7 +278,7 @@ def train():
                 with torch.no_grad():
                     batch = next(valid_itr)
                     x, y = batch
-                    loss = run_step(x, y, model, loss_function, args.device)
+                    loss = run_step(x, y, model, loss_function, args.device, args.distributed)
                 avg_valid_loss.update(loss.item())
 
             valid_avg_loss = avg_valid_loss.avg
