@@ -192,7 +192,7 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
             unmatch = load_tlm_transformers_bin(c, embeddings, replace_layers=BERT_HF_FT_LAYER_MAP)
             if unmatch['missing'] or unmatch['unexpected']:
                 raise Exception("Unable to load the HuggingFace checkpoint")
-        if mime_type(embeddings) == 'application/zip':
+        if mime_type(embeddings) == 'application/zip' and not embeddings.endswith("pth"):
             keys_to_restore = set(list(c.embeddings.keys()))
             filtered_keys = keys_to_restore.difference(c.skippable)
             if not keys_to_restore:
