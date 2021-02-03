@@ -89,15 +89,17 @@ def tlm_load_state_dict(module: nn.Module, checkpoint_file: str):
     :param checkpoint_file: The file name
     :return: None
     """
-    from_str = 'transformer'
-    to_str = 'generator'
+    str_map = {'transformer': 'generator'}
     if hasattr(module, 'transformer'):
-        from_str = 'generator'
-        to_str = 'transformer'
+        str_map = {'generator': 'transformer'}
+    if hasattr(module, 'reduction_layer'):
+        str_map.update({'reduction_layer_1': 'reduction_layer'})
     ckpt_dict = torch.load(checkpoint_file)
     renamed = {}
     for k, v in ckpt_dict.items():
-        renamed[k.replace(from_str, to_str)] = v
+        for from_str, to_str in str_map.items():
+            k = k.replace(from_str, to_str)
+        renamed[k] = v
     unmatch = module.load_state_dict(renamed, strict=False)
     if unmatch.missing_keys or len(unmatch.unexpected_keys) > 2:
         print("Warning: Embedding doesn't match with the checkpoint being loaded.")
