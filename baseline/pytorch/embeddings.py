@@ -234,16 +234,34 @@ class TransformerLMPooledEmbeddingsModel(TransformerLMEmbeddingsModel):
 
     def __init__(self, name, **kwargs):
         super().__init__(name=name, **kwargs)
-
-        pooling = kwargs.get('pooling', 'cls')
-        if pooling == 'max':
+        self.pooling = kwargs.get('pooling', 'cls')
+        reduction_d_k = kwargs.get('reduction_d_k', self.d_model)
+        dropout = kwargs.get('dropout', 0.1)  # use the same dropout as the transformer encoder for reduction layer
+        if self.pooling == 'max':
             self.pooling_op = _max_pool
-        elif pooling == 'mean':
+        elif self.pooling == 'mean':
             self.pooling_op = _mean_pool
-        elif pooling == 'sqrt_length':
+        elif self.pooling == 'sqrt_length':
             self.pooling_op = self._sqrt_length_pool
+        elif self.pooling == '2HA':
+            self.reduction_layer = TwoHeadConcat(self.d_model, dropout, scale=False, d_k=reduction_d_k)
+            self.pooling_op = self._att_reduction
+        elif self.pooling == 'SHA':
+            self.reduction_layer = SingleHeadReduction(self.d_model, dropout, scale=False, d_k=reduction_d_k)
+            self.pooling_op = self._att_reduction
         else:
             self.pooling_op = self._cls_pool
+
+    def _att_reduction(self, inputs, embeddings):
+        mask = (inputs != Offsets.PAD)
+        att_mask = mask.unsqueeze(1).unsqueeze(1)
+        reduced = self.reduction_layer((embeddings, embeddings, embeddings, att_mask))
+        return reduced
+
+    def get_dsz(self):
+        if self.pooling == '2HA':
+            return 2*self.d_model
+        return self.d_model
 
     def _sqrt_length_pool(self, inputs, embeddings):
         mask = (inputs != 0)
