@@ -845,7 +845,9 @@ class BPEDict1DVectorizer(BPEVectorizer1D):
         self.delim = kwargs.get('token_delim', '~~')
 
     def iterable(self, tokens):
-        return super().iterable([t[self.field] for t in tokens])
+        tok = [t[self.field] if isinstance(t, dict) else t for t in tokens]
+
+        return super().iterable(tok)
 
 
 # This code is borrowed from the official BERT rep and slightly modified
