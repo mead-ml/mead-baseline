@@ -34,7 +34,7 @@ This file uses Baseline to train a Transformer model using fastBPE with query-re
   
 """
 def create_model(embeddings, d_model, d_ff, dropout, num_heads, num_layers, model_type, rpr_k, d_k, reduction_d_k,
-                 stacking_layers, ff_pdrop, windowed_ra, logger):
+                 stacking_layers, ff_pdrop, windowed_ra, reduction_type_dual, logger):
     if model_type == "encoder-decoder":
         logger.info("Creating tied encoder decoder model")
         hps = {"dsz": d_model,
@@ -51,11 +51,12 @@ def create_model(embeddings, d_model, d_ff, dropout, num_heads, num_layers, mode
         model = TiedEmbeddingsSeq2SeqModel({'x': embeddings}, None, **hps)
     elif model_type == 'transformer-bow':
         model = TransformerBoWPairedModel(embeddings, d_model, d_ff, dropout, num_heads, num_layers, rpr_k=rpr_k, d_k=d_k,
-                                          reduction_d_k=reduction_d_k, stacking_layers=stacking_layers, ffn_pdrop=ff_pdrop, windowed_ra=windowed_ra)
+                                          reduction_d_k=reduction_d_k, stacking_layers=stacking_layers, ffn_pdrop=ff_pdrop, windowed_ra=windowed_ra,
+                                          reduction_type_1=reduction_type_dual)
     else:
         model = PairedModel(embeddings, d_model, d_ff, dropout, num_heads, num_layers, rpr_k=rpr_k, d_k=d_k,
                             reduction_d_k=reduction_d_k, stacking_layers=stacking_layers, ffn_pdrop=ff_pdrop,
-                            windowed_ra=windowed_ra)
+                            windowed_ra=windowed_ra, reduction_type=reduction_type_dual)
 
     logger.info(model)
     return model
@@ -117,6 +118,7 @@ def train():
     parser.add_argument("--saves_per_epoch", type=int, default=10, help="The number of checkpoints to save per epoch")
     parser.add_argument("--reduction_d_k", type=int, default=64, help="Dimensions of Key and Query in the single headed"
                                                                       "reduction layers")
+    parser.add_argument("--reduction_type_dual", type=str, default="2HA", help="If using a dual encoder, specifies the reduction type")
     parser.add_argument("--stacking_layers", type=int, nargs='+', default=[],
                         help="Hidden sizes of the dense stack (ff2 from the convert paper)")
     parser.add_argument("--ff_pdrop", type=float, default=0.1, help="Dropout in the dense stack")
@@ -195,6 +197,7 @@ def train():
                          num_heads=args.num_heads, num_layers=args.num_layers,
                          model_type=args.model_type, rpr_k=rpr_k, d_k=args.d_k, reduction_d_k=args.reduction_d_k,
                          stacking_layers=args.stacking_layers, ff_pdrop=args.ff_pdrop, windowed_ra=args.windowed_ra,
+                         reduction_type_dual=args.reduction_type_dual,
                          logger=logger)
 
     model.to(args.device)
