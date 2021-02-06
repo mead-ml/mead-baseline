@@ -333,7 +333,8 @@ class MultiTFRecordLoader(MultiFileLoader):
         files = list(glob.glob(os.path.join(directory, '*.tfrecord')))
         for f in files:
             idx_file = '.'.join(f.split('.')[:-1]) + '.index'
-            self.tfrecord.tools.tfrecord2idx.create_index(f, idx_file)
+            if not os.path.exists(idx_file):
+                self.tfrecord.tools.tfrecord2idx.create_index(f, idx_file)
 
     def __iter__(self):
         files, read_file_order, node_worker_id = self._init_read_order()
