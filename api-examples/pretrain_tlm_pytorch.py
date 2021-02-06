@@ -112,8 +112,9 @@ def train():
         reader_type = 'preprocessed'
     else:
         reader_type = 'lang'
-    reader = MultiFileDatasetReader(args.nctx, args.subword_model_file, args.subword_vocab_file, f'*.{args.file_type}',
-                                    reader_type=reader_type)
+    reader = MultiFileDatasetReader(src_nctx=args.nctx, model_file=args.subword_model_file,
+                                    vocab_file=args.subword_vocab_file, file_type=args.file_type,
+                                    reader_type=reader_type, record_keys=['x', 'y'] if args.mlm else ['x'])
 
     # This looks a bit funny but the streaming reader ignores our vocab and gives us the one from the subword_model
     # However, we do need to get counts from our dataset for validation so we can calculate the perplexity
