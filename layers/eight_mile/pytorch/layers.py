@@ -4085,17 +4085,19 @@ class DualEncoderModel(nn.Module):
 
 
     """
-    def __init__(self, in_sz: int, stacking_layers: Union[int, List[int]] = None, d_out: int = 512, ffn_pdrop=0.1):
+    def __init__(self, in_sz: int, stacking_layers: Union[int, List[int]] = None, d_out: int = 512, ffn_pdrop=0.1, in_sz_2=None):
         super().__init__()
 
+        if not in_sz_2:
+            in_sz_2 = in_sz
         if stacking_layers:
             stacking_layers = listify(stacking_layers)
         if stacking_layers:
             self.ff1 = ConveRTFFN(in_sz, stacking_layers, d_out, ffn_pdrop)
-            self.ff2 = ConveRTFFN(in_sz, stacking_layers, d_out, ffn_pdrop)
-        elif in_sz != d_out:
+            self.ff2 = ConveRTFFN(in_sz_2, stacking_layers, d_out, ffn_pdrop)
+        elif in_sz != d_out or in_sz != in_sz_2:
             self.ff1 = nn.Linear(in_sz, d_out)
-            self.ff2 = nn.Linear(in_sz, d_out)
+            self.ff2 = nn.Linear(in_sz_2, d_out)
         else:
             self.ff1 = nn.Identity()
             self.ff2 = nn.Identity()
@@ -4130,13 +4132,13 @@ class DualEncoderModel(nn.Module):
         return TripletLoss(self)
 
 
-class AbstractDualEncoderModel(nn.Module):
+class BasicDualEncoderModel(DualEncoderModel):
     """A simple encoder where the encoders are injected and supply the `encode_query_base` and `encode_response_base`
 
     """
 
     def __init__(self, encoder_1: nn.Module, encoder_2: nn.Module, stacking_layers: Union[int, List[int]] = None, d_out: int = 512, ffn_pdrop=0.1):
-        super().__init__(encoder_1.output_dim, stacking_layers, d_out, ffn_pdrop)
+        super().__init__(encoder_1.output_dim, stacking_layers, d_out, ffn_pdrop, in_sz_2=encoder_2.output_dim)
         self.encoder_1 = encoder_1
         self.encoder_2 = encoder_2
 
