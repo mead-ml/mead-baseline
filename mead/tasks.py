@@ -456,7 +456,7 @@ class Task:
                 embed_file = embed_files if is_stacked else embed_files[0]
                 embedding_bundle = baseline.embeddings.load_embeddings(name,
                                                                        embed_file=embed_file,
-                                                                       known_vocab=vocabs[name],
+                                                                       known_vocab=vocabs.get(name),
                                                                        embed_type=embed_type,
                                                                        data_download_cache=self.data_download_cache,
                                                                        **embeddings_section)

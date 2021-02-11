@@ -1380,6 +1380,50 @@ class WordpieceDict1DVectorizer(WordpieceVectorizer1D):
             yield t
 
 
+
+@register_vectorizer(name="pass-through")
+class PassThroughVectorizer(AbstractVectorizer):
+    def __init__(self, feature_size = None, **kwargs):
+        self.feature_size = feature_size
+        self.max_seen = 0
+        self.mxlen = -1
+
+    def count(self, tokens):
+        return {}
+    def reset(self):
+        """Reset allows the vectorizer to reset any critical information from scratch
+        In this implementation, the only critical items are the max length of the temporal stream allowable and the
+        maximum attested temporal stream length
+        :return: None
+        """
+        self.mxlen = -1
+        self.max_seen = -1
+
+    def run(self, tokens, _):
+        self.feature_size = len(tokens)
+        return tokens, self.feature_size
+
+
+@register_vectorizer(name="pass-through-dict")
+class PassThroughDict1DVectorizer(PassThroughVectorizer):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.fields = listify(kwargs.get('fields', 'text'))
+        self.delim = kwargs.get('token_delim', '@@')
+
+    def count(self, tokens):
+        self.max_seen = max(self.max_seen, len(tokens))
+
+    def run(self, tokens, _):
+        if self.mxlen < 0:
+            self.mxlen = self.max_seen
+        features = np.stack([[t[self.fields[i]] for i in range(len(self.fields))] for t in tokens])
+        self.feature_size = features.shape[-1]
+        vec = np.zeros((self.mxlen, self.feature_size), dtype=np.float32)
+        vec[:len(features)] = features
+        return vec, len(features)
+
+
 @export
 def create_vectorizer(**kwargs):
     vec_type = kwargs.get('vectorizer_type', kwargs.get('type', 'token1d'))
