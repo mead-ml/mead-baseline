@@ -144,10 +144,12 @@ def fit(model, ts, vs, es, **kwargs):
 
     num_loader_workers = int(kwargs.get('num_loader_workers', 0))
     pin_memory = bool(kwargs.get('pin_memory', True))
-    ts = DataLoader(ts, num_workers=num_loader_workers, batch_size=None, pin_memory=pin_memory)
-    vs = DataLoader(vs, batch_size=None, pin_memory=pin_memory)
-    es = DataLoader(es, batch_size=None, pin_memory=pin_memory) if es is not None else None
-
+    if not isinstance(ts, DataLoader):
+        ts = DataLoader(ts, num_workers=num_loader_workers, batch_size=None, pin_memory=pin_memory)
+    if not isinstance(vs, DataLoader):
+        vs = DataLoader(vs, batch_size=None, pin_memory=pin_memory)
+    if es and not isinstance(es, DataLoader):
+        es = DataLoader(es, batch_size=None, pin_memory=pin_memory)
     best_metric = 10000
     if do_early_stopping:
         early_stopping_metric = kwargs.get('early_stopping_metric', 'avg_loss')

@@ -70,13 +70,14 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
 
         # Allow us to track a length, which is needed for BLSTMs
         if self.lengths_key is not None:
-            lengths = batch_dict[self.lengths_key]
-            if numpy_to_tensor:
-                lengths = torch.from_numpy(lengths)
-            lengths, perm_idx = lengths.sort(0, descending=True)
-            if self.gpu:
-                lengths = lengths.cuda()
-            example_dict['lengths'] = lengths
+            lengths = batch_dict.get(self.lengths_key)
+            if lengths:
+                if numpy_to_tensor:
+                    lengths = torch.from_numpy(lengths)
+                lengths, perm_idx = lengths.sort(0, descending=True)
+                if self.gpu:
+                    lengths = lengths.cuda()
+                example_dict['lengths'] = lengths
 
         for key in self.embeddings.keys():
             tensor = batch_dict[key]
@@ -85,7 +86,14 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
             if perm_idx is not None:
                 tensor = tensor[perm_idx]
             if self.gpu:
-                tensor = tensor.cuda()
+
+                if isinstance(tensor, torch.Tensor):
+                    tensor = tensor.cuda()
+                elif is_sequence(tensor):
+                    t = list(tensor)
+                    for i in range(len(t)):
+                        t[i] = t[i].cuda()
+                        tensor = tuple(t)
             example_dict[key] = tensor
 
         y = batch_dict.get('y')
