@@ -71,7 +71,7 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
         # Allow us to track a length, which is needed for BLSTMs
         if self.lengths_key is not None:
             lengths = batch_dict.get(self.lengths_key)
-            if lengths:
+            if lengths is not None:
                 if numpy_to_tensor:
                     lengths = torch.from_numpy(lengths)
                 lengths, perm_idx = lengths.sort(0, descending=True)
