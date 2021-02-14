@@ -232,6 +232,7 @@ class LabelSmoothingLoss(nn.Module):
     def extra_repr(self):
         return f"label_smoothing={self.label_smoothing}"
 
+
 class MeanPool1D(nn.Module):
     """Do a mean pool while accounting for the length of a sequence
     """
@@ -3692,7 +3693,7 @@ class SingleHeadReduction(AttentionReduction):
     Implementation of the "self_attention_head" layer from the conveRT paper (https://arxiv.org/pdf/1911.03688.pdf)
     """
     def __init__(
-            self, d_model: int, dropout: float = 0.0, scale: bool = True, d_k: Optional[int] = None
+            self, d_model: int, dropout: float = 0.0, scale: bool = True, d_k: Optional[int] = None, pooling: str = 'sqrt_length',
     ):
         """
         :param d_model: The model hidden size
@@ -3701,6 +3702,7 @@ class SingleHeadReduction(AttentionReduction):
         :param d_k: The low-order project per head.  This is normally `d_model // num_heads` unless set explicitly
         """
         super().__init__()
+
         self.output_dim = d_model
         if d_k is None:
             self.d_k = d_model
@@ -3713,6 +3715,29 @@ class SingleHeadReduction(AttentionReduction):
         else:
             self.attn_fn = SeqDotProductAttention(dropout)
         self.attn = None
+        pooling = pooling.lower()
+        self.fill = 0
+        if pooling == 'max':
+            self.pool = self._max_pool
+            self.fill = -1e9
+        elif pooling == 'mean':
+            self.pool = self._mean_pool
+        else:
+            self.pool = self._sqrt_length_pool
+
+    def _sqrt_length_pool(self, x, seq_lengths):
+        x = x.sum(dim=1)  # [B, D]
+        x = x * seq_lengths.float().sqrt().unsqueeze(-1)
+        return x
+
+    def _mean_pool(self, x, seq_lengths):
+        return torch.sum(x, 1, keepdim=False) / torch.unsqueeze(seq_lengths, -1).to(x.dtype).to(
+            x.device
+        )
+
+    def _max_pool(self, x, _):
+        x, _ = torch.max(x, 1, keepdim=False)
+        return x
 
     def forward(self, qkvm: Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]) -> torch.Tensor:
         """According to conveRT model's graph, they project token encodings to lower-dimensional query and key in single
@@ -3740,10 +3765,8 @@ class SingleHeadReduction(AttentionReduction):
         self.attn = self.attn_fn.attn
 
         x = x.squeeze(1)  # [B, T, D]
-        x = x * seq_mask.unsqueeze(-1)
-        x = x.sum(dim=1)  # [B, D]
-        x = x * seq_lengths.float().sqrt().unsqueeze(-1)
-        return x
+        x = x.masked_fill(seq_mask.unsqueeze(-1) == MASK_FALSE, self.fill)
+        return self.pool(x, seq_lengths)
 
 
 class TransformerDiscriminator(nn.Module):
@@ -4026,7 +4049,7 @@ class TwoHeadConcat(AttentionReduction):
     """Use two parallel SingleHeadReduction, and concatenate the outputs. It is used in the conveRT
     paper (https://arxiv.org/pdf/1911.03688.pdf)"""
 
-    def __init__(self, d_model, dropout, scale=False, d_k=None):
+    def __init__(self, d_model, dropout, scale=False, d_k=None, pooling='sqrt_length'):
         """Two parallel 1-head self-attention, then concatenate the output
         :param d_model: dim of the self-attention
         :param dropout: dropout of the self-attention
@@ -4036,8 +4059,8 @@ class TwoHeadConcat(AttentionReduction):
         """
         super().__init__()
         self.output_dim = 2*d_model
-        self.reduction1 = SingleHeadReduction(d_model, dropout, scale=scale, d_k=d_k)
-        self.reduction2 = SingleHeadReduction(d_model, dropout, scale=scale, d_k=d_k)
+        self.reduction1 = SingleHeadReduction(d_model, dropout, scale=scale, d_k=d_k, pooling=pooling)
+        self.reduction2 = SingleHeadReduction(d_model, dropout, scale=scale, d_k=d_k, pooling=pooling)
 
     def forward(self, inputs: torch.Tensor):
         x = inputs
