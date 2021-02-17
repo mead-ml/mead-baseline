@@ -1081,7 +1081,6 @@ class IndexPairLabelReader(SeqLabelReader):
                                              batchsz=batchsz, shuffle=shuffle, trim=self.trim, truncate=self.truncate)
 
 
-
 @export
 @register_reader(task='classify', name='tsv-paired-shared-vec')
 class TSVIndexPairLabelReader(IndexPairLabelReader):
@@ -1115,6 +1114,7 @@ class JSONLIndexPairLabelReader(IndexPairLabelReader):
         text1 = ' '.join(list(filter(lambda s: len(s) != 0, [clean_fn(w) for w in text1.split()])))
         text2 = ' '.join(list(filter(lambda s: len(s) != 0, [clean_fn(w) for w in text1.split()])))
         return index, text1, text2, label
+
 
 @export
 @register_reader(task='lm', name='default')
