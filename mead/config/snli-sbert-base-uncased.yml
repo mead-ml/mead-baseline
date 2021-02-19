@@ -22,8 +22,7 @@ loader:
   reader_type: tsv-paired-shared-vec
   use_token_type: true
   col_keys: [pairID, sentence1, sentence2, gold_label]
-  start_tokens_1: ["[CLS]"]
-  example_type: dual 
+  example_type: dual
 model:
   model_type: fine-tune-dual
 task: classify
