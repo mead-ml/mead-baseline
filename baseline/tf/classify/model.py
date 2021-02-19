@@ -677,29 +677,34 @@ class FineTunePairedClassifierModel(FineTuneModelClassifier):
         stacked = self.stack_model(base_layers)
         return self.output_layer(stacked)
 
-    #def make_input(self, batch_dict, train=False):
-    #    """Transform a `batch_dict` into a TensorFlow `feed_dict`
-    #
-    #    :param batch_dict: (``dict``) A dictionary containing all inputs to the embeddings for this model
-    #    :param train: (``bool``) Are we training.  Defaults to False
-    #    :return:
-    #    """
-    #    y = batch_dict.get('y', None)
-    #    if not tf.executing_eagerly():
-    #        batch_for_model = new_placeholder_dict(train)
-    #
-    #        for key in self.embeddings.keys():
-    #            self._convert_pair(key, batch_dict, batch_for_model)
-    #
-    #        if y is not None:
-    #            batch_for_model[self.y] = fill_y(len(self.labels), y)
-    #
-    #    else:
-    #        SET_TRAIN_FLAG(train)
-    #        batch_for_model = {}
-    #        for key in self.embeddings.keys():
-    #            self._convert_pair(key, batch_dict, batch_for_model)
-    #    return batch_for_model
+
+@register_model(task='classify', name='fine-tune-dual')
+class FineTuneDualModelClassifier(FineTuneModelClassifier):
+    """Fine-tune based on pre-pooled representations"""
+
+    def init_embed(self, embeddings: Dict[str, TensorDef], **kwargs) -> BaseLayer:
+        """This method creates the "embedding" layer of the inputs, with an optional reduction
+
+        :param embeddings: A dictionary of embeddings
+
+        :Keyword Arguments: See below
+        * *embeddings_reduction* (defaults to `concat`) An operator to perform on a stack of embeddings
+        * *embeddings_dropout = float(kwargs.get('embeddings_dropout', 0.0))
+
+        :return: The output of the embedding stack followed by its reduction.  This will typically be an output
+          with an additional dimension which is the hidden representation of the input
+        """
+        reduction = kwargs.get('embeddings_reduction', 'concat-subtract')
+        embeddings_dropout = float(kwargs.get('embeddings_dropout', 0.0))
+        if len(embeddings) != 1:
+            raise Exception("Currently we only support a single embedding")
+        name = kwargs.get('embeddings_name')
+
+        key_name = list(embeddings.keys())[0]
+        key1 = f"{key_name}[0]"
+        key2 = f"{key_name}[1]"
+        embeddings_dual = {key1: embeddings[key_name], key2: embeddings[key_name]}
+        return EmbeddingsStack(embeddings_dual, embeddings_dropout, reduction=reduction, name=name)
 
 
 @register_model(task='classify', name='composite')
