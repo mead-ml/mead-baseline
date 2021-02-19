@@ -2,6 +2,7 @@ import os
 import re
 from typing import List, Dict
 import codecs
+import json
 from itertools import chain
 import logging
 from collections import Counter
@@ -950,8 +951,8 @@ class IndexPairLabelReader(SeqLabelReader):
                     if label not in self.label2index:
                         self.label2index[label] = label_idx
                         label_idx += 1
-                    if il > 0 and il % 1000 == 0:
-                        print(il)
+                    #if il > 0 and il % 1000 == 0:
+                    #    print(il)
         vocab = _filter_vocab(vocab, kwargs.get('min_f', {}))
         return vocab, self.get_labels()
 
@@ -1108,11 +1109,11 @@ class JSONLIndexPairLabelReader(IndexPairLabelReader):
         self.has_header = False
 
     def index_pair_label(self, line, clean_fn, header):
-        cols = line.split('\t')
-        index_pair_label_list = [cols[c] for c in self.col_indices]
+        cols = json.loads(line)
+        index_pair_label_list = [cols[c] for c in self.col_keys]
         index, text1, text2, label = index_pair_label_list
         text1 = ' '.join(list(filter(lambda s: len(s) != 0, [clean_fn(w) for w in text1.split()])))
-        text2 = ' '.join(list(filter(lambda s: len(s) != 0, [clean_fn(w) for w in text1.split()])))
+        text2 = ' '.join(list(filter(lambda s: len(s) != 0, [clean_fn(w) for w in text2.split()])))
         return index, text1, text2, label
 
 
