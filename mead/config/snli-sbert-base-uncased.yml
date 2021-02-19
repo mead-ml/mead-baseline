@@ -1,0 +1,36 @@
+backend: pytorch
+basedir: ./snli-bert-base-uncased
+batchsz: 8
+dataset: snli1
+features:
+- embeddings:
+    word_embed_type: learned-positional-w-bias
+    label: bert-base-uncased-npz
+    type: tlm-words-embed-pooled
+    pooling: mean
+    reduction: sum-layer-norm
+    layer_norms_after: true
+    finetune: true
+    dropout: 0.1
+    mlm: true
+
+  name: x 
+  vectorizer:
+    mxlen: 128
+    label: bert-base-uncased
+loader:
+  reader_type: tsv-paired-shared-vec
+  use_token_type: true
+  col_keys: [pairID, sentence1, sentence2, gold_label]
+  example_type: dual
+model:
+  model_type: fine-tune-dual
+task: classify
+train:
+  early_stopping_metric: acc
+  epochs: 3
+  patience: 6
+  eta: 1.0e-5
+  optim: adamw
+  weight_decay: 1.0e-8
+unif: 0.1

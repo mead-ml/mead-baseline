@@ -1614,6 +1614,7 @@ class BiGRUEncoderHidden(BiGRUEncoderBase):
         output, _ = torch.nn.utils.rnn.pad_packed_sequence(output, batch_first=self.batch_first)
         return self.extract_top_state(_cat_dir(hidden))
 
+
 class Reduction(nn.Module):
 
     def __init__(self):
@@ -1631,6 +1632,22 @@ class ConcatReduction(Reduction):
 
     def forward(self, inputs: List[torch.Tensor]) -> torch.Tensor:
         return torch.cat(inputs, self.axis)
+
+
+class ConcatSubtractReduction(Reduction):
+    """This reduction assumes paired input and subtracts the two to get a distance
+
+    It is useful for training sentence encoders and is used, for example, in SentenceBERT
+    For this to work we assume that the inputs are paired, and subtract them
+    """
+    def __init__(self, output_dims: List[int], axis=-1):
+        super().__init__()
+        self.axis = axis
+        self.output_dim = 3 * output_dims[0]
+
+    def forward(self, inputs: List[torch.Tensor]) -> torch.Tensor:
+        sub = torch.abs(inputs[0] - inputs[1])
+        return torch.cat([inputs[0], inputs[1], sub], self.axis)
 
 
 class SumReduction(Reduction):
@@ -1687,6 +1704,8 @@ class EmbeddingsStack(nn.Module):
                 self.reduction = SumReduction(output_dims)
             elif reduction == 'sum-layer-norm':
                 self.reduction = SumLayerNormReduction(output_dims, layer_norm_eps=kwargs.get('layer_norm_eps', 1.0e-12))
+            elif reduction == 'concat-subtract':
+                self.reduction = ConcatSubtractReduction(output_dims)
             else:
                 self.reduction = ConcatReduction(output_dims)
         else:

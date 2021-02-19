@@ -11,7 +11,16 @@ from eight_mile.pytorch.embeddings import LookupTableEmbeddings, LearnedPosition
 from eight_mile.downloads import web_downloader
 # From https://github.com/huggingface/transformers/blob/master/src/transformers/modeling_bert.py
 
+"""
 
+You can use the predefined checkpoint paths, or you can download the model and convert the checkpoint that way.
+
+For example to convert SentenceBERT, which is just a vanilla BERT style checkpoint:
+
+git clone https://huggingface.co/sentence-transformers/bert-base-nli-mean-tokens
+and then pass that path in
+
+"""
 BERT_PRETRAINED_CONFIG_ARCHIVE_MAP = {
     "bert-base-uncased": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-uncased-config.json",
     "bert-large-uncased": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-large-uncased-config.json",
@@ -95,17 +104,17 @@ def create_transformer_lm(config_url: str) -> Tuple[TransformerMaskedLanguageMod
     return model, num_layers
 
 
-def download_and_convert_checkpoint(bert_checkpoint: str, num_layers: int, target_dir: str) -> Dict:
+def convert_checkpoint(bert_checkpoint: str, num_layers: int, target_dir: str, checkpoint_disk_loc: str) -> Dict:
 
-    checkpoint_basename = os.path.basename(bert_checkpoint)
-    checkpoint_disk_loc = os.path.join(target_dir, checkpoint_basename)
-    if not os.path.exists(checkpoint_disk_loc):
+    if os.path.exists(checkpoint_disk_loc):
+        print(f'Checkpoint found at {checkpoint_disk_loc}')
+    else:
+        print(f'Downloading {bert_checkpoint} to {checkpoint_disk_loc}')
         web_downloader(bert_checkpoint, checkpoint_disk_loc)
     state_dict = torch.load(checkpoint_disk_loc)
 
     mapped_keys = convert_transformers_keys(num_layers, state_dict)
     return mapped_keys
-
 
 def write_npz(output_file: str, model: TransformerMaskedLanguageModel):
     save_tlm_npz(model, output_file)
@@ -114,12 +123,22 @@ def write_npz(output_file: str, model: TransformerMaskedLanguageModel):
 parser = argparse.ArgumentParser(description='Grab a HuggingFace BERT checkpoint down and convert it to a TLM NPZ file')
 parser.add_argument('--model', help='This is the key of a HuggingFace input model', default='bert-base-uncased')
 parser.add_argument('--target_dir', help='This is the target directory where we will put the checkpoints', default='.')
+parser.add_argument('--config_file_name', help='The name of the config file.  Only needed for local models', default='config.json')
+parser.add_argument('--checkpoint', help='The name of the checkpoint file. Only needed for local models', default='pytorch_model.bin')
 args = parser.parse_args()
 
-config_url = BERT_PRETRAINED_CONFIG_ARCHIVE_MAP[args.model]
-bert_checkpoint = BERT_PRETRAINED_MODEL_ARCHIVE_MAP[args.model]
+if os.path.isdir(args.model):
+    config_url = os.path.join(args.model, args.config_file_name)
+    bert_checkpoint = os.path.join(args.model, args.checkpoint)
+    checkpoint_disk_loc = bert_checkpoint
+else:
+    config_url = BERT_PRETRAINED_CONFIG_ARCHIVE_MAP[args.model]
+    bert_checkpoint = BERT_PRETRAINED_MODEL_ARCHIVE_MAP[args.model]
+    checkpoint_basename = os.path.basename(bert_checkpoint)
+    checkpoint_disk_loc = os.path.join(args.target_dir, checkpoint_basename)
+
 model, num_layers = create_transformer_lm(config_url)
-mapped_keys = download_and_convert_checkpoint(bert_checkpoint, num_layers, args.target_dir)
+mapped_keys = convert_checkpoint(bert_checkpoint, num_layers, args.target_dir, checkpoint_disk_loc)
 unknown_keys = model.load_state_dict(mapped_keys, strict=False)
 for k in unknown_keys.missing_keys:
     if k not in ['output_layer.weight', 'output_layer.bias']:

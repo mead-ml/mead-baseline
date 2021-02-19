@@ -1802,6 +1802,23 @@ class ConcatReduction(Reduction):
         return tf.concat(values=inputs, axis=-1)
 
 
+class ConcatSubtractReduction(Reduction):
+    """This reduction assumes paired input and subtracts the two to get a distance
+
+       It is useful for training sentence encoders and is used, for example, in SentenceBERT
+       For this to work we assume that the inputs are paired, and subtract them
+       """
+
+    def __init__(self, output_dims: List[int], axis=-1):
+        super().__init__()
+        self.axis = axis
+        self.output_dim = 3 * output_dims[0]
+
+    def call(self, inputs: List[tf.Tensor]) -> tf.Tensor:
+        sub = tf.abs(inputs[0] - inputs[1])
+        return tf.concat(values=[inputs[0], inputs[1], sub], axis=-1)
+
+
 class SumReduction(Reduction):
     def __init__(self, output_dims: List[int]):
         super().__init__()
