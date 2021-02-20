@@ -263,7 +263,7 @@ def train():
 
 
             x, y = batch
-            loss = run_step(x, y, model, loss_function, args.device, args.distributed, step)
+            loss = run_step(x, y, model, loss_function, args.device, args.distributed)
             loss.backward()
             avg_loss.update(loss.item())
 
