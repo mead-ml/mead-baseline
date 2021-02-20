@@ -34,7 +34,7 @@ This file uses Baseline to train a Transformer model using fastBPE with query-re
   
 """
 def create_model(embeddings, d_model, d_ff, dropout, num_heads, num_layers, model_type, rpr_k, d_k, reduction_d_k,
-                 stacking_layers, ff_pdrop, windowed_ra, reduction_type_dual, logger):
+                 stacking_layers, ff_pdrop, windowed_ra, reduction_type, logger):
     if model_type == "encoder-decoder":
         logger.info("Creating tied encoder decoder model")
         hps = {"dsz": d_model,
@@ -52,11 +52,11 @@ def create_model(embeddings, d_model, d_ff, dropout, num_heads, num_layers, mode
     elif model_type == 'transformer-bow':
         model = TransformerBoWPairedModel(embeddings, d_model, d_ff, dropout, num_heads, num_layers, rpr_k=rpr_k, d_k=d_k,
                                           reduction_d_k=reduction_d_k, stacking_layers=stacking_layers, ffn_pdrop=ff_pdrop, windowed_ra=windowed_ra,
-                                          reduction_type_1=reduction_type_dual)
+                                          reduction_type_1=reduction_type, freeze_encoders=True)
     else:
         model = PairedModel(embeddings, d_model, d_ff, dropout, num_heads, num_layers, rpr_k=rpr_k, d_k=d_k,
                             reduction_d_k=reduction_d_k, stacking_layers=stacking_layers, ffn_pdrop=ff_pdrop,
-                            windowed_ra=windowed_ra, reduction_type=reduction_type_dual)
+                            windowed_ra=windowed_ra, reduction_type=reduction_type, freeze_encoders=True)
 
     logger.info(model)
     return model
@@ -122,7 +122,8 @@ def train():
     parser.add_argument("--saves_per_epoch", type=int, default=10, help="The number of checkpoints to save per epoch")
     parser.add_argument("--reduction_d_k", type=int, default=64, help="Dimensions of Key and Query in the single headed"
                                                                       "reduction layers")
-    parser.add_argument("--reduction_type_dual", type=str, default="2HA", help="If using a dual encoder, specifies the reduction type")
+    parser.add_argument("--reduction_type", type=str, default="2ha", help="If using a dual encoder, specifies the reduction type")
+    parser.add_argument("--unfreeze_after_step", default=0, type=int, help="Unfreeze encoders after step, ignored if we dont have a checkpoint")
     parser.add_argument("--stacking_layers", type=int, nargs='+', default=[],
                         help="Hidden sizes of the dense stack (ff2 from the convert paper)")
     parser.add_argument("--ff_pdrop", type=float, default=0.1, help="Dropout in the dense stack")
@@ -201,7 +202,7 @@ def train():
                          num_heads=args.num_heads, num_layers=args.num_layers,
                          model_type=args.model_type, rpr_k=rpr_k, d_k=args.d_k, reduction_d_k=args.reduction_d_k,
                          stacking_layers=args.stacking_layers, ff_pdrop=args.ff_pdrop, windowed_ra=args.windowed_ra,
-                         reduction_type_dual=args.reduction_type_dual,
+                         reduction_type=args.reduction_type,
                          logger=logger)
 
     model.to(args.device)
@@ -225,9 +226,14 @@ def train():
     start_epoch = 0
 
     if args.restart_from:
+
+        if args.unfreeze_after_step > 0 and args.model_type == "dual-encoder":
+            logger.info(f"Encoders will be frozen until step %d", args.unfreeze_after_step)
         global_step, start_epoch = reload_from_checkpoint(args.model_type, args.restart_from, args.restart_tt, model, steps_per_epoch)
         logger.info("Restarting from a previous checkpoint %s.\n\tStarting at global_step=%d, epoch=%d",
                     args.restart_from, global_step, start_epoch+1)
+
+
     optimizer = OptimizerManager(model, global_step, optim=args.optim, lr=args.lr, lr_function=lr_sched, weight_decay=args.weight_decay)
     logger.info("Model has {:,} parameters".format(sum(p.numel() for p in model.parameters() if p.requires_grad)))
 
@@ -248,9 +254,16 @@ def train():
         train_itr = iter(train_loader)
         for i in range(steps_per_epoch):
             batch = next(train_itr)
+
+            if steps > args.unfreeze_after_step and hasattr(model, 'freeze') and model.freeze:
+                logging.info("Unfreezing encoders at step %d", steps)
+                model.freeze = False
             steps += 1
+
+
+
             x, y = batch
-            loss = run_step(x, y, model, loss_function, args.device, args.distributed)
+            loss = run_step(x, y, model, loss_function, args.device, args.distributed, step)
             loss.backward()
             avg_loss.update(loss.item())
 

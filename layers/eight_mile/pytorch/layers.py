@@ -9,6 +9,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.jit as jit
 import torch.autograd
+import contextlib
 import glob
 from eight_mile.utils import listify, Offsets, is_sequence
 from eight_mile.utils import transition_mask as transition_mask_np
@@ -3712,7 +3713,7 @@ class SingleHeadReduction(AttentionReduction):
     Implementation of the "self_attention_head" layer from the conveRT paper (https://arxiv.org/pdf/1911.03688.pdf)
     """
     def __init__(
-            self, d_model: int, dropout: float = 0.0, scale: bool = True, d_k: Optional[int] = None, pooling: str = 'sqrt_length',
+            self, d_model: int, dropout: float = 0.0, scale: bool = False, d_k: Optional[int] = None, pooling: str = 'sqrt_length',
     ):
         """
         :param d_model: The model hidden size
@@ -4216,13 +4217,23 @@ class PairedModel(DualEncoderModel):
                  ffn_pdrop=0.1,
                  windowed_ra=False,
                  rpr_value_on=False,
-                 reduction_type="2HA"):
-        super().__init__(2*d_model if reduction_type == "2HA" else d_model, stacking_layers, d_out, ffn_pdrop)
+                 reduction_type="2ha",
+                 freeze_encoders=False):
+        super().__init__(2*d_model if reduction_type.startswith("2") else d_model, stacking_layers, d_out, ffn_pdrop)
 
-        if reduction_type == "2HA":
+        reduction_type = reduction_type.lower()
+        if reduction_type == "2ha":
             self.reduction_layer = TwoHeadConcat(d_model, dropout, scale=False, d_k=reduction_d_k)
-        elif reduction_type == "SHA":
+        elif reduction_type == "2ha_mean":
+            self.reduction_layer = TwoHeadConcat(d_model, dropout, scale=False, d_k=reduction_d_k, reduction_type="mean")
+        elif reduction_type == "2ha_max":
+            self.reduction_layer = TwoHeadConcat(d_model, dropout, scale=False, d_k=reduction_d_k, reduction_type="max")
+        elif reduction_type == "sha":
             self.reduction_layer = SingleHeadReduction(d_model, dropout, scale=False, d_k=reduction_d_k)
+        elif reduction_type == "sha_mean":
+            self.reduction_layer = SingleHeadReduction(d_model, dropout, scale=False, d_k=reduction_d_k, reduction_type="mean")
+        elif reduction_type == "sha_max":
+            self.reduction_layer = SingleHeadReduction(d_model, dropout, scale=False, d_k=reduction_d_k, reduction_type="max")
         else:
             raise Exception("Unknown exception type")
         self.weight_std = weight_std
@@ -4232,7 +4243,7 @@ class PairedModel(DualEncoderModel):
                                                    d_k=d_k, rpr_k=rpr_k, windowed_ra=windowed_ra, rpr_value_on=rpr_value_on)
 
         self.embeddings = EmbeddingsStack({'x': embeddings})
-
+        self.freeze = freeze_encoders
         self.apply(self.init_layer_weights)
 
     def init_layer_weights(self, module):
@@ -4244,15 +4255,19 @@ class PairedModel(DualEncoderModel):
     def encode_query_base(self, query):
         query_mask = (query != Offsets.PAD)
         att_mask = query_mask.unsqueeze(1).unsqueeze(1)
-        embedded = self.embeddings({'x': query})
-        encoded_query = self.transformer((embedded, att_mask))
+
+        with torch.no_grad() if self.freeze else contextlib.ExitStack():
+            embedded = self.embeddings({'x': query})
+            encoded_query = self.transformer((embedded, att_mask))
+
         encoded_query = self.reduction_layer((encoded_query, encoded_query, encoded_query, att_mask))
         return encoded_query
 
     def encode_response_base(self, response):
         response_mask = (response != Offsets.PAD)
         att_mask = response_mask.unsqueeze(1).unsqueeze(1)
-        embedded = self.embeddings({'x': response})
-        encoded_response = self.transformer((embedded, att_mask))
+        with torch.no_grad() if self.freeze else contextlib.ExitStack():
+            embedded = self.embeddings({'x': response})
+            encoded_response = self.transformer((embedded, att_mask))
         encoded_response = self.reduction_layer((encoded_response, encoded_response, encoded_response, att_mask))
         return encoded_response
