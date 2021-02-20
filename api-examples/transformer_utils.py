@@ -411,14 +411,27 @@ class TransformerBoWPairedModel(DualEncoderModel):
                  ffn_pdrop=0.1,
                  windowed_ra=False,
                  rpr_value_on=False,
-                 reduction_type_1="SHA"):
+                 reduction_type_1="2ha",
+                 freeze_encoders=False):
         super().__init__(d_model, stacking_layers, d_out, ffn_pdrop)
 
-        if reduction_type_1 == "2HA":
+        reduction_type_1 = reduction_type_1.lower()
+
+        if reduction_type_1 == "2ha":
             self.reduction_layer_1 = nn.Sequential(TwoHeadConcat(d_model, dropout, scale=False, d_k=reduction_d_k),
                                                    nn.Linear(2*d_model, d_model))
-        elif reduction_type_1 == "SHA":
+        elif reduction_type_1 == "2ha_mean":
+            self.reduction_layer_1 = nn.Sequential(TwoHeadConcat(d_model, dropout, scale=False, d_k=reduction_d_k, reduction_type="mean"),
+                                                   nn.Linear(2 * d_model, d_model))
+        elif reduction_type_1 == "2ha_max":
+            self.reduction_layer_1 = nn.Sequential(TwoHeadConcat(d_model, dropout, scale=False, d_k=reduction_d_k, reduction_type="max"),
+                                                   nn.Linear(2 * d_model, d_model))
+        elif reduction_type_1 == "sha":
             self.reduction_layer_1 = SingleHeadReduction(d_model, dropout, scale=False, d_k=reduction_d_k)
+        elif reduction_type_1 == "sha_mean":
+            self.reduction_layer_1 = SingleHeadReduction(d_model, dropout, scale=False, d_k=reduction_d_k, reduction_type="mean")
+        elif reduction_type_1 == "sha_max":
+            self.reduction_layer_1 = SingleHeadReduction(d_model, dropout, scale=False, d_k=reduction_d_k, reduction_type="max")
         else:
             raise Exception("Unknown exception type")
         self.weight_std = weight_std
@@ -428,7 +441,9 @@ class TransformerBoWPairedModel(DualEncoderModel):
                                                    d_k=d_k, rpr_k=rpr_k, windowed_ra=windowed_ra, rpr_value_on=rpr_value_on)
 
         self.embeddings = EmbeddingsStack({'x': embeddings})
-        self.reduction_layer_2 = MeanPool1D(d_out)
+        self.freeze = freeze_encoders
+
+        self.reduction_layer_2 = MaxPool1D(d_out) if reduction_type_1.endswith('max') else MeanPool1D(d_out)
         self.apply(self.init_layer_weights)
 
     def init_layer_weights(self, module):
@@ -440,15 +455,17 @@ class TransformerBoWPairedModel(DualEncoderModel):
     def encode_query_base(self, query):
         query_mask = (query != Offsets.PAD)
         att_mask = query_mask.unsqueeze(1).unsqueeze(1)
-        embedded = self.embeddings({'x': query})
-        encoded_query = self.transformer((embedded, att_mask))
+        with torch.no_grad() if self.freeze else contextlib.ExitStack():
+            embedded = self.embeddings({'x': query})
+            encoded_query = self.transformer((embedded, att_mask))
         encoded_query = self.reduction_layer_1((encoded_query, encoded_query, encoded_query, att_mask))
         return encoded_query
 
     def encode_response_base(self, response):
         response_lengths = torch.sum(response != Offsets.PAD, dim=1)
-        embedded = self.embeddings({'x': response})
-        return self.reduction_layer_2((embedded, response_lengths))
+        with torch.no_grad() if self.freeze else contextlib.ExitStack():
+            embedded = self.embeddings({'x': response})
+        encoded_response = self.reduction_layer_2((embedded, response_lengths))
         return encoded_response
 
 
