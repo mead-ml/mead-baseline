@@ -421,17 +421,17 @@ class TransformerBoWPairedModel(DualEncoderModel):
             self.reduction_layer_1 = nn.Sequential(TwoHeadConcat(d_model, dropout, scale=False, d_k=reduction_d_k),
                                                    nn.Linear(2*d_model, d_model))
         elif reduction_type_1 == "2ha_mean":
-            self.reduction_layer_1 = nn.Sequential(TwoHeadConcat(d_model, dropout, scale=False, d_k=reduction_d_k, reduction_type="mean"),
+            self.reduction_layer_1 = nn.Sequential(TwoHeadConcat(d_model, dropout, scale=False, d_k=reduction_d_k, pooling="mean"),
                                                    nn.Linear(2 * d_model, d_model))
         elif reduction_type_1 == "2ha_max":
-            self.reduction_layer_1 = nn.Sequential(TwoHeadConcat(d_model, dropout, scale=False, d_k=reduction_d_k, reduction_type="max"),
+            self.reduction_layer_1 = nn.Sequential(TwoHeadConcat(d_model, dropout, scale=False, d_k=reduction_d_k, pooling="max"),
                                                    nn.Linear(2 * d_model, d_model))
         elif reduction_type_1 == "sha":
             self.reduction_layer_1 = SingleHeadReduction(d_model, dropout, scale=False, d_k=reduction_d_k)
         elif reduction_type_1 == "sha_mean":
-            self.reduction_layer_1 = SingleHeadReduction(d_model, dropout, scale=False, d_k=reduction_d_k, reduction_type="mean")
+            self.reduction_layer_1 = SingleHeadReduction(d_model, dropout, scale=False, d_k=reduction_d_k, pooling="mean")
         elif reduction_type_1 == "sha_max":
-            self.reduction_layer_1 = SingleHeadReduction(d_model, dropout, scale=False, d_k=reduction_d_k, reduction_type="max")
+            self.reduction_layer_1 = SingleHeadReduction(d_model, dropout, scale=False, d_k=reduction_d_k, pooling="max")
         else:
             raise Exception("Unknown exception type")
         self.weight_std = weight_std
