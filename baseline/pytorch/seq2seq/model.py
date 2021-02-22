@@ -213,5 +213,5 @@ class Seq2SeqModel(EncoderDecoderModelBase):
 @register_model(task='seq2seq', name='tied-embed')
 class TiedEmbeddingsSeq2SeqModel(Seq2SeqModel):
 
-    def __init__(self, tied_embeddings, _, **kwargs):
+    def __init__(self, tied_embeddings, _=None, **kwargs):
         super().__init__(tied_embeddings, tied_embeddings['x'], **kwargs)
