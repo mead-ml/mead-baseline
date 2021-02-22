@@ -322,6 +322,13 @@ def to_tlm_array(pytorch_tlm: nn.Module, embeddings_keys: List[str] = None, name
     for embeddings_key in keys_to_write:
         d.update(to_embed_array(pytorch_tlm.embeddings[embeddings_key], name=f"{name}/Embeddings/{embeddings_key}"))
 
+        if isinstance(pytorch_tlm.embeddings[embeddings_key], LearnedPositionalLookupTableEmbeddingsWithBias):
+            with torch.no_grad():
+                tt = LookupTableEmbeddings(vsz=2, dsz=pytorch_tlm.embeddings.output_dim)
+                tt.embeddings.weight *= 0
+                tt.embeddings.weight[0] = nn.Parameter(pytorch_tlm.embeddings[embeddings_key].bias)
+                d.update(to_embed_array(tt, f"{name}/Embeddings/tt"))
+
     if hasattr(pytorch_tlm.embeddings.reduction, 'ln'):
         d.update(to_weight_array(pytorch_tlm.embeddings.reduction.ln, name=f"{name}/Embeddings/reduction/ln"))
     return d
