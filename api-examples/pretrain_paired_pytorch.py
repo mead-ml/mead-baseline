@@ -74,7 +74,7 @@ def run_step_s2s(x, y, model, loss_function, device, distributed):
     y_lengths = torch.sum(y != 0, 1)
     if distributed:
         inputs = model.module.make_input({'x': x, 'x_lengths': x_lengths, 'tgt': y, 'tgt_lengths': y_lengths})
-        pred = model.module(inputs)
+        pred = model(inputs)
     else:
         inputs = model.make_input({'x': x, 'x_lengths': x_lengths, 'tgt': y, 'tgt_lengths': y_lengths})
         pred = model(inputs)
@@ -239,7 +239,7 @@ def train():
 
     # Prepare model for distributed training if needed
     if args.distributed:
-        model = DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank)
+        model = DistributedDataParallel(model, device_ids=[args.device], output_device=args.device)
         logger.info("Model located on %d", args.local_rank)
 
     model_base = os.path.join(args.basedir, 'checkpoint')
