@@ -29,7 +29,8 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
     def __init__(self, model, **kwargs):
 
         if type(model) is dict:
-            model = create_model_for('classify', **model)
+            model = create_model_for('classify', checkpoint=kwargs.get('checkpoint'), **model)
+
         super().__init__()
         if type(model) is dict:
             model = create_model_for('classify', **model)
