@@ -4015,7 +4015,7 @@ class SymmetricContrastiveLoss(nn.Module):
 
 
 class AllLoss(nn.Module):
-    def __init__(self, model, warmup_steps=10000):
+    def __init__(self, model, warmup_steps=10000, reduction_type='sum'):
         r"""Loss from here https://arxiv.org/pdf/1705.00652.pdf see section 4
 
         We want to minimize the negative log prob of y given x
@@ -4041,6 +4041,7 @@ class AllLoss(nn.Module):
         self.max_scale = math.sqrt(self.model.embeddings.output_dim)
         self.steps = 0
         self.warmup_steps = warmup_steps
+        self.reduction = torch.mean if reduction_type == 'mean' else torch.sum
 
     def forward(self, inputs, targets):
         # This is the cosine distance annealing referred to in https://arxiv.org/pdf/1911.03688.pdf
@@ -4060,7 +4061,7 @@ class AllLoss(nn.Module):
         # Because we are minimizing the negative log we turned the division into a subtraction here
         loss = pos_score - vec_log_sum_exp(all_score, -1).squeeze()
         # Batch loss
-        loss = torch.sum(loss)
+        loss = self.reduction(loss)
         # minimize the negative loss
         return -loss
 
@@ -4167,6 +4168,8 @@ class DualEncoderModel(nn.Module):
     def create_loss(self, loss_type='all'):
         if loss_type == 'all':
             return AllLoss(self)
+        elif loss_type == 'all_mean':
+            return AllLoss(self, reduction_type='mean')
         elif loss_type == 'contrastive':
             return ContrastiveLoss(self)
         elif loss_type == 'symmetric':

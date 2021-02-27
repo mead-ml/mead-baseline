@@ -134,7 +134,7 @@ def train():
     parser.add_argument("--src_end_tok", type=str, nargs='+', default=['<EOS>'])
     parser.add_argument("--tgt_begin_tok", type=str, nargs='+', default=['<GO>'])
     parser.add_argument("--tgt_end_tok", type=str, nargs='+', default=['<EOS>'])
-    parser.add_argument("--loss", type=str, default='all', choices=['triplet', 'all', 'contrastive', 'symmetric'])
+    parser.add_argument("--loss", type=str, default='all', choices=['triplet', 'all', 'all_mean', 'contrastive', 'symmetric'])
     parser.add_argument('--rpr_k',
                         help='Relative attention positional sizes pass 0 if you dont want relative attention',
                         type=int, default=[8], nargs='+')
