@@ -1559,7 +1559,7 @@ check_tar = partial(check_mn, mn=MN.TAR, start=MN.TAR_START)
 check_zip = partial(check_mn, mn=MN.ZIP)
 
 
-class RE(object):
+class RE:
     HTML = re.compile(b"(<!doctype html>|<html.*?>)")
     BIN = re.compile(b"\d+? \d+?$", re.MULTILINE)
 

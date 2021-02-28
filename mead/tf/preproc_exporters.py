@@ -48,7 +48,7 @@ def peek_lengths_key(model_file, field_map):
     return field_map.get(lengths, lengths)
 
 
-class PreProcessorController(object):
+class PreProcessorController:
     def __init__(self, model_base_dir, pid, features, feature_exporter_field_map, length_field='tokens'):
         self.length_field = length_field
         saved_vectorizers = self.get_vectorizers(model_base_dir, pid)

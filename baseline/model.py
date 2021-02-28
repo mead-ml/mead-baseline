@@ -299,7 +299,7 @@ class TaggerModel:
 
 
 @export
-class LanguageModel(object):
+class LanguageModel:
 
     task_name = 'lm'
 
@@ -319,7 +319,7 @@ class LanguageModel(object):
 
 
 @export
-class EncoderDecoderModel(object):
+class EncoderDecoderModel:
 
     task_name = 'seq2seq'
 

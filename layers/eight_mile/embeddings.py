@@ -64,7 +64,7 @@ def write_word2vec_file(filename, vocab, word_vectors):
 
 
 @export
-class EmbeddingsModel(object):
+class EmbeddingsModel:
     def __init__(self):
         super().__init__()
 

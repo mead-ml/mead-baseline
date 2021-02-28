@@ -46,7 +46,7 @@ def to_tensors(ts, lengths_key):
     return features, y
 
 
-class TaggerEvaluatorTf(object):
+class TaggerEvaluatorTf:
     """Performs evaluation on tagger output
     """
     def __init__(self, model, span_type, verbose):

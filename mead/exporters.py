@@ -6,7 +6,7 @@ export = exporter(__all__)
 
 
 @export
-class Exporter(object):
+class Exporter:
 
     def __init__(self, task, **kwargs):
         super().__init__()

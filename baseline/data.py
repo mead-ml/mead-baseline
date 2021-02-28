@@ -10,7 +10,7 @@ logger = logging.getLogger('baseline')
 
 
 @export
-class DataFeed(object):
+class DataFeed:
     """Data collection that, when iterated, produces an epoch of data
 
     This class manages producing a dataset to the trainer, by iterating an epoch and producing
@@ -88,7 +88,7 @@ class ExampleDataFeed(DataFeed):
 
 
 @export
-class DictExamples(object):
+class DictExamples:
     """This object holds a list of dictionaries, and knows how to shuffle, sort and batch them
     """
     def __init__(self, example_list, do_shuffle=True, sort_key=None):
@@ -171,7 +171,7 @@ class DictExamples(object):
 
 
 @export
-class Seq2SeqExamples(object):
+class Seq2SeqExamples:
 
     """Paired training examples
     """

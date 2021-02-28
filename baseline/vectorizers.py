@@ -12,7 +12,7 @@ export = exporter(__all__)
 
 
 @export
-class Vectorizer(object):
+class Vectorizer:
 
     def __init__(self):
         pass

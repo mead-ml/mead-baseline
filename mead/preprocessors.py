@@ -8,7 +8,7 @@ BASELINE_PREPROCESSORS = {}
 
 
 @export
-class Preprocessor(object):
+class Preprocessor:
     """
     Generic class for creating vectorizers using tensorflow/pyt ops, to be used for exporting models when the service gets
     a string instead of a vectorized input.

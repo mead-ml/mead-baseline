@@ -39,7 +39,7 @@ def verify_example(examples, keys):
         raise ValueError("Data should have keys: {}\n {} are missing.".format(keys, missing_keys))
 
 
-class RemoteModel(object):
+class RemoteModel:
     def __init__(
             self,
             remote,

@@ -19,7 +19,7 @@ def register_reporting(cls, name=None):
 
 
 @export
-class ReportingHook(object):
+class ReportingHook:
     def __init__(self, **kwargs):
         pass
 

@@ -102,7 +102,7 @@ def suppress_output():
 
 
 @export
-class Colors(object):
+class Colors:
     GREEN = '\033[32;1m'
     RED = '\033[31;1m'
     YELLOW = '\033[33;1m'
