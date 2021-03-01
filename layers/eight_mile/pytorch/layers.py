@@ -3979,10 +3979,12 @@ class TripletLoss(nn.Module):
 
 
 class ContrastiveLoss(nn.Module):
-    def __init__(self, model, t=1.0):
+    def __init__(self, model, t=1.0, train_temperature=True):
         super().__init__()
         self.model = model
-        self.t = nn.Parameter(torch.tensor(t).float())
+        if t is None:
+            t = math.sqrt(self.model.output_dim)
+        self.t = nn.Parameter(torch.tensor(t).float(), requires_grad=train_temperature)
 
     def forward(self, inputs, targets):
         query = self.model.encode_query(inputs)  # [B, H]
@@ -3996,10 +3998,12 @@ class ContrastiveLoss(nn.Module):
 
 
 class SymmetricContrastiveLoss(nn.Module):
-    def __init__(self, model, t=1.0):
+    def __init__(self, model, t=1.0, train_temperature=True):
         super().__init__()
-        self.t = nn.Parameter(torch.tensor(t))
         self.model = model
+        if t is None:
+            t = math.sqrt(self.model.output_dim)
+        self.t = nn.Parameter(torch.tensor(t).float(), requires_grad=train_temperature)
 
     def forward(self, inputs, targets):
         query = self.model.encode_query(inputs)  # [B, H]
@@ -4145,6 +4149,7 @@ class DualEncoderModel(nn.Module):
         else:
             self.ff1 = nn.Identity()
             self.ff2 = nn.Identity()
+        self.output_dim = d_out
 
     def encode_query_base(self, query: torch.Tensor) -> torch.Tensor:
         pass

@@ -233,10 +233,10 @@ def train():
         logger.info("Restarting from a previous checkpoint %s.\n\tStarting at global_step=%d, epoch=%d",
                     args.restart_from, global_step, start_epoch+1)
 
+    target = model if args.model_type == 'encoder-decoder' else loss_function
 
-    optimizer = OptimizerManager(model, global_step, optim=args.optim, lr=args.lr, lr_function=lr_sched, weight_decay=args.weight_decay)
-    logger.info("Model has {:,} parameters".format(sum(p.numel() for p in model.parameters() if p.requires_grad)))
-
+    optimizer = OptimizerManager(target, global_step, optim=args.optim, lr=args.lr, lr_function=lr_sched, weight_decay=args.weight_decay)
+    logger.info("Model has {:,} parameters".format(sum(p.numel() for p in target.parameters() if p.requires_grad)))
     # Prepare model for distributed training if needed
     if args.distributed:
         model = DistributedDataParallel(model, device_ids=[args.device], output_device=args.device)
