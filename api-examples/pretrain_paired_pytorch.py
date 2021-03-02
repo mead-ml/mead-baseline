@@ -34,7 +34,7 @@ This file uses Baseline to train a Transformer model using fastBPE with query-re
   
 """
 def create_model(embeddings, d_model, d_ff, dropout, num_heads, num_layers, model_type, rpr_k, d_k, reduction_d_k,
-                 stacking_layers, ff_pdrop, windowed_ra, reduction_type, logger):
+                 stacking_layers, ff_pdrop, windowed_ra, reduction_type, layer_drop, logger):
     if model_type == "encoder-decoder":
         logger.info("Creating tied encoder decoder model")
         hps = {"dsz": d_model,
@@ -47,6 +47,7 @@ def create_model(embeddings, d_model, d_ff, dropout, num_heads, num_layers, mode
                "decoder_type": "transformer",
                "src_lengths_key": "x_lengths",
                "d_k": d_k,
+               "layer_drop": layer_drop,
                "rpr_k": rpr_k}
         model = TiedEmbeddingsSeq2SeqModel({'x': embeddings}, None, **hps)
     elif model_type == 'transformer-bow':
@@ -126,6 +127,7 @@ def train():
     parser.add_argument("--unfreeze_after_step", default=0, type=int, help="Unfreeze encoders after step, ignored if we dont have a checkpoint")
     parser.add_argument("--stacking_layers", type=int, nargs='+', default=[],
                         help="Hidden sizes of the dense stack (ff2 from the convert paper)")
+    parser.add_argument("--layer_drop", type=float, default=0.0, help="LayerDrop to apply")
     parser.add_argument("--ff_pdrop", type=float, default=0.1, help="Dropout in the dense stack")
 
     parser.add_argument("--reader_type", type=str, default='preprocessed', choices=['ntp', 'nsp', 'preprocessed', 'tfrecord'])
@@ -206,6 +208,7 @@ def train():
                          model_type=args.model_type, rpr_k=rpr_k, d_k=args.d_k, reduction_d_k=args.reduction_d_k,
                          stacking_layers=args.stacking_layers, ff_pdrop=args.ff_pdrop, windowed_ra=args.windowed_ra,
                          reduction_type=args.reduction_type,
+                         layer_drop=args.layer_drop,
                          logger=logger)
 
     model.to(args.device)
