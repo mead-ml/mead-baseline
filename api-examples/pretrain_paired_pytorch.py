@@ -34,7 +34,7 @@ This file uses Baseline to train a Transformer model using fastBPE with query-re
   
 """
 def create_model(embeddings, d_model, d_ff, dropout, num_heads, num_layers, model_type, rpr_k, d_k, reduction_d_k,
-                 stacking_layers, ff_pdrop, windowed_ra, reduction_type, logger):
+                 stacking_layers, ff_pdrop, windowed_ra, reduction_type, layer_drop, logger):
     if model_type == "encoder-decoder":
         logger.info("Creating tied encoder decoder model")
         hps = {"dsz": d_model,
@@ -208,6 +208,7 @@ def train():
                          model_type=args.model_type, rpr_k=rpr_k, d_k=args.d_k, reduction_d_k=args.reduction_d_k,
                          stacking_layers=args.stacking_layers, ff_pdrop=args.ff_pdrop, windowed_ra=args.windowed_ra,
                          reduction_type=args.reduction_type,
+                         layer_drop=args.layer_drop,
                          logger=logger)
 
     model.to(args.device)
