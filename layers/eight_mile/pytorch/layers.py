@@ -4170,15 +4170,15 @@ class DualEncoderModel(nn.Module):
         encoded_response = self.encode_response(response)
         return encoded_query, encoded_response
 
-    def create_loss(self, loss_type='all'):
+    def create_loss(self, loss_type='all', init_temp=None, learn_temp=False):
         if loss_type == 'all':
             return AllLoss(self)
         elif loss_type == 'all_mean':
             return AllLoss(self, reduction_type='mean')
         elif loss_type == 'contrastive':
-            return ContrastiveLoss(self)
+            return ContrastiveLoss(self, init_temp, learn_temp)
         elif loss_type == 'symmetric':
-            return SymmetricContrastiveLoss(self)
+            return SymmetricContrastiveLoss(self, init_temp, learn_temp)
 
         return TripletLoss(self)
 
