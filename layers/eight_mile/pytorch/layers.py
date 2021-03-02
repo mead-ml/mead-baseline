@@ -4000,7 +4000,7 @@ class ContrastiveLoss(nn.Module):
         super().__init__()
         self.model = model
         if t is None:
-            t = math.sqrt(self.model.output_dim)
+            t = 1.0
         self.t = nn.Parameter(torch.tensor(t).float(), requires_grad=train_temperature)
 
     def forward(self, inputs, targets):
@@ -4019,7 +4019,7 @@ class SymmetricContrastiveLoss(nn.Module):
         super().__init__()
         self.model = model
         if t is None:
-            t = math.sqrt(self.model.output_dim)
+            t = 1.0
         self.t = nn.Parameter(torch.tensor(t).float(), requires_grad=train_temperature)
 
     def forward(self, inputs, targets):
