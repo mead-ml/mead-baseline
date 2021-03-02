@@ -3979,10 +3979,12 @@ class TripletLoss(nn.Module):
 
 
 class ContrastiveLoss(nn.Module):
-    def __init__(self, model, t=1.0):
+    def __init__(self, model, t=1.0, train_temperature=True):
         super().__init__()
         self.model = model
-        self.t = nn.Parameter(torch.tensor(t).float())
+        if t is None:
+            t = math.sqrt(self.model.output_dim)
+        self.t = nn.Parameter(torch.tensor(t).float(), requires_grad=train_temperature)
 
     def forward(self, inputs, targets):
         query = self.model.encode_query(inputs)  # [B, H]
@@ -3996,10 +3998,12 @@ class ContrastiveLoss(nn.Module):
 
 
 class SymmetricContrastiveLoss(nn.Module):
-    def __init__(self, model, t=1.0):
+    def __init__(self, model, t=1.0, train_temperature=True):
         super().__init__()
-        self.t = nn.Parameter(torch.tensor(t))
         self.model = model
+        if t is None:
+            t = math.sqrt(self.model.output_dim)
+        self.t = nn.Parameter(torch.tensor(t).float(), requires_grad=train_temperature)
 
     def forward(self, inputs, targets):
         query = self.model.encode_query(inputs)  # [B, H]
@@ -4145,6 +4149,7 @@ class DualEncoderModel(nn.Module):
         else:
             self.ff1 = nn.Identity()
             self.ff2 = nn.Identity()
+        self.output_dim = d_out
 
     def encode_query_base(self, query: torch.Tensor) -> torch.Tensor:
         pass
@@ -4165,15 +4170,15 @@ class DualEncoderModel(nn.Module):
         encoded_response = self.encode_response(response)
         return encoded_query, encoded_response
 
-    def create_loss(self, loss_type='all'):
+    def create_loss(self, loss_type='all', init_temp=None, learn_temp=False):
         if loss_type == 'all':
             return AllLoss(self)
         elif loss_type == 'all_mean':
             return AllLoss(self, reduction_type='mean')
         elif loss_type == 'contrastive':
-            return ContrastiveLoss(self)
+            return ContrastiveLoss(self, init_temp, learn_temp)
         elif loss_type == 'symmetric':
-            return SymmetricContrastiveLoss(self)
+            return SymmetricContrastiveLoss(self, init_temp, learn_temp)
 
         return TripletLoss(self)
 

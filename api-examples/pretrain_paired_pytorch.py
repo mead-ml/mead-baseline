@@ -135,6 +135,9 @@ def train():
     parser.add_argument("--tgt_begin_tok", type=str, nargs='+', default=['<GO>'])
     parser.add_argument("--tgt_end_tok", type=str, nargs='+', default=['<EOS>'])
     parser.add_argument("--loss", type=str, default='all', choices=['triplet', 'all', 'all_mean', 'contrastive', 'symmetric'])
+    parser.add_argument("--learn_temp", type=str2bool, default=True,
+                        help="If 'constrastive' or 'symmetric' loss, should we learn the temperature scaling")
+    parser.add_argument("--init_temp", type=float, help="Initialize the temperature for 'contrastive' or 'symmetric' loss")
     parser.add_argument('--rpr_k',
                         help='Relative attention positional sizes pass 0 if you dont want relative attention',
                         type=int, default=[8], nargs='+')
@@ -206,11 +209,15 @@ def train():
                          logger=logger)
 
     model.to(args.device)
-    loss_function = model.create_loss(loss_type=args.loss)
+    if args.model_type == 'encoder_decoder':
+        run_step = run_step_s2s
+    else:
+        run_step = run_step_dual
+        logger.info(f"Creating {args.loss}, init temperature: {args.init_temp}, learnable: {args.learn_temp}")
+    loss_function = model.create_loss(loss_type=args.loss, init_temp=args.init_temp, learn_temp=args.learn_temp)
     loss_function.to(args.device)
-    run_step = run_step_s2s if args.model_type == 'encoder-decoder' else run_step_dual
 
-    logger.info("Loaded model and loss")
+    logger.info("Created model and loss")
 
     steps_per_epoch = len(train_loader) // num_gpus
     valid_steps = len(valid_loader)
@@ -233,10 +240,10 @@ def train():
         logger.info("Restarting from a previous checkpoint %s.\n\tStarting at global_step=%d, epoch=%d",
                     args.restart_from, global_step, start_epoch+1)
 
+    target = model if args.model_type == 'encoder-decoder' else loss_function
 
-    optimizer = OptimizerManager(model, global_step, optim=args.optim, lr=args.lr, lr_function=lr_sched, weight_decay=args.weight_decay)
-    logger.info("Model has {:,} parameters".format(sum(p.numel() for p in model.parameters() if p.requires_grad)))
-
+    optimizer = OptimizerManager(target, global_step, optim=args.optim, lr=args.lr, lr_function=lr_sched, weight_decay=args.weight_decay)
+    logger.info("Model has {:,} parameters".format(sum(p.numel() for p in target.parameters() if p.requires_grad)))
     # Prepare model for distributed training if needed
     if args.distributed:
         model = DistributedDataParallel(model, device_ids=[args.device], output_device=args.device)
