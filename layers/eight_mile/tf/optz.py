@@ -235,23 +235,25 @@ class ZarembaDecaySchedulerTensorFlow2(tf.keras.optimizers.schedules.PiecewiseCo
 
 
 class CompositeLRSchedulerTensorFlow2(tf.keras.optimizers.schedules.LearningRateSchedule):
-    def __init__(self, warm=None, rest=None, **kwargs):
+    def __init__(self, warm=None, rest=None, plateau_steps=0, **kwargs):
         self.warm = warm
         self.rest = rest
+        self.plateau_steps = plateau_steps
 
     def __call__(self, global_step):
+        total_steps_lr1 = self.warm.warmup_steps + self.plateau_steps
         warm_tensor = self.warm(global_step)
 
         def call_warm():
             return warm_tensor
 
-        rest_step = global_step - self.warm.warmup_steps
+        rest_step = global_step - total_steps_lr1
         rest_tensor = self.rest(rest_step)
 
         def call_rest():
             return rest_tensor
 
-        new_lr = tf.cond(global_step < self.warm.warmup_steps, call_warm, call_rest)
+        new_lr = tf.cond(global_step < total_steps_lr1, call_warm, call_rest)
         tf.summary.scalar(name='composite_lr', data=new_lr, step=tf.cast(global_step, tf.int64))
         return new_lr
 

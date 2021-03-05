@@ -42,6 +42,8 @@ LINEAR_WARMUP_LR_CONFIG = {"lr_scheduler_type": "warmup_linear", "warmup_steps":
 COMPOSITE_LR_CONFIG = LINEAR_WARMUP_LR_CONFIG.copy()
 COMPOSITE_LR_CONFIG.update(EXP_LR_CONFIG)
 COMPOSITE_LR_CONFIG["lr_scheduler_type"] = ["warmup_linear", "exponential"]
+COMPOSITE_LR_PLATEAU_CONFIG = COMPOSITE_LR_CONFIG.copy()
+COMPOSITE_LR_PLATEAU_CONFIG.update({'plateau_steps': 10})
 
 BOUNDS = [1, 2, 4, 10, 50]
 ZAREMBA_DECAY_RATE = 1.2
@@ -179,6 +181,29 @@ def test_composite_warmup():
         else:
             assert np.allclose(lrs[step], exp_expected[step - warmup_steps])
 
+
+
+
+def test_composite_warmup_plateau():
+    from eight_mile.tf import optz
+
+    warmup_steps = COMPOSITE_LR_PLATEAU_CONFIG["warmup_steps"]
+    plateau_steps = COMPOSITE_LR_PLATEAU_CONFIG["plateau_steps"]
+    decay_rate = EXP_LR_CONFIG["decay_rate"]
+    lr_sched = create_lr_scheduler(**COMPOSITE_LR_PLATEAU_CONFIG)
+    lrs = [lr_sched(step) for step in range(NUM_STEPS)]
+
+    warmup_expected = [INIT_LR * min(1.0, step / warmup_steps) for step in range(NUM_STEPS)]
+    linear_expected = [INIT_LR] * NUM_STEPS
+    exp_expected = [(INIT_LR * decay_rate ** (t / 100.0)) for t in range(NUM_STEPS)]
+
+    for step in range(NUM_STEPS):
+        if step < warmup_steps:
+            assert np.allclose(lrs[step], warmup_expected[step])
+        elif step < (warmup_steps + plateau_steps):
+            assert np.allclose(lrs[step], linear_expected[step])
+        else:
+            assert np.allclose(lrs[step], exp_expected[step - (warmup_steps + plateau_steps)])
 
 def test_constant():
     from eight_mile.tf import optz

@@ -156,12 +156,14 @@ class ExponentialDecayScheduler(LearningRateScheduler):
 
 @export
 class CompositeLRScheduler(LearningRateScheduler):
-    def __init__(self, warm=None, rest=None, **kwargs):
+    def __init__(self, warm=None, rest=None, plateau_steps=0, **kwargs):
         super().__init__(**kwargs)
         self.warm = warm
         self.rest = rest
+        self.plateau_steps = plateau_steps
 
     def __call__(self, global_step):
-        if global_step < self.warm.warmup_steps:
+        total_steps_lr1 = self.warm.warmup_steps + self.plateau_steps
+        if global_step < total_steps_lr1:
             return self.warm(global_step)
-        return self.rest(global_step - self.warm.warmup_steps)
+        return self.rest(global_step - total_steps_lr1)
