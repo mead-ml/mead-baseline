@@ -129,6 +129,20 @@ class CosineDecayScheduler(LearningRateScheduler):
 
 
 @export
+class LinearDecayScheduler(LearningRateScheduler):
+    def __init__(self, decay_steps=1000, alpha=0.0, **kwargs):
+        super().__init__(**kwargs)
+        self.decay_steps = decay_steps
+        self.alpha = alpha
+
+    def __call__(self, global_step):
+        global_step = min(global_step, self.decay_steps)
+        # Linear interpolation
+        scaled_lr = self.lr * (1.0 - self.alpha) * (1.0 - global_step / self.decay_steps) + (self.alpha * self.lr)
+        return scaled_lr
+
+
+@export
 class InverseTimeDecayScheduler(LearningRateScheduler):
     def __init__(self, decay_steps=16000, decay_rate=0.05, staircase=False, **kwargs):
         super().__init__(**kwargs)

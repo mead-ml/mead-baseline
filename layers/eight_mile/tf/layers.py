@@ -36,6 +36,7 @@ def set_tf_eager_debug(debug: bool = False):
         if debug:
             tf.config.experimental_run_functions_eagerly(debug)
 
+
 def patch_dist_strategy(strategy):
     TF_VERSION = get_version(tf)
     if TF_VERSION < 2.2:
