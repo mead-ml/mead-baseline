@@ -13,6 +13,7 @@ from eight_mile.optz import (
     InverseTimeDecayScheduler,
     ExponentialDecayScheduler,
     CompositeLRScheduler,
+    LinearDecayScheduler,
 )
 
 logger = logging.getLogger("mead.layers")
@@ -29,6 +30,10 @@ class WarmupLinearSchedulerPyTorch(WarmupLinearScheduler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+@register_lr_scheduler(name="linear")
+class LinearDecaySchedulerPyTorch(LinearDecayScheduler):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
 @register_lr_scheduler(name="clr")
 class CyclicLRSchedulerPyTorch(CyclicLRScheduler):
