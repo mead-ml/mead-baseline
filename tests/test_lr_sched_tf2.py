@@ -10,6 +10,7 @@ from eight_mile.optz import (
     create_lr_scheduler,
     ConstantScheduler,
     WarmupLinearScheduler,
+    LinearDecayScheduler,
     CyclicLRScheduler,
     PiecewiseDecayScheduler,
     ZarembaDecayScheduler,
@@ -33,7 +34,7 @@ NUM_STEPS = 1000
 CYCLIC_LR_CONFIG = {"lr_scheduler_type": "clr", "decay_steps": 10, "lr": INIT_LR, "max_lr": INIT_LR * 3}
 
 INVTIME_LR_CONFIG = {"lr_scheduler_type": "invtime", "decay_rate": 0.05, "decay_steps": 1, "lr": INIT_LR}
-
+LINEAR_LR_CONFIG = {"lr_scheduler_type": "linear", "decay_steps": NUM_STEPS, "lr": INIT_LR}
 
 EXP_LR_CONFIG = {"lr_scheduler_type": "exponential", "decay_rate": 0.5, "decay_steps": 100, "lr": INIT_LR}
 
@@ -129,6 +130,23 @@ def test_invtime():
     assert np.allclose(inv_times, lrs)
     assert np.allclose(inv_times, lrs_bl)
 
+def test_linear():
+    from eight_mile.tf import optz
+
+    lr_sched = create_lr_scheduler(**LINEAR_LR_CONFIG)
+    bl_sched = LinearDecayScheduler(**LINEAR_LR_CONFIG)
+
+    linear = [INIT_LR * (1.0 - step / NUM_STEPS) for step in range(NUM_STEPS)]
+    lrs = []
+    lrs_bl = []
+    for step in range(NUM_STEPS):
+
+        lr = lr_sched(step)
+        lrs += [lr]
+        lr_bl = bl_sched(step)
+        lrs_bl += [lr_bl]
+    assert np.allclose(lrs_bl, lrs)
+    assert np.allclose(linear, lrs_bl)
 
 def test_exp():
     from eight_mile.tf import optz

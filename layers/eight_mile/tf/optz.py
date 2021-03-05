@@ -307,6 +307,19 @@ class CosineDecaySchedulerTensorFlow(CosineDecayScheduler, tf.keras.optimizers.s
         return new_lr
 
 
+class LinearDecaySchedulerTensorFlow(LearningRateScheduler, tf.keras.optimizers.schedules.LearningRateSchedule):
+    def __init__(self, decay_steps=1000, alpha=0.0, **kwargs):
+        super().__init__(**kwargs)
+        self.decay_steps = decay_steps
+        self.alpha = alpha
+
+    def __call__(self, global_step):
+        global_step = min(global_step, self.decay_steps)
+        # Linear interpolation
+        scaled_lr = self.lr * (1.0 - self.alpha) * (1.0 - global_step / self.decay_steps) + (self.alpha * self.lr)
+        return scaled_lr
+
+
 if not tf.executing_eagerly():
 
     ConstantSchedulerTensorFlow = ConstantSchedulerTensorFlow1
@@ -328,6 +341,7 @@ else:
     ExponentialDecaySchedulerTensorFlow = ExponentialDecaySchedulerTensorFlow2
     InverseTimeDecaySchedulerTensorFlow = InverseTimeDecaySchedulerTensorFlow2
     ZarembaDecaySchedulerTensorFlow = ZarembaDecaySchedulerTensorFlow2
+    register(LinearDecaySchedulerTensorFlow, MEAD_LAYERS_LR_SCHEDULERS, "linear", "lr_scheduler")
 
 register(ConstantSchedulerTensorFlow, MEAD_LAYERS_LR_SCHEDULERS, "default", "lr_scheduler")
 register(WarmupLinearSchedulerTensorFlow, MEAD_LAYERS_LR_SCHEDULERS, "warmup_linear", "lr_scheduler")
