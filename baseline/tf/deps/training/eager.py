@@ -26,7 +26,6 @@ if TF_VERSION < 2:
     tf.enable_eager_execution()
 
 
-
 def to_tensors(ts, lengths_key):
     """Convert a data feed into a tuple of `features` (`dict`) and `y` values
 

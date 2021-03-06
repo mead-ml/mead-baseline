@@ -95,7 +95,7 @@ def main():
     parser.add_argument('--reporting', help='reporting hooks', nargs='+')
     parser.add_argument('--backend', help='The deep learning backend to use')
     parser.add_argument('--checkpoint', help='Restart training from this checkpoint')
-    parser.add_argument('--prefer_eager', help="If running in TensorFlow, should we prefer eager model", type=str2bool)
+    parser.add_argument('--prefer_eager', help="If running in TensorFlow, should we prefer eager model", default=True, type=str2bool)
     args, overrides = parser.parse_known_args()
     config_params = read_config_stream(args.config)
     config_params = parse_and_merge_overrides(config_params, overrides, pre='x')

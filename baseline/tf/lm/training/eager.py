@@ -56,7 +56,6 @@ class LanguageModelTrainerEagerTf(Trainer):
                                                              directory=checkpoint_dir,
                                                              max_to_keep=5)
 
-
     def checkpoint(self):
         """This method saves a checkpoint
 
