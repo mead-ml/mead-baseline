@@ -6,11 +6,11 @@ from baseline.train import create_trainer, register_training_func
 from baseline.tf.lm.training.utils import to_tensors, SHUF_BUF_SZ, NUM_PREFETCH
 
 
-@register_training_func('lm')
+@register_training_func('lm', 'datasets')
 def fit_datasets(model_params, ts, vs, es=None, **kwargs):
-    """
-    Train an language model using TensorFlow with `tf.dataset`.  This
-    is the default behavior for training.
+    """Deprecated: this code will be removed in the next version of mead-baseline
+
+    Train an language model using TensorFlow with `tf.dataset`.
 
     :param model_params: The model (or parameters to create the model) to train
     :param ts: A training data set

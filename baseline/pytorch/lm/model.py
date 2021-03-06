@@ -1,5 +1,5 @@
 from baseline.pytorch.torchy import *
-from baseline.pytorch.transformer import TransformerEncoderStack, subsequent_mask, MultiHeadedAttention
+from eight_mile.pytorch.layers import TransformerEncoderStack, subsequent_mask, MultiHeadedAttention
 from baseline.model import LanguageModel, register_model
 from eight_mile.pytorch.serialize import load_tlm_npz
 import torch.autograd

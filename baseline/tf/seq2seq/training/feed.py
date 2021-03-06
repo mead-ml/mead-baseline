@@ -11,8 +11,8 @@ from baseline.train import Trainer, create_trainer, register_trainer, register_t
 from baseline.model import create_model_for
 from collections import OrderedDict
 
-#@register_training_func('seq2seq', 'feed_dict')
-@register_training_func('seq2seq', 'default')
+
+@register_training_func('seq2seq')
 def fit(model_params, ts, vs, es=None, **kwargs):
     """
     Train an encoder-decoder network using TensorFlow with a `feed_dict`.

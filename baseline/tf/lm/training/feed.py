@@ -12,7 +12,7 @@ from baseline.model import create_model_for
 from collections import OrderedDict
 
 
-@register_training_func('lm', 'feed_dict')
+@register_training_func('lm')
 def fit(model_params, ts, vs, es=None, **kwargs):
     """
     Train an language model using TensorFlow with a `feed_dict`.

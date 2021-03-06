@@ -6,12 +6,11 @@ from baseline.train import create_trainer, register_training_func
 from baseline.tf.seq2seq.training.utils import to_tensors, SHUF_BUF_SZ, NUM_PREFETCH
 
 
-@register_training_func('seq2seq', 'dataset')
+@register_training_func('seq2seq', 'datasets')
 def fit_datasets(model_params, ts, vs, es=None, **kwargs):
-    """
-    Train an encoder-decoder network using TensorFlow with `tf.dataset`.  This
-    is the default behavior for training.
+    """Deprecated: this code will be removed in the next version of mead-baseline
 
+    Train an encoder-decoder network using TensorFlow with `tf.dataset`.
     :param model_params: The model (or parameters to create the model) to train
     :param ts: A training data set
     :param vs: A validation data set

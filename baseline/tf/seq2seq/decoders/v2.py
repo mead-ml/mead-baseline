@@ -4,7 +4,6 @@ from baseline.utils import ls_props, read_json, Offsets, exporter
 from baseline.model import register_decoder, register_arc_policy, create_seq2seq_arc_policy
 from baseline.tf.embeddings import *
 from baseline.tf.seq2seq.encoders.v2 import TransformerEncoderOutput
-from baseline.tf.transformer import subsequent_mask
 from functools import partial
 
 

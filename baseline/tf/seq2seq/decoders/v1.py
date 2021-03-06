@@ -2,7 +2,6 @@ from baseline.tf.tfy import *
 from baseline.utils import ls_props, read_json, Offsets, exporter
 from baseline.model import register_decoder, register_arc_policy, create_seq2seq_arc_policy
 from baseline.tf.embeddings import *
-from baseline.tf.transformer import transformer_decoder_stack, subsequent_mask
 
 
 __all__ = []

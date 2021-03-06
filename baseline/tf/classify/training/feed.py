@@ -18,7 +18,7 @@ from baseline.model import create_model_for
 import numpy as np
 
 
-@register_training_func('classify', 'feed_dict')
+@register_training_func('classify')
 def fit(model_params, ts, vs, es=None, **kwargs):
     """
     Train a classifier using TensorFlow with a `feed_dict`.  This

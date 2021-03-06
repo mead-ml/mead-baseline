@@ -83,7 +83,7 @@ def main():
         ],
         extras_require={
             'test': ['pytest', 'mock', 'contextdecorator', 'pytest-forked', 'onnxruntime'],
-            'report': ['visdom', 'tensorboard'],
+            'report': ['tensorboard'],
             'yaml': ['pyyaml'],
             'bpe': ['fastBPE'],
             'bpex': ['fastBPE', 'subword-nmt'],

@@ -13,7 +13,7 @@ from baseline.tf.tagger.training.utils import TaggerEvaluatorTf
 logger = logging.getLogger('baseline')
 
 
-@register_training_func('tagger', 'feed_dict')
+@register_training_func('tagger')
 def fit(model_params, ts, vs, es, **kwargs):
     """
     Train a classifier using TensorFlow with a `feed_dict`.  This
