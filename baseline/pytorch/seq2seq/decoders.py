@@ -5,8 +5,7 @@ import torch.nn.functional as F
 import numpy as np
 from torch.autograd import Variable
 from baseline.utils import Offsets, exporter
-from eight_mile.pytorch.layers import repeat_batch, gnmt_length_penalty, BeamSearchBase, rnn_cell, WeightTieDense
-from baseline.pytorch.transformer import subsequent_mask, TransformerDecoderStack
+from eight_mile.pytorch.layers import repeat_batch, gnmt_length_penalty, BeamSearchBase, rnn_cell, WeightTieDense, subsequent_mask, TransformerDecoderStack
 from baseline.model import register_arc_policy, register_decoder, create_seq2seq_arc_policy
 from baseline.pytorch.seq2seq.encoders import TransformerEncoderOutput
 from baseline.pytorch.torchy import (

@@ -1,6 +1,6 @@
 from collections import namedtuple
 from baseline.pytorch.torchy import sequence_mask, pytorch_linear, pytorch_lstm
-from baseline.pytorch.transformer import TransformerEncoderStack
+from eight_mile.pytorch.layers import TransformerEncoderStack
 from baseline.model import register_encoder
 from eight_mile.pytorch.layers import *
 import torch
