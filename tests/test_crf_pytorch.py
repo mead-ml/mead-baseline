@@ -390,7 +390,7 @@ def test_viterbi_score_equals_sentence_score(generate_batch):
 
     p, viterbi_scores = Viterbi(Offsets.GO, Offsets.EOS)(unary, crf.transitions, lengths)
     gold_scores = crf.score_sentence(unary, p, lengths)
-    np.testing.assert_allclose(viterbi_scores.detach().numpy(), gold_scores.detach().numpy())
+    np.testing.assert_allclose(viterbi_scores.detach().numpy(), gold_scores.detach().numpy(), rtol=1e-6)
 
 
 def test_viterbi_script(generate_batch):

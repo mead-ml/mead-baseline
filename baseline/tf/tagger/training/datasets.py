@@ -19,9 +19,10 @@ SHUF_BUF_SZ = 5000
 logger = logging.getLogger('baseline')
 
 
-@register_training_func('tagger')
+@register_training_func('tagger', 'datasets')
 def fit_datasets(model_params, ts, vs, es=None, **kwargs):
-    """
+    """Deprecated: this code will be removed in the next version of mead-baseline
+
     Train a tagger using TensorFlow with `tf.dataset`.  This
     is the default behavior for training.
 

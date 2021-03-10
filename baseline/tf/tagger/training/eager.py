@@ -91,6 +91,8 @@ class TaggerEvaluatorEagerTf:
         :param dataset: (`bool`) Is this using `tf.dataset`s
         :return: The metrics
         """
+        SET_TRAIN_FLAG(False)
+
         total_correct = total_sum = 0
         gold_spans = []
         pred_spans = []
@@ -335,7 +337,6 @@ def fit_eager(model_params, ts, vs, es=None, **kwargs):
     for epoch in range(epochs):
         trainer.train(train_dataset, reporting_fns, steps=len(ts))
         test_metrics = trainer.test(valid_dataset, reporting_fns, phase='Valid', steps=len(vs))
-
         if do_early_stopping is False:
             trainer.checkpoint()
             trainer.model.save(model_file)

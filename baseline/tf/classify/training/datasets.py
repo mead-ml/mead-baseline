@@ -25,9 +25,10 @@ SHUF_BUF_SZ = 5000
 log = logging.getLogger('baseline.timing')
 
 
-@register_training_func('classify')
+@register_training_func('classify', 'datasets')
 def fit_datasets(model_params, ts, vs, es=None, **kwargs):
-    """
+    """Deprecated: this code will be removed in the next version of mead-baseline
+
     Train a classifier using TensorFlow with `tf.dataset`.  This
     is the default behavior for training.
 
