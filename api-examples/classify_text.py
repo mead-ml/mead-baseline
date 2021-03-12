@@ -18,7 +18,7 @@ parser.add_argument('--batchsz', help='batch size when --text is a file', defaul
 parser.add_argument('--model_type', type=str, default='default')
 parser.add_argument('--modules', default=[])
 parser.add_argument('--prefer_eager', help="If running in TensorFlow, should we prefer eager model", type=str2bool, default=False)
-
+parser.add_argument('--scores', '-s', action="store_true")
 args = parser.parse_args()
 
 if args.backend == 'tf':
@@ -44,5 +44,8 @@ m = bl.ClassifierService.load(args.model, backend=args.backend, remote=args.remo
                               device=args.device, model_type=args.model_type)
 for texts in batched:
     for text, output in zip(texts, m.predict(texts)):
-        print("{}, {}".format(" ".join(text), output[0][0]))
+        if args.scores:
+            print("{}, {}".format(" ".join(text), output))
+        else:
+            print("{}, {}".format(" ".join(text), output[0][0]))
 
