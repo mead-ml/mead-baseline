@@ -12,14 +12,14 @@ from eight_mile.optz import *
 from eight_mile.pytorch.serialize import load_seq2seq_enc_from_tlm_npz, load_transformer_seq2seq_npz
 from eight_mile.pytorch.layers import (
     save_checkpoint, init_distributed,
-    PairedModel
+    PairedModel,
+    TransformerBoWPairedModel,
 )
 from baseline.pytorch.seq2seq.model import TiedEmbeddingsSeq2SeqModel
 from eight_mile.pytorch.optz import *
 from transformer_utils import (
     MultiFileDatasetReader,
     get_lr_decay,
-    TransformerBoWPairedModel
 )
 
 
