@@ -75,8 +75,8 @@ def fit(model_params, ts, vs, es, **kwargs):
     last_improved = 0
     for epoch in range(epochs):
 
-        trainer.train(ts, reporting_fns, dataset=False)
-        test_metrics = trainer.test(vs, reporting_fns, phase='Valid', dataset=False)
+        trainer.train(ts, reporting_fns)
+        test_metrics = trainer.test(vs, reporting_fns, phase='Valid')
 
         if do_early_stopping is False:
             trainer.checkpoint()
@@ -101,7 +101,7 @@ def fit(model_params, ts, vs, es, **kwargs):
         # What to do about overloading this??
         evaluator = TaggerEvaluatorTf(trainer.model, span_type, verbose)
         start = time.time()
-        test_metrics = evaluator.test(es, conll_output=conll_output, txts=txts, dataset=False)
+        test_metrics = evaluator.test(es, conll_output=conll_output, txts=txts)
         duration = time.time() - start
         for reporting in reporting_fns:
             reporting(test_metrics, 0, 'Test')

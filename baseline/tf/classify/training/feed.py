@@ -77,8 +77,8 @@ def fit(model_params, ts, vs, es=None, **kwargs):
 
     for epoch in range(epochs):
 
-        trainer.train(ts, reporting_fns, dataset=False)
-        test_metrics = trainer.test(vs, reporting_fns, phase='Valid', dataset=False)
+        trainer.train(ts, reporting_fns)
+        test_metrics = trainer.test(vs, reporting_fns, phase='Valid')
 
         if do_early_stopping is False:
             trainer.checkpoint()
@@ -101,4 +101,4 @@ def fit(model_params, ts, vs, es=None, **kwargs):
     if es is not None:
         print('Reloading best checkpoint')
         trainer.recover_last_checkpoint()
-        trainer.test(es, reporting_fns, phase='Test', verbose=verbose, dataset=False)
+        trainer.test(es, reporting_fns, phase='Test', verbose=verbose)

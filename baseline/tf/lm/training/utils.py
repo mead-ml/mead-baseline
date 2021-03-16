@@ -131,7 +131,7 @@ class LanguageModelTrainerTf(Trainer):
     def _num_toks(batch):
         return np.prod(batch['y'].shape)
 
-    def train(self, ts, reporting_fns, dataset=True):
+    def train(self, ts, reporting_fns):
         """Train by looping over the steps
 
         For a `tf.dataset`-backed `fit_func`, we are using the previously wired `dataset`s
@@ -162,11 +162,8 @@ class LanguageModelTrainerTf(Trainer):
         self.nstep_start = start
         for batch_dict in ts:
 
-            if dataset:
-                feed_dict = {TRAIN_FLAG(): 1}
-            else:
-                feed_dict = self.model.make_input(batch_dict, True)
-                _, global_step, lossv = self.sess.run([self.train_op, self.global_step, self.loss], feed_dict=feed_dict)
+            feed_dict = self.model.make_input(batch_dict, True)
+            _, global_step, lossv = self.sess.run([self.train_op, self.global_step, self.loss], feed_dict=feed_dict)
 
             # In Keras LSTM, the order is h first, c second, its the opposite in TF 1, however I dont think it
             # ends up mattering here
@@ -209,7 +206,7 @@ class LanguageModelTrainerTf(Trainer):
         metrics['perplexity'] = np.exp(metrics['avg_loss'])
         return metrics
 
-    def test(self, vs, reporting_fns, phase, dataset=True):
+    def test(self, vs, reporting_fns, phase):
         """Run an epoch of testing over the dataset
 
         If we are using a `tf.dataset`-based `fit_func`, we will just
@@ -244,9 +241,7 @@ class LanguageModelTrainerTf(Trainer):
         start = time.time()
 
         for batch_dict in vs:
-            feed_dict = {}
-            if not dataset:
-                feed_dict = self.model.make_input(batch_dict, False)
+            feed_dict = self.model.make_input(batch_dict, False)
             # In Keras LSTM, the order is h first, c second, its the opposite in TF 1, however I dont think it
             # ends up mattering here
             if self.model.requires_state:

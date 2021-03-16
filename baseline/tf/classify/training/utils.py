@@ -26,7 +26,6 @@ SHUF_BUF_SZ = 5000
 log = logging.getLogger('baseline.timing')
 
 
-
 def to_tensors(ts, lengths_key):
     """Convert a data feed into a tuple of `features` (`dict`) and `y` values
 
@@ -49,7 +48,6 @@ def to_tensors(ts, lengths_key):
         del features[lengths_key]
     y = features.pop('y')
     return features, y
-
 
 
 def _report(step, metrics, start, phase, tt, reporting_fns, steps=1):
@@ -134,7 +132,7 @@ class ClassifyTrainerTf(EpochReportingTrainer):
     def _get_batchsz(batch_dict):
         return len(batch_dict['y'])
 
-    def _train(self, loader, dataset=True, **kwargs):
+    def _train(self, loader, **kwargs):
         """Train an epoch of data using either the input loader or using `tf.dataset`
 
         In non-`tf.dataset` mode, we cycle the loader data feed, and pull a batch and feed it to the feed dict
@@ -145,7 +143,6 @@ class ClassifyTrainerTf(EpochReportingTrainer):
         :param kwargs: See below
 
         :Keyword Arguments:
-         * *dataset* (`bool`) Set to `True` if using `tf.dataset`s, defaults to `True`
          * *reporting_fns* (`list`) A list of reporting hooks to use
 
         :return: Metrics
@@ -159,12 +156,8 @@ class ClassifyTrainerTf(EpochReportingTrainer):
         steps = len(loader)
         pg = create_progress_bar(steps)
         for batch_dict in pg(loader):
-            if dataset:
-                _, step, lossv = self.sess.run([self.train_op, self.global_step, self.loss],
-                                               feed_dict={TRAIN_FLAG(): 1})
-            else:
-                feed_dict = self.model.make_input(batch_dict, True)
-                _, step, lossv = self.sess.run([self.train_op, self.global_step, self.loss], feed_dict=feed_dict)
+            feed_dict = self.model.make_input(batch_dict, True)
+            _, step, lossv = self.sess.run([self.train_op, self.global_step, self.loss], feed_dict=feed_dict)
 
             batchsz = self._get_batchsz(batch_dict)
             report_lossv = lossv * batchsz
@@ -204,8 +197,6 @@ class ClassifyTrainerTf(EpochReportingTrainer):
         if self.ema:
             self.sess.run(self.ema_load)
 
-        use_dataset = kwargs.get('dataset', True)
-
         cm = ConfusionMatrix(self.model.labels)
         steps = len(loader)
         total_loss = 0
@@ -215,11 +206,8 @@ class ClassifyTrainerTf(EpochReportingTrainer):
         pg = create_progress_bar(steps)
         for i, batch_dict in enumerate(pg(loader)):
             y = batch_dict['y']
-            if use_dataset:
-                guess, lossv = self.sess.run([self.model.best, self.test_loss])
-            else:
-                feed_dict = self.model.make_input(batch_dict, False)
-                guess, lossv = self.sess.run([self.model.best, self.test_loss], feed_dict=feed_dict)
+            feed_dict = self.model.make_input(batch_dict, False)
+            guess, lossv = self.sess.run([self.model.best, self.test_loss], feed_dict=feed_dict)
 
             batchsz = len(guess)
             total_loss += lossv * batchsz

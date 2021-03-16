@@ -100,7 +100,7 @@ class Seq2SeqTrainerEagerTf(Trainer):
     def _num_toks(self, lens):
         return tf.reduce_sum(lens)
 
-    def train(self, ts, reporting_fns, dataset=True):
+    def train(self, ts, reporting_fns):
         """Train by looping over the steps
 
         For a `tf.dataset`-backed `fit_func`, we are using the previously wired `dataset`s
@@ -187,7 +187,7 @@ class Seq2SeqTrainerEagerTf(Trainer):
         )
         return metrics
 
-    def test(self, vs, reporting_fns, phase='Valid', dataset=True, **kwargs):
+    def test(self, vs, reporting_fns, phase='Valid', **kwargs):
         """Run an epoch of testing over the dataset
 
         If we are using a `tf.dataset`-based `fit_func`, we will just
