@@ -4,7 +4,7 @@ from baseline.vectorizers import *
 from baseline.confusion import *
 from baseline.data import *
 from baseline.reader import *
-from baseline.progress import *
+from eight_mile.progress import *
 from baseline.reporting import *
 from baseline.model import *
 from baseline.embeddings import *
