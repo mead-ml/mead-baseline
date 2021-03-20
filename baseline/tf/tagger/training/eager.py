@@ -8,7 +8,7 @@ import logging
 from eight_mile.utils import listify, revlut, to_spans, write_sentence_conll, per_entity_f1, span_f1, conlleval_output, Offsets
 from eight_mile.tf.layers import TRAIN_FLAG, SET_TRAIN_FLAG, reload_checkpoint, get_shape_as_list, autograph_options
 from eight_mile.tf.optz import EagerOptimizer
-from baseline.progress import create_progress_bar
+from eight_mile.progress import create_progress_bar
 from baseline.model import create_model_for
 from baseline.train import register_training_func, EpochReportingTrainer
 from baseline.utils import get_model_file, get_metric_cmp

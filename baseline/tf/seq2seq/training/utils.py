@@ -4,7 +4,7 @@ import numpy as np
 import tensorflow as tf
 from eight_mile.tf.layers import create_session, reload_checkpoint
 from eight_mile.tf.optz import optimizer
-from baseline.progress import create_progress_bar
+from eight_mile.progress import create_progress_bar
 from eight_mile.bleu import bleu
 
 from baseline.utils import (
@@ -150,16 +150,11 @@ class Seq2SeqTrainerTf(Trainer):
         metrics['perplexity'] = np.exp(metrics['avg_loss'])
         return metrics
 
-    def train(self, ts, reporting_fns, dataset=True):
+    def train(self, ts, reporting_fns):
         """Train by looping over the steps
-
-        For a `tf.dataset`-backed `fit_func`, we are using the previously wired `dataset`s
-        in the model (and `dataset` is `True`).  For `feed_dict`, we convert the ts samples
-        to `feed_dict`s and hand them in one-by-one
 
         :param ts: The training set
         :param reporting_fns: A list of reporting hooks
-        :param dataset: (`bool`) Are we using `tf.dataset`s
         :return: Metrics
         """
         epoch_loss = 0
@@ -168,12 +163,9 @@ class Seq2SeqTrainerTf(Trainer):
         start = time.time()
         self.nstep_start = start
         for batch_dict in ts:
-            if dataset:
-                _, global_step, lossv = self.sess.run([self.train_op, self.global_step, self.loss],
-                                                      feed_dict={TRAIN_FLAG(): 1})
-            else:
-                feed_dict = self.model.make_input(batch_dict, True)
-                _, global_step, lossv = self.sess.run([self.train_op, self.global_step, self.loss], feed_dict=feed_dict)
+
+            feed_dict = self.model.make_input(batch_dict, True)
+            _, global_step, lossv = self.sess.run([self.train_op, self.global_step, self.loss], feed_dict=feed_dict)
 
             # ?? How to get this cleaner?
             toks = self._num_toks(batch_dict['tgt_lengths'])
@@ -222,7 +214,7 @@ class Seq2SeqTrainerTf(Trainer):
         )
         return metrics
 
-    def test(self, vs, reporting_fns, phase='Valid', dataset=True):
+    def test(self, vs, reporting_fns, phase='Valid'):
         """Run an epoch of testing over the dataset
 
         If we are using a `tf.dataset`-based `fit_func`, we will just
@@ -237,7 +229,7 @@ class Seq2SeqTrainerTf(Trainer):
         :param dataset: (`bool`) Are we using `tf.dataset`s
         :return: Metrics
         """
-        if phase == 'Test' and not dataset:
+        if phase == 'Test':
             return self._evaluate(vs, reporting_fns)
         self.valid_epochs += 1
 
@@ -250,11 +242,8 @@ class Seq2SeqTrainerTf(Trainer):
         pg = create_progress_bar(len(vs))
         for batch_dict in pg(vs):
 
-            if dataset:
-                lossv, top_preds = self.model.sess.run([self.test_loss, self.model.decoder.best])
-            else:
-                feed_dict = self.model.make_input(batch_dict)
-                lossv, top_preds = self.model.sess.run([self.test_loss, self.model.decoder.best], feed_dict=feed_dict)
+            feed_dict = self.model.make_input(batch_dict)
+            lossv, top_preds = self.model.sess.run([self.test_loss, self.model.decoder.best], feed_dict=feed_dict)
             toks = self._num_toks(batch_dict['tgt_lengths'])
             total_loss += lossv * toks
             total_toks += toks

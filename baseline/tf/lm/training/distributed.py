@@ -77,7 +77,7 @@ class LanguageModelTrainerDistributedTf(Trainer):
     def _num_toks(y):
         return tf.reduce_prod(get_shape_as_list(y))
 
-    def train(self, ts, reporting_fns, steps=0, dataset=True):
+    def train(self, ts, reporting_fns, steps=0):
         """Train by looping over the steps
 
         For a `tf.dataset`-backed `fit_func`, we are using the previously wired `dataset`s

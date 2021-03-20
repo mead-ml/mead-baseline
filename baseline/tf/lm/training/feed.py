@@ -10,6 +10,7 @@ from baseline.utils import get_model_file, get_metric_cmp
 from baseline.train import Trainer, create_trainer, register_trainer, register_training_func
 from baseline.model import create_model_for
 from collections import OrderedDict
+from baseline.tf.lm.training.utils import *
 
 
 @register_training_func('lm')
@@ -70,11 +71,11 @@ def fit(model_params, ts, vs, es=None, **kwargs):
 
     for epoch in range(epochs):
 
-        trainer.train(ts, reporting_fns, dataset=False)
+        trainer.train(ts, reporting_fns)
         if after_train_fn is not None:
             after_train_fn(trainer.model)
 
-        test_metrics = trainer.test(vs, reporting_fns, phase='Valid', dataset=False)
+        test_metrics = trainer.test(vs, reporting_fns, phase='Valid')
 
         if do_early_stopping is False:
             trainer.checkpoint()
@@ -95,5 +96,5 @@ def fit(model_params, ts, vs, es=None, **kwargs):
         print('Best performance on %s: %.3f at epoch %d' % (early_stopping_metric, best_metric, last_improved))
     if es is not None:
         trainer.recover_last_checkpoint()
-        trainer.test(es, reporting_fns, phase='Test', dataset=False)
+        trainer.test(es, reporting_fns, phase='Test')
 

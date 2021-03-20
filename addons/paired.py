@@ -1,6 +1,6 @@
 from torch.utils.data.dataset import IterableDataset, TensorDataset
 from baseline.vectorizers import Token1DVectorizer, BPEVectorizer1D
-from baseline.progress import create_progress_bar
+from eight_mile.progress import create_progress_bar
 from baseline.reader import register_reader
 from eight_mile.utils import str2bool, write_yaml, read_yaml, Offsets
 import torch

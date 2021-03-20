@@ -7,7 +7,7 @@ import logging
 from eight_mile.tf.optz import optimizer
 from eight_mile.utils import to_spans, Offsets, revlut, span_f1, per_entity_f1, conlleval_output, write_sentence_conll
 
-from baseline.progress import create_progress_bar
+from eight_mile.progress import create_progress_bar
 from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
 from baseline.tf.tfy import TRAIN_FLAG
 from baseline.model import create_model_for
@@ -64,13 +64,9 @@ class TaggerEvaluatorTf:
             print('Setting span type {}'.format(self.span_type))
         self.verbose = verbose
 
-    def process_batch(self, batch_dict, handle, txts, dataset=True):
-        if dataset:
-            guess = self.sess.run(self.model.best)
-        else:
-            feed_dict = self.model.make_input(batch_dict)
-            guess = self.sess.run(self.model.best, feed_dict=feed_dict)
-
+    def process_batch(self, batch_dict, handle, txts):
+        feed_dict = self.model.make_input(batch_dict)
+        guess = self.sess.run(self.model.best, feed_dict=feed_dict)
         sentence_lengths = batch_dict[self.model.lengths_key]
 
         ids = batch_dict['ids']
@@ -106,17 +102,12 @@ class TaggerEvaluatorTf:
 
         return correct_labels, total_labels, gold_chunks, pred_chunks
 
-    def test(self, ts, conll_output=None, txts=None, dataset=True):
-        """Method that evaluates on some data.  There are 2 modes this can run in, `feed_dict` and `dataset`
+    def test(self, ts, conll_output=None, txts=None):
+        """Method that evaluates on some data.
 
-        In `feed_dict` mode, the model cycles the test data batch-wise and feeds each batch in with a `feed_dict`.
-        In `dataset` mode, the data is still passed in to this method, but it is not passed in a `feed_dict` and is
-        mostly superfluous since the features are grafted right onto the graph.  However, we do use it for supplying
-        the ground truth, ids and text, so it is essential that the caller does not shuffle the data
         :param ts: The test set
         :param conll_output: (`str`) An optional file output
         :param txts: A list of text data associated with the encoded batch
-        :param dataset: (`bool`) Is this using `tf.dataset`s
         :return: The metrics
         """
         total_correct = total_sum = 0
@@ -133,7 +124,7 @@ class TaggerEvaluatorTf:
 
         try:
             for batch_dict in pg(ts):
-                correct, count, golds, guesses = self.process_batch(batch_dict, handle, txts, dataset)
+                correct, count, golds, guesses = self.process_batch(batch_dict, handle, txts)
                 total_correct += correct
                 total_sum += count
                 gold_spans.extend(golds)
@@ -246,19 +237,14 @@ class TaggerTrainerTf(EpochReportingTrainer):
 
         :return: Metrics
         """
-        use_dataset = kwargs.get('dataset', True)
         reporting_fns = kwargs.get('reporting_fns', [])
         epoch_loss = 0
         epoch_div = 0
         steps = len(ts)
         pg = create_progress_bar(steps)
         for batch_dict in pg(ts):
-            if use_dataset:
-                _, step, lossv = self.sess.run([self.train_op, self.global_step, self.loss],
-                                               feed_dict={TRAIN_FLAG(): 1})
-            else:
-                feed_dict = self.model.make_input(batch_dict, True)
-                _, step, lossv = self.sess.run([self.train_op, self.global_step, self.loss], feed_dict=feed_dict)
+            feed_dict = self.model.make_input(batch_dict, True)
+            _, step, lossv = self.sess.run([self.train_op, self.global_step, self.loss], feed_dict=feed_dict)
 
             batchsz = self._get_batchsz(batch_dict)
             report_loss = lossv * batchsz
@@ -277,7 +263,7 @@ class TaggerTrainerTf(EpochReportingTrainer):
         metrics = self.calc_metrics(epoch_loss, epoch_div)
         return metrics
 
-    def _test(self, ts, dataset=True):
+    def _test(self, ts):
         """Test an epoch of data using either the input loader or using `tf.dataset`
 
         In non-`tf.dataset` mode, we cycle the loader data feed, and pull a batch and feed it to the feed dict
@@ -294,4 +280,4 @@ class TaggerTrainerTf(EpochReportingTrainer):
 
         :return: Metrics
         """
-        return self.evaluator.test(ts, dataset=dataset)
+        return self.evaluator.test(ts)

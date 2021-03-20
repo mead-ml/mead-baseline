@@ -4,7 +4,7 @@ import time
 import logging
 import tensorflow as tf
 
-from baseline.progress import create_progress_bar
+from eight_mile.progress import create_progress_bar
 from eight_mile.utils import listify, get_version, Offsets
 from eight_mile.metrics import LCM, UCM, LAS, UAS
 from eight_mile.tf.layers import SET_TRAIN_FLAG, get_shape_as_list, autograph_options, masked_fill

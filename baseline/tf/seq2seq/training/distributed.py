@@ -5,7 +5,7 @@ import tensorflow as tf
 from eight_mile.utils import listify
 from eight_mile.tf.layers import SET_TRAIN_FLAG, get_shape_as_list, autograph_options, create_distribute_strategy
 from eight_mile.tf.optz import EagerOptimizer
-from baseline.progress import create_progress_bar
+from eight_mile.progress import create_progress_bar
 from baseline.utils import get_model_file, get_metric_cmp, convert_seq2seq_golds, convert_seq2seq_preds
 from eight_mile.bleu import bleu
 from baseline.model import create_model_for

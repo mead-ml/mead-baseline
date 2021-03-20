@@ -8,7 +8,7 @@ from eight_mile.confusion import ConfusionMatrix
 from eight_mile.utils import listify
 from eight_mile.tf.optz import optimizer
 
-from baseline.progress import create_progress_bar
+from eight_mile.progress import create_progress_bar
 from baseline.utils import get_model_file, get_metric_cmp
 from baseline.tf.tfy import _add_ema, TRAIN_FLAG, SET_TRAIN_FLAG
 from baseline.tf.classify.training.utils import to_tensors
@@ -77,8 +77,8 @@ def fit(model_params, ts, vs, es=None, **kwargs):
 
     for epoch in range(epochs):
 
-        trainer.train(ts, reporting_fns, dataset=False)
-        test_metrics = trainer.test(vs, reporting_fns, phase='Valid', dataset=False)
+        trainer.train(ts, reporting_fns)
+        test_metrics = trainer.test(vs, reporting_fns, phase='Valid')
 
         if do_early_stopping is False:
             trainer.checkpoint()
@@ -101,4 +101,4 @@ def fit(model_params, ts, vs, es=None, **kwargs):
     if es is not None:
         print('Reloading best checkpoint')
         trainer.recover_last_checkpoint()
-        trainer.test(es, reporting_fns, phase='Test', verbose=verbose, dataset=False)
+        trainer.test(es, reporting_fns, phase='Test', verbose=verbose)

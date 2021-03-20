@@ -14,8 +14,9 @@ from multiprocessing import Process, cpu_count, Manager
 import numpy as np
 import mead
 import baseline
-from baseline.progress import create_progress_bar
-from baseline.utils import read_config_file, suppress_output
+from eight_mile.progress import create_progress_bar
+from eight_mile.utils import read_config_file
+from baseline.utils import suppress_output
 from xpctl.helpers import order_json
 
 Version = namedtuple('Version', 'major minor patch')
