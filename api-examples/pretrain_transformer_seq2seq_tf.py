@@ -5,15 +5,14 @@ import os
 from argparse import ArgumentParser
 import baseline
 import baseline.tf
-baseline.tf.set_tf_eager_debug(True)
 
-from eight_mile.utils import str2bool, write_json, Average, read_yaml, get_num_gpus_multiworker, get_version
+from eight_mile.utils import str2bool, write_json, Average, get_num_gpus_multiworker, get_version
 from baseline.tf.embeddings import *
 import baseline.embeddings
 from baseline.vectorizers import BPEVectorizer1D
 from eight_mile.optz import *
 from eight_mile.tf.optz import *
-from eight_mile.tf.layers import create_distribute_strategy
+from eight_mile.tf.layers import create_distribute_strategy, read_yaml_tf
 from baseline.tf.seq2seq.model import Seq2SeqModel
 from eight_mile.tf.serialize import save_transformer_seq2seq_npz
 
@@ -103,7 +102,7 @@ def get_dataset(directory, file_type, num_parallel_reads=1, shuffle=True):
 
 
 def get_num_samples(sample_md):
-    yml = read_yaml(sample_md)
+    yml = read_yaml_tf(sample_md)
     return yml['num_samples']
 
 

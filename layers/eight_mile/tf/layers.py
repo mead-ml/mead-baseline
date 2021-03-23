@@ -43,6 +43,22 @@ def patch_dist_strategy(strategy):
         strategy.run = strategy.experimental_run_v2
 
 
+def read_yaml_tf(filepath: str) -> Dict:
+    """Read a YAML file using TensorFlow API (supports GCP remote files)
+    :param: filepath, The file name to load
+    :return: dict, The read yaml object
+    """
+    file_stream = tf.python.lib.io.file_io.FileIO(filepath, mode='r')
+    as_str = file_stream.read()
+
+    import yaml
+    from distutils.version import LooseVersion
+
+    if LooseVersion(yaml.__version__) >= LooseVersion("5.1"):
+        return yaml.load(as_str, Loader=yaml.FullLoader)
+    return yaml.load(as_str)
+
+
 def set_tf_log_level(ll):
     # 0     | DEBUG            | [Default] Print all messages
     # 1     | INFO             | Filter out INFO messages

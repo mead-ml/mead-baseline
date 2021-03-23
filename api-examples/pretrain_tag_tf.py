@@ -9,11 +9,11 @@ from eight_mile.utils import str2bool, write_json, read_json
 import baseline.tf.embeddings
 import baseline.embeddings
 from baseline.vectorizers import BPEVectorizer1D
-from eight_mile.utils import Average, get_num_gpus_multiworker, read_yaml
-from eight_mile.tf.layers import create_distribute_strategy, TransformerEncoderStack, EmbeddingsStack
+from eight_mile.utils import Average, get_num_gpus_multiworker
+from eight_mile.tf.layers import create_distribute_strategy, TransformerEncoderStack, EmbeddingsStack, read_yaml_tf
 from eight_mile.optz import *
 from eight_mile.tf.optz import *
-from baseline.tf.lm import SET_TRAIN_FLAG
+from baseline.tf.tfy import SET_TRAIN_FLAG
 from eight_mile.tf.serialize import save_tlm_npz
 import tensorflow as tf
 import json
@@ -126,7 +126,7 @@ def get_dataset(directory, file_type, num_parallel_reads=1, shuffle=True):
 
 
 def get_num_samples(sample_md):
-    yml = read_yaml(sample_md)
+    yml = read_yaml_tf(sample_md)
     if not yml:
         raise Exception(f"Invalid sample file {sample_md}")
     return yml['num_samples']
