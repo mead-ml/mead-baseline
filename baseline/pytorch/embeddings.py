@@ -159,19 +159,20 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
         self.finetune = kwargs.get('finetune', True)
 
     def forward(self, x, token_type=None):
-        # the following line masks out the attention to padding tokens
-        input_mask = torch.zeros(x.shape, device=x.device, dtype=torch.long).masked_fill(x != 0, 1).unsqueeze(1).unsqueeze(1)
-        # A causal LM should have a subsequent mask; and a masked LM should have no mask
-        if not self.mlm:
-            input_mask = input_mask & subsequent_mask(x.shape[1]).type_as(input_mask)
-        embedding = self.embed(x, token_type)
-        embedding = self.proj_to_dsz(embedding)
-        transformer_out = self.transformer((embedding, input_mask))
-        z = self.get_output(x, transformer_out)
-        return z
+        with torch.no_grad() if not self.finetune else contextlib.ExitStack():
+            # the following line masks out the attention to padding tokens
+            input_mask = torch.zeros(x.shape, device=x.device, dtype=torch.long).masked_fill(x != 0, 1).unsqueeze(1).unsqueeze(1)
+            # A causal LM should have a subsequent mask; and a masked LM should have no mask
+            if not self.mlm:
+                input_mask = input_mask & subsequent_mask(x.shape[1]).type_as(input_mask)
+            embedding = self.embed(x, token_type)
+            embedding = self.proj_to_dsz(embedding)
+            transformer_out = self.transformer((embedding, input_mask))
+            z = self.get_output(x, transformer_out)
+            return z
 
     def get_output(self, inputs, z):
-        return z if self.finetune else z.detach()
+        return z
 
     def get_vocab(self):
         return self.vocab
@@ -282,7 +283,7 @@ class TransformerLMPooledEmbeddingsModel(TransformerLMEmbeddingsModel):
 
     def get_output(self, inputs, z):
         z = self.pooling_op(inputs, z)
-        return z if self.finetune else z.detach()
+        return z
 
 
 @register_embeddings(name='tlm-words-embed-pooled2d')
