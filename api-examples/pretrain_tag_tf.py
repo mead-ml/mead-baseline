@@ -10,11 +10,11 @@ import baseline.tf.embeddings
 import baseline.embeddings
 from baseline.vectorizers import BPEVectorizer1D
 from eight_mile.utils import Average, get_num_gpus_multiworker
-from eight_mile.tf.layers import create_distribute_strategy, TransformerEncoderStack, EmbeddingsStack, read_yaml_tf
+from eight_mile.tf.layers import create_distribute_strategy, TransformerEncoderStack, EmbeddingsStack, read_yaml_tf, read_json_tf
 from eight_mile.optz import *
 from eight_mile.tf.optz import *
 from baseline.tf.tfy import SET_TRAIN_FLAG
-from eight_mile.tf.serialize import save_tlm_npz
+from eight_mile.tf.serialize import save_tlm_output_npz
 import tensorflow as tf
 import json
 logger = logging.getLogger(__file__)
@@ -211,7 +211,7 @@ def train():
     num_train_samples = get_num_samples(train_md)
     valid_md = args.valid_md if args.valid_md else os.path.join(args.valid_dir, 'md.yml')
     num_valid_samples = get_num_samples(valid_md)
-    labels = read_json(args.label_file)
+    labels = read_json_tf(args.label_file)
     num_labels = len(labels)
 
     def dataset_train_fn(input_context):
@@ -327,7 +327,7 @@ def train():
                     logger.warning("Convert only flag specified.  Stopping after one step")
                     steps = optimizer.global_step.numpy()
                     npz_checkpoint = os.path.join(args.basedir, f'checkpoint-step-{steps}.npz')
-                    save_tlm_npz(model, npz_checkpoint)
+                    save_tlm_output_npz(model, npz_checkpoint)
                     return
 
                 steps = optimizer.global_step.numpy()
@@ -341,7 +341,7 @@ def train():
                     if args.npz:
 
                         npz_checkpoint = os.path.join(args.basedir, f'checkpoint-step-{steps}.npz')
-                        save_tlm_npz(model, npz_checkpoint)
+                        save_tlm_output_npz(model, npz_checkpoint)
 
             # How much time elapsed in minutes
             elapsed = (time.time() - start)/60
