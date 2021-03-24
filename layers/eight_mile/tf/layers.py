@@ -2774,9 +2774,10 @@ class TransformerEncoderStack(tf.keras.layers.Layer):
     def call(self, inputs):
         x, mask = inputs
         for layer in self.encoders:
-            pdrop = tf.random.uniform([])
-            if not TRAIN_FLAG() or (pdrop >= self.layer_drop):
-                x = layer((x, mask))
+            ## TODO: FIXME I dont work on TPUs!!!
+            ##pdrop = tf.random.uniform([])
+            ##if not TRAIN_FLAG() or (pdrop >= self.layer_drop):
+            x = layer((x, mask))
         return self.ln(x)
 
 
