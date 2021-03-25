@@ -135,6 +135,8 @@ class TransformerTagger(TaggerModelBase):
                 load_tlm_output_npz(self, checkpoint)
             else:
                 raise Exception("Currently we only support NPZ format checkpoints")
+        else:
+            logger.warning("No checkpoint was given.  Randomly initializing the weights")
 
     def transduce(self, inputs: Dict[str, TensorDef]) -> TensorDef:
         """This operation performs embedding of the input, followed by encoding and projection to logits
