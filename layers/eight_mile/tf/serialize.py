@@ -324,9 +324,9 @@ def save_tlm_output_npz(tlm: tf.keras.layers.Layer, npz: str, embeddings_keys: L
     """
     d = to_tlm_array(tlm, embeddings_keys, name)
     if hasattr(tlm, 'output'):
-        d.update(to_weight_array(tlm.output, name='output'))
+        d.update(to_weight_array(tlm.output, name=f'{name}/output'))
     elif hasattr(tlm, 'output_layer'):
-        d.update(to_weight_array(tlm.output_layer, name='output'))
+        d.update(to_weight_array(tlm.output_layer, name=f'{name}/output'))
     if verbose:
         print(d.keys())
     np.savez(npz, **d)
