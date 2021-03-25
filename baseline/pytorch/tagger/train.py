@@ -19,7 +19,7 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
     def __init__(self, model, **kwargs):
         super().__init__()
         if type(model) is dict:
-            model = create_model_for('tagger', **model)
+            model = create_model_for('tagger', checkpoint=kwargs.get('checkpoint'), **model)
         self.grad_accum = int(kwargs.get('grad_accum', 1))
         self.gpus = int(kwargs.get('gpus', 1))
         # By default support IOB1/IOB2

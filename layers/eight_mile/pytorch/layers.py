@@ -2313,7 +2313,7 @@ class ViterbiLogSoftmaxNorm(Viterbi):
         best_path = torch.stack(best_path)
         # Mask out the extra tags (This might be pointless given that anything that
         # will use this as a dense tensor downstream will mask it itself?)
-        seq_mask = sequence_mask(lengths).to(best_path.device).transpose(0, 1)
+        seq_mask = sequence_mask(lengths, seq_len).to(best_path.device).transpose(0, 1)
         best_path = best_path.masked_fill(seq_mask == MASK_FALSE, 0)
         return best_path, path_score
 
@@ -3651,7 +3651,10 @@ def rm_old_checkpoints(base_path, current_epoch, last_n=10):
 def find_latest_checkpoint(checkpoint_dir: str, wildcard="checkpoint") -> Tuple[str, int]:
     step_num = 0
     for f in glob.glob(os.path.join(checkpoint_dir, f"{wildcard}*")):
-        last = os.path.basename(f).split("-")[-1]
+        base = os.path.basename(f)
+        if "-" not in base:
+            continue
+        last = base.split("-")[-1]
         for x in ('.pth', '.npz'):
             last = last.replace(x, '', -1)
         this_step_num = int(last)

@@ -489,6 +489,24 @@ def load_tlm_npz(pytorch_tlm: nn.Module, npz: str, embeddings_keys: List[str] = 
     d = np.load(npz)
     from_tlm_array(pytorch_tlm, d, embeddings_keys, name)
 
+def load_tlm_output_npz(pytorch_tlm: nn.Module, npz: str, embeddings_keys: List[str] = None, name: str = "TLM"):
+    """Restore a TLM-like model (possibly a `nn.Module` for fine-tuning
+
+    We just populate the `TransformerEncoderStack` and the embeddings from weights, all other values remain
+    uninitialized
+
+    :param pytorch_tlm: A TLM-like model
+    :param npz: A file to restore the weights from
+    :param embeddings_key: Name of embeddings to restore, defaults to `None` in which case we restore all embeddings
+    :param name: A name for this primitive
+    :return:
+    """
+    d = np.load(npz)
+    from_tlm_array(pytorch_tlm, d, embeddings_keys, name)
+    if hasattr(pytorch_tlm, 'output_layer'):
+        from_weight_array(pytorch_tlm.output_layer, d, f"{name}/output")
+    else:
+        from_weight_array(pytorch_tlm.output, d, f"{name}/output")
 
 def load_transformer_seq2seq_npz(pytorch_seq2seq: nn.Module, npz: str, src_embeddings_keys: List[str] = None,
                                  tgt_embedding_key: str = 'y', name: str = "Seq2Seq"):
