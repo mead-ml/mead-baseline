@@ -216,6 +216,12 @@ class OptimizerManager:
         self.current_lr = self.update_lr()
         self.global_step += 1
 
+    def scale_grads(self, scalar):
+        for param_group in self.optimizer.param_groups:
+            for p in param_group['params']:
+                if p.grad is not None:
+                    p.grad.data.mul_(scalar)
+
     def zero_grad(self):
         self.optimizer.zero_grad()
 
