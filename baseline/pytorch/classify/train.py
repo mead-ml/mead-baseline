@@ -27,13 +27,11 @@ def _add_to_cm(cm, y, pred):
 class ClassifyTrainerPyTorch(EpochReportingTrainer):
 
     def __init__(self, model, **kwargs):
+        super().__init__()
 
         if type(model) is dict:
             model = create_model_for('classify', checkpoint=kwargs.get('checkpoint'), **model)
 
-        super().__init__()
-        if type(model) is dict:
-            model = create_model_for('classify', **model)
         self.clip = float(kwargs.get('clip', 5))
         self.labels = model.labels
         self.gpus = int(kwargs.get('gpus', 1))

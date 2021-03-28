@@ -9,8 +9,8 @@ from eight_mile.utils import str2bool, write_json
 import baseline.tf.embeddings
 import baseline.embeddings
 from baseline.vectorizers import BPEVectorizer1D
-from eight_mile.utils import Average, get_num_gpus_multiworker, read_yaml
-from eight_mile.tf.layers import create_distribute_strategy
+from eight_mile.utils import Average, get_num_gpus_multiworker
+from eight_mile.tf.layers import create_distribute_strategy, read_yaml_tf
 from eight_mile.optz import *
 from eight_mile.tf.optz import *
 from baseline.tf.lm import SET_TRAIN_FLAG, TransformerLanguageModel, TransformerMaskedLanguageModel
@@ -30,20 +30,16 @@ Sample preprocessed data can be found here: https://www.dropbox.com/s/jir4layu6n
 
 """
 
-class Loss:
-    def __init__(self, vocab_size, nctx):
-        self.vocab_size = vocab_size
-        self.nctx = nctx
 
-    def __call__(self, model, features, labels):
-        logits, _ = model(features, None)
-        loss_mask = tf.cast(labels != 0, tf.float32)
-        losses = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=labels)
-        losses = losses * loss_mask
-        losses = tf.reduce_sum(losses)
-        non_zero = tf.reduce_sum(loss_mask)
-        losses /= non_zero
-        return losses
+def loss_function(model, features, labels):
+    logits, _ = model(features, None)
+    loss_mask = tf.cast(labels != 0, tf.float32)
+    losses = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=labels)
+    losses = losses * loss_mask
+    losses = tf.reduce_sum(losses)
+    non_zero = tf.reduce_sum(loss_mask)
+    losses /= non_zero
+    return losses
 
 
 def _parse_json(example):
@@ -109,7 +105,7 @@ def get_dataset(directory, file_type, num_parallel_reads=1, shuffle=True, causal
 
 
 def get_num_samples(sample_md):
-    yml = read_yaml(sample_md)
+    yml = read_yaml_tf(sample_md)
     if not yml:
         raise Exception(f"Invalid sample file {sample_md}")
     return yml['num_samples']
@@ -276,8 +272,6 @@ def train():
                        layer_drop=args.layer_drop,
                        src_keys=['x'], tgt_key='x')
 
-    loss_function = Loss(vocab_size, args.nctx)
-
     logger.info("Loaded model and loss")
 
     if is_curriculum:
@@ -328,12 +322,10 @@ def train():
         per_replica_loss = strategy.run(_replicated_train_step, args=(inputs,))
         return strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_loss, axis=None)
 
-    valid_loss_function = Loss(vocab_size, args.nctx)
-
     def _replicated_test_step(inputs):
         """This runs on a single replica"""
         x, y = inputs
-        per_replica_loss = valid_loss_function(model, {'x': x}, y) / num_replicas
+        per_replica_loss = loss_function(model, {'x': x}, y) / num_replicas
         return per_replica_loss
 
     @tf.function

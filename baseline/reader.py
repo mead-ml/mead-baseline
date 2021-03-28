@@ -328,7 +328,14 @@ class SeqPredictReader:
         label2index = _try_read_labels(**kwargs)
         if label2index and _all_predefined_vocabs(self.vectorizers):
             offset = len(label2index)
-            self.label2index.update({k: v + offset} for k, v in label2index.items())
+
+            # If the label list contains all of our special tokens, just reassign to the read in labels
+            if all(k in label2index for k in self.label2index):
+                self.label2index = label2index
+            # If the label list doesnt contain all our special tokens, prepend them
+            # TODO: This is a bit dangerous, what if some of them are in there?
+            else:
+                self.label2index.update({k: v + offset} for k, v in label2index.items())
             logger.info("Skipping building vocabulary.  All vectorizers have predefined vocabs and a label file was given!")
             return {k: v.vocab for k, v in self.vectorizers.items()}
         pre_vocabs = None

@@ -6,6 +6,7 @@ from eight_mile.utils import listify, Offsets, wraps, get_version, is_sequence, 
 from typing import Optional, Union, List, Dict, Any, Tuple
 import contextlib
 import math
+import json
 
 BASELINE_TF_TRAIN_FLAG = None
 LOGGER = logging.getLogger('mead.layers')
@@ -41,6 +42,32 @@ def patch_dist_strategy(strategy):
     TF_VERSION = get_version(tf)
     if TF_VERSION < 2.2:
         strategy.run = strategy.experimental_run_v2
+
+
+def read_yaml_tf(filepath: str) -> Dict:
+    """Read a YAML file using TensorFlow API (supports GCP remote files)
+    :param: filepath, The file name to load
+    :return: dict, The read yaml object
+    """
+    file_stream = tf.python.lib.io.file_io.FileIO(filepath, mode='r')
+    as_str = file_stream.read()
+
+    import yaml
+    from distutils.version import LooseVersion
+
+    if LooseVersion(yaml.__version__) >= LooseVersion("5.1"):
+        return yaml.load(as_str, Loader=yaml.FullLoader)
+    return yaml.load(as_str)
+
+
+def read_json_tf(filepath: str) -> Dict:
+    """Read a JSON file using TensorFlow API (supports GCP remote files)
+    :param: filepath, The file name to load
+    :return: dict, The read yaml object
+    """
+    file_stream = tf.python.lib.io.file_io.FileIO(filepath, mode='r')
+    as_str = file_stream.read()
+    return json.loads(as_str)
 
 
 def set_tf_log_level(ll):
@@ -2758,9 +2785,10 @@ class TransformerEncoderStack(tf.keras.layers.Layer):
     def call(self, inputs):
         x, mask = inputs
         for layer in self.encoders:
-            pdrop = tf.random.uniform([])
-            if not TRAIN_FLAG() or (pdrop >= self.layer_drop):
-                x = layer((x, mask))
+            ## TODO: FIXME I dont work on TPUs!!!
+            ##pdrop = tf.random.uniform([])
+            ##if not TRAIN_FLAG() or (pdrop >= self.layer_drop):
+            x = layer((x, mask))
         return self.ln(x)
 
 
