@@ -92,8 +92,8 @@ class LanguageModelTrainerEagerTf(Trainer):
         epoch_div = tf.Variable(0, dtype=tf.int32)
         nstep_loss = tf.Variable(0.0)
         nstep_div = tf.Variable(0, dtype=tf.int32)
-        self.nstep_start = time.time()
-        start = time.time()
+        self.nstep_start = time.perf_counter()
+        start = time.perf_counter()
 
         def _train_step_no_state(inputs):
             """Replicated training step."""
@@ -138,7 +138,7 @@ class LanguageModelTrainerEagerTf(Trainer):
                 )
                 nstep_loss.assign(0.0)
                 nstep_div.assign(0)
-                self.nstep_start = time.time()
+                self.nstep_start = time.perf_counter()
 
         epoch_loss = epoch_loss.numpy()
         epoch_div = epoch_div.numpy()
@@ -178,7 +178,7 @@ class LanguageModelTrainerEagerTf(Trainer):
             epochs = self.valid_epochs
         SET_TRAIN_FLAG(False)
 
-        start = time.time()
+        start = time.perf_counter()
         h = None
         for features, y in vs:
             if self.model.requires_state:

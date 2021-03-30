@@ -158,7 +158,7 @@ class LanguageModelTrainerTf(Trainer):
         if self.model.requires_state:
             fetches["final_state"] = self.model.final_state
 
-        start = time.time()
+        start = time.perf_counter()
         self.nstep_start = start
         for batch_dict in ts:
 
@@ -238,7 +238,7 @@ class LanguageModelTrainerTf(Trainer):
         if self.model.requires_state:
             fetches["final_state"] = self.model.final_state
 
-        start = time.time()
+        start = time.perf_counter()
 
         for batch_dict in vs:
             feed_dict = self.model.make_input(batch_dict, False)

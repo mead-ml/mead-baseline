@@ -81,7 +81,7 @@ class Seq2SeqTrainerPyTorch(Trainer):
         preds = []
         golds = []
 
-        start = time.time()
+        start = time.perf_counter()
         pg = create_progress_bar(steps)
         for batch_dict in pg(vs):
             input_ = self._input(batch_dict)
@@ -110,7 +110,7 @@ class Seq2SeqTrainerPyTorch(Trainer):
         pg = create_progress_bar(len(es))
         preds = []
         golds = []
-        start = time.time()
+        start = time.perf_counter()
         for batch_dict in pg(es):
             tgt = batch_dict['tgt']
             tgt_lens = batch_dict['tgt_lengths']
@@ -130,11 +130,10 @@ class Seq2SeqTrainerPyTorch(Trainer):
         epoch_loss = 0
         epoch_toks = 0
 
-        start = time.time()
+        start = time.perf_counter()
         self.nstep_start = start
         for batch_dict in ts:
 
-            start_time = time.time()
             self.optimizer.zero_grad()
             input_ = self._input(batch_dict)
             tgt = input_['tgt']

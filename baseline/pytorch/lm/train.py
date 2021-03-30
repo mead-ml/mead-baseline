@@ -65,7 +65,7 @@ class LanguageModelTrainerPyTorch(Trainer):
         if phase == 'Valid':
             self.valid_epochs += 1
             epoch = self.valid_epochs
-        start = time.time()
+        start = time.perf_counter()
         self.model.eval()
         total_loss = 0
         total_toks = 0
@@ -89,7 +89,7 @@ class LanguageModelTrainerPyTorch(Trainer):
         return metrics
 
     def train(self, ts, reporting_fns):
-        start = time.time()
+        start = time.perf_counter()
         self.nstep_start = start
         self.model.train()
         epoch_loss = 0

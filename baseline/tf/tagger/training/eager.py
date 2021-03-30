@@ -5,7 +5,7 @@ from itertools import zip_longest
 import numpy as np
 import tensorflow as tf
 import logging
-from eight_mile.utils import listify, revlut, to_spans, write_sentence_conll, per_entity_f1, span_f1, conlleval_output, Offsets
+from eight_mile.utils import Timer, listify, revlut, to_spans, write_sentence_conll, per_entity_f1, span_f1, conlleval_output, Offsets
 from eight_mile.tf.layers import TRAIN_FLAG, SET_TRAIN_FLAG, reload_checkpoint, get_shape_as_list, autograph_options
 from eight_mile.tf.optz import EagerOptimizer
 from eight_mile.progress import create_progress_bar
@@ -207,7 +207,7 @@ class TaggerTrainerEagerTf(EpochReportingTrainer):
         epoch_div = tf.Variable(0, dtype=tf.int32)
         nstep_loss = tf.Variable(0.0)
         nstep_div = tf.Variable(0, dtype=tf.int32)
-        self.nstep_start = time.time()
+        self.nstep_start = time.perf_counter()
 
         @tf.function
         def _train_step(inputs):
@@ -234,7 +234,7 @@ class TaggerTrainerEagerTf(EpochReportingTrainer):
                     )
                     nstep_loss.assign(0.0)
                     nstep_div.assign(0)
-                    self.nstep_start = time.time()
+                    self.nstep_start = time.perf_counter()
 
         epoch_loss = epoch_loss.numpy()
         epoch_div = epoch_div.numpy()
@@ -362,9 +362,9 @@ def fit_eager(model_params, ts, vs, es=None, **kwargs):
         test_dataset = test_dataset.batch(test_batchsz, drop_remainder=False)
         test_dataset = test_dataset.prefetch(NUM_PREFETCH)
         evaluator = TaggerEvaluatorEagerTf(trainer.model, span_type, verbose)
-        start = time.time()
+        timer = Timer()
         test_metrics = evaluator.test(test_dataset, conll_output=conll_output, txts=txts, batches=es, steps=len(es))
-        duration = time.time() - start
+        duration = timer.elapsed()
         for reporting in reporting_fns:
             reporting(test_metrics, 0, 'Test')
         trainer.log.debug({'phase': 'Test', 'time': duration})

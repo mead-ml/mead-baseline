@@ -5,7 +5,7 @@ from argparse import ArgumentParser
 import baseline
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader
-from eight_mile.utils import str2bool, write_json, Average, get_num_gpus_multiworker
+from eight_mile.utils import str2bool, write_json, Average, Timer, get_num_gpus_multiworker
 from baseline.pytorch.embeddings import *
 import baseline.embeddings
 from eight_mile.optz import *
@@ -254,12 +254,13 @@ def train():
 
     model_base = os.path.join(args.basedir, 'checkpoint')
     steps = global_step
+    timer = Timer()
 
     for epoch in range(start_epoch, args.epochs):
         avg_loss = Average('average_train_loss')
         metrics = {}
         optimizer.zero_grad()
-        start = time.time()
+        timer.start()
         model.train()
         train_itr = iter(train_loader)
         for i in range(steps_per_epoch):
@@ -269,8 +270,6 @@ def train():
                 logging.info("Unfreezing encoders at step %d", steps)
                 model.freeze = False
             steps += 1
-
-
 
             x, y = batch
             loss = run_step(x, y, model, loss_function, args.device, args.distributed)
@@ -283,13 +282,13 @@ def train():
             if (i + 1) % report_on == 0:
                 logging.info(avg_loss)
             if (i + 1) % update_on == 0 and args.local_rank < 1:
-                elapsed = (time.time() - start)/60
+                elapsed = timer.elapsed(True)
                 logging.info('elapsed time this epoch %d min', elapsed)
                 logging.info('elapsed step time %f steps/min', i/elapsed)
                 save_checkpoint(model, model_base, steps, tick_type='step')
 
         # How much time elapsed in minutes
-        elapsed = (time.time() - start)/60
+        elapsed = timer.elapsed(True)
         train_avg_loss = avg_loss.avg
         # This is the average training token-level loss across all machines
         # This is the token-level training perplexity
@@ -297,7 +296,7 @@ def train():
         metrics['average_train_loss'] = train_avg_loss
         if args.local_rank < 1:
             avg_valid_loss = Average('average_valid_loss')
-            start = time.time()
+            timer.start()
             model.eval()
             valid_itr = iter(valid_loader)
             for j in range(valid_steps):
@@ -309,7 +308,7 @@ def train():
 
             valid_avg_loss = avg_valid_loss.avg
 
-            elapsed = (time.time() - start)/60
+            elapsed = timer.elapsed(True)
             metrics['valid_elapsed_min'] = elapsed
 
             metrics['average_valid_loss'] = valid_avg_loss

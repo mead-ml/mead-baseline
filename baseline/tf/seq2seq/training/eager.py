@@ -117,8 +117,8 @@ class Seq2SeqTrainerEagerTf(Trainer):
         epoch_div = tf.Variable(0, dtype=tf.int32)
         nstep_loss = tf.Variable(0.0)
         nstep_div = tf.Variable(0, dtype=tf.int32)
-        self.nstep_start = time.time()
-        start = time.time()
+        self.nstep_start = time.perf_counter()
+        start = time.perf_counter()
 
         @tf.function
         def _train_step(features, y):
@@ -147,7 +147,7 @@ class Seq2SeqTrainerEagerTf(Trainer):
                     )
                     nstep_loss.assign(0.0)
                     nstep_div.assign(0)
-                    self.nstep_start = time.time()
+                    self.nstep_start = time.perf_counter()
 
         epoch_loss = epoch_loss.numpy()
         epoch_div = epoch_div.numpy()
@@ -173,7 +173,7 @@ class Seq2SeqTrainerEagerTf(Trainer):
         """
         preds = []
         golds = []
-        start = time.time()
+        start = time.perf_counter()
 
         for features, tgt in es:
             features['dst'] = tgt[:, :-1]
@@ -213,7 +213,7 @@ class Seq2SeqTrainerEagerTf(Trainer):
         preds = []
         golds = []
 
-        start = time.time()
+        start = time.perf_counter()
         for features, tgt in vs:
             features['dst'] = tgt[:, :-1]
             top_preds = self.model.predict(features, beam=1, make_input=False)[0]

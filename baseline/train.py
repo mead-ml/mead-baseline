@@ -36,7 +36,7 @@ class Trainer:
         :param reporting_fns: `List[Callable]` The list of reporting functions to call.
         :param steps: `int` The number of steps in this segment, used to normalize the time.
         """
-        elapsed = time.time() - start
+        elapsed = time.perf_counter() - start
         for reporting in reporting_fns:
             reporting(metrics, step, phase, tt)
         self.log.debug({
@@ -48,7 +48,7 @@ class Trainer:
     def reset_nstep(self):
         self.nstep_agg = 0
         self.nstep_div = 0
-        self.nstep_start = time.time()
+        self.nstep_start = time.perf_counter()
 
     @staticmethod
     def calc_metrics(agg, norm):
@@ -68,7 +68,7 @@ class EpochReportingTrainer(Trainer):
         super().__init__()
 
     def train(self, ts, reporting_fns, **kwargs):
-        start_time = time.time()
+        start_time = time.perf_counter()
         self.nstep_start = start_time
         metrics = self._train(ts, reporting_fns=reporting_fns, **kwargs)
         self.train_epochs += 1
@@ -79,7 +79,7 @@ class EpochReportingTrainer(Trainer):
         return metrics
 
     def test(self, vs, reporting_fns, phase='Valid', **kwargs):
-        start_time = time.time()
+        start_time = time.perf_counter()
         metrics = self._test(vs, **kwargs)
         epochs = 0
         if phase == 'Valid':

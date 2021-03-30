@@ -106,8 +106,8 @@ class Seq2SeqTrainerDistributedTf(Trainer):
             epoch_div = tf.Variable(0, dtype=tf.int32)
             nstep_loss = tf.Variable(0.0)
             nstep_div = tf.Variable(0, dtype=tf.int32)
-            self.nstep_start = time.time()
-            start = time.time()
+            self.nstep_start = time.perf_counter()
+            start = time.perf_counter()
 
             @tf.function
             def _distributed_train_step(inputs):
@@ -135,7 +135,7 @@ class Seq2SeqTrainerDistributedTf(Trainer):
                         )
                         nstep_loss.assign(0.0)
                         nstep_div.assign(0)
-                        self.nstep_start = time.time()
+                        self.nstep_start = time.perf_counter()
 
                 epoch_loss = epoch_loss.numpy()
                 epoch_div = epoch_div.numpy()
@@ -161,7 +161,7 @@ class Seq2SeqTrainerDistributedTf(Trainer):
         """
         preds = []
         golds = []
-        start = time.time()
+        start = time.perf_counter()
         kwargs['make_input'] = False
 
         for features, tgt in es:
@@ -217,7 +217,7 @@ class Seq2SeqTrainerDistributedTf(Trainer):
             preds = []
             golds = []
 
-            start = time.time()
+            start = time.perf_counter()
 
             test_iter = iter(vs)
 

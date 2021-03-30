@@ -3,13 +3,13 @@ import baseline
 import baseline.embeddings
 import baseline.pytorch.embeddings
 from collections import Counter
+from eight_mile.utils import Timer
 from eight_mile.confusion import ConfusionMatrix
 from eight_mile.pytorch.optz import EagerOptimizer
 import eight_mile.pytorch.layers as L
 import nlp as nlp_datasets
 import numpy as np
 import os
-import time
 import torch
 import torch.nn.functional as F
 
@@ -137,10 +137,12 @@ def loss(model, x, y):
 
 optimizer = EagerOptimizer(loss, optim="adam", lr=0.001)
 
+timer = Timer()
+
 for epoch in range(args.epochs):
     loss_acc = 0.
     step = 0
-    start = time.time()
+    timer.start()
     model.train()
     for x in train_loader:
         x = to_device(x)
@@ -148,7 +150,7 @@ for epoch in range(args.epochs):
         loss_value = optimizer.update(model, x, y)
         loss_acc += loss_value
         step += 1
-    print('training time {}'.format(time.time() - start))
+    print('training time {}'.format(timer.elapsed()))
     mean_loss = loss_acc / step
     print('Training Loss {}'.format(mean_loss))
     cm = ConfusionMatrix(['0', '1'])

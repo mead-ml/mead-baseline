@@ -305,6 +305,7 @@ def train():
         per_replica_loss = strategy.run(_replicated_test_step, args=(inputs,))
         return strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_loss, axis=None)
 
+    timer = Timer()
     with strategy.scope():
 
         for epoch in range(start_epoch, args.epochs):
@@ -312,7 +313,7 @@ def train():
             logger.info('Starting epoch %d', epoch + 1)
             avg_loss = Average('average_train_loss')
             metrics = {}
-            start = time.time()
+            timer.start()
             train_iter = iter(train_loader)
             for i in range(steps_per_epoch):
 
@@ -334,7 +335,7 @@ def train():
                 if (steps + 1) % report_on == 0:
                     logger.info(avg_loss)
                 if (steps + 1) % update_on == 0:
-                    elapsed = (time.time() - start)/60
+                    elapsed = timer.elapsed(True)
                     logger.info('elapsed time this epoch %d min', elapsed)
                     logger.info('elapsed step time %f steps/min', i/elapsed)
                     checkpoint_manager.save()
@@ -344,7 +345,7 @@ def train():
                         save_tlm_output_npz(model, npz_checkpoint)
 
             # How much time elapsed in minutes
-            elapsed = (time.time() - start)/60
+            elapsed = timer.elapsed(True)
             train_token_loss = avg_loss.avg
             # This is the average training token-level loss across all machines
             # This is the token-level training perplexity
@@ -355,7 +356,7 @@ def train():
             metrics['lr'] = float(lr_sched(tf.cast(optimizer.global_step, tf.float32)).numpy().item())
 
             avg_valid_loss = Average('average_valid_loss')
-            start = time.time()
+            timer.start()
             SET_TRAIN_FLAG(False)
             valid_iter = iter(valid_loader)
             for i in range(steps_per_valid_epoch):
@@ -370,7 +371,7 @@ def train():
             valid_token_loss = avg_valid_loss.avg
             valid_token_ppl = math.exp(valid_token_loss)
 
-            elapsed = (time.time() - start)/60
+            elapsed = timer.elapsed(True)
 
             metrics['valid_elapsed_min'] = elapsed
             metrics['average_valid_loss'] = valid_token_loss
