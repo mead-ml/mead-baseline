@@ -1683,47 +1683,51 @@ class Average:
         fmtstr = '{name} {val' + self.fmt + '} ({avg' + self.fmt + '})'
         return fmtstr.format(**self.__dict__)
 
+
 @export
 class Timer:
 
     def __init__(self):
         """Start the timer
-
         """
+        self._started = 0
         self.start()
 
     def start(self):
         """Start the timer.  Any old value overwritten
-
         :return:
         """
-        self.started = time.perf_counter()
+        self._started = time.perf_counter()
 
-    def elapsed(self):
-        """Return the elapsed time (ms) since the timer was started, w/o resetting start time
+    def elapsed(self, return_minutes=False):
+        """Return the elapsed time (s) since the timer was started, w/o resetting start time
 
-        :return:
+        :param return_minutes if True, return minutes
+        :return: elapsed
         """
-        return time.perf_counter() - self.started
+        elapsed = time.perf_counter() - self._started
+        return (elapsed / 60) if return_minutes else elapsed
 
-    def stop(self):
-        """Stop and null out the timer, returning the elapsed time (ms) between when the timer was started and this call
+    def stop(self, return_minutes=False):
+        """Stop and null out the timer, returning the elapsed time (s) between when the timer was started and this call
 
-        :return:
+        :param return_minutes if True, return minutes
+        :return: elapsed
         """
         elapsed = self.elapsed()
-        self.started = 0
-        return elapsed
+        self._started = 0
+        return (elapsed / 60) if return_minutes else elapsed
 
-    def restart(self):
+    def restart(self, return_minutes=False):
         """Return the elapsed time since the last start call and reset the timer to the current time
 
-        :return:
+        :param return_minutes if True, return minutes
+        :return: elapsed prior to restart
         """
-        old_start = self.started
+        old_start = self._started
         self.start()
-        elapsed = self.started - old_start
-        return elapsed
+        elapsed = self._started - old_start
+        return (elapsed / 60) if return_minutes else elapsed
 
 @export
 def undo_bpe(seq: str) -> str:
