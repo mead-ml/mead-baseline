@@ -2,6 +2,7 @@ import re
 import io
 import os
 import sys
+import time
 import json
 import logging
 import inspect
@@ -1682,6 +1683,47 @@ class Average:
         fmtstr = '{name} {val' + self.fmt + '} ({avg' + self.fmt + '})'
         return fmtstr.format(**self.__dict__)
 
+@export
+class Timer:
+
+    def __init__(self):
+        """Start the timer
+
+        """
+        self.start()
+
+    def start(self):
+        """Start the timer.  Any old value overwritten
+
+        :return:
+        """
+        self.started = time.perf_counter()
+
+    def elapsed(self):
+        """Return the elapsed time (ms) since the timer was started, w/o resetting start time
+
+        :return:
+        """
+        return time.perf_counter() - self.started
+
+    def stop(self):
+        """Stop and null out the timer, returning the elapsed time (ms) between when the timer was started and this call
+
+        :return:
+        """
+        elapsed = self.elapsed()
+        self.started = 0
+        return elapsed
+
+    def restart(self):
+        """Return the elapsed time since the last start call and reset the timer to the current time
+
+        :return:
+        """
+        old_start = self.started
+        self.start()
+        elapsed = self.started - old_start
+        return elapsed
 
 @export
 def undo_bpe(seq: str) -> str:
