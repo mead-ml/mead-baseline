@@ -286,6 +286,7 @@ def train():
                 elapsed = (time.time() - start)/60
                 logging.info('elapsed time this epoch %d min', elapsed)
                 logging.info('elapsed step time %f steps/min', i/elapsed)
+                logging.info('LR: %f',  optimizer.current_lr)
                 save_checkpoint(model, model_base, steps, tick_type='step')
 
         # How much time elapsed in minutes
@@ -354,6 +355,8 @@ def reload_from_checkpoint(model_type, restart_from, restart_tick_type, model, s
         start_epoch = step_num // steps_per_epoch
     else:
         logger.warning(f"The previous tick was {step_num} but command-line specifies to ignore, setting to 0")
+        step_num = 0
+        start_epoch = 0
     return step_num, start_epoch
 
 
