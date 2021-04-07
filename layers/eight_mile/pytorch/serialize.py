@@ -82,19 +82,20 @@ def convert_transformers_keys(num_layers: int, d: Dict, nested_layer_map: Dict =
     return m
 
 
-def tlm_load_state_dict(module: nn.Module, checkpoint_file: str):
+def tlm_load_state_dict(module: nn.Module, checkpoint_file: str, map_location=None, str_map = None):
     """
 
     :param tlm: Safely loads the state dict for a transformer encoder
     :param checkpoint_file: The file name
     :return: None
     """
-    str_map = {'transformer': 'generator'}
-    if hasattr(module, 'transformer'):
-        str_map = {'generator': 'transformer'}
+    if str_map is None:
+        str_map = {'transformer': 'generator'}
+        if hasattr(module, 'transformer'):
+            str_map = {'generator': 'transformer'}
     if hasattr(module, 'reduction_layer'):
         str_map.update({'reduction_layer_1': 'reduction_layer'})
-    ckpt_dict = torch.load(checkpoint_file)
+    ckpt_dict = torch.load(checkpoint_file, map_location=map_location)
     renamed = {}
     for k, v in ckpt_dict.items():
         for from_str, to_str in str_map.items():
