@@ -1,6 +1,6 @@
 from baseline.embeddings import register_embeddings, create_embeddings
 from eight_mile.pytorch.embeddings import *
-from eight_mile.pytorch.serialize import load_tlm_npz, tlm_load_state_dict
+from eight_mile.pytorch.serialize import load_tlm_npz, load_tlm_output_npz, tlm_load_state_dict
 from eight_mile.utils import read_config_stream, mime_type
 from baseline.vectorizers import load_bert_vocab
 
@@ -232,7 +232,6 @@ def _max_pool(inputs, embeddings):
     return torch.max(embeddings, 1, False)[0]
 
 
-
 @register_embeddings(name='tlm-words-embed-pooled')
 class TransformerLMPooledEmbeddingsModel(TransformerLMEmbeddingsModel):
 
@@ -288,6 +287,43 @@ class TransformerLMPooledEmbeddingsModel(TransformerLMEmbeddingsModel):
         z = self.pooling_op(inputs, z)
         return z
 
+
+@register_embeddings(name='tlm-words-embed-pooled-output')
+class TransformerLMPooledEmbeddingsWithOutputModel(TransformerLMPooledEmbeddingsModel):
+
+    def __init__(self, name, **kwargs):
+        super().__init__(name, **kwargs)
+        self._output_dim = kwargs.get('output_dim', self.d_model)
+        self.output_layer = pytorch_linear(self.d_model, self.output_dim)
+
+    def get_dsz(self):
+        return self._output_dim
+
+    def get_output(self, inputs, z):
+        z = self.pooling_op(inputs, z)
+        return self.output_layer(z)
+
+    @classmethod
+    def load(cls, embeddings, **kwargs):
+        c = cls("tlm-words-embed", **kwargs)
+
+        if embeddings.endswith('.bin'):
+            # HuggingFace checkpoint, convert on the fly
+            from eight_mile.pytorch.serialize import load_tlm_transformers_bin, BERT_HF_FT_LAYER_MAP
+            unmatch = load_tlm_transformers_bin(c, embeddings, replace_layers=BERT_HF_FT_LAYER_MAP)
+            if unmatch['missing'] or unmatch['unexpected']:
+                raise Exception("Unable to load the HuggingFace checkpoint")
+        if mime_type(embeddings) == 'application/zip' and not embeddings.endswith("pth"):
+            keys_to_restore = set(list(c.embeddings.keys()))
+            filtered_keys = keys_to_restore.difference(c.skippable)
+            if not keys_to_restore:
+                raise Exception("No keys to restore!")
+            if len(filtered_keys) < len(keys_to_restore):
+                logger.warning("Restoring only key [%s]", ' '.join(filtered_keys))
+            load_tlm_output_npz(c, embeddings, filtered_keys)
+        else:
+            tlm_load_state_dict(c, embeddings)
+        return c
 
 @register_embeddings(name='tlm-words-embed-pooled2d')
 class TransformerLMPooled2DEmbeddingsModel(TransformerLMPooledEmbeddingsModel):
