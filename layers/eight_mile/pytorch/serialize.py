@@ -351,6 +351,28 @@ def save_tlm_npz(pytorch_tlm: nn.Module, npz: str, embeddings_keys: List[str] = 
     np.savez(npz, **d)
 
 
+def save_tlm_output_npz(tlm: nn.Module, npz: str, embeddings_keys: List[str] = None, name: str = "TLM", verbose: bool = False):
+    """Save a TLM to an NPZ file with an output layer
+
+    :param tlm: A Transformer LM-type module
+    :param npz: A file to save
+    :param embeddings_keys: A key to get embeddings from.  Defaults to `None`, in which case, all embeddings are written
+    :param name: A name for this TLM
+    :param verbose: whether output
+    :return: None
+    """
+    d = to_tlm_array(tlm, embeddings_keys, name)
+    if hasattr(tlm, 'output'):
+        d.update(to_weight_array(tlm.output, name=f'{name}/output'))
+    elif hasattr(tlm, 'output_layer'):
+        d.update(to_weight_array(tlm.output_layer, name=f'{name}/output'))
+    else:
+        raise Exception("No output layer was found")
+    if verbose:
+        print(d.keys())
+    np.savez(npz, **d)
+
+
 def save_transformer_seq2seq_npz(pytorch_seq2seq: nn.Module, npz: str, src_embeddings_keys: List[str] = None,
                                  tgt_embedding_key: str = 'y', name: str = "Seq2Seq", verbose: bool = False):
     """Save a Transformer seq2seq file out
