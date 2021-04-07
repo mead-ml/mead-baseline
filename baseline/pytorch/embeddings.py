@@ -95,10 +95,13 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
         # If you trained your model with MEAD/Baseline, you will have a `*.json` file which would want to
         # reference here
         vocab_file = kwargs.get('vocab_file')
-        if vocab_file and vocab_file.endswith('.json'):
-            self.vocab = read_config_stream(kwargs.get('vocab_file'))
+        if vocab_file:
+            if vocab_file.endswith('.json'):
+                self.vocab = read_config_stream(kwargs.get('vocab_file'))
+            else:
+                self.vocab = load_bert_vocab(kwargs.get('vocab_file'))
         else:
-            self.vocab = load_bert_vocab(kwargs.get('vocab_file'))
+            self.vocab = kwargs.get('vocab')
         # When we reload, allows skipping restoration of these embeddings
         # If the embedding wasnt trained with token types, this allows us to add them later
         self.skippable = set(listify(kwargs.get('skip_restore_embeddings', [])))
