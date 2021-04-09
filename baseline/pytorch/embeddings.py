@@ -95,13 +95,13 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
         # If you trained your model with MEAD/Baseline, you will have a `*.json` file which would want to
         # reference here
         vocab_file = kwargs.get('vocab_file')
-        if vocab_file:
+        if vocab_file and os.path.exists(vocab_file):
             if vocab_file.endswith('.json'):
                 self.vocab = read_config_stream(kwargs.get('vocab_file'))
             else:
                 self.vocab = load_bert_vocab(kwargs.get('vocab_file'))
         else:
-            self.vocab = kwargs.get('vocab')
+            self.vocab = kwargs.get('vocab', kwargs.get('known_vocab'))
         # When we reload, allows skipping restoration of these embeddings
         # If the embedding wasnt trained with token types, this allows us to add them later
         self.skippable = set(listify(kwargs.get('skip_restore_embeddings', [])))
@@ -158,13 +158,13 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
                                                    activation=activation, ffn_pdrop=ff_pdrop,
                                                    layer_norms_after=layer_norms_after, layer_norm_eps=layer_norm_eps,
                                                    windowed_ra=windowed_ra, rpr_value_on=rpr_value_on)
-        self.mlm = kwargs.get('mlm', False)
+        self.mlm = kwargs.get('mlm', True)
         self.finetune = kwargs.get('finetune', True)
 
     def forward(self, x, token_type=None):
         with torch.no_grad() if not self.finetune else contextlib.ExitStack():
             # the following line masks out the attention to padding tokens
-            input_mask = torch.zeros(x.shape, device=x.device, dtype=torch.long).masked_fill(x != 0, 1).unsqueeze(1).unsqueeze(1)
+            input_mask = torch.zeros(x.shape, device=x.device, dtype=torch.long).masked_fill(x != Offsets.PAD, 1).unsqueeze(1).unsqueeze(1)
             # A causal LM should have a subsequent mask; and a masked LM should have no mask
             if not self.mlm:
                 input_mask = input_mask & subsequent_mask(x.shape[1]).type_as(input_mask)
@@ -220,14 +220,14 @@ def _identity(x):
 
 
 def _mean_pool(inputs, embeddings):
-    mask = (inputs != 0)
+    mask = (inputs != Offsets.PAD)
     seq_lengths = mask.sum(1).float()
     embeddings = embeddings.masked_fill(mask.unsqueeze(-1) == False, 0.)
     return embeddings.sum(1)/seq_lengths.unsqueeze(-1)
 
 
 def _max_pool(inputs, embeddings):
-    mask = (inputs != 0)
+    mask = (inputs != Offsets.PAD)
     embeddings = embeddings.masked_fill(mask.unsqueeze(-1) == False, 0.)
     return torch.max(embeddings, 1, False)[0]
 
@@ -267,7 +267,7 @@ class TransformerLMPooledEmbeddingsModel(TransformerLMEmbeddingsModel):
         return self.d_model
 
     def _sqrt_length_pool(self, inputs, embeddings):
-        mask = (inputs != 0)
+        mask = (inputs != Offsets.PAD)
         lengths = mask.sum(1)
         sqrt_length = lengths.float()
         embeddings = embeddings.masked_fill(mask.unsqueeze(-1) == False, 0.)

@@ -461,7 +461,7 @@ def read_config_stream(config_stream) -> Dict:
             path_to_save, _ = urlretrieve(config_stream)
             return read_config_stream(path_to_save)
         else:
-            logger.info("No file found '{}...', loading as string".format(config_stream[:12]))
+            logger.info("No file found '...{}', loading as string".format(config_stream[-32:]))
     return json.loads(config)
 
 
@@ -1605,8 +1605,8 @@ def to_numpy(x):
 def mlm_masking(inputs, mask_value, vocab_size, ignore_prefix, ignore_suffix, pad_y=True):
     labels = np.copy(inputs)
     masked_indices = np.random.binomial(size=len(inputs), n=1, p=0.15)
-    masked_indices = masked_indices & (labels != 0)
-    masked_indices[np.random.randint(1, sum(labels != 0))] = 1  #ensure at least one token is masked
+    masked_indices = masked_indices & (labels != Offsets.PAD)
+    masked_indices[np.random.randint(1, sum(labels != Offsets.PAD))] = 1  #ensure at least one token is masked
     if ignore_prefix:
         masked_indices[0] = 0
     if ignore_suffix:

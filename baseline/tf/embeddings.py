@@ -241,7 +241,7 @@ class TransformerLMEmbeddings(TensorFlowEmbeddings):
                                                    activation=activation, layer_norms_after=layer_norms_after,
                                                    layer_norm_eps=layer_norm_eps, windowed_ra=windowed_ra,
                                                    rpr_value_on=rpr_value_on)
-        self.mlm = kwargs.get('mlm', False)
+        self.mlm = kwargs.get('mlm', True)
         self.finetune = kwargs.get('finetune', True)
 
     def encode(self, x, token_type=None):

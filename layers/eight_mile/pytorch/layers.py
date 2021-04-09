@@ -3855,7 +3855,7 @@ class TransformerDiscriminator(nn.Module):
     def forward(self, features):
         embedded = self.embeddings(features)
         x = features[self.lengths_feature]
-        input_mask = torch.zeros(x.shape, device=x.device, dtype=torch.long).masked_fill(x != 0, 1).unsqueeze(1).unsqueeze(1)
+        input_mask = torch.zeros(x.shape, device=x.device, dtype=torch.long).masked_fill(x != Offsets.PAD, 1).unsqueeze(1).unsqueeze(1)
         transformer_out = self.transformer((embedded, input_mask))
         binary = self.proj_to_output(transformer_out)
         return torch.sigmoid(binary)

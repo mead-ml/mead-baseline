@@ -9,7 +9,7 @@ from eight_mile.utils import str2bool, write_json, read_json
 import baseline.tf.embeddings
 import baseline.embeddings
 from baseline.vectorizers import BPEVectorizer1D
-from eight_mile.utils import Average, get_num_gpus_multiworker
+from eight_mile.utils import Average, get_num_gpus_multiworker, Offsets
 from eight_mile.tf.layers import create_distribute_strategy, TransformerEncoderStack, EmbeddingsStack, read_yaml_tf, read_json_tf
 from eight_mile.optz import *
 from eight_mile.tf.optz import *
@@ -54,7 +54,7 @@ class TransformerTagger(tf.keras.Model):
         self.output_layer = tf.keras.layers.Dense(num_labels)
 
     def call(self, inputs):
-        input_mask = tf.expand_dims(tf.expand_dims(tf.cast(inputs['x'] != 0, tf.int32), 1), 1)
+        input_mask = tf.expand_dims(tf.expand_dims(tf.cast(inputs['x'] != Offsets.PAD, tf.int32), 1), 1)
         embed = self.embeddings(inputs)
         transformed = self.transformer((embed, input_mask))
         output = self.output_layer(transformed)
@@ -63,7 +63,7 @@ class TransformerTagger(tf.keras.Model):
 
 def loss_function(model, features, labels):
     logits = model(features)
-    loss_mask = tf.cast(labels != 0, tf.float32)
+    loss_mask = tf.cast(labels != Offsets.PAD, tf.float32)
     losses = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=labels)
     losses = losses * loss_mask
     losses = tf.reduce_sum(losses)

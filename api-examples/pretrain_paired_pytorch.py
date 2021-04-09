@@ -71,8 +71,8 @@ def run_step_dual(x, y, model, loss_function, device, distributed):
 
 
 def run_step_s2s(x, y, model, loss_function, device, distributed):
-    x_lengths = torch.sum(x != 0, 1)
-    y_lengths = torch.sum(y != 0, 1)
+    x_lengths = torch.sum(x != Offsets.PAD, 1)
+    y_lengths = torch.sum(y != Offsets.PAD, 1)
     if distributed:
         inputs = model.module.make_input({'x': x, 'x_lengths': x_lengths, 'tgt': y, 'tgt_lengths': y_lengths})
         pred = model(inputs)
