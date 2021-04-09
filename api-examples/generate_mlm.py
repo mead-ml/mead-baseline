@@ -23,7 +23,7 @@ def decode_sentence(model, vectorizer, query, word2index, index2word, device, sa
         if vec[i] == UNK:
             vec[i] = MASK
 
-    bpe = [index2word[v] for v in vec if v != 0]
+    bpe = [index2word[v] for v in vec if v != Offsets.PAD]
     print('[BPE] ' + ' '.join(bpe))
     toks = torch.from_numpy(vec).unsqueeze(0).to(device=device)
 

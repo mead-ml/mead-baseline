@@ -2898,7 +2898,7 @@ class TransformerDiscriminator(tf.keras.Model):
     def call(self, features):
         embedded = self.embeddings(features)
         x = features[self.lengths_feature]
-        input_mask = tf.expand_dims(tf.expand_dims(tf.cast(x != 0, tf.int32), 1), 1)
+        input_mask = tf.expand_dims(tf.expand_dims(tf.cast(x != Offsets.PAD, tf.int32), 1), 1)
         #input_mask = tf.expand_dims(tf.expand_dims(tf.ones_like(x, dtype=tf.uint8), 1), 1)
         transformer_out = self.transformer((embedded, input_mask))
         binary = tf.squeeze(self.proj_to_output(transformer_out), -1)

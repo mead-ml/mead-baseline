@@ -29,7 +29,7 @@ class TransformerTagger(tf.keras.Model):
         self.output_layer = tf.keras.layers.Dense(num_labels)
 
     def call(self, inputs):
-        input_mask = tf.expand_dims(tf.expand_dims(tf.cast(inputs['x'] != 0, tf.int32), 1), 1)
+        input_mask = tf.expand_dims(tf.expand_dims(tf.cast(inputs['x'] != Offsets.PAD, tf.int32), 1), 1)
         embed = self.embeddings(inputs)
         transformed = self.transformer((embed, input_mask))
         output = self.output_layer(transformed)
