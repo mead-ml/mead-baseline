@@ -2,7 +2,7 @@ import baseline
 import argparse
 import baseline.pytorch.embeddings
 import eight_mile.pytorch.layers as L
-from eight_mile.utils import revlut, str2bool
+from eight_mile.utils import revlut, str2bool, Timer
 from eight_mile.pytorch.layers import SequenceLoss
 from eight_mile.pytorch.optz import EagerOptimizer
 import torch
@@ -171,11 +171,11 @@ def repackage_hidden(h):
 
 optimizer = EagerOptimizer(loss, optim="sgd", lr=args.lr)
 
-
+timer = Timer()
 for epoch in range(args.epochs):
     loss_accum = 0.
     step = 0
-    start = time.time()
+    timer.start()
     h = None
 
     for x, y in train_set.get_input(training=True):
@@ -185,7 +185,7 @@ for epoch in range(args.epochs):
         loss_value, h = optimizer.update_with_hidden(model, h, x, y)
         loss_accum += loss_value
         step += 1
-    print(f'training time {time.time() - start}')
+    print(f'training time {timer.elapsed()}')
 
     mean_loss = loss_accum / step
     print(f'Training Loss {mean_loss}, Perplexity {np.exp(mean_loss)}')

@@ -6,7 +6,7 @@ from collections import namedtuple
 import baseline
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader
-from eight_mile.utils import str2bool, write_json, revlut, print_table
+from eight_mile.utils import Timer, str2bool, write_json, revlut, print_table
 import glob
 from baseline.pytorch.embeddings import *
 import baseline.embeddings
@@ -311,6 +311,8 @@ def train():
     if do_on_demand_masking:
         logger.info(f"On-demand masking is turned on")
 
+    timer = Timer()
+
     for epoch in range(start_epoch, args.epochs):
         gen_model.train()
         discrim_model.train()
@@ -320,7 +322,7 @@ def train():
         avg_train_loss = Average('average5_train_loss')
         metrics = {}
         optz.zero_grad()
-        start = time.time()
+        timer.start()
         print(f'Starting epoch {epoch + 1}')
         train_iter = iter(train_loader)
         valid_iter = iter(valid_loader)
@@ -345,7 +347,7 @@ def train():
                 logging.info('Loss g=%f, d=%f total=%f, Per token acc=%f', avg_gen_loss.avg, avg_discrim_loss.avg, avg_train_loss.avg, avg_discrim_acc.avg)
 
             if (i + 1) % update_on == 0 and args.local_rank < 1:
-                elapsed = (time.time() - start)/60
+                elapsed = timer.elapsed(True)
                 logging.info('elapsed time this epoch %d min', elapsed)
                 logging.info('elapsed step time %f steps/min', i/elapsed)
                 logging.info('LR: %f',  optz.current_lr)
@@ -353,7 +355,7 @@ def train():
                 save_checkpoint(discrim_model, discrim_base, steps, tick_type='step')
 
         # How much time elapsed in minutes
-        elapsed = (time.time() - start)/60
+        elapsed = timer.elapsed(True)
         # This is the average training token-level loss across all machines
         # This is the token-level training perplexity
         metrics['train_elapsed_min'] = elapsed
@@ -367,7 +369,7 @@ def train():
             avg_valid_discrim_loss = Average('average_valid_discrim_loss')
             avg_valid_discrim_acc = Average('average_valid_discrim_acc')
             avg_valid_loss = Average('average_valid_loss')
-            start = time.time()
+            timer.start()
             gen_model.eval()
             discrim_model.eval()
             for i in range(valid_steps_per_epoch):
@@ -382,7 +384,7 @@ def train():
                     avg_valid_discrim_loss.update(discrim_loss_step.item())
                     total_loss_step = gen_loss_step + args.gen_loss_scale * discrim_loss_step
                     avg_valid_loss.update(total_loss_step.item())
-            elapsed = (time.time() - start)/60
+            elapsed = timer.elapsed(True)
             metrics['valid_elapsed_min'] = elapsed
             metrics['average_valid_gen_loss'] = avg_valid_gen_loss.avg
             metrics['average_valid_discrim_loss'] = avg_valid_discrim_loss.avg

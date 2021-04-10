@@ -160,7 +160,7 @@ class Seq2SeqTrainerTf(Trainer):
         epoch_loss = 0
         epoch_toks = 0
 
-        start = time.time()
+        start = time.perf_counter()
         self.nstep_start = start
         for batch_dict in ts:
 
@@ -201,7 +201,7 @@ class Seq2SeqTrainerTf(Trainer):
         pg = create_progress_bar(len(es))
         preds = []
         golds = []
-        start = time.time()
+        start = time.perf_counter()
         for batch_dict in pg(es):
             tgt = batch_dict.pop('tgt')
             tgt_lens = batch_dict.pop('tgt_lengths')
@@ -238,7 +238,7 @@ class Seq2SeqTrainerTf(Trainer):
         preds = []
         golds = []
 
-        start = time.time()
+        start = time.perf_counter()
         pg = create_progress_bar(len(vs))
         for batch_dict in pg(vs):
 

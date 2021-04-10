@@ -2,7 +2,7 @@ import six
 import os
 import time
 import logging
-from eight_mile.utils import listify
+from eight_mile.utils import listify, Timer
 
 from baseline.train import create_trainer, register_training_func
 from baseline.tf.tfy import TRAIN_FLAG
@@ -100,9 +100,9 @@ def fit(model_params, ts, vs, es, **kwargs):
         trainer.recover_last_checkpoint()
         # What to do about overloading this??
         evaluator = TaggerEvaluatorTf(trainer.model, span_type, verbose)
-        start = time.time()
+        timer = Timer()
         test_metrics = evaluator.test(es, conll_output=conll_output, txts=txts)
-        duration = time.time() - start
+        duration = timer.elapsed()
         for reporting in reporting_fns:
             reporting(test_metrics, 0, 'Test')
         trainer.log.debug({'phase': 'Test', 'time': duration})

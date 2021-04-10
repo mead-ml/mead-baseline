@@ -3,13 +3,12 @@ import argparse
 import baseline.embeddings
 import baseline.tf.embeddings
 import eight_mile.tf.layers as L
-from eight_mile.utils import revlut, str2bool
+from eight_mile.utils import Timer, revlut, str2bool
 from eight_mile.tf.layers import SET_TRAIN_FLAG, set_tf_log_level
 from eight_mile.tf.optz import EagerOptimizer
 import tensorflow as tf
 import logging
 import numpy as np
-import time
 
 NUM_PREFETCH = 2
 SHUF_BUF_SZ = 5000
@@ -164,7 +163,7 @@ for epoch in range(args.epochs):
 
     loss_accum = 0.
     step = 0
-    start = time.time()
+    timer.start()
     h = None
 
 
@@ -175,7 +174,7 @@ for epoch in range(args.epochs):
         loss_value, h = optimizer.update_with_hidden(model, h, x, y)
         loss_accum += loss_value
         step += 1
-    print('training time {}'.format(time.time() - start))
+    print('training time {}'.format(timer.elapsed()))
 
     mean_loss = loss_accum / step
     print('Training Loss {}, Perplexity {}'.format(mean_loss, np.exp(mean_loss)))

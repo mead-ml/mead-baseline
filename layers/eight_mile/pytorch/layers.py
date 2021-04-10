@@ -11,7 +11,7 @@ import torch.jit as jit
 import torch.autograd
 import contextlib
 import glob
-from eight_mile.utils import listify, Offsets, is_sequence
+from eight_mile.utils import listify, Offsets, is_sequence, str2bool
 from eight_mile.utils import transition_mask as transition_mask_np
 
 MASK_FALSE = False
@@ -4377,3 +4377,35 @@ class TransformerBoWPairedModel(DualEncoderModel):
             embedded = self.embeddings({'x': response})
         encoded_response = self.reduction_layer_2((embedded, response_lengths))
         return encoded_response
+
+
+class CudaTimer:
+    """A CUDA timer context manager that can be used to track and record events
+
+    The timer is only enabled if `MEAD_PYTORCH_TIMER` is true.  If its enabled, it
+    will cause a large slowdown (similar to `CUDA_LAUNCH_BLOCKING`).
+    """
+    def __init__(self, name, sync_before=True):
+        """
+
+        :param name:
+        :param sync_before:
+        """
+        self.enabled = str2bool(os.getenv('MEAD_PYTORCH_TIMER', False))
+        if self.enabled:
+            self._name = name
+            self._start = torch.cuda.Event(enable_timing=True)
+            self._end = torch.cuda.Event(enable_timing=True)
+            if sync_before:
+                torch.cuda.synchronize()
+
+    def __enter__(self):
+        if self.enabled:
+            self._start.record()
+
+    def __exit__(self, exc_type, exc_value, exc_traceback):
+        if self.enabled:
+            self._end.record()
+            torch.cuda.synchronize()
+            elapsed = self._start.elapsed_time(self._end)
+            print(f"({os.getpid()}) {self._name} {elapsed}")

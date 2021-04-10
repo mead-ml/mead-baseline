@@ -11,7 +11,7 @@ from collections import namedtuple
 import baseline.tf.embeddings
 import baseline.embeddings
 from baseline.vectorizers import BPEVectorizer1D
-from eight_mile.utils import Average, get_num_gpus_multiworker
+from eight_mile.utils import Average, Timer, get_num_gpus_multiworker
 from eight_mile.optz import *
 from eight_mile.tf.optz import *
 from eight_mile.tf.layers import get_shape_as_list, TransformerDiscriminator, SET_TRAIN_FLAG, create_distribute_strategy, read_yaml_tf
@@ -435,7 +435,7 @@ def train():
         return sum_loss, sum_gen_loss, sum_discrim_loss, sum_acc
     # This is the training loop
     start_epoch = 0
-
+    timer = Timer()
     with strategy.scope():
 
         for epoch in range(start_epoch, args.epochs):
@@ -447,7 +447,7 @@ def train():
             avg_acc = Average('average_train_acc')
 
             metrics = {}
-            start = time.time()
+            timer.start()
             train_iter = iter(train_loader)
             for i in range(steps_per_epoch):
                 loss, gen_loss, discrim_loss, acc = _distributed_train_step(next(train_iter))
@@ -476,7 +476,7 @@ def train():
                     logging.info(avg_discrim_loss)
                     logging.info(avg_acc)
                 if (i + 1) % update_on == 0:
-                    elapsed = (time.time() - start)/60
+                    elapsed = timer.elapsed(True)
                     logging.info('elapsed time this epoch %d min', elapsed)
                     logging.info('elapsed step time %f steps/min', i/elapsed)
                     gen_checkpoint_manager.save()
@@ -489,11 +489,9 @@ def train():
                         npz_checkpoint = os.path.join(args.basedir, f'gen-step-{steps}.npz')
                         save_tlm_npz(gen_model, npz_checkpoint)
 
-            # How much time elapsed in minutes
-            elapsed = (time.time() - start)/60
             # This is the average training token-level loss across all machines
             # This is the token-level training perplexity
-            metrics['train_elapsed_min'] = elapsed
+            metrics['train_elapsed_min'] = timer.elapsed(True)
             metrics['average_train_loss'] = avg_loss.avg
             metrics['average_gen_loss'] = avg_gen_loss.avg
             metrics['average_discrim_loss'] = avg_discrim_loss.avg
@@ -505,7 +503,7 @@ def train():
             avg_valid_discrim_loss = Average('average_valid_discrim_loss')
             avg_valid_acc = Average('average_valid_acc')
 
-            start = time.time()
+            timer.start()
             SET_TRAIN_FLAG(False)
             valid_iter = iter(valid_loader)
             for i in range(steps_per_valid_epoch):
@@ -519,9 +517,7 @@ def train():
                 avg_valid_discrim_loss.update(valid_discrim_loss.numpy().item())
                 avg_valid_acc.update(valid_acc.numpy().item())
 
-            elapsed = (time.time() - start)/60
-
-            metrics['valid_elapsed_min'] = elapsed
+            metrics['valid_elapsed_min'] = timer.elapsed(True)
             metrics['average_valid_loss'] = avg_valid_loss.avg
             metrics['average_valid_gen_loss'] = avg_valid_gen_loss.avg
             metrics['average_valid_discrim_loss'] = avg_valid_discrim_loss.avg

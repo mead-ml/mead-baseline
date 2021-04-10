@@ -6,7 +6,7 @@ from argparse import ArgumentParser
 import baseline
 import baseline.tf
 
-from eight_mile.utils import str2bool, write_json, Average, get_num_gpus_multiworker, get_version
+from eight_mile.utils import str2bool, write_json, Average, get_num_gpus_multiworker, get_version, Timer
 from baseline.tf.embeddings import *
 import baseline.embeddings
 from baseline.vectorizers import BPEVectorizer1D
@@ -288,7 +288,7 @@ def train():
 
     # This is the training loop
     start_epoch = 0
-
+    timer = Timer()
     with strategy.scope():
 
         for epoch in range(start_epoch, args.epochs):
@@ -296,7 +296,7 @@ def train():
             logger.info('Starting epoch %d', epoch + 1)
             avg_loss = Average('average_train_loss')
             metrics = {}
-            start = time.time()
+            timer.start()
             train_iter = iter(train_loader)
             for i in range(steps_per_epoch):
                 loss = _distributed_train_step(next(train_iter))
@@ -313,7 +313,7 @@ def train():
                 if (i + 1) % report_on == 0:
                     logging.info(avg_loss)
                 if (i + 1) % update_on == 0:
-                    elapsed = (time.time() - start) / 60
+                    elapsed = timer.elapsed(True)
                     logging.info('elapsed time this epoch %d min', elapsed)
                     logging.info('elapsed step time %f steps/min', i / elapsed)
                     checkpoint_manager.save()
@@ -323,18 +323,17 @@ def train():
                         save_transformer_seq2seq_npz(model, npz_checkpoint)
 
             # How much time elapsed in minutes
-            elapsed = (time.time() - start) / 60
             train_token_loss = avg_loss.avg
             # This is the average training token-level loss across all machines
             # This is the token-level training perplexity
             train_token_ppl = math.exp(train_token_loss)
-            metrics['train_elapsed_min'] = elapsed
+            metrics['train_elapsed_min'] = timer.elapsed(True)
             metrics['average_train_loss'] = train_token_loss
             metrics['train_ppl'] = train_token_ppl
             metrics['lr'] = float(lr_sched(tf.cast(optimizer.global_step, tf.float32)).numpy().item())
 
             avg_valid_loss = Average('average_valid_loss')
-            start = time.time()
+            timer.start()
             SET_TRAIN_FLAG(False)
             valid_iter = iter(valid_loader)
             for i in range(steps_per_valid_epoch):
@@ -345,9 +344,7 @@ def train():
             valid_token_loss = avg_valid_loss.avg
             valid_token_ppl = math.exp(valid_token_loss)
 
-            elapsed = (time.time() - start) / 60
-
-            metrics['valid_elapsed_min'] = elapsed
+            metrics['valid_elapsed_min'] = timer.elapsed(True)
             metrics['average_valid_loss'] = valid_token_loss
             metrics['average_valid_word_ppl'] = valid_token_ppl
             logger.info(json.dumps(metrics, indent=4))

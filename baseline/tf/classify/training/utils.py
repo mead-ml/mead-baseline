@@ -61,7 +61,7 @@ def _report(step, metrics, start, phase, tt, reporting_fns, steps=1):
     :param reporting_fns: `List[Callable]` The list of reporting functions to call.
     :param steps: `int` The number of steps in this segment, used to normalize the time.
     """
-    elapsed = time.time() - start
+    elapsed = time.perf_counter() - start
     for reporting in reporting_fns:
         reporting(metrics, step, phase, tt)
     log.debug({
