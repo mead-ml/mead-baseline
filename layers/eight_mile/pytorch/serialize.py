@@ -2,7 +2,15 @@ import torch
 import torch.nn as nn
 import numpy as np
 from typing import Dict, List
-from eight_mile.pytorch.layers import Dense, TransformerEncoderStack, TransformerEncoder, TransformerDecoderStack, TransformerDecoder, EmbeddingsStack
+from eight_mile.pytorch.layers import (
+    Dense,
+    TransformerEncoderStack,
+    TransformerEncoder,
+    TransformerDecoderStack,
+    TransformerDecoder,
+    EmbeddingsStack,
+    WithDropout,
+)
 from eight_mile.pytorch.embeddings import LookupTableEmbeddings, LearnedPositionalLookupTableEmbeddingsWithBias
 
 # BERT HuggingFace Tokenizers checkpoints can be converted into MEAD Baseline Transformer checkpoints
@@ -114,6 +122,8 @@ def to_weight_array(pytorch_layer: nn.Module, name: str) -> Dict:
     :param name: The name of this layer to serialize
     :return: A Dictionary containing `weights` and `bias` keys
     """
+    if isinstance(pytorch_layer, WithDropout):
+        pytorch_layer = pytorch_layer.layer
     if isinstance(pytorch_layer, Dense):
         pytorch_layer = pytorch_layer.layer
     weights = pytorch_layer.weight.cpu().detach().numpy()
