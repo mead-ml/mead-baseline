@@ -196,7 +196,7 @@ def load_embeddings(name, **kwargs):
             model = RandomInitVecModel(dsz, known_vocab=known_vocab, unif_weight=unif, counts=not preserve_vocab_indices)
         # If there, is use the PretrainedEmbeddingsModel loader
         else:
-            if is_sequence(filename):
+            if is_sequence(filename) or preserve_vocab_indices:
                 model = PretrainedEmbeddingsStack(
                     listify(filename),
                     known_vocab=known_vocab,
