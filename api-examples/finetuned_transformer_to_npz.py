@@ -14,7 +14,7 @@ import os
 import torch
 import logging
 from baseline.utils import import_user_module
-from eight_mile.pytorch.serialize import save_tlm_output_npz
+from eight_mile.pytorch.serialize import save_tlm_output_npz, save_tlm_npz
 parser = argparse.ArgumentParser(
     description='Convert finetuned transformer model trained with PyTorch classifier to an TLM NPZ'
 )
@@ -22,7 +22,7 @@ parser.add_argument('--model', help='The path to the .pyt file created by traini
 parser.add_argument('--device', help='device')
 parser.add_argument('--npz', help='Output file name, defaults to the original name with replaced suffix')
 parser.add_argument('--modules', help='modules to load: local files, remote URLs or mead-ml/hub refs', default=[], nargs='+', required=False)
-
+parser.add_argument('--no_output_layer', action='store_true', help='If set, we wont store the final layers')
 args = parser.parse_args()
 
 logger = logging.getLogger(__file__)
@@ -44,6 +44,10 @@ if len(keys) > 1:
     )
 
 tpt_embed = tpt_embed_dict[keys[0]]
-# Monkey patch the embedding to contain an output_layer
-tpt_embed.output_layer = bl_model.output_layer
-save_tlm_output_npz(tpt_embed, args.npz, verbose=True)
+
+if args.no_output_layer:
+    save_tlm_npz(tpt_embed, args.npz, verbose=True)
+else:
+    # Monkey patch the embedding to contain an output_layer
+    tpt_embed.output_layer = bl_model.output_layer
+    save_tlm_output_npz(tpt_embed, args.npz, verbose=True)
