@@ -351,7 +351,7 @@ class PretrainedEmbeddingsStack(EmbeddingsModel):
         embeddings = []
 
         for file in filenames:
-            embeddings.append(PretrainedEmbeddingsModel(file, known_vocab))
+            embeddings.append(PretrainedEmbeddingsModel(file, copy.deepcopy(known_vocab)))
 
         self.dsz = sum([embedding.dsz for embedding in embeddings])
         self.weights = np.random.uniform(-uw, uw, (self.vsz, self.dsz)).astype(np.float32)
