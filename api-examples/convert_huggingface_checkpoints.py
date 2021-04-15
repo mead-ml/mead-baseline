@@ -3,7 +3,7 @@ import argparse
 import torch
 from typing import Tuple, Dict
 from eight_mile.pytorch.layers import EmbeddingsStack
-from eight_mile.pytorch.serialize import save_tlm_npz, convert_transformers_keys
+from eight_mile.pytorch.serialize import *
 from baseline.pytorch.lm import TransformerMaskedLanguageModel
 from eight_mile.utils import read_config_stream
 
@@ -13,12 +13,17 @@ from eight_mile.downloads import web_downloader
 
 """
 
-You can use the predefined checkpoint paths, or you can download the model and convert the checkpoint that way.
+You can use the predefined checkpoint paths, or you can download the model and convert
+the checkpoint that way using the git LFS repos provided by hugging face.  This is 
+the preferred approach for most models.  For any model supported, you can go to its page on
+https://huggingface.co/ and click on the `Use in transformers` link to get the git LFS repo
 
 For example to convert SentenceBERT, which is just a vanilla BERT style checkpoint:
 
 git clone https://huggingface.co/sentence-transformers/bert-base-nli-mean-tokens
 and then pass that path in
+
+
 
 """
 BERT_PRETRAINED_CONFIG_ARCHIVE_MAP = {
@@ -71,6 +76,11 @@ BERT_PRETRAINED_MODEL_ARCHIVE_MAP = {
     "bert-base-dutch-cased": "https://s3.amazonaws.com/models.huggingface.co/bert/wietsedv/bert-base-dutch-cased/pytorch_model.bin",
 }
 
+MODEL_MAPS = {
+    'roberta': {'layers': ROBERTA_HF_LAYER_MAP, 'embed': ROBERTA_HF_EMBED_MAP},
+    'bert': {'layers': BERT_HF_LAYER_MAP, 'embed': BERT_HF_EMBED_MAP}
+}
+
 
 def create_transformer_lm(config_url: str) -> Tuple[TransformerMaskedLanguageModel, int]:
     config = read_config_stream(config_url)
@@ -83,11 +93,8 @@ def create_transformer_lm(config_url: str) -> Tuple[TransformerMaskedLanguageMod
     num_heads = config['num_attention_heads']
     num_layers = config['num_hidden_layers']
     pad = config['pad_token_id']
-    if pad != 0:
+    if pad != 0 and pad != 1:
         raise Exception(f"Unexpected pad value {pad}")
-    if layer_norm_eps != 1e-12:
-        raise Exception(f"Expected layer norm to be 1e-12, received {layer_norm_eps}")
-
     tt_vsz = config['type_vocab_size']
     vsz = config['vocab_size']
     embeddings = {'x': LearnedPositionalLookupTableEmbeddings(vsz=vsz, dsz=d_model, mxlen=mxlen),
@@ -104,7 +111,8 @@ def create_transformer_lm(config_url: str) -> Tuple[TransformerMaskedLanguageMod
     return model, num_layers
 
 
-def convert_checkpoint(bert_checkpoint: str, num_layers: int, target_dir: str, checkpoint_disk_loc: str) -> Dict:
+def convert_checkpoint(bert_checkpoint: str, num_layers: int, target_dir: str, checkpoint_disk_loc: str,
+                       nested_layer_map, flat_map) -> Dict:
 
     if os.path.exists(checkpoint_disk_loc):
         print(f'Checkpoint found at {checkpoint_disk_loc}')
@@ -113,7 +121,7 @@ def convert_checkpoint(bert_checkpoint: str, num_layers: int, target_dir: str, c
         web_downloader(bert_checkpoint, checkpoint_disk_loc)
     state_dict = torch.load(checkpoint_disk_loc)
 
-    mapped_keys = convert_transformers_keys(num_layers, state_dict)
+    mapped_keys = convert_transformers_keys(num_layers, state_dict, nested_layer_map=nested_layer_map, flat_map=flat_map)
     return mapped_keys
 
 def write_npz(output_file: str, model: TransformerMaskedLanguageModel):
@@ -121,8 +129,9 @@ def write_npz(output_file: str, model: TransformerMaskedLanguageModel):
 
 
 parser = argparse.ArgumentParser(description='Grab a HuggingFace BERT checkpoint down and convert it to a TLM NPZ file')
-parser.add_argument('--model', help='This is the key of a HuggingFace input model', default='bert-base-uncased')
-parser.add_argument('--target_dir', help='This is the target directory where we will put the checkpoints', default='.')
+parser.add_argument('--model', help='This is the key of a HuggingFace input model or path to model', default='bert-base-uncased')
+parser.add_argument('--model_type', choices=['bert', 'roberta'], default='Model flavor: bert (BERT, SBERT), roberta (RoBERTa, XLM-R)')
+parser.add_argument('--target_dir', help='This is the target directory where we will put the checkpoints')
 parser.add_argument('--config_file_name', help='The name of the config file.  Only needed for local models', default='config.json')
 parser.add_argument('--checkpoint', help='The name of the checkpoint file. Only needed for local models', default='pytorch_model.bin')
 args = parser.parse_args()
@@ -140,7 +149,9 @@ else:
     output_file = args.model
 
 model, num_layers = create_transformer_lm(config_url)
-mapped_keys = convert_checkpoint(bert_checkpoint, num_layers, args.target_dir, checkpoint_disk_loc)
+mapped_keys = convert_checkpoint(bert_checkpoint, num_layers, args.target_dir, checkpoint_disk_loc,
+                                 nested_layer_map=MODEL_MAPS[args.model_type]['layers'],
+                                 flat_map=MODEL_MAPS[args.model_type]['embed'])
 unknown_keys = model.load_state_dict(mapped_keys, strict=False)
 for k in unknown_keys.missing_keys:
     if k not in ['output_layer.weight', 'output_layer.bias']:
@@ -148,4 +159,5 @@ for k in unknown_keys.missing_keys:
 for k in unknown_keys.unexpected_keys:
     print(f'Warning: unexpected key {k}')
 output_file = os.path.join(args.target_dir, output_file + '.npz')
+print(f'Writing output file {output_file}')
 write_npz(output_file, model)

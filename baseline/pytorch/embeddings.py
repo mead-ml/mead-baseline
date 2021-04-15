@@ -106,7 +106,7 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
         # If the embedding wasnt trained with token types, this allows us to add them later
         self.skippable = set(listify(kwargs.get('skip_restore_embeddings', [])))
 
-        self.cls_index = self.vocab['[CLS]']
+        self.cls_index = self.vocab.get('[CLS]', self.vocab.get('<s>'))
         self.vsz = max(self.vocab.values()) + 1
         self.d_model = int(kwargs.get('dsz', kwargs.get('d_model', 768)))
         self.init_embed(**kwargs)

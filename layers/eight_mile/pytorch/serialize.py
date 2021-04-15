@@ -76,6 +76,67 @@ BERT_HF_EMBED_MAP = {
     'bert.embeddings.LayerNorm.gamma': 'embeddings.reduction.ln.weight',
 }
 
+ROBERTA_HF_LAYER_MAP = {
+    ## FFN weights
+    'roberta.encoder.layer.{}.intermediate.dense.weight': 'generator.encoders.{}.ffn.0.layer.weight',
+    'roberta.encoder.layer.{}.intermediate.dense.bias': 'generator.encoders.{}.ffn.0.layer.bias',
+    'roberta.encoder.layer.{}.output.dense.weight': 'generator.encoders.{}.ffn.3.layer.weight',
+    'roberta.encoder.layer.{}.output.dense.bias': 'generator.encoders.{}.ffn.3.layer.bias',
+
+    ## MHA weights
+    'roberta.encoder.layer.{}.attention.self.key.weight': 'generator.encoders.{}.self_attn.w_K.layer.weight',
+    'roberta.encoder.layer.{}.attention.self.key.bias': 'generator.encoders.{}.self_attn.w_K.layer.bias',
+    'roberta.encoder.layer.{}.attention.self.query.weight': 'generator.encoders.{}.self_attn.w_Q.layer.weight',
+    'roberta.encoder.layer.{}.attention.self.query.bias': 'generator.encoders.{}.self_attn.w_Q.layer.bias',
+    'roberta.encoder.layer.{}.attention.self.value.weight': 'generator.encoders.{}.self_attn.w_V.layer.weight',
+    'roberta.encoder.layer.{}.attention.self.value.bias': 'generator.encoders.{}.self_attn.w_V.layer.bias',
+    'roberta.encoder.layer.{}.attention.output.dense.weight': 'generator.encoders.{}.self_attn.w_O.layer.weight',
+    'roberta.encoder.layer.{}.attention.output.dense.bias': 'generator.encoders.{}.self_attn.w_O.layer.bias',
+
+    ## LN weights
+    # The names in of layer norm our transformers are a bit unspecific
+    # think of ln1 as ln_x and ln2 as ln_attn_output
+    'roberta.encoder.layer.{}.output.LayerNorm.bias': 'generator.encoders.{}.ln1.bias',
+    'roberta.encoder.layer.{}.output.LayerNorm.weight': 'generator.encoders.{}.ln1.weight',
+    'roberta.encoder.layer.{}.attention.output.LayerNorm.bias': 'generator.encoders.{}.ln2.bias',
+    'roberta.encoder.layer.{}.attention.output.LayerNorm.weight': 'generator.encoders.{}.ln2.weight'
+}
+
+ROBERTA_HF_FT_LAYER_MAP = {
+    ## FFN weights
+    'roberta.encoder.layer.{}.intermediate.dense.weight': 'transformer.encoders.{}.ffn.0.layer.weight',
+    'roberta.encoder.layer.{}.intermediate.dense.bias': 'transformer.encoders.{}.ffn.0.layer.bias',
+    'roberta.encoder.layer.{}.output.dense.weight': 'transformer.encoders.{}.ffn.3.layer.weight',
+    'roberta.encoder.layer.{}.output.dense.bias': 'transformer.encoders.{}.ffn.3.layer.bias',
+
+    ## MHA weights
+    'roberta.encoder.layer.{}.attention.self.key.weight': 'transformer.encoders.{}.self_attn.w_K.layer.weight',
+    'roberta.encoder.layer.{}.attention.self.key.bias': 'transformer.encoders.{}.self_attn.w_K.layer.bias',
+    'roberta.encoder.layer.{}.attention.self.query.weight': 'transformer.encoders.{}.self_attn.w_Q.layer.weight',
+    'roberta.encoder.layer.{}.attention.self.query.bias': 'transformer.encoders.{}.self_attn.w_Q.layer.bias',
+    'roberta.encoder.layer.{}.attention.self.value.weight': 'transformer.encoders.{}.self_attn.w_V.layer.weight',
+    'roberta.encoder.layer.{}.attention.self.value.bias': 'transformer.encoders.{}.self_attn.w_V.layer.bias',
+    'roberta.encoder.layer.{}.attention.output.dense.weight': 'transformer.encoders.{}.self_attn.w_O.layer.weight',
+    'roberta.encoder.layer.{}.attention.output.dense.bias': 'transformer.encoders.{}.self_attn.w_O.layer.bias',
+
+    ## LN weights
+    # The names in of layer norm our transformers are a bit unspecific
+    # think of ln1 as ln_x and ln2 as ln_attn_output
+    'roberta.encoder.layer.{}.output.LayerNorm.bias': 'transformer.encoders.{}.ln1.bias',
+    'roberta.encoder.layer.{}.output.LayerNorm.weight': 'transformer.encoders.{}.ln1.weight',
+    'roberta.encoder.layer.{}.attention.output.LayerNorm.beta': 'transformer.encoders.{}.ln2.bias',
+    'roberta.encoder.layer.{}.attention.output.LayerNorm.weight': 'transformer.encoders.{}.ln2.weight'
+}
+
+ROBERTA_HF_EMBED_MAP = {
+    ## Embedding weights
+    'roberta.embeddings.word_embeddings.weight': 'embeddings.embeddings.0.embeddings.weight',
+    'roberta.embeddings.position_embeddings.weight': 'embeddings.embeddings.0.pos_embeddings.weight',
+    'roberta.embeddings.token_type_embeddings.weight': 'embeddings.embeddings.1.embeddings.weight',
+    'roberta.embeddings.LayerNorm.bias': 'embeddings.reduction.ln.bias',
+    'roberta.embeddings.LayerNorm.weight': 'embeddings.reduction.ln.weight',
+}
+
 
 def convert_transformers_keys(num_layers: int, d: Dict, nested_layer_map: Dict = BERT_HF_LAYER_MAP, flat_map: Dict = BERT_HF_EMBED_MAP) -> Dict:
     m = {}

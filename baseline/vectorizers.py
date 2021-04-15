@@ -650,7 +650,7 @@ class BPEVectorizer1D(AbstractVectorizer, HasSubwordTokens):
         self.model_file = kwargs.get('model_file')
         self.vocab_file = kwargs.get('vocab_file')
         use_fast_bpe = kwargs.get('use_fast_bpe', True)
-        self._special_tokens = {"[CLS]", "<unk>", "<EOS>"}
+        self._special_tokens = {"[CLS]", "<unk>", "<EOS>", "<UNK>", "<s>", "</s>"}
 
         extra_tokens = []
         if use_fast_bpe:
