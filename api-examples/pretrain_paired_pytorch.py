@@ -136,6 +136,7 @@ def train():
     parser.add_argument("--src_end_tok", type=str, nargs='+', default=['<EOS>'])
     parser.add_argument("--tgt_begin_tok", type=str, nargs='+', default=['<GO>'])
     parser.add_argument("--tgt_end_tok", type=str, nargs='+', default=['<EOS>'])
+    parser.add_argument('--lower', type=baseline.str2bool, default=False)
     parser.add_argument("--loss", type=str, default='all', choices=['triplet', 'all', 'all_mean', 'contrastive', 'symmetric'])
     parser.add_argument("--learn_temp", type=str2bool, default=True,
                         help="If 'constrastive' or 'symmetric' loss, should we learn the temperature scaling")
@@ -173,7 +174,8 @@ def train():
         args.tgt_nctx = args.nctx
     reader = MultiFileDatasetReader(args.nctx, args.tgt_nctx, args.src_begin_tok, args.src_end_tok, args.tgt_begin_tok,
                                     args.tgt_end_tok, args.subword_model_file, args.subword_vocab_file,
-                                    args.file_type, reader_type=args.reader_type, record_keys=args.record_keys)
+                                    args.file_type, reader_type=args.reader_type, record_keys=args.record_keys,
+                                    lower=args.lower)
 
     vocab = reader.build_vocab()
     # If we are not using chars, then use 'x' for both input and output
