@@ -13,33 +13,16 @@
     "emit_begin_tok": []
   },
   {
-    "label": "bert-base-cased-no-cls",
-    "type": "wordpiece1d",
-    "vocab_file": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-cased-vocab.txt",
-    "emit_begin_tok": []
-  },
-  {
     "label": "bert-base-uncased-dict1d",
     "type": "wordpiece-dict1d",
     "vocab_file": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-uncased-vocab.txt",
     "transform": "baseline.lowercase"
   },
   {
-    "label": "bert-base-cased-dict1d",
-    "type": "wordpiece-dict1d",
-    "vocab_file": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-cased-vocab.txt"
-  },
-  {
     "label": "bert-base-uncased-no-cls-dict1d",
     "type": "wordpiece-dict1d",
     "vocab_file": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-uncased-vocab.txt",
     "transform": "baseline.lowercase",
-    "emit_begin_tok": []
-  },
-  {
-    "label": "bert-base-cased-no-cls-dict1d",
-    "type": "wordpiece-dict1d",
-    "vocab_file": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-cased-vocab.txt",
     "emit_begin_tok": []
   },
   {
@@ -50,6 +33,31 @@
     "emit_begin_tok": [],
     "emit_end_tok": []
   },
+
+  {
+    "label": "bert-base-cased",
+    "type": "wordpiece1d",
+    "vocab_file": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-cased-vocab.txt"
+  },
+  {
+    "label": "bert-base-cased-no-cls",
+    "type": "wordpiece1d",
+    "vocab_file": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-cased-vocab.txt",
+    "emit_begin_tok": []
+  },
+
+  {
+    "label": "bert-base-cased-dict1d",
+    "type": "wordpiece-dict1d",
+    "vocab_file": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-cased-vocab.txt"
+  },
+
+  {
+    "label": "bert-base-cased-no-cls-dict1d",
+    "type": "wordpiece-dict1d",
+    "vocab_file": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-cased-vocab.txt",
+    "emit_begin_tok": []
+  },
   {
     "label": "bert-base-cased-no-extra-dict1d",
     "type": "wordpiece-dict1d",
@@ -57,16 +65,81 @@
     "emit_begin_tok": [],
     "emit_end_tok": []
   },
+
+  {
+    "label": "mbert-base-uncased",
+    "type": "wordpiece1d",
+    "vocab_file": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-multilingual-uncased-vocab.txt",
+    "transform": "baseline.lowercase"
+  },
+  {
+    "label": "mbert-base-uncased-no-cls",
+    "type": "wordpiece1d",
+    "vocab_file": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-multilingual-uncased-vocab.txt",
+    "transform": "baseline.lowercase",
+    "emit_begin_tok": []
+  },
+  {
+    "label": "mbert-base-uncased-dict1d",
+    "type": "wordpiece-dict1d",
+    "vocab_file": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-multilingual-uncased-vocab.txt",
+    "transform": "baseline.lowercase"
+  },
+  {
+    "label": "mbert-base-uncased-no-cls-dict1d",
+    "type": "wordpiece-dict1d",
+    "vocab_file": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-multilingual-uncased-vocab.txt",
+    "transform": "baseline.lowercase",
+    "emit_begin_tok": []
+  },
+  {
+    "label": "mbert-base-uncased-no-extra-dict1d",
+    "type": "wordpiece-dict1d",
+    "vocab_file": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-multilingual-uncased-vocab.txt",
+    "transform": "baseline.lowercase",
+    "emit_begin_tok": [],
+    "emit_end_tok": []
+  },
+
+  {
+    "label": "mbert-base-cased",
+    "type": "wordpiece1d",
+    "vocab_file": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-multilingual-cased-vocab.txt"
+  },
+  {
+    "label": "mbert-base-cased-no-cls",
+    "type": "wordpiece1d",
+    "vocab_file": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-multilingual-cased-vocab.txt",
+    "emit_begin_tok": []
+  },
+
+  {
+    "label": "mbert-base-cased-dict1d",
+    "type": "wordpiece-dict1d",
+    "vocab_file": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-multilingual-cased-vocab.txt"
+  },
+
+  {
+    "label": "mbert-base-cased-no-cls-dict1d",
+    "type": "wordpiece-dict1d",
+    "vocab_file": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-multilingual-cased-vocab.txt",
+    "emit_begin_tok": []
+  },
+  {
+    "label": "mbert-base-cased-no-extra-dict1d",
+    "type": "wordpiece-dict1d",
+    "vocab_file": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-multilingual-cased-vocab.txt",
+    "emit_begin_tok": [],
+    "emit_end_tok": []
+  },
+
+
+
   {
     "label": "bert-large-uncased",
     "type": "wordpiece1d",
     "vocab_file": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-large-uncased-vocab.txt",
     "transform": "baseline.lowercase"
-  },
-  {
-    "label": "bert-base-cased",
-    "type": "wordpiece1d",
-    "vocab_file": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-cased-vocab.txt"
   },
   {
     "label": "bert-large-cased",

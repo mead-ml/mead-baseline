@@ -14,6 +14,20 @@
     "dsz": 768
   },
   {
+    "label": "mbert-base-uncased-npz",
+    "file": "https://www.dropbox.com/s/ghs0ltoj64cj560/bert-base-multilingual-uncased.npz?dl=1",
+    "sha1": "a791b8e947653f84e1b573cc523cecc9377193db",
+    "unzip": false,
+    "dsz": 768
+  },
+  {
+    "label": "mbert-base-cased-npz",
+    "file": "https://www.dropbox.com/s/tj68ulg6473myau/bert-base-multilingual-cased.npz?dl=1",
+    "sha1": "c0e1b5510cad771e080b2b34eb6ec111da141005",
+    "unzip": false,
+    "dsz": 768
+  },
+  {
     "label": "sentence-bert-mean-npz",
     "file": "https://www.dropbox.com/s/z5iczzz1r5n0nxk/bert-base-nli-mean-tokens.npz?dl=1",
     "unzip": false,

@@ -131,11 +131,13 @@ if os.path.isdir(args.model):
     config_url = os.path.join(args.model, args.config_file_name)
     bert_checkpoint = os.path.join(args.model, args.checkpoint)
     checkpoint_disk_loc = bert_checkpoint
+    output_file = os.path.basename(args.model)
 else:
     config_url = BERT_PRETRAINED_CONFIG_ARCHIVE_MAP[args.model]
     bert_checkpoint = BERT_PRETRAINED_MODEL_ARCHIVE_MAP[args.model]
     checkpoint_basename = os.path.basename(bert_checkpoint)
     checkpoint_disk_loc = os.path.join(args.target_dir, checkpoint_basename)
+    output_file = args.model
 
 model, num_layers = create_transformer_lm(config_url)
 mapped_keys = convert_checkpoint(bert_checkpoint, num_layers, args.target_dir, checkpoint_disk_loc)
@@ -145,5 +147,5 @@ for k in unknown_keys.missing_keys:
         print(f'Warning: missing key: {k}')
 for k in unknown_keys.unexpected_keys:
     print(f'Warning: unexpected key {k}')
-output_file = os.path.join(args.target_dir, args.model + '.npz')
+output_file = os.path.join(args.target_dir, output_file + '.npz')
 write_npz(output_file, model)
