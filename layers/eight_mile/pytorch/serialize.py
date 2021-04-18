@@ -35,10 +35,10 @@ BERT_HF_LAYER_MAP = {
     ## LN weights
     # The names in of layer norm our transformers are a bit unspecific
     # think of ln1 as ln_x and ln2 as ln_attn_output
-    'bert.encoder.layer.{}.output.LayerNorm.bias': 'generator.encoders.{}.ln1.bias',
-    'bert.encoder.layer.{}.output.LayerNorm.weight': 'generator.encoders.{}.ln1.weight',
-    'bert.encoder.layer.{}.attention.output.LayerNorm.bias': 'generator.encoders.{}.ln2.bias',
-    'bert.encoder.layer.{}.attention.output.LayerNorm.weight': 'generator.encoders.{}.ln2.weight'
+    'bert.encoder.layer.{}.output.LayerNorm.beta': 'generator.encoders.{}.ln1.bias',
+    'bert.encoder.layer.{}.output.LayerNorm.gamma': 'generator.encoders.{}.ln1.weight',
+    'bert.encoder.layer.{}.attention.output.LayerNorm.beta': 'generator.encoders.{}.ln2.bias',
+    'bert.encoder.layer.{}.attention.output.LayerNorm.gamma': 'generator.encoders.{}.ln2.weight'
 }
 
 BERT_HF_FT_LAYER_MAP = {
@@ -61,10 +61,10 @@ BERT_HF_FT_LAYER_MAP = {
     ## LN weights
     # The names in of layer norm our transformers are a bit unspecific
     # think of ln1 as ln_x and ln2 as ln_attn_output
-    'bert.encoder.layer.{}.output.LayerNorm.bias': 'transformer.encoders.{}.ln1.bias',
+    'bert.encoder.layer.{}.output.LayerNorm.beta': 'transformer.encoders.{}.ln1.bias',
     'bert.encoder.layer.{}.output.LayerNorm.weight': 'transformer.encoders.{}.ln1.weight',
     'bert.encoder.layer.{}.attention.output.LayerNorm.beta': 'transformer.encoders.{}.ln2.bias',
-    'bert.encoder.layer.{}.attention.output.LayerNorm.weight': 'transformer.encoders.{}.ln2.weight'
+    'bert.encoder.layer.{}.attention.output.LayerNorm.gamma': 'transformer.encoders.{}.ln2.weight'
 }
 
 BERT_HF_EMBED_MAP = {
@@ -72,8 +72,8 @@ BERT_HF_EMBED_MAP = {
     'bert.embeddings.word_embeddings.weight': 'embeddings.embeddings.0.embeddings.weight',
     'bert.embeddings.position_embeddings.weight': 'embeddings.embeddings.0.pos_embeddings.weight',
     'bert.embeddings.token_type_embeddings.weight': 'embeddings.embeddings.1.embeddings.weight',
-    'bert.embeddings.LayerNorm.bias': 'embeddings.reduction.ln.bias',
-    'bert.embeddings.LayerNorm.weight': 'embeddings.reduction.ln.weight',
+    'bert.embeddings.LayerNorm.beta': 'embeddings.reduction.ln.bias',
+    'bert.embeddings.LayerNorm.gamma': 'embeddings.reduction.ln.weight',
 }
 
 
