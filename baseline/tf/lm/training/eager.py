@@ -8,7 +8,6 @@ from eight_mile.tf.optz import EagerOptimizer
 from baseline.utils import get_model_file, get_metric_cmp
 from baseline.model import create_model_for
 from baseline.train import register_training_func, Trainer
-from baseline.tf.lm.training.utils import to_tensors, SHUF_BUF_SZ, NUM_PREFETCH
 
 
 def loss_with_state(model, h, x, y):
@@ -98,7 +97,10 @@ class LanguageModelTrainerEagerTf(Trainer):
         def _train_step_no_state(inputs):
             """Replicated training step."""
 
-            features, y = inputs
+            features = inputs.copy()
+            features['lengths'] = features[self.lengths_key]
+            del features[self.lengths_key]
+            y = features.pop('y')
             loss = self.optimizer.update(self.model, features, y)
             toks = self._num_toks(y)
             report_loss = loss * tf.cast(toks, tf.float32)
@@ -107,7 +109,8 @@ class LanguageModelTrainerEagerTf(Trainer):
         def _train_step_with_state(inputs, hidden):
             """Replicated training step."""
 
-            features, y = inputs
+            features = inputs.copy()
+            y = features.pop('y')
             loss, hidden = self.optimizer.update_with_hidden(self.model, hidden, features, y)
             toks = self._num_toks(y)
             report_loss = loss * tf.cast(toks, tf.float32)
@@ -180,7 +183,8 @@ class LanguageModelTrainerEagerTf(Trainer):
 
         start = time.perf_counter()
         h = None
-        for features, y in vs:
+        for features in vs:
+            y = features.pop('y')
             if self.model.requires_state:
                 loss_value, h = loss_with_state(self.model, h, features, y)
             else:
@@ -251,27 +255,14 @@ def fit_eager(model_params, ts, vs, es=None, **kwargs):
     reporting_fns = listify(kwargs.get('reporting', []))
     print('reporting', reporting_fns)
 
-    batchsz = kwargs['batchsz']
-    test_batchsz = kwargs.get('test_batchsz', batchsz)
-    tgt_key = model_params.get('tgt_key')
-
-    train_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(ts))
-    train_dataset = train_dataset.shuffle(buffer_size=SHUF_BUF_SZ)
-    train_dataset = train_dataset.batch(batchsz, drop_remainder=False)
-    train_dataset = train_dataset.prefetch(NUM_PREFETCH)
-
-    valid_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(vs))
-    valid_dataset = valid_dataset.batch(batchsz, drop_remainder=False)
-    valid_dataset = valid_dataset.prefetch(NUM_PREFETCH)
-
     trainer = LanguageModelTrainerEagerTf(model_params, **kwargs)
     last_improved = 0
     SET_TRAIN_FLAG(True)
 
     for epoch in range(epochs):
 
-        trainer.train(train_dataset, reporting_fns)
-        test_metrics = trainer.test(valid_dataset, reporting_fns, phase='Valid')
+        trainer.train(ts, reporting_fns)
+        test_metrics = trainer.test(vs, reporting_fns, phase='Valid')
 
         if do_early_stopping is False:
             trainer.checkpoint()
@@ -294,8 +285,5 @@ def fit_eager(model_params, ts, vs, es=None, **kwargs):
     if es is not None:
         print('Reloading best checkpoint')
         trainer.recover_last_checkpoint()
-        test_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(es))
-        test_dataset = test_dataset.batch(test_batchsz, drop_remainder=False)
-        test_dataset = test_dataset.prefetch(NUM_PREFETCH)
-        trainer.test(test_dataset, reporting_fns, phase='Test')
+        trainer.test(es, reporting_fns, phase='Test')
 

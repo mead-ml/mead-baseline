@@ -1,4 +1,4 @@
-import six
+import sys
 import os
 import time
 import logging
@@ -6,21 +6,15 @@ import tensorflow as tf
 
 from eight_mile.confusion import ConfusionMatrix
 from eight_mile.progress import create_progress_bar
-from eight_mile.utils import listify, get_version
+from eight_mile.utils import listify
 from eight_mile.tf.layers import get_shape_as_list
 from eight_mile.tf.optz import *
 from baseline.utils import get_model_file, get_metric_cmp
 from baseline.tf.tfy import SET_TRAIN_FLAG
-from baseline.tf.classify.training.utils import to_tensors
 from baseline.train import EpochReportingTrainer, register_trainer, register_training_func
 from baseline.utils import verbose_output
 from baseline.model import create_model_for
 import numpy as np
-
-# Number of batches to prefetch if using tf.datasets
-NUM_PREFETCH = 2
-# The shuffle buffer
-SHUF_BUF_SZ = 5000
 
 log = logging.getLogger('baseline.timing')
 
@@ -65,7 +59,7 @@ class ClassifyTrainerEagerTf(EpochReportingTrainer):
             self.model = model_params
 
         self.optimizer = EagerOptimizer(loss, **kwargs)
-        self.nsteps = kwargs.get('nsteps', six.MAXSIZE)
+        self.nsteps = kwargs.get('nsteps', sys.maxsize)
         self._checkpoint = tf.train.Checkpoint(optimizer=self.optimizer.optimizer, model=self.model)
         checkpoint_dir = '{}-{}'.format("./tf-classify", os.getpid())
 
@@ -102,7 +96,9 @@ class ClassifyTrainerEagerTf(EpochReportingTrainer):
         @tf.function
         def _train_step(inputs):
             """Replicated training step."""
-            features, y = inputs
+            features = inputs.copy()
+            y = features.pop('y')
+            features['lengths'] = features.pop(self.model.lengths_key)
             loss = self.optimizer.update(self.model, features, y)
             batchsz = get_shape_as_list(y)[0]
             report_loss = loss * batchsz
@@ -114,7 +110,7 @@ class ClassifyTrainerEagerTf(EpochReportingTrainer):
             nstep_loss.assign_add(step_report_loss)
             epoch_div.assign_add(step_batchsz)
             nstep_div.assign_add(step_batchsz)
-            step = self.optimizer.global_step.numpy() + 1
+            step = self.optimizer.global_step + 1
 
             if step % self.nsteps == 0:
                 metrics = self.calc_metrics(nstep_loss.numpy(), nstep_div.numpy())
@@ -157,7 +153,10 @@ class ClassifyTrainerEagerTf(EpochReportingTrainer):
         pg = create_progress_bar(steps)
 
         SET_TRAIN_FLAG(False)
-        for features, y in pg(loader):
+        for inputs in pg(loader):
+            features = inputs.copy()
+            y = features.pop('y')
+            features['lengths'] = features.pop(self.model.lengths_key)
             logits = self.model(features)
             y_ = tf.argmax(logits, axis=1, output_type=tf.int32)
             cm.add_batch(y, y_)
@@ -230,19 +229,6 @@ def fit_eager(model_params, ts, vs, es=None, **kwargs):
     epochs = int(kwargs.get('epochs', 20))
     model_file = get_model_file('classify', 'tf', kwargs.get('basedir'))
 
-    batchsz = kwargs['batchsz']
-    lengths_key = model_params.get('lengths_key')
-
-    test_batchsz = kwargs.get('test_batchsz', batchsz)
-    train_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(ts, lengths_key))
-    train_dataset = train_dataset.shuffle(buffer_size=SHUF_BUF_SZ)
-    train_dataset = train_dataset.batch(batchsz, drop_remainder=False)
-    train_dataset = train_dataset.prefetch(NUM_PREFETCH)
-
-    valid_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(vs, lengths_key))
-    valid_dataset = valid_dataset.batch(batchsz, drop_remainder=False)
-    valid_dataset = valid_dataset.prefetch(NUM_PREFETCH)
-
     best_metric = 0
     if do_early_stopping:
         early_stopping_metric = kwargs.get('early_stopping_metric', 'acc')
@@ -258,8 +244,8 @@ def fit_eager(model_params, ts, vs, es=None, **kwargs):
 
     for epoch in range(epochs):
 
-        trainer.train(train_dataset, reporting_fns, steps=len(ts))
-        test_metrics = trainer.test(valid_dataset, reporting_fns, phase='Valid', steps=len(vs))
+        trainer.train(ts, reporting_fns, steps=len(ts))
+        test_metrics = trainer.test(vs, reporting_fns, phase='Valid', steps=len(vs))
 
         if do_early_stopping is False:
             trainer.checkpoint()
@@ -282,7 +268,4 @@ def fit_eager(model_params, ts, vs, es=None, **kwargs):
     if es is not None:
         print('Reloading best checkpoint')
         trainer.recover_last_checkpoint()
-        test_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(es, lengths_key))
-        test_dataset = test_dataset.batch(test_batchsz, drop_remainder=False)
-        test_dataset = test_dataset.prefetch(NUM_PREFETCH)
-        trainer.test(test_dataset, reporting_fns, phase='Test', verbose=verbose, steps=len(es))
+        trainer.test(es, reporting_fns, phase='Test', verbose=verbose, steps=len(es))

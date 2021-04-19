@@ -1,4 +1,4 @@
-import six
+import sys
 import os
 import re
 import sys
@@ -400,19 +400,19 @@ def get_metric_cmp(metric, user_cmp=None, less_than_metrics=LESS_THAN_METRICS):
     if user_cmp is not None:
         return _try_user_cmp(user_cmp)
     if metric in less_than_metrics:
-        return lt, six.MAXSIZE
-    return gt, -six.MAXSIZE - 1
+        return lt, sys.maxsize
+    return gt, -sys.maxsize - 1
 
 
 def _try_user_cmp(user_cmp):
     user_cmp = user_cmp.lower()
     if user_cmp in {"lt", "less", "less than", "<", "less_than"}:
-        return lt, six.MAXSIZE
+        return lt, sys.maxsize
     if user_cmp in {"le", "lte", "<="}:
-        return le, six.MAXSIZE
+        return le, sys.maxsize
     if user_cmp in {"ge", "gte", ">="}:
-        return ge, -six.MAXSIZE - 1
-    return gt, -six.MAXSIZE - 1
+        return ge, -sys.maxsize - 1
+    return gt, -sys.maxsize - 1
 
 
 @export
@@ -441,7 +441,7 @@ def show_examples(model, es, rlut1, rlut2, vocab, mxlen, sample, prob_clip, max_
         logger.info('[OP] %s' % sent)
         sent = lookup_sentence(rlut2, example['tgt'].squeeze())
         logger.info('[Actual] %s' % sent)
-        dst_i = model.predict(example)[0][0][0]
+        dst_i = model.predict(example, numpy_to_tensor=False)[0][0][0]
         sent = lookup_sentence(rlut2, dst_i)
         logger.info('Guess: %s' % sent)
         logger.info('------------------------------------------------------------------------')

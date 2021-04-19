@@ -258,9 +258,15 @@ class Task:
     def _create_task_specific_reader(self, vecs_set=None):
         self._create_vectorizers(vecs_set)
         reader_params = self.config_params['reader'] if 'reader' in self.config_params else self.config_params['loader']
+
+        if self.backend.name == 'tf' and self.backend.params is not None and not bool(self.backend.params.get('prefer_eager', True)):
+            reader_params['backend'] = None
+        else:
+            reader_params['backend'] = self.backend.name
+
         reader_params['clean_fn'] = reader_params.get('clean_fn', self.config_params.get('preproc', {}).get('clean_fn'))
         if reader_params['clean_fn'] is not None and self.config_params['dataset'] != 'SST2':
-            logger.warning('Warning: A reader preprocessing function (%s) is active, it is recommended that all data preprocessing is done outside of baseline to insure data at inference time matches data at training time.', reader_params['clean_fn'])
+            logger.warning('Warning: A reader preprocessing function (%s) is active, it is recommended that all data preprocessing is done outside of baseline to ensure data at inference time matches data at training time.', reader_params['clean_fn'])
         reader_params['mxlen'] = self.vectorizers[self.primary_key].mxlen
         if self.config_params['train'].get('gpus', 1) > 1:
             reader_params['truncate'] = True
@@ -397,7 +403,7 @@ class Task:
 
             # Also, if we are in eager mode, we might have to place the embeddings explicitly on the CPU
             embeddings_section['cpu_placement'] = bool(embeddings_section.get('cpu_placement', False))
-            if self.backend.params is not None:
+            if self.backend.name == 'tf' and self.backend.params is not None:
                 # If we are in eager mode
                 if bool(self.backend.params.get('prefer_eager', False)):
                     train_block = self.config_params['train']
@@ -959,13 +965,19 @@ class LanguageModelingTask(Task):
 
     def _create_task_specific_reader(self, vecs_set=None):
         self._create_vectorizers(vecs_set)
-
         reader_params = self.config_params['reader'] if 'reader' in self.config_params else self.config_params['loader']
         reader_params['nctx'] = reader_params.get('nctx', reader_params.get('nbptt', self.config_params.get('nctx', self.config_params.get('nbptt', 35))))
         reader_params['clean_fn'] = reader_params.get('clean_fn', self.config_params.get('preproc', {}).get('clean_fn'))
         if reader_params['clean_fn'] is not None and self.config_params['dataset'] != 'SST2':
-            logger.warning('Warning: A reader preprocessing function (%s) is active, it is recommended that all data preprocessing is done outside of baseline to insure data at inference time matches data at training time.', reader_params['clean_fn'])
+            logger.warning('Warning: A reader preprocessing function (%s) is active, it is recommended that all data preprocessing is done outside of baseline to ensure data at inference time matches data at training time.', reader_params['clean_fn'])
         reader_params['mxlen'] = self.vectorizers[self.primary_key].mxlen
+
+
+        if self.backend.name == 'tf' and self.backend.params is not None and not bool(self.backend.params.get('prefer_eager', True)):
+            reader_params['backend'] = None
+        else:
+            reader_params['backend'] = self.backend.name
+
         if self.config_params['train'].get('gpus', 1) > 1:
             reader_params['truncate'] = True
         return baseline.reader.create_reader(self.task_name(), self.vectorizers, self.config_params.get('preproc', {}).get('trim', False), **reader_params)
@@ -1045,7 +1057,7 @@ class LanguageModelingTask(Task):
         self._reorganize_params()
         self._load_dataset()
         # Dont do this here!  We need to move train_data elsewhere
-        calc_lr_params(self.config_params['train'], self.train_data.steps)
+        calc_lr_params(self.config_params['train'], len(self.train_data))#.steps)
         baseline.save_vectorizers(self.get_basedir(), self.vectorizers)
 
         model_params = self.config_params['model']

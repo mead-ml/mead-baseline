@@ -1,4 +1,4 @@
-import six
+import sys
 import logging
 from eight_mile.progress import create_progress_bar
 from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
@@ -42,7 +42,7 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
         else:
             logger.warning("Requested training on CPU.  This will be slow.")
 
-        self.nsteps = kwargs.get('nsteps', six.MAXSIZE)
+        self.nsteps = kwargs.get('nsteps', sys.maxsize)
 
     def save(self, model_file):
         self.model.save(model_file)

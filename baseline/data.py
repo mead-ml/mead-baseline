@@ -1,13 +1,14 @@
+import os
 import random
 import logging
 import numpy as np
 import math
+from eight_mile.utils import str2bool
 from baseline.utils import exporter
 
 __all__ = []
 export = exporter(__all__)
 logger = logging.getLogger('baseline')
-
 
 @export
 class DataFeed:
@@ -43,7 +44,7 @@ class ExampleDataFeed(DataFeed):
     """Abstract base class that works on a list of examples
 
     """
-    def __init__(self, examples, batchsz, **kwargs):
+    def __init__(self, examples, batchsz, shuffle=True, trim=False, truncate=False):
         """Constructor from a list of examples
 
         Use the examples requested to provide data.  Options for batching and shuffling are supported,
@@ -69,13 +70,13 @@ class ExampleDataFeed(DataFeed):
 
         self.examples = examples
         self.batchsz = batchsz
-        self.shuffle = bool(kwargs.get('shuffle', False))
-        self.truncate = bool(kwargs.get('truncate', False))
+        self.shuffle = shuffle
+        self.truncate = truncate
         if self.truncate:
             self.steps = int(math.floor(len(self.examples) / float(batchsz)))
         else:
             self.steps = (len(self.examples) + batchsz - 1) // batchsz
-        self.trim = bool(kwargs.get('trim', False))
+        self.trim = trim
 
     def _batch(self, i):
         """
@@ -85,6 +86,47 @@ class ExampleDataFeed(DataFeed):
         """
         batch = self.examples.batch(i, self.batchsz, trim=self.trim)
         return batch
+
+try:
+    from torch.utils.data import DataLoader
+    from torch.utils.data.distributed import DistributedSampler
+    from baseline.pytorch.torchy import DatasetAdapter
+except:
+    pass
+try:
+    from baseline.tf.tfy import TFDataAdapter, TFSeqDataAdapter
+except:
+    pass
+
+
+def data_feed(examples, batch_size=1, shuffle=True,
+              is_distributed=False, num_workers=0,
+              prefetch=2, trim=False, truncate=False, pin_memory=True, backend=None):
+
+    use_native = str2bool(os.getenv('MEAD_NATIVE_LOADER', True))
+    if use_native:
+        if backend == 'pytorch':
+            if trim:
+                logger.warning("Warning, trim is not currently supported with PyTorch native loader")
+            dataset = DatasetAdapter(examples)
+            do_shuffle = shuffle
+            sampler = None
+            if shuffle and is_distributed:
+                do_shuffle = False
+                sampler = DistributedSampler(dataset)
+            loader = DataLoader(dataset, batch_size, shuffle=do_shuffle, sampler=sampler, prefetch_factor=prefetch,
+                                num_workers=num_workers, pin_memory=pin_memory, drop_last=truncate)
+            return loader
+
+        elif backend == 'tf':
+            if trim:
+                logger.warning("Warning, trim is not currently supported with TF native loader")
+            return TFDataAdapter(examples, batch_size, shuffle, prefetch=prefetch, num_workers=num_workers,
+                                 is_distributed=is_distributed, truncate=truncate)
+
+    if is_distributed:
+        raise Exception("Example data feed is not distributable")
+    return ExampleDataFeed(examples, batch_size, shuffle, trim, truncate)
 
 
 @export
@@ -272,36 +314,17 @@ class SeqWordCharDataFeed(DataFeed):
         :param tgt_key: Which field to treat as the target key (this will share an embedding vocab with the source)
         """
         super().__init__()
-        self.examples = dict()
+        self.examples = examples
         # This identifies which vector to use for targets
         self.tgt_key = 'x' if tgt_key is None else tgt_key
         num_examples = examples['{}_dims'.format(tgt_key)][0]
         rest = num_examples // batchsz
         self.steps = rest // nctx
-        # if num_examples is divisible by batchsz * nctx (equivalent to rest is divisible by nctx), we
-        # have a problem. reduce rest in that case.
-
-        if rest % nctx == 0:
-            rest = rest-1
-
-        for k in examples.keys():
-            if k.endswith('_dims'):
-                continue
-            dim_key = '{}_dims'.format(k)
-            shp = examples[dim_key]
-            if len(shp) == 2:
-                width = shp[1]
-            else:
-                width = 1
-            trunc = batchsz * rest * width
-            vec = examples[k].reshape(-1)[:trunc]
-            self.examples[k] = vec.reshape((batchsz, rest * width))
-
-            logger.info('Truncating %s from %d to %d', k, num_examples, trunc)
-            self.examples[k].flatten()
-            self.examples[dim_key] = shp
         self.nctx = nctx
         self.batchsz = batchsz
+
+    def keys(self):
+        return list(self.examples.keys()) + ['y']
 
     def _batch(self, i):
 
@@ -309,7 +332,8 @@ class SeqWordCharDataFeed(DataFeed):
         for k in self.examples.keys():
             if k.endswith('_dims'):
                 continue
-            x = self.examples[k]
+            # TODO: is this inefficient?
+            x = self.examples[k].reshape(self.batchsz, -1)
             dims = self.examples['{}_dims'.format(k)]
             if len(dims) == 1:
                 width = 1
@@ -327,8 +351,20 @@ class SeqWordCharDataFeed(DataFeed):
                 example['y'] = x[:, i*self.nctx * width + 1:(i + 1) * self.nctx * width + 1].reshape(reshape_dims)
 
         return example
-        #return {
-        #    'x': self.x[:, i*self.nbptt:(i+1)*self.nbptt].reshape((self.batchsz, self.nbptt)),
-        #    'xch': self.xch[:, i*self.stride_ch:(i+1)*self.stride_ch].reshape((self.batchsz, self.nbptt, self.wsz)),
-        #    'y': self.x[:, i*self.nbptt+1:(i+1)*self.nbptt+1].reshape((self.batchsz, self.nbptt))
-        #}
+
+
+def lm_data_feed(examples, nctx, batch_size, tgt_key=None,
+                 is_distributed=False,
+                 prefetch=2, backend=None):
+
+    use_native = str2bool(os.getenv('MEAD_NATIVE_LOADER', True))
+    dataset = SeqWordCharDataFeed(examples, nctx, batch_size, tgt_key=tgt_key)
+    if use_native and backend == 'tf':
+        print('Using Native loader', backend)
+        return TFSeqDataAdapter(dataset, prefetch=prefetch,
+                                is_distributed=is_distributed)
+
+    if is_distributed:
+        raise Exception("SeqWordCharDataFeed is not distributable")
+
+    return dataset

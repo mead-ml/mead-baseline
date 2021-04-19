@@ -1,5 +1,5 @@
 from __future__ import print_function
-from six.moves import shlex_quote
+from shlex import quote as shlex_quote
 
 import os
 import shutil

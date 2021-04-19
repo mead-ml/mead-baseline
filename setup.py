@@ -78,7 +78,6 @@ def main():
         include_package_data=True,
         install_requires=[
             'numpy',
-            'six',
             'mead-layers=={}'.format(About.VERSION),
         ],
         extras_require={
