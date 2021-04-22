@@ -135,8 +135,12 @@ def load_data_caching(token_type, reader, dataset, file_key, vocabs, caching, lo
 
 class MultiFileLoader(IterableDataset):
 
-    def __init__(self, directory, pattern, vocabs, src_vectorizer, tgt_vectorizer, last_turn_only=False, distribute=True, shuffle=True):
+    def __init__(
+            self, directory, pattern, vocabs, src_vectorizer, tgt_vectorizer, last_turn_only=False,
+            distribute=True, shuffle=True, record_keys=[]
+    ):
         super().__init__()
+        self.record_keys = record_keys
         self.src_vectorizer = src_vectorizer
         self.tgt_vectorizer = tgt_vectorizer
         self.pattern = pattern
@@ -225,12 +229,17 @@ class MultiFileLoader(IterableDataset):
 
 class NextTurnPredictionFileLoader(MultiFileLoader):
 
+    def get_pair_order(self, pair):
+        if self.record_keys == ['y', 'x']:
+            return pair[1], pair[0]
+        return pair[0], pair[1]
+
     def process_line(self, line):
         pair = line.strip().split('\t')
         # Unfortunately, this occassionally happens, a bunch of blank turns etc.
         if len(pair) != 2:
             return None
-        q, r = pair
+        q, r = self.get_pair_order(pair)
         if q == '' or r == '':
             return None
         if self.last_turn_only:
@@ -383,8 +392,9 @@ class MultiFileDatasetReader:
 
     def load(self, directory, vocabs, distribute=True, shuffle=True):
         reader_type = self.reader_type.lower()
+        # For `self.record_keys` in NTP and NSP, these names a
         if reader_type == "ntp":
-            return NextTurnPredictionFileLoader(directory, self.pattern, vocabs, self.src_vectorizer, self.tgt_vectorizer, distribute=distribute, shuffle=shuffle)
+            return NextTurnPredictionFileLoader(directory, self.pattern, vocabs, self.src_vectorizer, self.tgt_vectorizer, distribute=distribute, shuffle=shuffle, record_keys=self.record_keys)
         elif reader_type == "nsp":
             return NextSequencePredictionFileLoader(directory, self.pattern, vocabs, self.src_vectorizer, self.tgt_vectorizer, distribute=distribute, shuffle=shuffle)
         elif reader_type == "lang":
