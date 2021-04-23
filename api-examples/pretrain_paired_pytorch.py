@@ -214,7 +214,7 @@ def train():
                          logger=logger)
 
     model.to(args.device)
-    if args.model_type == 'encoder_decoder':
+    if args.model_type == 'encoder-decoder':
         run_step = run_step_s2s
     else:
         run_step = run_step_dual
