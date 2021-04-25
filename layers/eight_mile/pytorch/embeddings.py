@@ -243,11 +243,12 @@ class LearnedPositionalMixin(PositionalMixin):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.mxlen = int(kwargs.get("mxlen", 512))
+        self.offset = int(kwargs.get("offset", 0))
         self.pos_embeddings = nn.Embedding(self.mxlen, self.get_dsz())
 
     def positional(self, length):
         return self.pos_embeddings(
-            torch.arange(length, dtype=torch.long, device=self.pos_embeddings.weight.device)
+            torch.arange(self.offset, self.offset + length, dtype=torch.long, device=self.pos_embeddings.weight.device)
         ).unsqueeze(0)
 
 

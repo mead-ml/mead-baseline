@@ -374,7 +374,8 @@ def from_embed_array(pytorch_embed: nn.Module, d: Dict, name: str):
     device = pytorch_embed.embeddings.weight.device
     pytorch_embed.embeddings.weight = torch.nn.Parameter(torch.from_numpy(d[f"{name}/weights"]).to(device=device), requires_grad=True)
     if hasattr(pytorch_embed, 'pos_embeddings'):
-        pytorch_embed.pos_embeddings.weight = torch.nn.Parameter(torch.from_numpy(d[f"{name}/pos_weights"]).to(device=device),
+        pos_weights = torch.from_numpy(d[f"{name}/pos_weights"])
+        pytorch_embed.pos_embeddings.weight = torch.nn.Parameter(pos_weights.to(device=device),
                                                                  requires_grad=True)
 
 
