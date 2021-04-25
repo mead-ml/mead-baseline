@@ -125,7 +125,7 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
         # `learned-positional` with a token type feature
         # or `learned-positional-w-bias` if you dont care about the token type
         embed_type = kwargs.get('word_embed_type', 'learned-positional')
-        x_embedding = create_embeddings(vsz=self.vsz, dsz=self.d_model, embed_type=embed_type)
+        x_embedding = create_embeddings(vsz=self.vsz, dsz=self.d_model, embed_type=embed_type, mxlen=kwargs.get('mxlen', 512))
 
         embeddings = {'x': x_embedding}
         # This is for BERT support when we are using 2 features
@@ -149,7 +149,7 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
         d_k = kwargs.get('d_k')
         rpr_k = kwargs.get('rpr_k')
         layer_norms_after = kwargs.get('layer_norms_after', False)
-        layer_norm_eps = kwargs.get('layer_norm_eps', 1e-12)
+        layer_norm_eps = float(kwargs.get('layer_norm_eps', 1e-12))
         activation = kwargs.get('activation', 'gelu')
         windowed_ra = kwargs.get('windowed_ra', False)
         rpr_value_on = kwargs.get('rpr_value_on', True)
