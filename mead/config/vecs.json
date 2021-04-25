@@ -148,7 +148,7 @@
   },
   {
     "label": "roberta-base",
-    "type": "gpt2_bpe1d",
+    "type": "gpt2-bpe1d",
     "emit_begin_tok": "<s>",
     "emit_end_tok": "</s>",
     "model_file": "https://www.dropbox.com/s/2p86azt5cigrdhw/merges.txt?dl=1",
