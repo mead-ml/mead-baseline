@@ -1,8 +1,12 @@
 import collections
 import tempfile
 import unicodedata
+import re
+import json
 from typing import Tuple, List, Iterable, Set, Dict
 import numpy as np
+
+from functools import lru_cache
 from eight_mile.downloads import open_file_or_url, get_file_or_url
 from eight_mile.utils import exporter, optional_params, listify, register, Offsets, is_sequence
 from baseline.utils import import_user_module
@@ -1423,6 +1427,230 @@ class PassThroughDict1DVectorizer(PassThroughVectorizer):
         vec = np.zeros((self.mxlen, self.feature_size), dtype=np.float32)
         vec[:len(features)] = features
         return vec, len(features)
+
+# The code below is modified from:
+# https://raw.githubusercontent.com/openai/gpt-2/master/src/encoder.py"""
+
+@lru_cache()
+def bytes_to_unicode():
+    """
+    Returns list of utf-8 byte and a corresponding list of unicode strings.
+    The reversible bpe codes work on unicode strings.
+    This means you need a large # of unicode characters in your vocab if you want to avoid UNKs.
+    When you're at something like a 10B token dataset you end up needing around 5K for decent coverage.
+    This is a signficant percentage of your normal, say, 32K bpe vocab.
+    To avoid that, we want lookup tables between utf-8 bytes and unicode strings.
+    And avoids mapping to whitespace/control characters the bpe code barfs on.
+    """
+    bs = list(range(ord("!"), ord("~")+1))+list(range(ord("¡"), ord("¬")+1))+list(range(ord("®"), ord("ÿ")+1))
+    cs = bs[:]
+    n = 0
+    for b in range(2**8):
+        if b not in bs:
+            bs.append(b)
+            cs.append(2**8+n)
+            n += 1
+    cs = [chr(n) for n in cs]
+    return dict(zip(bs, cs))
+
+
+def get_pairs(word):
+    """Return set of symbol pairs in a word.
+
+    Word is represented as tuple of symbols (symbols being variable-length strings).
+    """
+    pairs = set()
+    prev_char = word[0]
+    for char in word[1:]:
+        pairs.add((prev_char, char))
+        prev_char = char
+    return pairs
+
+
+class Encoder:
+    def __init__(self, encoder, bpe_merges, errors='replace'):
+        self.encoder = encoder
+        self.decoder = {v:k for k,v in self.encoder.items()}
+        self.errors = errors # how to handle errors in decoding
+        self.byte_encoder = bytes_to_unicode()
+        self.byte_decoder = {v:k for k, v in self.byte_encoder.items()}
+        self.bpe_ranks = dict(zip(bpe_merges, range(len(bpe_merges))))
+        self.cache = {}
+
+        # Should haved added re.IGNORECASE so BPE merges can happen for capitalized versions of contractions
+        self.pat = re.compile(r"""'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+""")
+
+    def bpe(self, token):
+        if token in self.cache:
+            return self.cache[token]
+        word = tuple(token)
+        pairs = get_pairs(word)
+
+        if not pairs:
+            return token
+
+        while True:
+            bigram = min(pairs, key=lambda pair: self.bpe_ranks.get(pair, float('inf')))
+            if bigram not in self.bpe_ranks:
+                break
+            first, second = bigram
+            new_word = []
+            i = 0
+            while i < len(word):
+                try:
+                    j = word.index(first, i)
+                    new_word.extend(word[i:j])
+                    i = j
+                except:
+                    new_word.extend(word[i:])
+                    break
+
+                if word[i] == first and i < len(word)-1 and word[i+1] == second:
+                    new_word.append(first+second)
+                    i += 2
+                else:
+                    new_word.append(word[i])
+                    i += 1
+            new_word = tuple(new_word)
+            word = new_word
+            if len(word) == 1:
+                break
+            else:
+                pairs = get_pairs(word)
+        word = ' '.join(word)
+        self.cache[token] = word
+        return word
+
+    def encode(self, text):
+        bpe_tokens = []
+        for token in re.findall(self.pat, text):
+            token = ''.join(self.byte_encoder[b] for b in token.encode('utf-8'))
+            bpe_tokens.extend(self.encoder[bpe_token] for bpe_token in self.bpe(token).split(' '))
+        return bpe_tokens
+
+    def encode_subword(self, text):
+        bpe_tokens = []
+        for token in re.findall(self.pat, text):
+            token = ''.join(self.byte_encoder[b] for b in token.encode('utf-8'))
+            bpe_tokens.extend(bpe_token for bpe_token in self.bpe(token).split(' '))
+        return bpe_tokens
+
+    def decode(self, tokens):
+        text = ''.join([self.decoder[token] for token in tokens])
+        text = bytearray([self.byte_decoder[c] for c in text]).decode('utf-8', errors=self.errors)
+        return text
+
+
+@register_vectorizer(name='gpt2-bpe1d')
+class GPT2Vectorizer1D(AbstractVectorizer, HasSubwordTokens):
+
+    def __init__(self, **kwargs):
+        """Loads a BPE tokenizer"""
+        super().__init__(kwargs.get('transform_fn'), kwargs.get('emit_begin_tok', []), kwargs.get('emit_end_tok', []))
+        self.max_seen = 128
+        self.model_file = kwargs.get('model_file')
+        self.vocab_file = kwargs.get('vocab_file')
+        self._special_tokens = {"<unk>", "<pad>", "<s>", "</s>"}
+
+        with open_file_or_url(self.vocab_file, "r") as f:
+            vocab = json.load(f)
+
+        fpath = get_file_or_url(self.model_file)
+        with open(fpath, "r", encoding="utf-8") as f:
+            bpe_data = f.read()
+        bpe_merges = [tuple(merge_str.split()) for merge_str in bpe_data.split("\n")[1:-1]]
+        self.tokenizer = Encoder(
+            encoder=vocab,
+            bpe_merges=bpe_merges,
+        )
+
+        self.mxlen = kwargs.get('mxlen', -1)
+        Offsets.INDICES['PAD'] = self.vocab['<pad>']
+        Offsets.INDICES['GO'] = self.vocab['<s>']
+        Offsets.INDICES['EOS'] = self.vocab['</s>']
+        Offsets.INDICES['UNK'] = self.vocab['<unk>']
+        #Offsets.VALUES['PAD'] = '<pad>'
+        #Offsets.VALUES['GO'] = '<s>'
+        #Offsets.VALUES['EOS'] = '</s>'
+        #Offsets.VALUES['UNK'] = ['<unk>']
+
+    @property
+    def vocab(self):
+        return self.tokenizer.encoder
+
+    @property
+    def special_tokens(self) -> Set[str]:
+        return self._special_tokens
+
+    @property
+    def subword_sentinel(self):
+        return getattr(self.tokenizer, "subword_sentinel", "@@")
+
+    def valid_label_indices(self, tokens: Iterable) -> List[int]:
+        indices = []
+        in_subword = False
+        for i, token in enumerate(tokens):
+            if token in self.special_tokens:
+                in_subword = False
+                continue
+            if not in_subword:
+                indices.append(i)
+                if token.endswith(self.subword_sentinel):
+                    in_subword = True
+            else:
+                if not token.endswith(self.subword_sentinel):
+                    in_subword = False
+        return indices
+
+    def read_vocab(self, file_or_url):
+        with open_file_or_url(file_or_url, "r") as f:
+            self._vocab = json.load(f)
+
+    def count(self, tokens):
+        seen = 0
+        counter = collections.Counter()
+        for tok in self.iterable(tokens):
+            counter[tok] += 1
+            seen += 1
+        self.max_seen = max(self.max_seen, seen)
+        return counter
+
+    def iterable(self, tokens):
+        for t in self.emit_begin_tok:
+            yield t
+
+        if not isinstance(tokens, str):
+            tokens = ' '.join(tokens)
+
+        bpe_tokens = self.tokenizer.encode_subword(tokens)
+        for t in bpe_tokens:
+            yield t
+        for t in self.emit_end_tok:
+            yield t
+
+    def _next_element(self, tokens, vocab):
+        for atom in self.iterable(tokens):
+            value = vocab.get(atom, vocab.get(Offsets.VALUES[Offsets.UNK]))
+            yield value
+
+    def run(self, tokens, vocab):
+
+        if self.mxlen < 0:
+            self.mxlen = self.max_seen
+        vec1d = np.ones(self.mxlen, dtype=np.long)
+        for i, atom in enumerate(self._next_element(tokens, vocab)):
+            if i == self.mxlen:
+                i -= len(self.emit_end_tok)
+                for j, x in enumerate(self.emit_end_tok):
+                    vec1d[i + j] = vocab.get(x)
+                i = self.mxlen - 1
+                break
+            vec1d[i] = atom
+        valid_length = i + 1
+        return vec1d, valid_length
+
+    def get_dims(self):
+        return self.mxlen,
 
 
 @export

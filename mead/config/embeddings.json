@@ -28,6 +28,13 @@
     "dsz": 768
   },
   {
+    "label": "roberta-base-npz",
+    "file": "https://www.dropbox.com/s/7oyhphna2dtoq2k/roberta-base.npz?dl=1",
+    "sha1": "ea4bfe5c504cc5e21f63f5f6fd90474b78155fa4",
+    "unzip": false,
+    "dsz": 768
+  },
+  {
     "label": "sentence-bert-mean-npz",
     "file": "https://www.dropbox.com/s/z5iczzz1r5n0nxk/bert-base-nli-mean-tokens.npz?dl=1",
     "unzip": false,
@@ -102,11 +109,5 @@
     "file": "https://www.dropbox.com/s/s8q2feew1fmwl3p/senna-50.txt.gz?dl=1",
     "sha1": "5258af089f40f9071bbb8f4f5ac2b2f35b18fea2",
     "dsz": 50
-  },
-  { 
-    "label": "wnut-gaz",
-    "file": "https://www.dropbox.com/s/3p76mbx50uk22m7/wnut-gaz.txt?dl=1",
-    "sha1": "83f6ebdd1c8351ff37e0b8bf00d27faca6f5e685",
-    "dsz": "7"
   }
 ]
