@@ -138,18 +138,20 @@ args = parser.parse_args()
 
 if os.path.isdir(args.model):
     config_url = os.path.join(args.model, args.config_file_name)
-    bert_checkpoint = os.path.join(args.model, args.checkpoint)
-    checkpoint_disk_loc = bert_checkpoint
+    pt_checkpoint = os.path.join(args.model, args.checkpoint)
+    checkpoint_disk_loc = pt_checkpoint
+    if not args.target_dir:
+        args.target_dir = args.model
     output_file = os.path.basename(args.model)
 else:
     config_url = BERT_PRETRAINED_CONFIG_ARCHIVE_MAP[args.model]
-    bert_checkpoint = BERT_PRETRAINED_MODEL_ARCHIVE_MAP[args.model]
-    checkpoint_basename = os.path.basename(bert_checkpoint)
+    pt_checkpoint = BERT_PRETRAINED_MODEL_ARCHIVE_MAP[args.model]
+    checkpoint_basename = os.path.basename(pt_checkpoint)
     checkpoint_disk_loc = os.path.join(args.target_dir, checkpoint_basename)
     output_file = args.model
 
 model, num_layers = create_transformer_lm(config_url)
-mapped_keys = convert_checkpoint(bert_checkpoint, num_layers, args.target_dir, checkpoint_disk_loc,
+mapped_keys = convert_checkpoint(pt_checkpoint, num_layers, args.target_dir, checkpoint_disk_loc,
                                  nested_layer_map=MODEL_MAPS[args.model_type]['layers'],
                                  flat_map=MODEL_MAPS[args.model_type]['embed'])
 unknown_keys = model.load_state_dict(mapped_keys, strict=False)
