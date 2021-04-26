@@ -3,7 +3,7 @@ import copy
 import logging
 import numpy as np
 import tensorflow as tf
-from eight_mile.utils import write_json, Offsets, is_sequence, calc_nfeats
+from eight_mile.utils import write_json, Offsets, is_sequence, calc_nfeats, pads
 from eight_mile.tf.layers import *
 
 
@@ -335,7 +335,7 @@ class SinusoidalPositionalMixin(PositionalMixin):
         log_timescale_increment = math.log(max_timescale) / float(word_dsz)
         inv_timescales = np.exp(np.arange(0, word_dsz, 2, dtype=np.float32) * -log_timescale_increment)
 
-        pe = np.zeros((mxlen, word_dsz), dtype=np.float32)
+        pe = pads((mxlen, word_dsz), dtype=np.float32)
         position = np.expand_dims(np.arange(0, mxlen, dtype=np.float32), 1)
 
         pe[:, 0::2] = np.sin(position * inv_timescales)

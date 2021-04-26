@@ -465,6 +465,9 @@ def validate_url(url: str) -> bool:
     )
     return re.match(regex, url) is not None
 
+@export
+def pads(shape, dtype):
+    return np.full(shape, Offsets.PAD, dtype)
 
 
 @export
