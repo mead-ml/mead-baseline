@@ -85,7 +85,7 @@ def run():
     parser = ArgumentParser()
     parser.add_argument("--basedir", type=str)
     parser.add_argument("--checkpoint", type=str, help='Checkpoint name or directory to load')
-    parser.add_argument("--sample", type=str2bool, help='Sample from the decoder?  Defaults to `true`', default=0)
+    parser.add_argument("--sample", type=str2bool, help='Sample from the decoder?  Defaults to `false`', default=0)
     parser.add_argument("--vocab", type=str, help='Vocab file to load', required=False)
     parser.add_argument("--input", type=str, default='hello how are you ?')
     parser.add_argument("--dataset_cache", type=str, default=os.path.expanduser('~/.bl-data'),
@@ -117,21 +117,16 @@ def run():
         torch.cuda.set_device(0)
         args.device = torch.device("cuda", 0)
 
-
-    vocab_file = args.vocab
-
     if os.path.isdir(args.checkpoint):
-        if not vocab_file:
-            vocab_file = os.path.join(args.checkpoint, 'vocabs.json')
         checkpoint, _ = find_latest_checkpoint(args.checkpoint)
         logger.warning("Found latest checkpoint %s", checkpoint)
     else:
         checkpoint = args.checkpoint
-        if not vocab_file:
-            vocab_file = os.path.join(os.path.dirname(checkpoint), 'vocabs.json')
 
-
-    vocab = read_json(vocab_file)
+    cls = None if not args.use_cls else '[CLS]'
+    vectorizer = BPEVectorizer1D(model_file=args.subword_model_file, vocab_file=args.subword_vocab_file,
+                                 mxlen=args.nctx, emit_begin_tok=cls)
+    vocab = vectorizer.vocab
     # If we are not using chars, then use 'x' for both input and output
     preproc_data = baseline.embeddings.load_embeddings('x', dsz=args.d_model, counts=False, known_vocab=vocab, embed_type=args.embed_type)
     embeddings = preproc_data['embeddings']
@@ -141,9 +136,6 @@ def run():
                          device=args.device)
     model.to(args.device)
 
-    cls = None if not args.use_cls else '[CLS]'
-    vectorizer = BPEVectorizer1D(model_file=args.subword_model_file, vocab_file=args.subword_vocab_file,
-                                 mxlen=args.nctx, emit_begin_tok=cls)
 
     index2word = revlut(vocab)
     wf = None
