@@ -678,14 +678,8 @@ class BPEVectorizer1D(AbstractVectorizer, HasSubwordTokens):
 
         self.mxlen = kwargs.get('mxlen', -1)
         vocab_list = self.read_vocab(self.vocab_file)
-        self._vocab = {}
-        for i in range(len(vocab_list)):
-            if vocab_list[i] in self._vocab:
-                print(f'ERROR {vocab_list[i]} already in the list')
-            self._vocab[vocab_list[i]] = i
-        #self._vocab = {k: i for i, k in enumerate(vocab_list)}
-        #self._vocab = {k: i for i, k in enumerate(vocab_list + extra_tokens)}
-        print(len(self._vocab), len(vocab_list))
+        self._vocab = {k: i for i, k in enumerate(vocab_list + extra_tokens)}
+
     @property
     def vocab(self):
         return self._vocab
