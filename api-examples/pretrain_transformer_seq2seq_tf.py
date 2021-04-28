@@ -6,7 +6,7 @@ from argparse import ArgumentParser
 import baseline
 import baseline.tf
 
-from eight_mile.utils import str2bool, write_json, Average, get_num_gpus_multiworker, get_version, Timer
+from eight_mile.utils import str2bool, write_json, Average, get_env_gpus, get_num_gpus_multiworker, get_version, Timer
 from baseline.tf.embeddings import *
 import baseline.embeddings
 from baseline.vectorizers import BPEVectorizer1D
@@ -145,7 +145,6 @@ def train():
     parser.add_argument('--rpr_k',
                         help='Relative attention positional sizes pass 0 if you dont want relative attention',
                         type=int, default=[8], nargs='+')
-    parser.add_argument("--strategy", help="Training strategy, defaults to `mirror`", choices=["mirror"])
     parser.add_argument("--npz", help="Should we write out NPZ files?", type=str2bool, default=False)
     parser.add_argument("--tb", help="Turn on tensorboard?", type=str2bool, default=False)
     parser.add_argument("--convert_only", help="Should we just convert this file to NPZ and exit?", type=str2bool, default=False)
@@ -166,7 +165,7 @@ def train():
         file_writer.set_as_default()
         logger.info(f"Set up tensorboard logdir {logdir}")
 
-    strategy = create_distribute_strategy(args.distribute, args.tpu_ep)
+    strategy = create_distribute_strategy(args.distribute, args.tpu_ep, len(get_env_gpus(None)))
     num_replicas = strategy.num_replicas_in_sync
     logger.info(f"Using {num_replicas} replicas in this job.")
     vectorizer = BPEVectorizer1D(model_file=args.subword_model_file, vocab_file=args.subword_vocab_file, mxlen=args.nctx)
