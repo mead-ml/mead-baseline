@@ -736,6 +736,7 @@ class BPEVectorizer1D(AbstractVectorizer, HasSubwordTokens):
         if self.mxlen < 0:
             self.mxlen = self.max_seen
         vec1d = np.zeros(self.mxlen, dtype=np.long)
+        i = 0
         for i, atom in enumerate(self._next_element(tokens, vocab)):
             if i == self.mxlen:
                 i -= len(self.emit_end_tok)
