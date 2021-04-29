@@ -5,7 +5,7 @@ import os
 from argparse import ArgumentParser
 import baseline
 import baseline.tf
-
+#baseline.tf.set_tf_eager_debug(True)
 from eight_mile.utils import str2bool, write_json, Average, get_env_gpus, get_num_gpus_multiworker, get_version, Timer
 from baseline.tf.embeddings import *
 import baseline.embeddings
@@ -65,8 +65,13 @@ def _parse_tf_record(example_proto):
 
 
 def decode_json(example):
-    return tf.py_function(_parse_json, [example], [tf.int32, tf.int32])
-
+    import tensorflow_io as tfio
+    specs = {
+            'x': tf.TensorSpec(tf.TensorShape([None]), tf.int64),
+            'y': tf.TensorSpec(tf.TensorShape([None]), tf.int64)
+    }
+    record = tfio.experimental.serialization.decode_json(example, specs)
+    return record['x'], record['y']
 
 def get_dataset(directory, file_type, num_parallel_reads=1, shuffle=True):
     """Get a dataset as a tf.data.Dataset.  Input can be a bucket or a local file
