@@ -1455,8 +1455,9 @@ def f_score(overlap_count: int, gold_count: int, guess_count: int, f: int = 1) -
 
 
 @export
-def get_env_gpus() -> List[str]:
-    return os.getenv("CUDA_VISIBLE_DEVICES", os.getenv("NVIDIA_VISIBLE_DEVICES", os.getenv("NV_GPU", "0"))).split(",")
+def get_env_gpus(backoff="0") -> List[str]:
+    list_or_none = os.getenv("CUDA_VISIBLE_DEVICES", os.getenv("NVIDIA_VISIBLE_DEVICES", os.getenv("NV_GPU", backoff)))
+    return [] if list_or_none is None else list_or_none.split(",")
 
 
 @export

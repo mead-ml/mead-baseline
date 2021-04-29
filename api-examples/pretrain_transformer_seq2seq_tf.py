@@ -6,7 +6,7 @@ from argparse import ArgumentParser
 import baseline
 import baseline.tf
 
-from eight_mile.utils import str2bool, write_json, Average, get_num_gpus_multiworker, get_version, Timer
+from eight_mile.utils import str2bool, write_json, Average, get_env_gpus, get_num_gpus_multiworker, get_version, Timer
 from baseline.tf.embeddings import *
 import baseline.embeddings
 from baseline.vectorizers import BPEVectorizer1D
@@ -34,7 +34,7 @@ class Loss:
         self.nctx = nctx
 
     def __call__(self, model, features, labels):
-        features['src_len'] = tf.repeat(tf.shape(features['x'])[-1], tf.shape(features['x'])[0])
+        features['src_len'] = tf.reduce_sum(tf.cast(features['x'] != Offsets.PAD, tf.int32), -1)
         features['dst'] = labels
         logits = model(features)
         labels = labels[:, 1:]
@@ -82,7 +82,7 @@ def get_dataset(directory, file_type, num_parallel_reads=1, shuffle=True):
     files = tf.io.gfile.glob(pattern)
     logger.debug(files)
 
-    if file_type == 'json':
+    if file_type in ['json', 'jsonl']:
         ds = tf.data.TextLineDataset(files, num_parallel_reads=num_parallel_reads)
         if shuffle:
             ds = ds.shuffle(100)
@@ -127,7 +127,7 @@ def train():
     parser.add_argument("--distribute", type=str, default="mirror", choices=["mirror", "tpu", "nccl"])
     parser.add_argument("--tpu_ep", type=str, help="The TPU endpoint if using `distribute=tpu`")
     parser.add_argument("--nctx", type=int, default=256, help="Max input length")
-    parser.add_argument("--file_type", default='tfrecord', choices=['json', 'tfrecord'], help="Glob pattern for data")
+    parser.add_argument("--file_type", default='tfrecord', choices=['json', 'jsonl', 'tfrecord'], help="Glob pattern for data")
     parser.add_argument("--batch_size", type=int, default=256, help="Batch Size")
     parser.add_argument("--subword_model_file", type=str, help="The BPE model file", required=True)
     parser.add_argument("--subword_vocab_file", type=str, help="The BPE subword vocab", required=True)
@@ -145,7 +145,6 @@ def train():
     parser.add_argument('--rpr_k',
                         help='Relative attention positional sizes pass 0 if you dont want relative attention',
                         type=int, default=[8], nargs='+')
-    parser.add_argument("--strategy", help="Training strategy, defaults to `mirror`", choices=["mirror"])
     parser.add_argument("--npz", help="Should we write out NPZ files?", type=str2bool, default=False)
     parser.add_argument("--tb", help="Turn on tensorboard?", type=str2bool, default=False)
     parser.add_argument("--convert_only", help="Should we just convert this file to NPZ and exit?", type=str2bool, default=False)
@@ -166,7 +165,7 @@ def train():
         file_writer.set_as_default()
         logger.info(f"Set up tensorboard logdir {logdir}")
 
-    strategy = create_distribute_strategy(args.distribute, args.tpu_ep)
+    strategy = create_distribute_strategy(args.distribute, args.tpu_ep, len(get_env_gpus(None)))
     num_replicas = strategy.num_replicas_in_sync
     logger.info(f"Using {num_replicas} replicas in this job.")
     vectorizer = BPEVectorizer1D(model_file=args.subword_model_file, vocab_file=args.subword_vocab_file, mxlen=args.nctx)
@@ -217,7 +216,7 @@ def train():
            "hsz": args.d_model,
            "d_ff": args.d_ff,
            "dropout": args.dropout,
-           "ffn_dropout": args.ffn_dropout,
+           "ffn_dropout": args.ff_pdrop,
            "layer_drop": args.layer_drop,
            "num_heads": args.num_heads,
            "layers": args.num_layers,

@@ -1,5 +1,6 @@
 import logging
 import tensorflow as tf
+from tensorflow.python.lib.io.file_io import FileIO
 import numpy as np
 import os
 from eight_mile.utils import listify, Offsets, wraps, get_version, is_sequence, transition_mask as transition_mask_np, get_num_gpus_multiworker
@@ -49,7 +50,7 @@ def read_yaml_tf(filepath: str) -> Dict:
     :param: filepath, The file name to load
     :return: dict, The read yaml object
     """
-    file_stream = tf.python.lib.io.file_io.FileIO(filepath, mode='r')
+    file_stream = FileIO(filepath, mode='r')
     as_str = file_stream.read()
 
     import yaml
@@ -65,7 +66,7 @@ def read_json_tf(filepath: str) -> Dict:
     :param: filepath, The file name to load
     :return: dict, The read yaml object
     """
-    file_stream = tf.python.lib.io.file_io.FileIO(filepath, mode='r')
+    file_stream = FileIO(filepath, mode='r')
     as_str = file_stream.read()
     return json.loads(as_str)
 
