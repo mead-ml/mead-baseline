@@ -117,11 +117,9 @@ def TRAIN_FLAG():
 def create_distribute_strategy(strategy_name, endpoint=None, num_gpus=-1):
     if strategy_name == 'tpu':
         if not endpoint:
-            endpoint = os.environ.get('MEAD_TPU_ADDR')
+            endpoint = os.environ.get('MEAD_TPU')
         elif endpoint == 'colab':
             endpoint = 'grpc://' + os.environ['COLAB_TPU_ADDR']
-        if endpoint and not endpoint.startswith('grpc://'):
-            endpoint = f'grpc://{endpoint}'
         resolver = tf.distribute.cluster_resolver.TPUClusterResolver(tpu=endpoint)
         tf.config.experimental_connect_to_cluster(resolver)
         # This is the TPU initialization code that has to be at the beginning.
@@ -140,11 +138,12 @@ def create_distribute_strategy(strategy_name, endpoint=None, num_gpus=-1):
         else:
             raise Exception(f"Unsupported strategy {strategy_name}")
 
-        for tpu in tf.config.list_logical_devices('GPU'):
-            LOGGER.info('Device [%s]', tpu.name)
+        for gpu in tf.config.list_logical_devices('GPU'):
+            LOGGER.info('Device [%s]', gpu.name)
 
     patch_dist_strategy(strategy)
     return strategy
+
 
 def infer_lengths(tensor, axis=1):
     """Infer the lengths of an input based on the idea the Offsets.PAD was used as the padding token.
