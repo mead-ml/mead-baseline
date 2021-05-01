@@ -86,6 +86,7 @@ def main():
             'report': ['tensorboard'],
             'yaml': ['pyyaml'],
             'bpe': ['fastBPE'],
+            'regex': ['regex'],
             'bpex': ['fastBPE', 'subword-nmt'],
             'tf2': ['tensorflow_addons'],
             'grpc': ['grpc'],

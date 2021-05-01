@@ -1048,7 +1048,7 @@ class IndexPairLabelReader(SeqLabelReader):
                 logger.warning(f"total length {total_length} exceeds allocated vectorizer width of {vectorizer.mxlen}")
                 vec = vec[:vectorizer.mxlen]
             elif extend > 0:
-                vec = np.concatenate([vec, np.zeros(extend, vec.dtype)])
+                vec = np.concatenate([vec, np.full(extend, Offsets.PAD, vec.dtype)])
 
             example_dict[key] = vec
             if self.use_token_type:

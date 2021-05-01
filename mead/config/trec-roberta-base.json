@@ -1,0 +1,49 @@
+{
+  "task": "classify",
+  "basedir": "./trec-roberta-base",
+  "backend": "pytorch",
+  "dataset": "trec",
+  "batchsz": 10,
+  "features": [
+    {
+      "name": "roberta",
+      "vectorizer": {
+        "label": "roberta-base"
+      },
+      "embeddings": {
+        "finetune": true,
+        "word_embed_type": "learned-positional-w-bias",
+        "offset": 2,
+        "mxlen": 514,
+        "label": "roberta-base-npz",
+        "type": "tlm-words-embed-pooled",
+        "reduction": "sum-layer-norm",
+        "layer_norms_after": true,
+        "layer_norm_eps": 1e-5,
+        "dropout": 0.1,
+        "mlm": true
+      }
+    }
+  ],
+  "preproc": {
+    "mxlen": 100
+  },
+  "loader": {
+    "reader_type": "default"
+  },
+  "unif": 0.25,
+  "model": {
+    "model_type": "fine-tune"
+  },
+  "train": {
+    "epochs": 5,
+    "optim": "adamw",
+    "eta":  0.00001,
+    "weight_decay": 1.0e-8,
+    "early_stopping_metric": "acc",
+    "verbose": {
+      "console": true,
+      "file": "trec-cm.csv"
+    }
+  }
+}

@@ -87,12 +87,46 @@ def register(cls, registry, name=None, error=""):
     return cls
 
 
+class classproperty(property):
+    def __get__(self, cls, owner):
+        return classmethod(self.fget).__get__(None, owner)()
+
+
 @export
 class Offsets:
-    """Support pre 3.4"""
+    INDICES = {
+        "PAD": 0,
+        "GO": 1,
+        "EOS": 2,
+        "UNK": 3,
+        "OFFSET": 4
+    }
+    VALUES = [
+        "<PAD>", "<GO>", "<EOS>", "<UNK>"
+    ]
 
-    PAD, GO, EOS, UNK, OFFSET = range(0, 5)
-    VALUES = ["<PAD>", "<GO>", "<EOS>", "<UNK>"]
+    @classproperty
+    def PAD(cls):
+        return cls.INDICES["PAD"]
+
+    @classproperty
+    def GO(cls):
+        return cls.INDICES["GO"]
+
+    @classproperty
+    def EOS(cls):
+        return cls.INDICES["EOS"]
+
+    @classproperty
+    def UNK(cls):
+        return cls.INDICES["UNK"]
+
+    @classproperty
+    def OFFSET(cls):
+        return cls.INDICES["OFFSET"]
+
+
+
 
 
 @export
@@ -431,6 +465,9 @@ def validate_url(url: str) -> bool:
     )
     return re.match(regex, url) is not None
 
+@export
+def pads(shape, dtype):
+    return np.full(shape, Offsets.PAD, dtype)
 
 
 @export
