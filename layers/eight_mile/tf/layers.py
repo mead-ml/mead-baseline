@@ -126,7 +126,7 @@ def create_distribute_strategy(strategy_name, endpoint=None, num_gpus=-1):
         tf.tpu.experimental.initialize_tpu_system(resolver)
         for tpu in tf.config.list_logical_devices('TPU'):
             LOGGER.info('Device [%s]', tpu.name)
-        strategy = tf.distribute.experimental.TPUStrategy(resolver)
+        strategy = tf.distribute.TPUStrategy(resolver)
     else:
         if strategy_name == "nccl":
             strategy = tf.distribute.experimental.MultiWorkerMirroredStrategy(
