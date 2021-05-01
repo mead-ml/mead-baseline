@@ -26,7 +26,7 @@ class TiedEmbeddingsSeq2SeqModel(Seq2SeqModel):
     def __init__(self, tied_embeddings, **kwargs):
         super().__init__(tied_embeddings, tied_embeddings['x'], **kwargs)
 
-def loss_function(self, model, features, labels):
+def loss_function(model, features, labels):
     features['src_len'] = tf.reduce_sum(tf.cast(features['x'] != Offsets.PAD, tf.int32), -1)
     features['dst'] = labels
     logits = model(features)
