@@ -172,7 +172,7 @@ def train():
     logger.info(f"Writing results to {args.basedir}")
 
     if args.tb:
-        logdir = f"logs/scalars/{os.getpid()}"
+        logdir = f"{args.basedir}/scalars/{os.getpid()}"
         file_writer = tf.summary.create_file_writer(logdir + "/metrics")
         file_writer.set_as_default()
         logger.info(f"Set up tensorboard logdir {logdir}")
