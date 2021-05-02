@@ -2950,9 +2950,10 @@ class TransformerDecoderStack(tf.keras.layers.Layer):
     def call(self, inputs):
         x, memory, src_mask, tgt_mask = inputs
         for layer in self.decoders:
-            pdrop = tf.random.uniform([])
-            if not TRAIN_FLAG() or (pdrop >= self.layer_drop):
-                x = layer((x, memory, src_mask, tgt_mask))
+            ## TODO: FIXME I dont work on TPUs!!!
+            ##pdrop = tf.random.uniform([])
+            ##if not TRAIN_FLAG() or (pdrop >= self.layer_drop):
+            x = layer((x, memory, src_mask, tgt_mask))
         return self.ln(x)
 
 
