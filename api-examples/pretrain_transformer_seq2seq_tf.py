@@ -26,25 +26,19 @@ class TiedEmbeddingsSeq2SeqModel(Seq2SeqModel):
     def __init__(self, tied_embeddings, **kwargs):
         super().__init__(tied_embeddings, tied_embeddings['x'], **kwargs)
 
-
-class Loss:
-    def __init__(self, vocab_size, nctx):
-        self.vocab_size = vocab_size
-        self.nctx = nctx
-
-    def __call__(self, model, features, labels):
-        features['src_len'] = tf.reduce_sum(tf.cast(features['x'] != Offsets.PAD, tf.int32), -1)
-        features['dst'] = labels
-        logits = model(features)
-        labels = labels[:, 1:]
-        loss_mask = tf.cast(labels != 0, tf.float32)
-        logits = logits[:, :-1, :]
-        losses = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=labels)
-        losses = losses * loss_mask
-        losses = tf.reduce_sum(losses)
-        non_zero = tf.reduce_sum(loss_mask)
-        losses /= non_zero
-        return losses
+def loss_function(model, features, labels):
+    features['src_len'] = tf.reduce_sum(tf.cast(features['x'] != Offsets.PAD, tf.int32), -1)
+    features['dst'] = labels
+    logits = model(features)
+    labels = labels[:, 1:]
+    loss_mask = tf.cast(labels != 0, tf.float32)
+    logits = logits[:, :-1, :]
+    losses = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=labels)
+    losses = losses * loss_mask
+    losses = tf.reduce_sum(losses)
+    non_zero = tf.reduce_sum(loss_mask)
+    losses /= non_zero
+    return losses
 
 
 feature_description = {
@@ -226,8 +220,6 @@ def train():
            "rpr_k": rpr_k}
     model = TiedEmbeddingsSeq2SeqModel(embeddings, **hps)
 
-    loss_function = Loss(vocab_size, args.nctx)
-
     logger.info("Loaded model and loss")
     steps_per_epoch = num_train_samples // args.batch_size
     steps_per_valid_epoch = num_valid_samples // args.batch_size
@@ -266,12 +258,10 @@ def train():
         per_replica_loss = strategy.run(_replicated_train_step, args=(inputs,))
         return strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_loss, axis=None)
 
-    valid_loss_function = Loss(vocab_size, args.nctx)
-
     def _replicated_test_step(inputs):
         """This runs on a single replica"""
         x, y = inputs
-        per_replica_loss = valid_loss_function(model, {'x': x}, y) / num_replicas
+        per_replica_loss = loss_function(model, {'x': x}, y) / num_replicas
         return per_replica_loss
 
     @tf.function
