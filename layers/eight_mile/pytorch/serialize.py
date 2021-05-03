@@ -468,7 +468,7 @@ def save_transformer_seq2seq_npz(pytorch_seq2seq: nn.Module, npz: str, src_embed
     transformer_decoder = pytorch_seq2seq.decoder.transformer_decoder
 
     dec.update(to_decoder_stack_array(transformer_decoder, name=f"{name}/TransformerDecoderStack"))
-    dec.update(to_embed_array(pytorch_seq2seq.tgt_embedding, name=f"{name}/TgtEmbedding/{tgt_embedding_key}"))
+    dec.update(to_embed_array(pytorch_seq2seq.decoder.tgt_embeddings, name=f"{name}/TgtEmbedding/{tgt_embedding_key}"))
 
     if verbose:
         print(enc.keys())
