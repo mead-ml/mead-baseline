@@ -10,7 +10,7 @@ from baseline.utils import get_model_file, get_metric_cmp
 from baseline.train import Trainer, create_trainer, register_trainer, register_training_func
 from baseline.model import create_model_for
 from collections import OrderedDict
-from tf.seq2seq.training.utils import *
+from baseline.tf.seq2seq.training.utils import *
 
 @register_training_func('seq2seq')
 def fit(model_params, ts, vs, es=None, **kwargs):
