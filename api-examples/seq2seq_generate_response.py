@@ -40,6 +40,7 @@ def decode_sentence(model, vectorizer, query, word2index, index2word, device, ma
                 output = torch.argmax(predictions, -1).squeeze(0)
                 output = output[token_offset].item()
             else:
+
                 # using a multinomial distribution to predict the word returned by the model
                 predictions = predictions.exp().squeeze(0)
                 output = torch.multinomial(predictions, num_samples=1).squeeze(0)[token_offset].item()

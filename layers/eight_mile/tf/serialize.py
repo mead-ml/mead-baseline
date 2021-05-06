@@ -146,7 +146,7 @@ def to_decoder_array(tf_decoder: TransformerDecoder, name: str) -> Dict:
     d = {}
     d.update(to_weight_array(tf_decoder.ln1, f"{name}/ln1"))
     d.update(to_weight_array(tf_decoder.ln2, f"{name}/ln2"))
-    d.update(to_weight_array(tf_decoder.ln2, f"{name}/ln3"))
+    d.update(to_weight_array(tf_decoder.ln3, f"{name}/ln3"))
     d.update(to_attn_array(tf_decoder.self_attn, f"{name}/self_attn"))
     d.update(to_attn_array(tf_decoder.src_attn, f"{name}/src_attn"))
     d.update(to_ffn_array(tf_decoder.ffn, f"{name}/ffn"))
@@ -257,7 +257,7 @@ def from_decoder_array(tf_decoder: TransformerDecoder, d: Dict, name: str):
     """
     from_weight_array(tf_decoder.ln1, d, f"{name}/ln1")
     from_weight_array(tf_decoder.ln2, d, f"{name}/ln2")
-    from_weight_array(tf_decoder.ln2, d, f"{name}/ln3")
+    from_weight_array(tf_decoder.ln3, d, f"{name}/ln3")
     from_attn_array(tf_decoder.src_attn, d, f"{name}/src_attn")
     from_attn_array(tf_decoder.self_attn, d, f"{name}/self_attn")
     from_ffn_array(tf_decoder.ffn, d, f"{name}/ffn")
