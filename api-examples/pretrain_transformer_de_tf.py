@@ -11,34 +11,11 @@ import baseline.embeddings
 from baseline.vectorizers import BPEVectorizer1D
 from eight_mile.optz import *
 from eight_mile.tf.optz import *
-from eight_mile.tf.layers import create_distribute_strategy, read_yaml_tf
-from baseline.tf.seq2seq.model import Seq2SeqModel
+from eight_mile.tf.layers import create_distribute_strategy, read_yaml_tf, PairedModel
 from eight_mile.tf.serialize import save_transformer_seq2seq_npz
 
 logger = logging.getLogger(__file__)
 
-"""Pre-train a denoising auto-encoder via seq2seq in TensorFlow
-
-This file uses Baseline to train a denoising auto-encoder Transformer model using fastBPE
-"""
-class TiedEmbeddingsSeq2SeqModel(Seq2SeqModel):
-
-    def __init__(self, tied_embeddings, **kwargs):
-        super().__init__(tied_embeddings, tied_embeddings['x'], **kwargs)
-
-def loss_function(model, features, labels):
-    features['src_len'] = tf.reduce_sum(tf.cast(features['x'] != Offsets.PAD, tf.int32), -1)
-    features['dst'] = labels
-    logits = model(features)
-    labels = labels[:, 1:]
-    loss_mask = tf.cast(labels != 0, tf.float32)
-    logits = logits[:, :-1, :]
-    losses = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=labels)
-    losses = losses * loss_mask
-    losses = tf.reduce_sum(losses)
-    non_zero = tf.reduce_sum(loss_mask)
-    losses /= non_zero
-    return losses
 
 
 feature_description = {
@@ -51,15 +28,12 @@ def _parse_tf_record(example_proto):
     record = tf.io.parse_single_example(example_proto, feature_description)
     return record['x'], record['y']
 
-
 def _parse_json(example):
     j = json.loads(example.numpy())
     return tf.constant(j['x'], dtype=tf.int32), tf.constant(j['y'], dtype=tf.int32)
 
-
 def decode_json(example):
     return tf.py_function(_parse_json, [example], [tf.int32, tf.int32])
-
 
 def get_dataset(directory, file_type, num_parallel_reads=1, shuffle=True):
     """Get a dataset as a tf.data.Dataset.  Input can be a bucket or a local file
@@ -138,6 +112,17 @@ def train():
     parser.add_argument('--rpr_k',
                         help='Relative attention positional sizes pass 0 if you dont want relative attention',
                         type=int, default=[8], nargs='+')
+    parser.add_argument("--reduction_d_k", type=int, default=64, help="Dimensions of Key and Query in the single headed"
+                                                                      "reduction layers")
+    parser.add_argument("--reduction_type", type=str, default="2ha",
+                        help="If using a dual encoder, specifies the reduction type")
+    parser.add_argument("--stacking_layers", type=int, nargs='+', default=[])
+    parser.add_argument("--loss", type=str, default='symmetric',
+                        choices=['contrastive', 'symmetric'])
+    parser.add_argument("--learn_temp", type=str2bool, default=True,
+                        help="If 'constrastive' or 'symmetric' loss, should we learn the temperature scaling")
+    parser.add_argument("--init_temp", type=float,
+                        help="Initialize the temperature for 'contrastive' or 'symmetric' loss")
     parser.add_argument("--npz", help="Should we write out NPZ files?", type=str2bool, default=False)
     parser.add_argument("--tb", help="Turn on tensorboard?", type=str2bool, default=False)
     parser.add_argument("--convert_only", help="Should we just convert this file to NPZ and exit?", type=str2bool, default=False)
@@ -195,7 +180,7 @@ def train():
     os.makedirs(args.basedir, exist_ok=True)
     # We want to make sure to save our input vocab into the basedir for reuse later
     write_json(vocabs, os.path.join(args.basedir, 'vocabs.json'))
-    embeddings = {'x': preproc_data['embeddings']}
+    embeddings = preproc_data['embeddings']
     logger.info("Loaded embeddings")
 
     logger.info("Loaded datasets")
@@ -207,22 +192,13 @@ def train():
     else:
         rpr_k = args.rpr_k
 
-    logger.info("Creating tied encoder decoder model")
-    hps = {"dsz": args.d_model,
-           "hsz": args.d_model,
-           "d_ff": args.d_ff,
-           "dropout": args.dropout,
-           "ffn_dropout": args.ff_pdrop,
-           "layer_drop": args.layer_drop,
-           "num_heads": args.num_heads,
-           "layers": args.num_layers,
-           "encoder_type": "transformer",
-           "decoder_type": "transformer",
-           "src_lengths_key": "x_lengths",
-           "d_k": args.d_k,
-           "rpr_k": rpr_k}
-    model = TiedEmbeddingsSeq2SeqModel(embeddings, **hps)
+    logger.info("Creating dual encoder")
+    model = PairedModel(embeddings, args.d_model, args.d_ff, args.dropout, args.num_heads, args.num_layers, rpr_k=rpr_k,
+                        d_k=args.d_k, reduction_d_k=args.reduction_d_k, stacking_layers=args.stacking_layers,
+                        ffn_pdrop=args.ff_pdrop,
+                        reduction_type=args.reduction_type, freeze_encoders=False)
 
+    loss_function = model.create_loss(loss_type=args.loss, init_temp=args.init_temp, learn_temp=args.learn_temp)
     logger.info("Loaded model and loss")
     steps_per_epoch = num_train_samples // args.batch_size
     steps_per_valid_epoch = num_valid_samples // args.batch_size
@@ -248,7 +224,7 @@ def train():
     def _replicated_train_step(inputs):
         """This runs on a single replica"""
         x, y = inputs
-        per_replica_loss = optimizer.update(model, {'x': x}, y, num_replicas)
+        per_replica_loss = optimizer.update(model, x, y, num_replicas)
         return per_replica_loss
 
     @tf.function
@@ -264,7 +240,7 @@ def train():
     def _replicated_test_step(inputs):
         """This runs on a single replica"""
         x, y = inputs
-        per_replica_loss = loss_function(model, {'x': x}, y) / num_replicas
+        per_replica_loss = loss_function(model, x, y) / num_replicas
         return per_replica_loss
 
     @tf.function

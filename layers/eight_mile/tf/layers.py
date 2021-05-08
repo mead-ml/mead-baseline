@@ -1699,7 +1699,6 @@ class BiLSTMEncoderAllLegacy(BiLSTMEncoder1):
         return rnnout, encoder_state
 
 
-
 class BiLSTMEncoderAll1(BiLSTMEncoderAllLegacy):
     """BiLSTM encoder that passes along the full output and hidden states for each layer
 
@@ -1868,6 +1867,7 @@ class SumLayerNormReduction(Reduction):
         outputs = tf.add_n(inputs)
         return self.ln(outputs)
 
+
 class EmbeddingsStack(tf.keras.layers.Layer):
     def __init__(
         self,
@@ -1997,7 +1997,7 @@ class DenseStack(tf.keras.layers.Layer):
         self,
         insz: Optional[int],
         hsz: Union[int, List[int]],
-        activation: Union[str, List[str]] = "relu",
+        activation: Union[tf.keras.layers.Activation, str, List[str]] = "relu",
         pdrop_value: float = 0.5,
         init: Optional[Any] = None,
         name: Optional[str] = None,
@@ -2027,6 +2027,7 @@ class DenseStack(tf.keras.layers.Layer):
             if not insz:
                 raise ValueError("In order to use skip connection, insz must be provided in DenseStack!")
             current = insz
+
         layer_stack = []
         for hsz, activation in zip(hszs, activations):
             if skip_connect and current == hsz:
@@ -2857,6 +2858,328 @@ class TransformerEncoderStackWithTimeMask(TransformerEncoderStack):
         max_seqlen = get_shape_as_list(x)[1]
         mask = subsequent_mask(max_seqlen)
         return super().call((x, mask))
+
+
+class AttentionReduction(tf.keras.layers.Layer):
+    """
+    This is a reduction that is given Q, K, V and a mask vector.  Different from base reductions, which get an embedding stack
+    """
+
+    def __init__(self, name=None):
+        super().__init__(name=name)
+
+    def call(self, qkvm: Tuple[tf.Tensor, tf.Tensor, tf.Tensor, tf.Tensor]) -> tf.Tensor:
+        """Inputs are the same as for a normal attention function, but the output here is a single tensor, ``[B, H]``
+        :param query: a query for alignment. Can come from self in case of self-attn or decoder in case of E/D
+        :param key: a set of keys from encoder or self
+        :param value: a set of values from encoder or self
+        :param mask: masking (for destination) to prevent seeing what we shouldnt
+        :return: sentence-level encoding with dim [B, d_model]
+        """
+
+
+class SingleHeadReduction(AttentionReduction):
+    """
+    Implementation of the "self_attention_head" layer from the conveRT paper (https://arxiv.org/pdf/1911.03688.pdf)
+    """
+    def __init__(
+            self, d_model: int, dropout: float = 0.0, scale: bool = False, d_k: Optional[int] = None, pooling: str = 'sqrt_length', name: Optional[str] = None,
+    ):
+        """
+        :param d_model: The model hidden size
+        :param dropout (``float``): The amount of dropout to use
+        :param scale: should we scale the dot product attention
+        :param d_k: The low-order project per head.  This is normally `d_model // num_heads` unless set explicitly
+        """
+        super().__init__(name=name)
+
+        self.output_dim = d_model
+        if d_k is None:
+            self.d_k = d_model
+        else:
+            self.d_k = d_k
+        self.w_Q = tf.keras.layers.Dense(self.d_k, name="query_projection")
+        self.w_K = tf.keras.layers.Dense(self.d_k, name="key_projection")
+        if scale:
+            self.attn_fn = SeqScaledDotProductAttention(dropout)
+        else:
+            self.attn_fn = SeqDotProductAttention(dropout)
+        self.attn = None
+        pooling = pooling.lower()
+        self.fill = 0
+        if pooling == 'max':
+            self.pool = self._max_pool
+            self.fill = -1e9
+        elif pooling == 'mean':
+            self.pool = self._mean_pool
+        else:
+            self.pool = self._sqrt_length_pool
+
+    def _sqrt_length_pool(self, x, seq_lengths):
+        x = tf.reduce_sum(x, axis=1)  # [B, D]
+        x = x * tf.expand_dims(tf.sqrt(tf.cast(seq_lengths, tf.float32)), -1)
+        return x
+
+    def _mean_pool(self, x, seq_lengths):
+        return tf.reduce_sum(x, 1) / tf.expand_dims(seq_lengths, -1)
+
+    def _max_pool(self, x, _):
+        x = tf.reduce_max(x, 1)
+        return x
+
+    def call(self, qkvm: Tuple[tf.Tensor, tf.Tensor, tf.Tensor, tf.Tensor]) -> tf.Tensor:
+
+        query, key, value, mask = qkvm
+        batchsz = get_shape_as_list(query)[0]
+
+        # (B, T, H, D) -> (B, H, T, D)
+        query = tf.transpose(tf.reshape(self.w_Q(query), [batchsz, -1, 1, self.d_k]), [0, 2, 1, 3])
+        key = tf.transpose(tf.reshape(self.w_K(key), [batchsz, -1, 1, self.d_k]), [0, 2, 1, 3])
+        value = tf.transpose(tf.reshape(value, [batchsz, -1, 1, self.output_dim]), [0, 2, 1, 3])
+        x = self.attn_fn((query, key, value, mask))
+        self.attn = self.attn_fn.attn
+        # (B, H, T, D) -> (B, T, H, D) -> (B, T, H*D)
+        x = tf.transpose(x, [0, 2, 1, 3])
+        x = tf.reshape(x, [batchsz, -1, self.output_dim])
+        seq_lengths = tf.squeeze(tf.reduce_sum(tf.cast(mask != 0, tf.int32), axis=-1))
+
+
+        pooled = self.pool(x, seq_lengths)
+        return pooled
+
+class TwoHeadConcat(AttentionReduction):
+    """Use two parallel SingleHeadReduction, and concatenate the outputs. It is used in the conveRT
+    paper (https://arxiv.org/pdf/1911.03688.pdf)"""
+
+    def __init__(self, d_model, dropout, scale=False, d_k=None, pooling='sqrt_length', name=None):
+        """Two parallel 1-head self-attention, then concatenate the output
+        :param d_model: dim of the self-attention
+        :param dropout: dropout of the self-attention
+        :param scale: scale fo the self-attention
+        :param d_k: d_k of the self-attention
+        :return: concatenation of the two 1-head attention
+        """
+        super().__init__(name=name)
+        self.output_dim = 2*d_model
+        self.reduction1 = SingleHeadReduction(d_model, dropout, scale=scale, d_k=d_k, pooling=pooling)
+        self.reduction2 = SingleHeadReduction(d_model, dropout, scale=scale, d_k=d_k, pooling=pooling)
+
+    def call(self, inputs: tf.Tensor):
+        x = inputs
+        encoding1 = self.reduction1(x)
+        encoding2 = self.reduction2(x)
+        x = tf.concat([encoding1, encoding2], axis=-1)
+        return x
+
+
+class ConveRTFFN(tf.keras.layers.Layer):
+    """Implementation of the FFN layer from the convert paper (https://arxiv.org/pdf/1911.03688.pdf)"""
+    def __init__(self, insz, hszs, outsz, pdrop, name=None):
+        """
+        :param insz: input dim
+        :param hszs: list of hidden sizes
+        :param outsz: output dim
+        :param pdrop: dropout of each hidden layer
+        """
+        super().__init__(name=name)
+        self.dense_stack = DenseStack(insz,
+                                      hszs,
+                                      activation=gelu,
+                                      pdrop_value=pdrop,
+                                      skip_connect=True,
+                                      layer_norm=True)
+        self.final = tf.keras.layers.Dense(outsz)
+        self.proj = tf.keras.layers.Dense(outsz) if insz != outsz else PassThru(insz)
+        self.ln1 = tf.keras.layers.LayerNormalization(epsilon=1e-6)
+        self.ln2 = tf.keras.layers.LayerNormalization(epsilon=1e-6)
+
+    def call(self, inputs):
+        x = self.ln1(inputs)
+        x = self.dense_stack(x)
+        x = self.final(x)
+        x = x + self.proj(inputs)
+        return self.ln2(x)
+
+
+
+class ContrastiveLoss(tf.keras.layers.Layer):
+    def __init__(self, t=1.0, train_temperature=True):
+        super().__init__()
+        if t is None:
+            t = 1.0
+        self.t = self.add_weight("temperature", shape=[1], initializer=tf.constant_initializer(t), trainable=train_temperature)
+
+    def call(self, model, inputs, targets):
+        query = model.encode_query(inputs)  # [B, H]
+        response = model.encode_response(targets)  # [B, H]
+        query = tf.math.l2_normalize(query, axis=1)
+        response = tf.math.l2_normalize(response, axis=1)
+        B = get_shape_as_list(query)[0]
+        labels = tf.range(0, B)
+        logits = tf.matmul(query, response, transpose_b=True) * tf.exp(self.t)
+        loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=labels, logits=logits)
+        loss = tf.reduce_mean(loss)
+        return loss
+
+
+class SymmetricContrastiveLoss(tf.keras.layers.Layer):
+    def __init__(self, t=1.0, train_temperature=True):
+        super().__init__()
+        if t is None:
+            t = 1.0
+        self.t = self.add_weight("temperature", shape=[1], initializer=tf.constant_initializer(t),
+                                 trainable=train_temperature)
+
+    def call(self, model, inputs, targets):
+        query = model.encode_query(inputs)  # [B, H]
+        response = model.encode_response(targets)  # [B, H]
+        query = tf.math.l2_normalize(query, axis=1)
+        response = tf.math.l2_normalize(response, axis=1)
+        B = get_shape_as_list(query)[0]
+        labels = tf.range(0, B)
+        logits = tf.matmul(query, response, transpose_b=True) * tf.exp(self.t)
+        loss_1 = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=labels, logits=logits)
+        loss_2 = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=labels, logits=tf.transpose(logits, [1, 0]))
+        loss_1 = tf.reduce_mean(loss_1)
+        loss_2 = tf.reduce_mean(loss_2)
+
+        loss = (loss_1 + loss_2) * 0.5
+        return loss
+
+
+
+class DualEncoderModel(tf.keras.layers.Layer):
+
+    """Abstract base for dual encoders
+
+    We can assume that our dual encoder needs to end up in the same output plane between the encoders, and we can define
+    the set of losses here that we are likely to need for most.
+
+
+    """
+    def __init__(self, in_sz: int, stacking_layers: Union[int, List[int]] = None, d_out: int = 512,
+                 ffn_pdrop=0.1, in_sz_2=None, name=None):
+        super().__init__(name=name)
+
+        if not in_sz_2:
+            in_sz_2 = in_sz
+        if stacking_layers:
+            stacking_layers = listify(stacking_layers)
+        if stacking_layers:
+            self.ff1 = ConveRTFFN(in_sz, stacking_layers, d_out, ffn_pdrop)
+            self.ff2 = ConveRTFFN(in_sz_2, stacking_layers, d_out, ffn_pdrop)
+        elif in_sz != d_out or in_sz != in_sz_2:
+            self.ff1 = tf.keras.layers.Dense(d_out)
+            self.ff2 = tf.keras.layers.Dense(d_out)
+        else:
+            self.ff1 = PassThru(in_sz)
+            self.ff2 = PassThru(in_sz)
+        self.output_dim = d_out
+
+    def encode_query_base(self, query: tf.Tensor) -> tf.Tensor:
+        pass
+
+    def encode_response_base(self, response: tf.Tensor) -> tf.Tensor:
+        pass
+
+    def encode_query(self, query: tf.Tensor) -> tf.Tensor:
+        tensor = self.encode_query_base(query)
+        return self.ff1(tensor)
+
+    def encode_response(self, response: tf.Tensor) -> tf.Tensor:
+        tensor = self.encode_response_base(response)
+        return self.ff2(tensor)
+
+    def call(self, inputs):
+        query, response = inputs
+        encoded_query = self.encode_query(query)
+        encoded_response = self.encode_response(response)
+        return encoded_query, encoded_response
+
+    def create_loss(self, loss_type='symmetric', init_temp=None, learn_temp=False):
+        if loss_type == 'contrastive':
+            return ContrastiveLoss(init_temp, learn_temp)
+        elif loss_type == 'symmetric':
+            return SymmetricContrastiveLoss(init_temp, learn_temp)
+        raise Exception(f"Unknown loss function type {loss_type}")
+
+
+class PairedModel(DualEncoderModel):
+    """Legacy model for transformer-based dual encoder
+
+    This is a dual-encoder transformer model which shares the lower layer encoder transformer sub-graph
+    The reduction layer is attention based and takes the same input as the transformer layers.  It pools the reprs
+    Finally, the feed-forward stacks are applied via subclassing.
+
+    Note that this model predates the more abstract `AbstractDualEncoder` which could accomplish the same thing
+    by injecting the same `nn.Module` for encoder_1 and encoder_2 consisting of the transformer and reduction
+    """
+    def __init__(self, embeddings,
+                 d_model,
+                 d_ff,
+                 dropout,
+                 num_heads,
+                 num_layers,
+                 stacking_layers=None,
+                 d_out=512,
+                 d_k=None,
+                 weight_std=0.02,
+                 rpr_k=None,
+                 reduction_d_k=64,
+                 ffn_pdrop=0.1,
+                 windowed_ra=False,
+                 rpr_value_on=False,
+                 reduction_type="2ha",
+                 freeze_encoders=False,
+                 name=None):
+        super().__init__(2*d_model if reduction_type.startswith("2") else d_model, stacking_layers, d_out, ffn_pdrop, name=name)
+
+        reduction_type = reduction_type.lower()
+        if reduction_type == "2ha":
+            self.reduction_layer = TwoHeadConcat(d_model, dropout, scale=False, d_k=reduction_d_k)
+        elif reduction_type == "2ha_mean":
+            self.reduction_layer = TwoHeadConcat(d_model, dropout, scale=False, d_k=reduction_d_k, pooling="mean")
+        elif reduction_type == "2ha_max":
+            self.reduction_layer = TwoHeadConcat(d_model, dropout, scale=False, d_k=reduction_d_k, pooling="max")
+        elif reduction_type == "sha":
+            self.reduction_layer = SingleHeadReduction(d_model, dropout, scale=False, d_k=reduction_d_k)
+        elif reduction_type == "sha_mean":
+            self.reduction_layer = SingleHeadReduction(d_model, dropout, scale=False, d_k=reduction_d_k, pooling="mean")
+        elif reduction_type == "sha_max":
+            self.reduction_layer = SingleHeadReduction(d_model, dropout, scale=False, d_k=reduction_d_k, pooling="max")
+        else:
+            raise Exception("Unknown exception type")
+
+        self.embeddings = EmbeddingsStack({'x': embeddings})
+        self.transformer = TransformerEncoderStack(num_heads=num_heads, d_model=d_model,
+                                                   pdrop=dropout, layers=num_layers, activation='gelu', d_ff=d_ff,
+                                                   ffn_pdrop=ffn_pdrop,
+                                                   d_k=d_k, rpr_k=rpr_k, windowed_ra=windowed_ra, rpr_value_on=rpr_value_on)
+
+        self.freeze = freeze_encoders
+
+    def encode_query_base(self, query):
+        query_mask = tf.cast(query != Offsets.PAD, tf.float32)
+        att_mask = tf.expand_dims(tf.expand_dims(query_mask, 1), 1)
+
+        embedded = self.embeddings({'x': query})
+        encoded_query = self.transformer((embedded, att_mask))
+        if self.freeze:
+            encoded_query = tf.stop_gradient(encoded_query)
+
+        encoded_query = self.reduction_layer((encoded_query, encoded_query, encoded_query, att_mask))
+        return encoded_query
+
+    def encode_response_base(self, response):
+        response_mask = tf.cast(response != Offsets.PAD, tf.float32)
+        att_mask = tf.expand_dims(tf.expand_dims(response_mask, 1), 1)
+        embedded = self.embeddings({'x': response})
+        encoded_response = self.transformer((embedded, att_mask))
+        if self.freeze:
+            encoded_response = tf.stop_gradient(encoded_response)
+        encoded_response = self.reduction_layer((encoded_response, encoded_response, encoded_response, att_mask))
+        return encoded_response
+
 
 
 class TransformerDiscriminator(tf.keras.Model):

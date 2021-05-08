@@ -4190,7 +4190,7 @@ class DualEncoderModel(nn.Module):
         encoded_response = self.encode_response(response)
         return encoded_query, encoded_response
 
-    def create_loss(self, loss_type='all', init_temp=None, learn_temp=False):
+    def create_loss(self, loss_type='symmetric', init_temp=None, learn_temp=False):
         if loss_type == 'all':
             return AllLoss(self)
         elif loss_type == 'all_mean':
