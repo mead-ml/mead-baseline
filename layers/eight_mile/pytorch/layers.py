@@ -2102,7 +2102,8 @@ def script_viterbi(
     seq_len: int = unary.size(0)
     num_tags: int = unary.size(1)
     fill_value: float = -1e4
-    alphas = torch.full((num_tags,), fill_value, dtype=unary.dtype, device=unary.device)
+    # dtype=unary.dtype fails, with prim_dtype error on torch 1.7.1
+    alphas = torch.full((num_tags,), fill_value, dtype=torch.float, device=unary.device)
     broadcast_idx = torch.full((num_tags,), start_idx, dtype=torch.long)
     alphas = alphas.scatter(0, broadcast_idx, torch.zeros((num_tags,)))
     alphas = alphas.unsqueeze(0)
@@ -2217,7 +2218,8 @@ def script_viterbi_log_softmax_norm(
     seq_len: int = unary.size(0)
     num_tags: int = unary.size(1)
     fill_value: float = -1e4
-    alphas = torch.full((num_tags,), fill_value, dtype=unary.dtype, device=unary.device)
+    # dtype=unary.dtype fails, with prim_dtype error on torch 1.7.1
+    alphas = torch.full((num_tags,), fill_value, dtype=torch.float, device=unary.device)
     broadcast_idx = torch.full((num_tags,), start_idx, dtype=torch.long)
     alphas = alphas.scatter(0, broadcast_idx, torch.zeros((num_tags,)))
     alphas = alphas.unsqueeze(0)
