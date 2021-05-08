@@ -125,7 +125,7 @@ pip install mead-baseline[onnx]
 To run the checkpoint we just exported:
 
 ```
-(base) dpressel@dpressel-CORSAIR-ONE:~/dev/work/baseline/api-examples$ python tag-text.py --model ../mead/models/conll-iobes-11335.zip --text "Mr. Jones flew to New York ." --backend onnx
+(base) dpressel@dpressel-CORSAIR-ONE:~/dev/work/baseline/api-examples$ python tag_text.py --model ../mead/models/conll-iobes-11335.zip --text "Mr. Jones flew to New York ." --backend onnx
 /tmp/43cd89440a7111ce9180faee69b1e75aac71c661/conll-iobes/tagger-model-31405.onnx
 /tmp/43cd89440a7111ce9180faee69b1e75aac71c661/conll-iobes/vocabs-word-31405.json
 /tmp/43cd89440a7111ce9180faee69b1e75aac71c661/conll-iobes/vocabs-char-31405.json
