@@ -118,7 +118,7 @@ def train():
                         help="If using a dual encoder, specifies the reduction type")
     parser.add_argument("--stacking_layers", type=int, nargs='+', default=[])
     parser.add_argument("--loss", type=str, default='symmetric',
-                        choices=['triplet', 'all', 'all_mean', 'contrastive', 'symmetric'])
+                        choices=['contrastive', 'symmetric'])
     parser.add_argument("--learn_temp", type=str2bool, default=True,
                         help="If 'constrastive' or 'symmetric' loss, should we learn the temperature scaling")
     parser.add_argument("--init_temp", type=float,
