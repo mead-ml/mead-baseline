@@ -134,7 +134,7 @@ class EncoderDecoderModelBase(nn.Module, EncoderDecoderModel):
         example = dict({})
 
         lengths = batch_dict[self.src_lengths_key]
-        tgt_lengths = batch_dict['tgt_lengths']
+        tgt_lengths = batch_dict.get('tgt_lengths')
         if numpy_to_tensor:
             lengths = torch.from_numpy(lengths)
         lengths, perm_idx = lengths.sort(0, descending=True)
