@@ -15,44 +15,26 @@ from baseline.vectorizers import Token1DVectorizer, BPEVectorizer1D
 logger = logging.getLogger(__file__)
 
 
-def decode_sentence(model, vectorizer, query, word2index, index2word, device, max_response_length, sou_token, eou_token, sample=True):
-    UNK = word2index.get('<UNK>')
-    MASK = word2index.get('[MASK]')
-    GO = word2index.get(sou_token)
-    vec, length = vectorizer.run(query, word2index)
+def decode_sentences(model, vectorizer, queries, word2index, index2word, beamsz):
 
-    for i in range(length):
-        if vec[i] == UNK:
-            vec[i] = MASK
-
-    toks = torch.from_numpy(vec).unsqueeze(0).to(device=device)
-    length = torch.from_numpy(np.array(length)).unsqueeze(0).to(device=device)
-    EOU = word2index.get(eou_token)
-    response = []
+    vecs = []
+    lengths = []
+    for query in queries:
+        vec, length = vectorizer.run(query, word2index)
+        vecs.append(vec)
+        lengths.append(length)
+    vecs = np.stack(vecs)
+    lengths = np.stack(lengths)
+    # B x K x T
     with torch.no_grad():
-        dst = [GO]
-        for i in range(max_response_length):
-            dst_tensor = torch.zeros_like(toks).squeeze()
-            dst_tensor[:len(dst)] = torch.from_numpy(np.array(dst)).to(device=device)
-            predictions = model({'x': toks, 'src_len': length, 'dst': dst_tensor.unsqueeze(0)})
-            token_offset = len(dst) - 1
-            if not sample:
-                output = torch.argmax(predictions, -1).squeeze(0)
-                output = output[token_offset].item()
-            else:
-
-                # using a multinomial distribution to predict the word returned by the model
-                predictions = predictions.exp().squeeze(0)
-                output = torch.multinomial(predictions, num_samples=1).squeeze(0)[token_offset].item()
-
-
-            dst.append(output)
-
-            if output == Offsets.EOS or output == EOU or output == Offsets.PAD:
-                break
-            response.append(index2word.get(dst[-1], '<ERROR>'))
-    return response
-
+        response, _ = model.predict({'x': vecs, 'x_lengths': lengths}, beam=beamsz)
+    sentences = []
+    for candidate in response:
+        best_sentence_idx = candidate[0]
+        best_sentence = ' '.join([index2word[x] for x in best_sentence_idx if x not in [Offsets.EOS, Offsets.PAD]])
+        sentences.append(best_sentence.replace('@@ ', ''))
+    #torch.cuda.empty_cache()
+    return sentences
 
 def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, d_k, activation, checkpoint_name, device):
     if len(rpr_k) == 0 or rpr_k[0] < 1:
@@ -101,11 +83,12 @@ def run():
                         help="register label of the embeddings, so far support positional or learned-positional")
     parser.add_argument("--subword_model_file", type=str, required=True)
     parser.add_argument("--subword_vocab_file", type=str, required=True)
+    parser.add_argument("--batchsz", help="Size of a batch to pass at once", default=4, type=int)
+    parser.add_argument("--beamsz", help="Size of beam to use", default=5, type=int)
     parser.add_argument("--activation", type=str, default='relu')
     parser.add_argument('--rpr_k', help='Relative attention positional sizes pass 0 if you dont want relative attention',
                         type=int, default=[8]*8, nargs='+')
-    parser.add_argument("--use_cls", type=str2bool, default=False, help="Prepend a [CLS] token on the encoder?")
-    parser.add_argument("--go_token", default="<GO>")
+    #parser.add_argument("--go_token", default="<GO>")
     parser.add_argument("--end_token", default="<EOS>")
     parser.add_argument("--output_file", type=str)
     parser.add_argument("--show_query", type=str2bool, default=False, help="Show the original query as well")
@@ -124,9 +107,8 @@ def run():
     else:
         checkpoint = args.checkpoint
 
-    cls = None if not args.use_cls else '[CLS]'
     vectorizer = BPEVectorizer1D(model_file=args.subword_model_file, vocab_file=args.subword_vocab_file,
-                                 mxlen=args.nctx, emit_begin_tok=cls)
+                                 mxlen=args.nctx, emit_end_tok=args.end_token)
     vocab = vectorizer.vocab
     # If we are not using chars, then use 'x' for both input and output
     preproc_data = baseline.embeddings.load_embeddings('x', dsz=args.d_model, counts=False, known_vocab=vocab, embed_type=args.embed_type)
@@ -136,35 +118,47 @@ def run():
                          rpr_k=args.rpr_k, d_k=args.d_k, checkpoint_name=checkpoint, activation=args.activation,
                          device=args.device)
     model.to(args.device)
-
+    model.eval()
 
     index2word = revlut(vocab)
     wf = None
     if args.output_file:
         wf = open(args.output_file, "w")
 
-    queries = []
-    if os.path.exists(args.input) and os.path.isfile(args.input):
-        with open(args.input) as rf:
-            for line in rf:
-                queries.append(line.strip())
-    else:
-        queries.append(args.input)
 
-    for query in queries:
-        output = ' '.join(decode_sentence(model, vectorizer, query.split(), vocab, index2word, args.device,
-                                          max_response_length=args.nctx, sou_token=args.go_token,
-                                          eou_token=args.end_token,
-                                          sample=args.sample))
-        output = output.replace('@@ ', '')
+    batches = []
+    if os.path.exists(args.input) and os.path.isfile(args.input):
+        with open(args.input, 'rt', encoding='utf-8') as f:
+            batch = []
+            for line in f:
+                text = line.strip().split()
+                if len(batch) == args.batchsz:
+                    batches.append(batch)
+                    batch = []
+                batch.append(text)
+
+            if len(batch) > 0:
+                batches.append(batch)
+
+    else:
+        batch = [args.input.split()]
+        batches.append(batch)
+
+    for queries in batches:
+
+        outputs = decode_sentences(model, vectorizer, queries, vocab, index2word, args.beamsz)
+
         if args.show_query:
-            print(f"[Query] {query}")
-            print(f"[Response] {output}")
+            for query, output in zip(queries, outputs):
+                print(f"[Query] {query}")
+                print(f"[Response] {output}")
         elif wf:
-            wf.write(f'{output}\n')
-            wf.flush()
+            for query, output in zip(queries, outputs):
+                wf.write(f'{output}\n')
+                wf.flush()
         else:
-            print(output)
+            for query, output in zip(queries, outputs):
+                print(output)
     if wf:
         wf.close()
 run()
