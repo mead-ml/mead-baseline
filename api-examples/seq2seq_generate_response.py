@@ -59,7 +59,6 @@ def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, d_k, a
         load_transformer_seq2seq_npz(model, checkpoint_name)
     else:
         model.load_state_dict(torch.load(checkpoint_name, map_location=torch.device(device)))
-    model.eval()
     print(model)
     return model
 
@@ -84,7 +83,7 @@ def run():
     parser.add_argument("--subword_model_file", type=str, required=True)
     parser.add_argument("--subword_vocab_file", type=str, required=True)
     parser.add_argument("--batchsz", help="Size of a batch to pass at once", default=4, type=int)
-    parser.add_argument("--beamsz", help="Size of beam to use", default=5, type=int)
+    parser.add_argument("--beamsz", help="Size of beam to use", default=4, type=int)
     parser.add_argument("--activation", type=str, default='relu')
     parser.add_argument('--rpr_k', help='Relative attention positional sizes pass 0 if you dont want relative attention',
                         type=int, default=[8]*8, nargs='+')
@@ -118,7 +117,6 @@ def run():
                          rpr_k=args.rpr_k, d_k=args.d_k, checkpoint_name=checkpoint, activation=args.activation,
                          device=args.device)
     model.to(args.device)
-    model.eval()
 
     index2word = revlut(vocab)
     wf = None
