@@ -360,6 +360,8 @@ for label in label2word.values():
 
 LABELS["O"] = len(LABELS)
 
+if not os.path.exists(args.output_dir):
+    os.makedirs(args.output_dir)
 write_json(LABELS, os.path.join(args.output_dir, 'labels.json'))
 valid_dir = os.path.join(args.output_dir, 'valid')
 train_dir = os.path.join(args.output_dir, 'train')
