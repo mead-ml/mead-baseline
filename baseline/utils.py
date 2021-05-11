@@ -256,16 +256,6 @@ def unzip_model(path):
     return os.path.join(path, [x[:-6] for x in os.listdir(path) if 'index' in x][0])
 
 
-@export
-def save_vectorizers(basedir, vectorizers, name='vectorizers'):
-    save_md_file = os.path.join(basedir, '{}-{}.pkl'.format(name, os.getpid()))
-    with open(save_md_file, 'wb') as f:
-        pickle.dump(vectorizers, f)
-    # Save out the vectorizer module names so we can automatically import them
-    # when reloading without going all the way to a pure json save
-    vectorizer_modules = [v.__class__.__module__ for v in vectorizers.values()]
-    module_file = os.path.join(basedir, '{}-{}.json'.format(name, os.getpid()))
-    write_json(vectorizer_modules, module_file)
 
 
 @export
@@ -292,18 +282,54 @@ def load_vocabs(directory: str, suffix: Optional[str] = None):
     return vocabs
 
 
+
+@export
+def save_vectorizers_legacy(basedir, vectorizers, name='vectorizers'):
+    save_md_file = os.path.join(basedir, '{}-{}.pkl'.format(name, os.getpid()))
+    with open(save_md_file, 'wb') as f:
+        pickle.dump(vectorizers, f)
+    # Save out the vectorizer module names so we can automatically import them
+    # when reloading without going all the way to a pure json save
+    vectorizer_modules = [v.__class__.__module__ for v in vectorizers.values()]
+    module_file = os.path.join(basedir, '{}-{}.json'.format(name, os.getpid()))
+    write_json(vectorizer_modules, module_file)
+
+@export
+def save_vectorizers(basedir, vectorizers, name='vectorizers', version=2):
+    if version < 2:
+        return save_vectorizers_legacy(basedir, vectorizers, name, version)
+    vec_params = {}
+    modules = []
+    for k, v in vectorizers.items():
+        vec_params[k] = v.get_state()
+        modules.append(v.__class__.__module__)
+    contents = {'vectorizers': vec_params, 'version': version, 'modules': modules}
+
+    # Save out the vectorizer module names so we can automatically import them
+    # when reloading without going all the way to a pure json save
+    module_file = os.path.join(basedir, '{}-{}.json'.format(name, os.getpid()))
+    write_json(contents, module_file)
+
 @export
 def load_vectorizers(directory: str, data_download_cache: Optional[str] = None):
+    from baseline.vectorizers import create_vectorizer
     vectorizers_fname = find_files_with_prefix(directory, 'vectorizers')
     # Find the module list for the vectorizer so we can import them without
     # needing to bother the user with providing them
     vectorizers_modules = [x for x in vectorizers_fname if 'json' in x][0]
-    modules = read_json(vectorizers_modules)
-    for module in modules:
-        import_user_module(module, data_download_cache)
-    vectorizers_pickle = [x for x in vectorizers_fname if 'pkl' in x][0]
-    with open(vectorizers_pickle, "rb") as f:
-        vectorizers = pickle.load(f)
+    json_obj = read_json(vectorizers_modules)
+    vectorizers = {}
+    if 'version' in json_obj and json_obj['version'] > 1:
+        for k, vec_params in json_obj['vectorizers'].items():
+            vectorizer = create_vectorizer(**vec_params)
+            vectorizers[k] = vectorizer
+    else:
+        modules = json_obj
+        for module in modules:
+            import_user_module(module, data_download_cache)
+        vectorizers_pickle = [x for x in vectorizers_fname if 'pkl' in x][0]
+        with open(vectorizers_pickle, "rb") as f:
+            vectorizers = pickle.load(f)
     return vectorizers
 
 

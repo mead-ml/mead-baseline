@@ -1,15 +1,18 @@
 import collections
 import tempfile
 import unicodedata
+from copy import deepcopy
+
 import re
 import json
 from typing import Tuple, List, Iterable, Set, Dict
 import numpy as np
+import logging
 
 from functools import lru_cache
 from eight_mile.downloads import open_file_or_url, get_file_or_url
 from eight_mile.utils import exporter, optional_params, listify, register, Offsets, is_sequence, pads
-from baseline.utils import import_user_module
+from baseline.utils import import_user_module, lowercase
 
 try:
     import regex
@@ -25,6 +28,8 @@ except:
 
 __all__ = []
 export = exporter(__all__)
+
+logger = logging.getLogger('baseline')
 
 
 @export
@@ -51,15 +56,22 @@ class Vectorizer:
     def reset(self):
         pass
 
+    def get_state(self):
+        c = deepcopy(self.__dict__)
+        if 'transform_fn' in c:
+            c['transform_fn'] = c['transform_fn'].__name__
+        c['modules'] = self.__class__.__module__
+        return c
+
 
 MEAD_VECTORIZERS = {}
-
 
 @export
 @optional_params
 def register_vectorizer(cls, name=None):
     """Register a function as a plug-in"""
-    return register(cls, MEAD_VECTORIZERS, name, 'vectorizer')
+    cls = register(cls, MEAD_VECTORIZERS, name, 'vectorizer')
+    return cls
 
 
 @export
@@ -72,6 +84,13 @@ class AbstractVectorizer(Vectorizer):
 
     def __init__(self, transform_fn=None, emit_begin_tok=[], emit_end_tok=[]):
         super().__init__()
+        if isinstance(transform_fn, str):
+            try:
+                transform_fn = eval(transform_fn)
+            except:
+                logger.error(f'Failed to map transform: {transform_fn}. This could cause problems')
+                transform_fn = None
+
         self.transform_fn = identity_trans_fn if transform_fn is None else transform_fn
         self.emit_begin_tok = listify(emit_begin_tok)
         self.emit_end_tok = listify(emit_end_tok)
@@ -126,7 +145,6 @@ class AbstractVectorizer(Vectorizer):
         except TypeError:
             return [i for i, _ in enumerate(tokens)]
 
-
 @export
 @register_vectorizer(name='token1d')
 class Token1DVectorizer(AbstractVectorizer):
@@ -135,7 +153,7 @@ class Token1DVectorizer(AbstractVectorizer):
         super().__init__(kwargs.get('transform_fn'), kwargs.get('emit_begin_tok', []), kwargs.get('emit_end_tok', []))
         self.time_reverse = kwargs.get('rev', False)
         self.mxlen = kwargs.get('mxlen', -1)
-        self.max_seen = 0
+        self.max_seen = kwargs.get('max_seen', 0)
 
     def count(self, tokens):
         """Count (tabulate) the "atoms" in this tokens stream
@@ -298,8 +316,8 @@ class Char2DVectorizer(AbstractCharVectorizer):
         super().__init__(kwargs.get('transform_fn'), kwargs.get('emit_begin_tok', []), kwargs.get('emit_end_tok', []))
         self.mxlen = kwargs.get('mxlen', -1)
         self.mxwlen = kwargs.get('mxwlen', -1)
-        self.max_seen_tok = 0
-        self.max_seen_char = 0
+        self.max_seen_tok = kwargs.get('max_seen_tok', 0)
+        self.max_seen_char = kwargs.get('max_seen_char', 0)
 
     def count(self, tokens):
         seen_tok = 0
@@ -384,7 +402,7 @@ class Char1DVectorizer(AbstractCharVectorizer):
         super().__init__(kwargs.get('transform_fn'))
         self.mxlen = kwargs.get('mxlen', -1)
         self.time_reverse = kwargs.get('rev', False)
-        self.max_seen_tok = 0
+        self.max_seen_tok = kwargs.get('max_seen_tok', 0)
 
     def count(self, tokens):
         seen_tok = 0
@@ -662,11 +680,11 @@ class BPEVectorizer1D(AbstractVectorizer, HasSubwordTokens):
     def __init__(self, **kwargs):
         """Loads a BPE tokenizer"""
         super().__init__(kwargs.get('transform_fn'), kwargs.get('emit_begin_tok', []), kwargs.get('emit_end_tok', []))
-        self.max_seen = 128
+        self.max_seen = kwargs.get('max_seen', 128)
         self.model_file = kwargs.get('model_file')
         self.vocab_file = kwargs.get('vocab_file')
         use_fast_bpe = kwargs.get('use_fast_bpe', True)
-        self._special_tokens = {"[CLS]", "<unk>", "<EOS>", "<UNK>", "<s>", "</s>"}
+        self._special_tokens = kwargs.get('_special_tokens' , {"[CLS]", "<unk>", "<EOS>", "<UNK>", "<s>", "</s>"})
 
         extra_tokens = []
         if use_fast_bpe:
@@ -1379,7 +1397,7 @@ class WordpieceDict1DVectorizer(WordpieceVectorizer1D):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.field = kwargs.get('fields', kwargs.get('field', 'text'))
-        self.delim = kwargs.get('token_delim', '~~')
+        self.delim = kwargs.get('token_delim', kwargs.get('delim', '~~'))
 
     def iterable(self, tokens):
         for t in self.emit_begin_tok:
@@ -1402,8 +1420,8 @@ class WordpieceDict1DVectorizer(WordpieceVectorizer1D):
 class PassThroughVectorizer(AbstractVectorizer):
     def __init__(self, feature_size = None, **kwargs):
         self.feature_size = feature_size
-        self.max_seen = 0
-        self.mxlen = -1
+        self.max_seen = kwargs.get('max_seen', 0)
+        self.mxlen = kwargs.get('mxlen', -1)
 
     def count(self, tokens):
         return {}
@@ -1426,7 +1444,7 @@ class PassThroughDict1DVectorizer(PassThroughVectorizer):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.fields = listify(kwargs.get('fields', 'text'))
-        self.delim = kwargs.get('token_delim', '@@')
+        self.delim = kwargs.get('token_delim', kwargs.get('delim', '~~'))
 
     def count(self, tokens):
         self.max_seen = max(self.max_seen, len(tokens))
@@ -1559,10 +1577,10 @@ class GPT2Vectorizer1D(AbstractVectorizer, HasSubwordTokens):
     def __init__(self, **kwargs):
         """Loads a BPE tokenizer"""
         super().__init__(kwargs.get('transform_fn'), kwargs.get('emit_begin_tok', []), kwargs.get('emit_end_tok', []))
-        self.max_seen = 128
+        self.max_seen = kwargs.get('max_seen', 128)
         self.model_file = kwargs.get('model_file')
         self.vocab_file = kwargs.get('vocab_file')
-        self._special_tokens = {"<unk>", "<pad>", "<s>", "</s>"}
+        self._special_tokens = kwargs.get('_special_tokens', {"<unk>", "<pad>", "<s>", "</s>"})
 
         with open_file_or_url(self.vocab_file, "r") as f:
             vocab = json.load(f)
@@ -1670,12 +1688,12 @@ class XLMRSentencePieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
     def __init__(self, **kwargs):
         """Loads a BPE tokenizer"""
         super().__init__(kwargs.get('transform_fn'), kwargs.get('emit_begin_tok', []), kwargs.get('emit_end_tok', []))
-        self.max_seen = 128
+        self.max_seen = kwargs.get('max_seen', 128)
         self.model_file = kwargs.get('model_file')
         self.tokenizer = spm.SentencePieceProcessor(self.model_file)
 
 
-        self._special_tokens = {"<unk>", "<pad>", "<s>", "</s>"}
+        self._special_tokens = kwargs.get('_special_tokens', {"<unk>", "<pad>", "<s>", "</s>"})
         self._vocab = {'<s>': 0, '<pad>': 1, '</s>': 2, '<unk>': 3}
 
         self.mxlen = kwargs.get('mxlen', -1)
@@ -1771,5 +1789,7 @@ def create_vectorizer(**kwargs):
     for module in listify(kwargs.get('module', kwargs.get('modules', []))):
         import_user_module(module, kwargs.get('data_download_cache'))
     Constructor = MEAD_VECTORIZERS.get(vec_type)
-    return Constructor(**kwargs)
+    vec = Constructor(**kwargs)
+    vec.vectorizer_type = vec_type
+    return vec
 
