@@ -1,6 +1,15 @@
 import numpy as np
 from typing import Dict, List
-from eight_mile.tf.layers import TransformerEncoderStack, TransformerEncoder, TransformerDecoderStack, TransformerDecoder, MultiHeadedAttention, FFN
+from eight_mile.tf.layers import (
+    TransformerEncoderStack,
+    TransformerEncoder,
+    TransformerDecoderStack,
+    TransformerDecoder,
+    MultiHeadedAttention,
+    PassThru,
+    FFN,
+    SingleHeadReduction
+)
 from eight_mile.tf.embeddings import LookupTableEmbeddings, LearnedPositionalLookupTableEmbeddingsWithBias, LearnedPositionalLookupTableEmbeddings
 
 import tensorflow as tf
@@ -422,6 +431,124 @@ def load_transformer_seq2seq_npz(tf_seq2seq: tf.keras.layers.Layer,
 
     from_decoder_stack_array(transformer_decoder, d,  name=f"{name}/TransformerDecoderStack")
     from_embed_array(tf_seq2seq.decoder.tgt_embeddings, d, name=f"{name}/TgtEmbedding/{tgt_embedding_key}")
+
+
+def to_attn_pool_array(tf_attn_pool: tf.keras.layers.Layer, name: str) -> Dict:
+    """Convert a self-attention module to a set of arrays
+
+    :param tf_attn_pool: The attention pooling layer of a dual encoder, this could be single head or 2-headed
+    :return: A Dict containing the arrays by key
+    """
+    d = {}
+
+    if isinstance(tf_attn_pool, SingleHeadReduction):
+        d.update(to_weight_array(tf_attn_pool.w_Q, f"{name}/w_Q"))
+        d.update(to_weight_array(tf_attn_pool.w_K, f"{name}/w_K"))
+    else:
+        d.update(to_weight_array(tf_attn_pool.reduction1.w_Q, f"{name}/reduction1/w_Q"))
+        d.update(to_weight_array(tf_attn_pool.reduction1.w_K, f"{name}/reduction1/w_K"))
+
+        d.update(to_weight_array(tf_attn_pool.reduction1.w_Q, f"{name}/reduction2/w_Q"))
+        d.update(to_weight_array(tf_attn_pool.reduction1.w_K, f"{name}/reduction2/w_K"))
+    return d
+
+
+def from_attn_pool_array(tf_attn_pool: tf.keras.layers.Layer, d: Dict, name: str):
+    """Restore a self-attention pooling module from a set of keys
+
+    :param tf_attn_pool: The attention pooling layer of a dual encoder, this could be single head or 2-headed
+    :param d: A Dict of arrays by key
+    :param name: The name of the layer
+    """
+
+    if isinstance(tf_attn_pool, SingleHeadReduction):
+        from_weight_array(tf_attn_pool.w_Q, d, f"{name}/w_Q")
+        from_weight_array(tf_attn_pool.w_K, d, f"{name}/w_K")
+
+    else:
+        from_weight_array(tf_attn_pool.reduction1.w_Q, d, f"{name}/reduction1/w_Q")
+        from_weight_array(tf_attn_pool.reduction1.w_K, d, f"{name}/reduction1/w_K")
+        from_weight_array(tf_attn_pool.reduction2.w_Q, d, f"{name}/reduction2/w_Q")
+        from_weight_array(tf_attn_pool.reduction2.w_K, d, f"{name}/reduction2/w_K")
+
+
+def save_transformer_de_npz(tf_de: tf.keras.layers.Layer, npz: str, embeddings_keys: List[str] = None,
+                            name: str = "DE", verbose: bool = False):
+    """Save a Transformer de file out
+
+    A Dual-Encoder will have 2 transformer layers with shared weights.  Because of this, when we save we only
+    want to save the first layer.  However, the upper "stacking" layers may be different
+
+    The encoder will have a transformer stack followed optionally by single or dual headed attention, and finally
+    either a linear or FFN stack of layers
+
+    :param tf_de: A Transformer Dual Encoder module
+    """
+
+    enc = {}
+    transformer = tf_de.encoder.transformer
+    enc.update(to_encoder_stack_array(transformer, name=f"{name}/TransformerEncoderStack"))
+    enc_keys_to_write = embeddings_keys if embeddings_keys else list(tf_de.embeddings.keys())
+
+    for embeddings_key in enc_keys_to_write:
+        enc.update(to_embed_array(tf_de.embeddings[embeddings_key], name=f"{name}/Embeddings/{embeddings_key}"))
+
+    enc.update(to_attn_pool_array(tf_de.reduction_layer, f"{name}/ReductionLayer"))
+
+    ff1 = tf_de.ff1
+    if isinstance(ff1, tf.keras.layers.Dense):
+        enc.update(to_weight_array(ff1, f"{name}/ff1"))
+    elif not isinstance(ff1, PassThru):
+        raise Exception("We dont currently support stacking layers in dual-encoder serialization")
+    ff2 = tf_de.ff2
+    if isinstance(ff2, tf.keras.layers.Dense):
+        enc.update(to_weight_array(ff2, f"{name}/ff2"))
+    elif not isinstance(ff2, PassThru):
+        raise Exception("We dont currently support stacking layers in dual-encoder serialization")
+
+    np.savez(npz, **enc)
+
+
+def load_transformer_de_npz(tf_de: tf.keras.layers.Layer,
+                            npz: str, embeddings_keys: List[str] = None,
+                            name: str = "DE"):
+    """Load a dual-encoder from NPZ
+
+    A Dual-Encoder will have 2 transformer layers with shared weights.  Because of this, when we save we only
+    want to save the first layer.  However, the upper "stacking" layers may be different
+
+    The encoder will have a transformer stack followed optionally by single or dual headed attention, and finally
+    either a linear or FFN stack of layers
+
+    :param tf_de: A Transformer Dual Encoder module
+    :param npz:
+    :param embeddings_keys:
+    :param name:
+    :return:
+    """
+
+    d = np.load(npz)
+
+    transformer = tf_de.encoder.transformer
+    from_encoder_stack_array(transformer, d, name=f"{name}/TransformerEncoderStack")
+
+    enc_keys_to_restore = embeddings_keys if embeddings_keys else list(tf_de.embeddings.keys())
+
+    for embeddings_key in enc_keys_to_restore:
+        from_embed_array(tf_de.embeddings[embeddings_key], d, f"{name}/Embeddings/{embeddings_key}")
+
+    from_attn_pool_array(tf_de.reduction, d, name=f"{name}/ReductionLayer")
+
+    ff1 = tf_de.ff1
+    if isinstance(ff1, tf.keras.layers.Dense):
+        from_weight_array(ff1, d, f"{name}/ff1")
+    elif not isinstance(ff1, PassThru):
+        raise Exception("We dont currently support stacking layers in dual-encoder serialization")
+    ff2 = tf_de.ff2
+    if isinstance(ff2, tf.keras.layers.Dense):
+        from_weight_array(ff2, d, f"{name}/ff2")
+    elif not isinstance(ff2, PassThru):
+        raise Exception("We dont currently support stacking layers in dual-encoder serialization")
 
 
 def load_tlm_npz(tf_tlm: tf.keras.layers.Layer, npz: str, embeddings_key: str = 'x', name: str = "TLM"):

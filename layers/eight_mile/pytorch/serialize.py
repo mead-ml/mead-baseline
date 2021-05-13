@@ -10,6 +10,7 @@ from eight_mile.pytorch.layers import (
     TransformerDecoder,
     EmbeddingsStack,
     WithDropout,
+    SingleHeadReduction,
 )
 from eight_mile.pytorch.embeddings import LookupTableEmbeddings, LearnedPositionalLookupTableEmbeddingsWithBias
 
@@ -443,6 +444,125 @@ def save_tlm_output_npz(tlm: nn.Module, npz: str, embeddings_keys: List[str] = N
     if verbose:
         print(d.keys())
     np.savez(npz, **d)
+
+
+
+def to_attn_pool_array(pyt_attn_pool: nn.Module, name: str) -> Dict:
+    """Convert a self-attention module to a set of arrays
+
+    :param pyt_attn_pool: The attention pooling layer of a dual encoder, this could be single head or 2-headed
+    :return: A Dict containing the arrays by key
+    """
+    d = {}
+
+    if isinstance(pyt_attn_pool, SingleHeadReduction):
+        d.update(to_weight_array(pyt_attn_pool.w_Q, f"{name}/w_Q"))
+        d.update(to_weight_array(pyt_attn_pool.w_K, f"{name}/w_K"))
+    else:
+        d.update(to_weight_array(pyt_attn_pool.reduction1.w_Q, f"{name}/reduction1/w_Q"))
+        d.update(to_weight_array(pyt_attn_pool.reduction1.w_K, f"{name}/reduction1/w_K"))
+
+        d.update(to_weight_array(pyt_attn_pool.reduction1.w_Q, f"{name}/reduction2/w_Q"))
+        d.update(to_weight_array(pyt_attn_pool.reduction1.w_K, f"{name}/reduction2/w_K"))
+    return d
+
+
+def from_attn_pool_array(pyt_attn_pool: nn.Module, d: Dict, name: str):
+    """Restore a self-attention pooling module from a set of keys
+
+    :param pyt_attn_pool: The attention pooling layer of a dual encoder, this could be single head or 2-headed
+    :param d: A Dict of arrays by key
+    :param name: The name of the layer
+    """
+
+    if isinstance(pyt_attn_pool, SingleHeadReduction):
+        from_weight_array(pyt_attn_pool.w_Q, d, f"{name}/w_Q")
+        from_weight_array(pyt_attn_pool.w_K, d, f"{name}/w_K")
+
+    else:
+        from_weight_array(pyt_attn_pool.reduction1.w_Q, d, f"{name}/reduction1/w_Q")
+        from_weight_array(pyt_attn_pool.reduction1.w_K, d, f"{name}/reduction1/w_K")
+        from_weight_array(pyt_attn_pool.reduction2.w_Q, d, f"{name}/reduction2/w_Q")
+        from_weight_array(pyt_attn_pool.reduction2.w_K, d, f"{name}/reduction2/w_K")
+
+
+def save_transformer_de_npz(pyt_de: nn.Module, npz: str, embeddings_keys: List[str] = None,
+                            name: str = "DE", verbose: bool = False):
+    """Save a Transformer de file out
+
+    A Dual-Encoder will have 2 transformer layers with shared weights.  Because of this, when we save we only
+    want to save the first layer.  However, the upper "stacking" layers may be different
+
+    The encoder will have a transformer stack followed optionally by single or dual headed attention, and finally
+    either a linear or FFN stack of layers
+
+    :param pyt_de: A Transformer Dual Encoder module
+    """
+
+    enc = {}
+    transformer = pyt_de.encoder.transformer
+    enc.update(to_encoder_stack_array(transformer, name=f"{name}/TransformerEncoderStack"))
+    enc_keys_to_write = embeddings_keys if embeddings_keys else list(pyt_de.embeddings.keys())
+
+    for embeddings_key in enc_keys_to_write:
+        enc.update(to_embed_array(pyt_de.embeddings[embeddings_key], name=f"{name}/Embeddings/{embeddings_key}"))
+
+    enc.update(to_attn_pool_array(pyt_de.reduction_layer, f"{name}/ReductionLayer"))
+
+    ff1 = pyt_de.ff1
+    if isinstance(ff1, nn.Linear):
+        enc.update(to_weight_array(ff1, f"{name}/ff1"))
+    elif not isinstance(ff1, nn.Identity):
+        raise Exception("We dont currently support stacking layers in dual-encoder serialization")
+    ff2 = pyt_de.ff2
+    if isinstance(ff2, nn.Linear):
+        enc.update(to_weight_array(ff2, f"{name}/ff2"))
+    elif not isinstance(ff2, nn.Identity):
+        raise Exception("We dont currently support stacking layers in dual-encoder serialization")
+
+    np.savez(npz, **enc)
+
+
+def load_transformer_de_npz(pyt: nn.Module,
+                            npz: str, embeddings_keys: List[str] = None,
+                            name: str = "DE"):
+    """Load a dual-encoder from NPZ
+
+    A Dual-Encoder will have 2 transformer layers with shared weights.  Because of this, when we save we only
+    want to save the first layer.  However, the upper "stacking" layers may be different
+
+    The encoder will have a transformer stack followed optionally by single or dual headed attention, and finally
+    either a linear or FFN stack of layers
+
+    :param pyt: A Transformer Dual Encoder module
+    :param npz:
+    :param embeddings_keys:
+    :param name:
+    :return:
+    """
+
+    d = np.load(npz)
+
+    transformer = pyt.encoder.transformer
+    from_encoder_stack_array(transformer, d, name=f"{name}/TransformerEncoderStack")
+
+    enc_keys_to_restore = embeddings_keys if embeddings_keys else list(pyt.embeddings.keys())
+
+    for embeddings_key in enc_keys_to_restore:
+        from_embed_array(pyt.embeddings[embeddings_key], d, f"{name}/Embeddings/{embeddings_key}")
+
+    from_attn_pool_array(pyt.reduction, d, name=f"{name}/ReductionLayer")
+
+    ff1 = pyt.ff1
+    if isinstance(ff1, nn.Linear):
+        from_weight_array(ff1, d, f"{name}/ff1")
+    elif not isinstance(ff1, nn.Identity):
+        raise Exception("We dont currently support stacking layers in dual-encoder serialization")
+    ff2 = pyt.ff2
+    if isinstance(ff2, nn.Linear):
+        from_weight_array(ff2, d, f"{name}/ff2")
+    elif not isinstance(ff2, nn.Identity):
+        raise Exception("We dont currently support stacking layers in dual-encoder serialization")
 
 
 def save_transformer_seq2seq_npz(pytorch_seq2seq: nn.Module, npz: str, src_embeddings_keys: List[str] = None,
