@@ -231,6 +231,6 @@ def fit(model_params, ts, vs, es=None, **kwargs):
 
     if es is not None:
         model = torch.load(model_file)
-        trainer = Seq2SeqTrainerPyTorch(model, **kwargs)
+        trainer = create_trainer(model, **kwargs)
         test_metrics = trainer.test(es, reporting_fns, phase='Test')
     return test_metrics
