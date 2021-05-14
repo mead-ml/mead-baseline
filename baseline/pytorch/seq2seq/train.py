@@ -20,7 +20,10 @@ class Seq2SeqTrainerPyTorch(Trainer):
     def __init__(self, model, **kwargs):
         super().__init__()
         if type(model) is dict:
-            model = create_model_for('seq2seq', checkpoint=kwargs.get('checkpoint'), **model)
+            checkpoint = kwargs.get('checkpoint')
+            if checkpoint:
+                model['checkpoint'] = checkpoint
+            model = create_model_for('seq2seq', **model)
 
         self.clip = float(kwargs.get('clip', 5))
         self.model = model

@@ -30,7 +30,10 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
         super().__init__()
 
         if type(model) is dict:
-            model = create_model_for('classify', checkpoint=kwargs.get('checkpoint'), **model)
+            checkpoint = kwargs.get('checkpoint')
+            if checkpoint:
+                model['checkpoint'] = checkpoint
+            model = create_model_for('classify', **model)
 
         self.clip = float(kwargs.get('clip', 5))
         self.labels = model.labels
