@@ -148,7 +148,7 @@ def run():
 
         if args.show_query:
             for query, output in zip(queries, outputs):
-                print(f"[Query] {query}")
+                print(f"[Query] {' '.join(query)}")
                 print(f"[Response] {output}")
         elif wf:
             for query, output in zip(queries, outputs):
