@@ -500,7 +500,7 @@ def save_transformer_de_npz(pyt_de: nn.Module, npz: str, embeddings_keys: List[s
     """
 
     enc = {}
-    transformer = pyt_de.encoder.transformer
+    transformer = pyt_de.transformer
     enc.update(to_encoder_stack_array(transformer, name=f"{name}/TransformerEncoderStack"))
     enc_keys_to_write = embeddings_keys if embeddings_keys else list(pyt_de.embeddings.keys())
 
@@ -543,7 +543,7 @@ def load_transformer_de_npz(pyt: nn.Module,
 
     d = np.load(npz)
 
-    transformer = pyt.encoder.transformer
+    transformer = pyt.transformer
     from_encoder_stack_array(transformer, d, name=f"{name}/TransformerEncoderStack")
 
     enc_keys_to_restore = embeddings_keys if embeddings_keys else list(pyt.embeddings.keys())
@@ -551,7 +551,7 @@ def load_transformer_de_npz(pyt: nn.Module,
     for embeddings_key in enc_keys_to_restore:
         from_embed_array(pyt.embeddings[embeddings_key], d, f"{name}/Embeddings/{embeddings_key}")
 
-    from_attn_pool_array(pyt.reduction, d, name=f"{name}/ReductionLayer")
+    from_attn_pool_array(pyt.reduction_layer, d, name=f"{name}/ReductionLayer")
 
     ff1 = pyt.ff1
     if isinstance(ff1, nn.Linear):
