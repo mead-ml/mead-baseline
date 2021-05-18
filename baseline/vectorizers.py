@@ -1265,7 +1265,18 @@ class WordpieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
     def __init__(self, **kwargs):
         super().__init__(kwargs.get('transform_fn'), kwargs.get('emit_begin_tok', ['[CLS]']), kwargs.get('emit_end_tok', ['[SEP]']))
         self.max_seen = 128
-        self.tokenizer = WordpieceTokenizer(self.read_vocab(kwargs.get('vocab_file')))
+
+        vocab_file = kwargs.get('vocab_file')
+        tokenizer = kwargs.get('tokenizer')
+        if tokenizer is not None:
+            self.tokenizer = WordpieceTokenizer(tokenizer['vocab'],
+                                                tokenizer.get('unk_token', "[UNK]"),
+                                                tokenizer.get('max_input_chars_per_word', 200))
+        elif vocab_file is not None:
+            self.tokenizer = WordpieceTokenizer(self.read_vocab(kwargs.get('vocab_file')))
+        else:
+            raise Exception("No vocab file and no previously serialized model provided for WordpieceTokenizer")
+        
         self.mxlen = kwargs.get('mxlen', -1)
         self.dtype = kwargs.get('dtype', 'int')
         self._special_tokens = {"[CLS]", "<unk>", "<EOS>"}
