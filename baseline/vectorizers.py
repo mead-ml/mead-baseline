@@ -12,7 +12,7 @@ import logging
 from functools import lru_cache
 from eight_mile.downloads import open_file_or_url, get_file_or_url
 from eight_mile.utils import exporter, optional_params, listify, register, Offsets, is_sequence, pads
-from baseline.utils import import_user_module, lowercase
+from baseline.utils import import_user_module
 
 try:
     import regex
@@ -56,13 +56,31 @@ class Vectorizer:
     def reset(self):
         pass
 
-    def get_state(self):
-        c = deepcopy(self.__dict__)
-        if 'transform_fn' in c:
-            c['transform_fn'] = c['transform_fn'].__name__
+    def __getstate__(self):
+        c = {}
+        for k, v in self.__dict__.items():
+
+            if k == 'transform_fn' and v != None:
+                c['transform_fn'] = v.__name__
+            elif hasattr(v, '__getstate__'):
+                c[k] = v.__getstate__()
+            elif isinstance(v, set):
+                c[k] = list(v)
+            else:
+                c[k] = deepcopy(v)
         c['modules'] = self.__class__.__module__
         return c
 
+    def __setstate__(self, state):
+        for k, v in state.items():
+
+            if k == 'transform_fn' and v != None:
+                if isinstance(v, str):
+                    self.transform_fn = eval(v)
+                else:
+                    self.transform_fn = v
+            else:
+                self.__dict__[k] = v
 
 MEAD_VECTORIZERS = {}
 
@@ -77,6 +95,33 @@ def register_vectorizer(cls, name=None):
 @export
 def identity_trans_fn(x):
     return x
+
+@export
+def lowercase(x):
+    return x.lower()
+
+
+UNREP_EMOTICONS = (
+    ':)',
+    ':(((',
+    ':D',
+    '=)',
+    ':-)',
+    '=(',
+    '(=',
+    '=[[',
+)
+
+
+@export
+def web_cleanup(word):
+    if word.startswith('http'): return 'URL'
+    if word.startswith('@'): return '@@@@'
+    if word.startswith('#'): return '####'
+    if word == '"': return ','
+    if word in UNREP_EMOTICONS: return ';)'
+    if word == '<3': return '&lt;3'
+    return word
 
 
 @export
@@ -590,6 +635,8 @@ class SavableFastBPE:
     """
     def __init__(self, codes_path, vocab_path):
         from fastBPE import fastBPE
+        self.codes = None
+        self.vocab = None
         codes_path = get_file_or_url(codes_path)
         vocab_path = get_file_or_url(vocab_path)
         with open(codes_path, 'rb') as rf:
@@ -603,13 +650,13 @@ class SavableFastBPE:
         return "@@"
 
     def __getstate__(self):
-        return {'codes': self.codes, 'vocab': self.vocab}
+        return {'codes': self.codes.decode('utf-8'), 'vocab': self.vocab.decode('utf-8')}
 
     def __setstate__(self, state):
         from fastBPE import fastBPE
         with tempfile.NamedTemporaryFile() as codes, tempfile.NamedTemporaryFile() as vocab:
-            codes.write(state['codes'])
-            vocab.write(state['vocab'])
+            codes.write(state['codes'].encode("utf-8"))
+            vocab.write(state['vocab'].encode("utf-8"))
             self.bpe = fastBPE(codes.name, vocab.name)
 
     def apply(self, sentences):
@@ -1101,6 +1148,14 @@ class WordpieceTokenizer:
         self.vocab = vocab
         self.unk_token = unk_token
         self.max_input_chars_per_word = max_input_chars_per_word
+
+    def __getstate__(self):
+        return {'vocab': self.vocab, 'unk_token': self.unk_token, 'max_input_chars_per_word': self.max_input_chars_per_word}
+
+    def __setstate__(self, state):
+        self.vocab = state['vocab']
+        self.unk_token = state['unk_token']
+        self.max_input_chars_per_word = state['max_input_chars_per_word']
 
     def convert_tokens_to_ids(self, tokens):
         return convert_by_vocab(self.vocab, tokens)

@@ -39,7 +39,7 @@ __all__ = []
 export = exporter(__all__)
 logger = logging.getLogger('mead')
 
-
+DEFAULT_VEC_FMT = "json"
 def merge_reporting_with_settings(reporting, settings):
     default_reporting = settings.get('reporting_hooks', {})
     # Add default reporting information to the reporting settings.
@@ -306,7 +306,7 @@ class Task:
         :return: Nothing
         """
         self._reorganize_params()
-        baseline.save_vectorizers(self.get_basedir(), self.vectorizers)
+        baseline.save_vectorizers(self.get_basedir(), self.vectorizers, self.config_params.get("vec_fmt", DEFAULT_VEC_FMT))
         self._load_dataset()
 
         model_params = self.config_params['model']
@@ -681,7 +681,7 @@ class TaggerTask(Task):
 
     def train(self, checkpoint=None):
         self._load_dataset()
-        baseline.save_vectorizers(self.get_basedir(), self.vectorizers)
+        baseline.save_vectorizers(self.get_basedir(), self.vectorizers, self.config_params.get("vec_fmt", DEFAULT_VEC_FMT))
         self._reorganize_params()
         conll_output = self.config_params.get("conll_output", None)
         model_params = self.config_params['model']
@@ -799,7 +799,7 @@ class DependencyParserTask(Task):
 
     def train(self, checkpoint=None):
         self._load_dataset()
-        baseline.save_vectorizers(self.get_basedir(), self.vectorizers)
+        baseline.save_vectorizers(self.get_basedir(), self.vectorizers, self.config_params.get("vec_fmt", DEFAULT_VEC_FMT))
         self._reorganize_params()
         conll_output = self.config_params.get("conll_output", None)
         model_params = self.config_params['model']
@@ -1046,7 +1046,7 @@ class LanguageModelingTask(Task):
         self._load_dataset()
         # Dont do this here!  We need to move train_data elsewhere
         calc_lr_params(self.config_params['train'], self.train_data.steps)
-        baseline.save_vectorizers(self.get_basedir(), self.vectorizers)
+        baseline.save_vectorizers(self.get_basedir(), self.vectorizers, self.config_params.get("vec_fmt", DEFAULT_VEC_FMT))
 
         model_params = self.config_params['model']
         model_params['task'] = self.task_name()

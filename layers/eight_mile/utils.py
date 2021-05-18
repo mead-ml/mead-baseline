@@ -71,13 +71,13 @@ export = exporter(__all__)
 
 
 @export
-def register(cls, registry, name=None, error=""):
+def register(cls, registry, name=None, warning=""):
     if name is None:
         name = cls.__name__
     if name in registry:
-        raise Exception(
-            "Error: attempt to re-define previously registered {} {} (old: {}, new: {})".format(
-                error, name, registry[name], cls
+        logger.warning(
+            "Warning: attempt to re-define previously registered {} {} (old: {}, new: {})".format(
+                warning, name, registry[name], cls
             )
         )
     if hasattr(cls, "create"):

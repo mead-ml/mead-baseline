@@ -19,6 +19,7 @@ import collections
 import eight_mile
 import importlib
 from eight_mile.utils import *
+from eight_mile.version import __version__
 from eight_mile.downloads import *
 import addons
 
@@ -150,33 +151,6 @@ class MakeFileHandler(logging.FileHandler):
         super().__init__(filename, mode, encoding, delay)
 
 
-@export
-def lowercase(x):
-    return x.lower()
-
-
-UNREP_EMOTICONS = (
-    ':)',
-    ':(((',
-    ':D',
-    '=)',
-    ':-)',
-    '=(',
-    '(=',
-    '=[[',
-)
-
-
-@export
-def web_cleanup(word):
-    if word.startswith('http'): return 'URL'
-    if word.startswith('@'): return '@@@@'
-    if word.startswith('#'): return '####'
-    if word == '"': return ','
-    if word in UNREP_EMOTICONS: return ';)'
-    if word == '<3': return '&lt;3'
-    return word
-
 
 @export
 def get_model_file(task, platform, basedir=None):
@@ -284,7 +258,7 @@ def load_vocabs(directory: str, suffix: Optional[str] = None):
 
 
 @export
-def save_vectorizers_legacy(basedir, vectorizers, name='vectorizers'):
+def save_vectorizers_pickle(basedir, vectorizers, name='vectorizers'):
     save_md_file = os.path.join(basedir, '{}-{}.pkl'.format(name, os.getpid()))
     with open(save_md_file, 'wb') as f:
         pickle.dump(vectorizers, f)
@@ -295,15 +269,15 @@ def save_vectorizers_legacy(basedir, vectorizers, name='vectorizers'):
     write_json(vectorizer_modules, module_file)
 
 @export
-def save_vectorizers(basedir, vectorizers, name='vectorizers', version=2):
-    if version < 2:
-        return save_vectorizers_legacy(basedir, vectorizers, name, version)
+def save_vectorizers(basedir, vectorizers, fmt="json", name='vectorizers'):
+    if fmt == "pickle":
+        return save_vectorizers_pickle(basedir, vectorizers, name)
     vec_params = {}
     modules = []
     for k, v in vectorizers.items():
-        vec_params[k] = v.get_state()
+        vec_params[k] = v.__getstate__()
         modules.append(v.__class__.__module__)
-    contents = {'vectorizers': vec_params, 'version': version, 'modules': modules}
+    contents = {'vectorizers': vec_params, 'version': __version__, 'modules': modules}
 
     # Save out the vectorizer module names so we can automatically import them
     # when reloading without going all the way to a pure json save
@@ -319,7 +293,7 @@ def load_vectorizers(directory: str, data_download_cache: Optional[str] = None):
     vectorizers_modules = [x for x in vectorizers_fname if 'json' in x][0]
     json_obj = read_json(vectorizers_modules)
     vectorizers = {}
-    if 'version' in json_obj and json_obj['version'] > 1:
+    if 'version' in json_obj:
         for k, vec_params in json_obj['vectorizers'].items():
             vectorizer = create_vectorizer(**vec_params)
             vectorizers[k] = vectorizer
