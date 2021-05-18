@@ -60,7 +60,7 @@ class Vectorizer:
         c = {}
         for k, v in self.__dict__.items():
 
-            if k == 'transform_fn' and v != None:
+            if k == 'transform_fn' and v is not None:
                 c['transform_fn'] = v.__name__
             elif hasattr(v, '__getstate__'):
                 c[k] = v.__getstate__()
@@ -74,7 +74,7 @@ class Vectorizer:
     def __setstate__(self, state):
         for k, v in state.items():
 
-            if k == 'transform_fn' and v != None:
+            if k == 'transform_fn' and v is not None:
                 if isinstance(v, str):
                     self.transform_fn = eval(v)
                 else:
@@ -1276,10 +1276,24 @@ class WordpieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
             self.tokenizer = WordpieceTokenizer(self.read_vocab(kwargs.get('vocab_file')))
         else:
             raise Exception("No vocab file and no previously serialized model provided for WordpieceTokenizer")
-        
+
         self.mxlen = kwargs.get('mxlen', -1)
         self.dtype = kwargs.get('dtype', 'int')
         self._special_tokens = {"[CLS]", "<unk>", "<EOS>"}
+
+    def __setstate__(self, state):
+        for k, v in state.items():
+            if k == 'tokenizer':
+                self.__dict__[k] = WordpieceTokenizer(v['vocab'],
+                                                      v.get('unk_token', "[UNK]"),
+                                                      v.get('max_input_chars_per_word', 200))
+            elif k == 'transform_fn' and v is not None:
+                if isinstance(v, str):
+                    self.transform_fn = eval(v)
+                else:
+                    self.transform_fn = v
+            else:
+                self.__dict__[k] = v
 
     def read_vocab(self, file):
         return load_bert_vocab(file)
