@@ -272,6 +272,7 @@ class ONNXClassifierService(ClassifierService):
         self.lengths_key = lengths_key
         super().__init__(vocabs, vectorizers, model, **kwargs)
         self.return_labels = False
+        self.input_names = set([x.name for x in model.get_inputs()])
 
     def get_labels(self):
         return self.labels
@@ -292,7 +293,7 @@ class ONNXClassifierService(ClassifierService):
         :returns: dict[str] -> np.ndarray: The vectorized batch.
         """
         examples = defaultdict(list)
-        if self.lengths_key is None:
+        if self.lengths_key is None and 'lengths' in self.input_names:
             self.lengths_key = list(self.vectorizers.keys())[0]
 
         for i, tokens in enumerate(tokens_batch):
@@ -346,6 +347,74 @@ class ONNXClassifierService(ClassifierService):
 
         model = ort.InferenceSession(model_name)
         return cls(vocabs, vectorizers, model, labels)
+
+@export
+class ONNXEmbeddingService(Service):
+
+    def __init__(self, vocabs=None, vectorizers=None, model=None, lengths_key=None, **kwargs):
+        super().__init__(vocabs, vectorizers, model,)
+        self.lengths_key = lengths_key
+        self.input_names = set([x.name for x in model.get_inputs()])
+
+    def predict(self, tokens, **kwargs):
+        tokens_batch = self.batch_input(tokens)
+        self.prepare_vectorizers(tokens_batch)
+        # Hide the fact we can only do one at a time
+        examples = [self.vectorize([tokens]) for tokens in tokens_batch]
+        outcomes_list = np.concatenate([self.model.run(None, example)[0] for example in examples])
+        return outcomes_list
+
+    def vectorize(self, tokens_batch):
+        """Turn the input into that batch dict for prediction.
+
+        :param tokens_batch: `List[List[str]]`: The input text batch.
+
+        :returns: dict[str] -> np.ndarray: The vectorized batch.
+        """
+        examples = defaultdict(list)
+        if self.lengths_key is None and 'lengths' in self.input_names:
+            self.lengths_key = list(self.vectorizers.keys())[0]
+
+        for i, tokens in enumerate(tokens_batch):
+            for k, vectorizer in self.vectorizers.items():
+                vec, length = vectorizer.run(tokens, self.vocabs[k])
+                examples[k].append(vec)
+                if self.lengths_key == k and length:
+                    #examples[f'{self.lengths_key}_lengths'].append(length)
+                    examples['lengths'].append(length)
+        for k in self.vectorizers.keys():
+            examples[k] = np.stack(examples[k])
+        if 'lengths' in examples:
+            examples['lengths'] = np.stack(examples['lengths'])
+        print(examples.keys())
+        return examples
+
+    @classmethod
+    def load(cls, bundle, **kwargs):
+        """Load a model from a bundle.
+
+        This can be either a local model or a remote, exported model.
+
+        :returns a Service implementation
+        """
+        import onnxruntime as ort
+
+        # can delegate
+        if os.path.isdir(bundle):
+            directory = bundle
+        # Try and unzip if its a zip file
+        else:
+            directory = unzip_files(bundle)
+
+        model_basename = find_model_basename(directory)
+        # model_basename = model_basename.replace(".pyt", "")
+        model_name = f"{model_basename}.onnx"
+
+        vocabs = load_vocabs(directory)
+        vectorizers = load_vectorizers(directory)
+
+        model = ort.InferenceSession(model_name)
+        return cls(vocabs, vectorizers, model)
 
 
 @export
@@ -517,6 +586,7 @@ class ONNXTaggerService(TaggerService):
         self.labels = labels
         self.lengths_key = lengths_key
         super().__init__(vocabs, vectorizers, model)
+        self.input_names = set([x.name for x in model.get_inputs()])
 
     def get_vocab(self, vocab_type='word'):
         return self.vocabs.get(vocab_type)
@@ -552,7 +622,7 @@ class ONNXTaggerService(TaggerService):
         :returns: dict[str] -> np.ndarray: The vectorized batch.
         """
         examples = defaultdict(list)
-        if self.lengths_key is None:
+        if self.lengths_key is None and 'lengths' in self.input_names:
             self.lengths_key = list(self.vectorizers.keys())[0]
 
         for i, tokens in enumerate(tokens_batch):

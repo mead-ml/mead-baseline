@@ -217,17 +217,25 @@ class EmbedPoolStackClassifier(ClassifierModelBase):
         """
         return Dense(input_dim, len(self.labels), activation=kwargs.get('output_activation', 'log_softmax'))
 
+    @property
+    def embed_output_dim(self):
+        return self.stack_model.output_dim
+
+    def embed(self, inputs):
+        lengths = inputs.get("lengths")
+        embedded = self.embeddings(inputs)
+        embedded = (embedded, lengths)
+        pooled = self.pool_model(embedded)
+        stacked = self.stack_model(pooled)
+        return stacked
+
     def forward(self, inputs: Dict[str, TensorDef]) -> TensorDef:
         """Forward execution of the model.  Sub-classes typically shouldnt need to override
 
         :param inputs: An input dictionary containing the features and the primary key length
         :return: A tensor
         """
-        lengths = inputs.get("lengths")
-        embedded = self.embeddings(inputs)
-        embedded = (embedded, lengths)
-        pooled = self.pool_model(embedded)
-        stacked = self.stack_model(pooled)
+        stacked = self.embed(inputs)
         return self.output_layer(stacked)
 
 
@@ -376,10 +384,17 @@ class FineTuneModelClassifier(ClassifierModelBase):
         self.embeddings = self.init_embed(embeddings, **kwargs)
         self.stack_model = self.init_stacked(self.embeddings.output_dim, **kwargs)
         self.output_layer = self.init_output(self.stack_model.output_dim, **kwargs)
+    @property
+    def embed_output_dim(self):
+        return self.stack_model.output_dim
 
-    def forward(self, inputs):
+    def embed(self, inputs):
         base_layers = self.embeddings(inputs)
         stacked = self.stack_model(base_layers)
+        return stacked
+
+    def forward(self, inputs):
+        stacked = self.embed(inputs)
         return self.output_layer(stacked)
 
 
