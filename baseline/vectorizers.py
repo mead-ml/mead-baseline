@@ -2,7 +2,7 @@ import collections
 import tempfile
 import unicodedata
 from copy import deepcopy
-
+import os
 import re
 import json
 from typing import Tuple, List, Iterable, Set, Dict
@@ -635,6 +635,7 @@ class SavableFastBPE:
     """
     def __init__(self, codes_path, vocab_path):
         from fastBPE import fastBPE
+
         self.codes = None
         self.vocab = None
         codes_path = get_file_or_url(codes_path)
@@ -752,6 +753,20 @@ class BPEVectorizer1D(AbstractVectorizer, HasSubwordTokens):
     @property
     def special_tokens(self) -> Set[str]:
         return self._special_tokens
+
+    def __setstate__(self, state):
+        for k, v in state.items():
+            if k == 'tokenizer' and isinstance(v, dict):
+                obj = SavableFastBPE.__new__(SavableFastBPE)
+                obj.__setstate__(v)
+                self.__dict__[k] = obj
+            elif k == 'transform_fn' and v is not None:
+                if isinstance(v, str):
+                    self.transform_fn = eval(v)
+                else:
+                    self.transform_fn = v
+            else:
+                self.__dict__[k] = v
 
     @property
     def subword_sentinel(self):
@@ -1283,10 +1298,10 @@ class WordpieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
 
     def __setstate__(self, state):
         for k, v in state.items():
-            if k == 'tokenizer':
-                self.__dict__[k] = WordpieceTokenizer(v['vocab'],
-                                                      v.get('unk_token', "[UNK]"),
-                                                      v.get('max_input_chars_per_word', 200))
+            if k == 'tokenizer' and isinstance(v, dict):
+                obj = WordpieceTokenizer.__new__(WordpieceTokenizer)
+                obj.__setstate__(v)
+                self.__dict__[k] = obj
             elif k == 'transform_fn' and v is not None:
                 if isinstance(v, str):
                     self.transform_fn = eval(v)
