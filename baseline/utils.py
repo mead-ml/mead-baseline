@@ -39,7 +39,7 @@ export(str2bool)
 
 @export
 def normalize_backend(name: str) -> str:
-    allowed_backends = {'tf', 'pytorch'}
+    allowed_backends = {'tf', 'pytorch', 'onnx'}
     name = name.lower()
     if name == 'tensorflow':
         name = 'tf'
