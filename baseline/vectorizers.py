@@ -12,7 +12,7 @@ import logging
 from functools import lru_cache
 from eight_mile.downloads import open_file_or_url, get_file_or_url
 from eight_mile.utils import exporter, optional_params, listify, register, Offsets, is_sequence, pads
-from baseline.utils import import_user_module
+from baseline.utils import import_user_module, lowercase, web_cleanup
 
 try:
     import regex
@@ -95,33 +95,6 @@ def register_vectorizer(cls, name=None):
 @export
 def identity_trans_fn(x):
     return x
-
-@export
-def lowercase(x):
-    return x.lower()
-
-
-UNREP_EMOTICONS = (
-    ':)',
-    ':(((',
-    ':D',
-    '=)',
-    ':-)',
-    '=(',
-    '(=',
-    '=[[',
-)
-
-
-@export
-def web_cleanup(word):
-    if word.startswith('http'): return 'URL'
-    if word.startswith('@'): return '@@@@'
-    if word.startswith('#'): return '####'
-    if word == '"': return ','
-    if word in UNREP_EMOTICONS: return ';)'
-    if word == '<3': return '&lt;3'
-    return word
 
 
 @export
@@ -656,8 +629,14 @@ class SavableFastBPE:
     def __setstate__(self, state):
         from fastBPE import fastBPE
         with tempfile.NamedTemporaryFile() as codes, tempfile.NamedTemporaryFile() as vocab:
-            codes.write(state['codes'].encode("utf-8"))
-            vocab.write(state['vocab'].encode("utf-8"))
+            codes_value = state['codes']
+            if isinstance(codes_value, str):
+                codes_value = codes_value.encode("utf-8")
+            codes.write(codes_value)
+            vocab_value = state['vocab']
+            if isinstance(vocab_value, str):
+                vocab_value = vocab_value.encode("utf-8")
+            vocab.write(vocab_value)
             self.bpe = fastBPE(codes.name, vocab.name)
 
     def apply(self, sentences):

@@ -39,6 +39,33 @@ export(str2bool)
 
 
 @export
+def lowercase(x):
+    return x.lower()
+
+
+UNREP_EMOTICONS = (
+    ':)',
+    ':(((',
+    ':D',
+    '=)',
+    ':-)',
+    '=(',
+    '(=',
+    '=[[',
+)
+
+
+@export
+def web_cleanup(word):
+    if word.startswith('http'): return 'URL'
+    if word.startswith('@'): return '@@@@'
+    if word.startswith('#'): return '####'
+    if word == '"': return ','
+    if word in UNREP_EMOTICONS: return ';)'
+    if word == '<3': return '&lt;3'
+    return word
+
+@export
 def normalize_backend(name: str) -> str:
     allowed_backends = {'tf', 'pytorch'}
     name = name.lower()
