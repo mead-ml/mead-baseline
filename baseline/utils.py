@@ -269,7 +269,7 @@ def save_vectorizers_pickle(basedir, vectorizers, name='vectorizers'):
     write_json(vectorizer_modules, module_file)
 
 @export
-def save_vectorizers(basedir, vectorizers, fmt="json", name='vectorizers'):
+def save_vectorizers(basedir, vectorizers, fmt="pickle", name='vectorizers'):
     if fmt == "pickle":
         return save_vectorizers_pickle(basedir, vectorizers, name)
     vec_params = {}
