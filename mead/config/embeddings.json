@@ -41,6 +41,13 @@
     "dsz": 768
   },
   {
+    "label": "camembert-base-npz",
+    "file": "https://www.dropbox.com/s/q8lxnv209on4ozg/camembert-base.npz?dl=1",
+    "unzip": false,
+    "dsz": 768
+  },
+
+  {
     "label": "sentence-bert-mean-npz",
     "file": "https://www.dropbox.com/s/z5iczzz1r5n0nxk/bert-base-nli-mean-tokens.npz?dl=1",
     "unzip": false,
