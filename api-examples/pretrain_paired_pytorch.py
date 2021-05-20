@@ -9,7 +9,7 @@ from eight_mile.utils import str2bool, write_json, Average, Timer, get_num_gpus_
 from baseline.pytorch.embeddings import *
 import baseline.embeddings
 from eight_mile.optz import *
-from eight_mile.pytorch.serialize import load_seq2seq_enc_from_tlm_npz, load_transformer_seq2seq_npz
+from eight_mile.pytorch.serialize import load_seq2seq_enc_from_tlm_npz, load_transformer_seq2seq_npz, load_transformer_de_npz
 from eight_mile.pytorch.layers import (
     save_checkpoint, init_distributed,
     PairedModel,
@@ -155,6 +155,7 @@ def train():
                         type=int,
                         default=-1,
                         help="Local rank for distributed training (-1 means use the environment variables to find)")
+    parser.add_argument("--save_npz", type=str2bool, default=False, help="Whether save npz checkpoint")
 
     args = parser.parse_args()
 
@@ -288,7 +289,7 @@ def train():
                 logging.info('elapsed time this epoch %d min', elapsed)
                 logging.info('elapsed step time %f steps/min', i/elapsed)
                 logging.info('LR: %f',  optimizer.current_lr)
-                save_checkpoint(model, model_base, steps, tick_type='step')
+                save_checkpoint(model, model_base, steps, tick_type='step', save_npz=args.save_npz)
 
         # How much time elapsed in minutes
         elapsed = timer.elapsed(True)
@@ -316,7 +317,7 @@ def train():
 
             metrics['average_valid_loss'] = valid_avg_loss
             logger.info(metrics)
-            save_checkpoint(model, model_base, epoch, tick_type='epoch')
+            save_checkpoint(model, model_base, epoch, tick_type='epoch', save_npz=args.save_npz)
 
 
 def reload_from_checkpoint(model_type, restart_from, restart_tick_type, model, steps_per_epoch):
@@ -340,12 +341,17 @@ def reload_from_checkpoint(model_type, restart_from, restart_tick_type, model, s
                 load_seq2seq_enc_from_tlm_npz(model, restart_from)
                 step_num = 0
                 tick_type = 'ignore'
-        # If its a dual-encoder, assuming we have model.transformer and model.embeddings, we can load directly
-        # from a Transformer Language Model
         else:
-            load_tlm_npz(model, restart_from)
-            step_num = 0
-            tick_type = 'ignore'
+            try:
+                load_transformer_de_npz(model, restart_from)
+            # If its a dual-encoder, assuming we have model.transformer and model.embeddings, we can load directly
+            # from a Transformer Language Model
+            except:
+                print('Model file not recognized as a dual encoder model, attempting to load as LM for encoder, reset step')
+                load_tlm_npz(model, restart_from)
+                step_num = 0
+                tick_type = 'ignore'
+
     else:
         model.load_state_dict(torch.load(restart_from))
     if tick_type == 'epoch':
