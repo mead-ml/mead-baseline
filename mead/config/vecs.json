@@ -155,6 +155,13 @@
     "vocab_file": "https://www.dropbox.com/s/ck7dyhjawlmv2kp/vocab.json?dl=1"
   },
   {
+    "label": "camembert-base",
+    "type": "camembert-spm1d",
+    "emit_begin_tok": "<s>",
+    "emit_end_tok": "</s>",
+    "model_file": "https://www.dropbox.com/s/op5pbfoub7ln7s7/camembert-base-sentencepiece.bpe.model?dl=1"
+  },
+  {
     "label": "xlmr-base",
     "type": "xlmr-spm1d",
     "emit_begin_tok": "<s>",
