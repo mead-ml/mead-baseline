@@ -386,7 +386,6 @@ class ONNXEmbeddingService(Service):
             examples[k] = np.stack(examples[k])
         if 'lengths' in examples:
             examples['lengths'] = np.stack(examples['lengths'])
-        print(examples.keys())
         return examples
 
     @classmethod
