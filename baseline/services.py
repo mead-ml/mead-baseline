@@ -178,8 +178,8 @@ class Service:
         return_labels = bool(assets['metadata']['return_labels'])
         version = kwargs.get('version')
 
-        if backend not in {'tf'}:
-            raise ValueError("only Tensorflow is currently supported for remote Services")
+        if backend not in {'tf', 'onnx'}:
+            raise ValueError(f"Unsupported backend {backend} for remote Services")
         import_user_module('baseline.{}.remote'.format(backend))
         exp_type = kwargs.get('remote_type')
         if exp_type is None:
@@ -222,7 +222,8 @@ class ClassifierService(Service):
     @classmethod
     def load(cls, bundle, **kwargs):
         backend = kwargs.get('backend', 'tf')
-        if backend == 'onnx':
+        remote = kwargs.get('remote')
+        if backend == 'onnx' and remote is None:
             return ONNXClassifierService.load(bundle, **kwargs)
         return super().load(bundle, **kwargs)
 
@@ -259,8 +260,11 @@ class ClassifierService(Service):
             if self.return_labels:
                 results += [list(map(lambda x: (x[0], x[1].item()), sorted(outcomes, key=lambda tup: tup[1], reverse=True)))]
             else:
+                # We have a list of tuples, one per class, sort these by score
+                outcomes = sorted(outcomes, key=lambda tup: tup[1], reverse=True)
+
                 results += [list(map(lambda x: (self.label_vocab[x[0].item()], x[1].item()),
-                                     sorted(outcomes, key=lambda tup: tup[1], reverse=True)))]
+                                     outcomes))]
         return results
 
 
@@ -404,7 +408,8 @@ class TaggerService(Service):
     @classmethod
     def load(cls, bundle, **kwargs):
         backend = kwargs.get('backend', 'tf')
-        if backend == 'onnx':
+        remote = kwargs.get('remote')
+        if backend == 'onnx' and remote is None:
             return ONNXTaggerService.load(bundle, **kwargs)
         return super().load(bundle, **kwargs)
 

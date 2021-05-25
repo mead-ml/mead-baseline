@@ -36,7 +36,7 @@ __all__ = []
 export = exporter(__all__)
 logger = logging.getLogger('mead')
 
-
+REMOTE_MODEL_NAME = 'model'
 VECTORIZER_SHAPE_MAP = {
     Token1DVectorizer: [1, 100],
     Dict1DVectorizer: [1, 100],
@@ -114,19 +114,23 @@ class PytorchONNXExporter(Exporter):
                 dynamics[k] = {1: 'sequence'}
         return dynamics
 
-    def _run(self, basename, output_dir, project=None, name=None, model_version=None, use_version=False, zip_results=True, **kwargs):
+    def _run(self, basename, output_dir, project=None, name=None, model_version=None, use_version=False, zip_results=True,
+             remote=False, **kwargs):
         logger.warning("Pytorch exporting is experimental and is not guaranteed to work for plugin models.")
         client_output, server_output = get_output_paths(
             output_dir,
             project, name,
             model_version,
-            kwargs.get('remote', False),
+            remote,
             use_version=use_version
         )
         logger.info("Saving vectorizers and vocabs to %s", client_output)
         logger.info("Saving serialized model to %s", server_output)
 
         model, vectorizers, vocabs, model_name = self.load_model(basename)
+        # Triton server wants to see a specific name
+        if remote:
+            model_name = REMOTE_MODEL_NAME
         model = self.apply_model_patches(model)
 
         data = self.create_example_input(vocabs, vectorizers)

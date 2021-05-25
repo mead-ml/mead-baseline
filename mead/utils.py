@@ -475,17 +475,9 @@ def get_output_paths(
     ):
     """Create the output paths for export.
 
-    Old behavior:
-    if remote == True:
-        f"{output_dir}/client/{basename(output_dir)}/{version}"
-        f"{output_dir}/server/{basename(output_dir)}/{version}"
-    else:
-        f"{output_dir}/{version}"
-
-    New Behavior:
     if remote == True:
         f"{output_dir}/client/{project}/{name}/{version}"
-        f"{output_dir}/server/{project}/{name}/{version}"
+        f"{output_dir}/server/{project}/{name}/{version}/model.onnx"
     else:
         f"{output_dir}/{project}/{name}/{version}"
 
@@ -500,7 +492,7 @@ def get_output_paths(
     :param name: `str` The second subdir in the created path.
     :param version: `str` The model version.
     :param remote: `bool` Should we create separate client and server bundles?
-    :param maker_server: `bool` When false don't actually make the directory that the
+    :param make_server: `bool` When false don't actually make the directory that the
         server part will go in. This is because TF really wants to make it itself.
     :param use_version: Should we use
     :returns: `Tuple[str, str]` The client and server output dirs.
