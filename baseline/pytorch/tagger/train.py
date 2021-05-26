@@ -23,6 +23,7 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
             if checkpoint:
                 model['checkpoint'] = checkpoint
             model = create_model_for('tagger', **model)
+        self.save_state_dict = bool(kwargs.get('save_state_dict', False))
         self.grad_accum = int(kwargs.get('grad_accum', 1))
         self.gpus = int(kwargs.get('gpus', 1))
         # By default support IOB1/IOB2
@@ -45,11 +46,19 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
         self.nsteps = kwargs.get('nsteps', six.MAXSIZE)
 
     def save(self, model_file):
-        self.model.save(model_file)
+        if self.save_state_dict:
+            save_checkpoint(self.model, model_file, self.optimizer.global_step, tick_type='step')
+        else:
+            self.model.save(model_file)
 
     @staticmethod
     def _get_batchsz(batch_dict):
         return batch_dict['y'].shape[0]
+
+    def get_model_file(self, basedir):
+        if self.save_state_dict:
+            return os.path.join(basedir, f'checkpoint-{os.getpid()}')
+        return get_model_file('tagger', 'pytorch', basedir)
 
     def process_output(self, guess, truth, sentence_lengths, ids, handle=None, txts=None):
 
@@ -173,7 +182,9 @@ def fit(model_params, ts, vs, es, **kwargs):
 
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
     epochs = int(kwargs.get('epochs', 20))
-    model_file = get_model_file('tagger', 'pytorch', kwargs.get('basedir'))
+
+    kwargs.get('save_state_dict')
+
     conll_output = kwargs.get('conll_output', None)
     txts = kwargs.get('txts', None)
 
@@ -200,7 +211,8 @@ def fit(model_params, ts, vs, es, **kwargs):
 
     after_train_fn = kwargs.get('after_train_fn', None)
     trainer = create_trainer(model_params, **kwargs)
-
+    basedir = kwargs.get('basedir', './')
+    model_file = trainer.get_model_file(basedir)
     last_improved = 0
     for epoch in range(epochs):
 
@@ -227,7 +239,13 @@ def fit(model_params, ts, vs, es, **kwargs):
 
     if es is not None:
         logger.info('Reloading best checkpoint')
-        model = torch.load(model_file)
+        if trainer.save_state_dict:
+            wildcard = os.path.basename(model_file)
+            checkpoint, _ = find_latest_checkpoint(basedir, wildcard=wildcard)
+            model = trainer.model
+            model.load_state_dict(torch.load(checkpoint))
+        else:
+            model = torch.load(model_file)
         trainer = create_trainer(model, **kwargs)
         test_metrics = trainer.test(es, reporting_fns, conll_output=conll_output, txts=txts, phase='Test')
     return test_metrics

@@ -3652,6 +3652,7 @@ def rm_old_checkpoints(base_path, current_epoch, last_n=10):
 
 def find_latest_checkpoint(checkpoint_dir: str, wildcard="checkpoint") -> Tuple[str, int]:
     step_num = 0
+    checkpoint = None
     for f in glob.glob(os.path.join(checkpoint_dir, f"{wildcard}*")):
         base = os.path.basename(f)
         if "-" not in base:
