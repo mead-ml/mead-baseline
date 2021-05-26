@@ -116,7 +116,6 @@ class PytorchONNXExporter(Exporter):
 
     def _run(self, basename, output_dir, project=None, name=None, model_version=None, use_version=False, zip_results=True,
              remote=False, **kwargs):
-        logger.warning("Pytorch exporting is experimental and is not guaranteed to work for plugin models.")
         client_output, server_output = get_output_paths(
             output_dir,
             project, name,
@@ -129,8 +128,7 @@ class PytorchONNXExporter(Exporter):
 
         model, vectorizers, vocabs, model_name = self.load_model(basename)
         # Triton server wants to see a specific name
-        if remote:
-            model_name = REMOTE_MODEL_NAME
+
         model = self.apply_model_patches(model)
 
         data = self.create_example_input(vocabs, vectorizers)
@@ -154,10 +152,12 @@ class PytorchONNXExporter(Exporter):
         logger.info("Model inputs: %s", inputs)
         logger.info("Model outputs: %s", outputs)
 
+        onnx_model_name = REMOTE_MODEL_NAME if remote else model_name
+
         torch.onnx.export(model, data,
                           verbose=True,
                           dynamic_axes=dynamics,
-                          f=f'{server_output}/{model_name}.onnx',
+                          f=f'{server_output}/{onnx_model_name}.onnx',
                           input_names=inputs,
                           output_names=outputs,
                           opset_version=self.onnx_opset,
