@@ -2,6 +2,7 @@ import os
 import logging
 import torch
 import torch.nn as nn
+from typing import Dict
 import baseline as bl
 from eight_mile.pytorch.layers import (
     CRF,
@@ -179,6 +180,47 @@ class PytorchONNXExporter(Exporter):
         model_name = os.path.basename(model_name)
         return model, vectorizers, vocabs, model_name
 
+
+class Embedder(nn.ModuleList):
+    def __init__(self, target):
+        super().__init__()
+        self.target = target
+
+    def forward(self, inputs: Dict[str, torch.Tensor]) -> torch.FloatTensor:
+        return self.target.embed(inputs)
+
+    @property
+    def embeddings(self):
+        return self.target.embeddings
+
+    @property
+    def lengths_key(self):
+        return self.target.lengths_key
+
+    @property
+    def embed_output_dim(self):
+        return self.target.embed_output_dim
+
+@export
+@register_exporter(task='classify', name='embed')
+class EmbedPytorchONNXExporter(PytorchONNXExporter):
+    def __init__(self, task, **kwargs):
+        super().__init__(task)
+        self.sig_name = 'embed_text'
+
+    def load_model(self, model_dir):
+        model_name = find_model_basename(model_dir)
+        vectorizers = load_vectorizers(model_dir)
+        vocabs = load_vocabs(model_dir)
+        model = load_model_for(self.task.task_name(), model_name, device='cpu')
+        model = Embedder(model)
+        model = model.cpu()
+        model.eval()
+        model_name = os.path.basename(model_name)
+        return model, vectorizers, vocabs, model_name
+
+    def create_example_output(self, model):
+        return torch.ones((1, model.embed_output_dim), dtype=torch.float32)
 
 @export
 @register_exporter(task='classify', name='default')
