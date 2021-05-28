@@ -1,4 +1,5 @@
 import collections
+import copy
 import tempfile
 import unicodedata
 import re
@@ -1665,21 +1666,24 @@ class GPT2Vectorizer1D(AbstractVectorizer, HasSubwordTokens):
         return self.mxlen,
 
 
-class FBStyleSentencePieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
-    def __init__(self, special_tokens={"<unk>", "<pad>", "<s>", "</s>"},
-                 vocab_offsets={'<s>': 0, '<pad>': 1, '</s>': 2, '<unk>': 3},
+@register_vectorizer(name='xlmr-spm1d')
+class XLMRSentencePieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
+    SPECIAL_TOKENS = {"<unk>", "<pad>", "<s>", "</s>"}
+    VOCAB_OFFSETS = {'<s>': 0, '<pad>': 1, '</s>': 2, '<unk>': 3}
+
+    def __init__(self,
                  **kwargs):
         """Loads a BPE tokenizer"""
         super().__init__(kwargs.get('transform_fn'),
                          kwargs.get('emit_begin_tok', []),
                          kwargs.get('emit_end_tok', []))
-        self.max_seen = 128
+        self.max_seen = 512
         self.model_file = kwargs.get('model_file')
         self.tokenizer = spm.SentencePieceProcessor(self.model_file)
 
 
-        self._special_tokens = special_tokens
-        self._vocab = vocab_offsets
+        self._special_tokens = XLMRSentencePieceVectorizer1D.SPECIAL_TOKENS
+        self._vocab = XLMRSentencePieceVectorizer1D.VOCAB_OFFSETS
 
         self.mxlen = kwargs.get('mxlen', -1)
 
@@ -1767,17 +1771,111 @@ class FBStyleSentencePieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
         return self.mxlen,
 
 
-@register_vectorizer(name='xlmr-spm1d')
-class XLMRSentencePieceVectorizer1D(FBStyleSentencePieceVectorizer1D):
-    pass
-
-
 @register_vectorizer(name='camembert-spm1d')
-class CamembertSentencePieceVectorizer1D(FBStyleSentencePieceVectorizer1D):
-    def __init__(self, special_tokens={"<unk>", "<pad>", "<s>", "</s>"},
-                 vocab_offsets={'<s>': 1, '<pad>': 0, '</s>': 2, '<unk>': 3},
+class CamembertSentencePieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
+
+    SPECIAL_TOKENS={"<unk>", "<pad>", "<s>", "</s>"}
+    VOCAB_OFFSETS={'<s>': 5, '<pad>': 1, '</s>': 6, '<unk>': 3}
+
+    def __init__(self,
                  **kwargs):
-        super().__init__(special_tokens, vocab_offsets, **kwargs)
+        """Loads a BPE tokenizer"""
+        super().__init__(kwargs.get('transform_fn'),
+                         kwargs.get('emit_begin_tok', []),
+                         kwargs.get('emit_end_tok', []))
+        self.max_seen = 512
+        self.model_file = kwargs.get('model_file')
+        self.tokenizer = spm.SentencePieceProcessor(self.model_file)
+
+
+        self._special_tokens = CamembertSentencePieceVectorizer1D.SPECIAL_TOKENS
+        self._vocab = copy.deepcopy(CamembertSentencePieceVectorizer1D.VOCAB_OFFSETS)
+
+        self.mxlen = kwargs.get('mxlen', -1)
+
+        Offsets.INDICES['PAD'] = self._vocab['<pad>']
+        Offsets.INDICES['GO'] = self._vocab['<s>']
+        Offsets.INDICES['EOS'] = self._vocab['</s>']
+        Offsets.INDICES['UNK'] = self._vocab['<unk>']
+        offset = len(CamembertSentencePieceVectorizer1D.VOCAB_OFFSETS)
+        for i in range(len(self.tokenizer)):
+            v = self.tokenizer.IdToPiece(i)
+            self._vocab[v] = i + offset
+        self._vocab['<mask>'] = offset + len(self.tokenizer) + 1
+
+    @property
+    def vocab(self):
+        return self._vocab
+
+    @property
+    def special_tokens(self) -> Set[str]:
+        return self._special_tokens
+
+    @property
+    def subword_sentinel(self):
+        return getattr(self.tokenizer, "subword_sentinel", "@@")
+
+    def valid_label_indices(self, tokens: Iterable) -> List[int]:
+        indices = []
+        in_subword = False
+        for i, token in enumerate(tokens):
+            if token in self.special_tokens:
+                in_subword = False
+                continue
+            if not in_subword:
+                indices.append(i)
+                if token.endswith(self.subword_sentinel):
+                    in_subword = True
+            else:
+                if not token.endswith(self.subword_sentinel):
+                    in_subword = False
+        return indices
+
+    def count(self, tokens):
+        seen = 0
+        counter = collections.Counter()
+        for tok in self.iterable(tokens):
+            counter[tok] += 1
+            seen += 1
+        self.max_seen = max(self.max_seen, seen)
+        return counter
+
+    def iterable(self, tokens):
+        for t in self.emit_begin_tok:
+            yield t
+
+        if not isinstance(tokens, str):
+            tokens = ' '.join(tokens)
+
+        spm_tokens = self.tokenizer.EncodeAsPieces(tokens)
+        for t in spm_tokens:
+            yield t
+        for t in self.emit_end_tok:
+            yield t
+
+    def _next_element(self, tokens, vocab):
+        for atom in self.iterable(tokens):
+            value = vocab.get(atom, Offsets.UNK)
+            yield value
+
+    def run(self, tokens, vocab):
+
+        if self.mxlen < 0:
+            self.mxlen = self.max_seen
+        vec1d = pads(self.mxlen, dtype=np.long)
+        for i, atom in enumerate(self._next_element(tokens, vocab)):
+            if i == self.mxlen:
+                i -= len(self.emit_end_tok)
+                for j, x in enumerate(self.emit_end_tok):
+                    vec1d[i + j] = vocab.get(x)
+                i = self.mxlen - 1
+                break
+            vec1d[i] = atom
+        valid_length = i + 1
+        return vec1d, valid_length
+
+    def get_dims(self):
+        return self.mxlen,
 
 
 @export
