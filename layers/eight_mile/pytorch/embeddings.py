@@ -307,6 +307,7 @@ class LearnedPositionalLookupTableEmbeddingsWithBias(LookupTableEmbeddings):
         super().__init__(**kwargs)
         self.dropout = nn.Dropout(kwargs.get('dropout', 0.0))
         self.mxlen = int(kwargs.get('mxlen', 512))
+        self.offset = int(kwargs.get("offset", 0))
         self.pos_embeddings = nn.Embedding(self.mxlen, self.get_dsz())
         self.bias = nn.Parameter(torch.zeros(self.get_dsz()))
 
@@ -317,7 +318,7 @@ class LearnedPositionalLookupTableEmbeddingsWithBias(LookupTableEmbeddings):
 
     def positional(self, length):
         return self.pos_embeddings(
-            torch.arange(length, dtype=torch.long, device=self.pos_embeddings.weight.device)
+            torch.arange(self.offset, self.offset + length, dtype=torch.long, device=self.pos_embeddings.weight.device)
         ).unsqueeze(0)
 
 

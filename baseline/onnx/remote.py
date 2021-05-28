@@ -82,7 +82,6 @@ class RemoteONNXPredictModel(RemoteModel):
         if 'lengths' in self.inputs:
             require_length = True
         for k, v in inputs.items():
-            # TODO: fix this hack
             if k not in self.inputs and not k.endswith('_lengths'):
                 logger.warning("Unexpected input: %s, ignoring", k)
 
@@ -103,7 +102,6 @@ class RemoteONNXPredictModel(RemoteModel):
         for k, v in self.outputs.items():
             output = grpc_service_pb2.ModelInferRequest().InferRequestedOutputTensor()
             output.name = k
-            #output.datatype = v
             request.outputs.extend([output])
 
         return request
