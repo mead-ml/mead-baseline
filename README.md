@@ -28,8 +28,6 @@ If you are using tensorflow 2 as your deep learning backend you will need to hav
 
 `pip install mead-baseline[tf2]`
 
-*Note for TF 2.1 users*: If you are using TF 2.1, you cannot just `pip install tensorflow_addons` (or the command above) -- it will pull a version that is dependent on a more recent version with breaking changes.  If you are running TF 2.1, use a pinned version of the addons: `pip install tensorflow_addons==0.9.1`
-
 ### From the repository
 
 If you have a clone of this repostory and want to install from it:
@@ -45,7 +43,7 @@ This first installs `mead-layers` AKA 8 mile, a tiny layers API containing PyTor
 
 ### Dockerhub
 
-We use Github CI/CD to automatically cut releases for TensorFlow (1.x and 2.x) and PyTorch via this project:
+We use Github CI/CD to automatically release TensorFlow and PyTorch via this project:
 
 https://github.com/mead-ml/mead-gpu
 
@@ -54,7 +52,7 @@ Links to the latest dockerhub images can be found there
 ## A Note About Versions
 
 Deep Learning Frameworks are evolving quickly and changes are not always
-backwards compatible. We recommend recent versions of whichever framework is being used underneath.  We currently run on TF versions between 1.13 and 2.3, and we recommend using at least TF 2.1.
+backwards compatible. We recommend recent versions of whichever framework is being used underneath.  We currently run on TF versions between 1.13 and 2.4.1.
 The PyTorch backend requires at least version 1.3.0, though we recommend using a more recent version.
 
 ## Citing
