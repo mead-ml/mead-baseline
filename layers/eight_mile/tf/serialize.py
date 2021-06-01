@@ -448,8 +448,8 @@ def to_attn_pool_array(tf_attn_pool: tf.keras.layers.Layer, name: str) -> Dict:
         d.update(to_weight_array(tf_attn_pool.reduction1.w_Q, f"{name}/reduction1/w_Q"))
         d.update(to_weight_array(tf_attn_pool.reduction1.w_K, f"{name}/reduction1/w_K"))
 
-        d.update(to_weight_array(tf_attn_pool.reduction1.w_Q, f"{name}/reduction2/w_Q"))
-        d.update(to_weight_array(tf_attn_pool.reduction1.w_K, f"{name}/reduction2/w_K"))
+        d.update(to_weight_array(tf_attn_pool.reduction2.w_Q, f"{name}/reduction2/w_Q"))
+        d.update(to_weight_array(tf_attn_pool.reduction2.w_K, f"{name}/reduction2/w_K"))
     return d
 
 
@@ -473,7 +473,7 @@ def from_attn_pool_array(tf_attn_pool: tf.keras.layers.Layer, d: Dict, name: str
 
 
 def save_transformer_de_npz(tf_de: tf.keras.layers.Layer, npz: str, embeddings_keys: List[str] = None,
-                            name: str = "DE", verbose: bool = False):
+                            name: str = "TLM", verbose: bool = False):
     """Save a Transformer de file out
 
     A Dual-Encoder will have 2 transformer layers with shared weights.  Because of this, when we save we only
@@ -486,7 +486,7 @@ def save_transformer_de_npz(tf_de: tf.keras.layers.Layer, npz: str, embeddings_k
     """
 
     enc = {}
-    transformer = tf_de.encoder.transformer
+    transformer = tf_de.transformer
     enc.update(to_encoder_stack_array(transformer, name=f"{name}/TransformerEncoderStack"))
     enc_keys_to_write = embeddings_keys if embeddings_keys else list(tf_de.embeddings.keys())
 
@@ -511,7 +511,7 @@ def save_transformer_de_npz(tf_de: tf.keras.layers.Layer, npz: str, embeddings_k
 
 def load_transformer_de_npz(tf_de: tf.keras.layers.Layer,
                             npz: str, embeddings_keys: List[str] = None,
-                            name: str = "DE"):
+                            name: str = "TLM"):
     """Load a dual-encoder from NPZ
 
     A Dual-Encoder will have 2 transformer layers with shared weights.  Because of this, when we save we only
@@ -539,16 +539,18 @@ def load_transformer_de_npz(tf_de: tf.keras.layers.Layer,
 
     from_attn_pool_array(tf_de.reduction, d, name=f"{name}/ReductionLayer")
 
-    ff1 = tf_de.ff1
-    if isinstance(ff1, tf.keras.layers.Dense):
-        from_weight_array(ff1, d, f"{name}/ff1")
-    elif not isinstance(ff1, PassThru):
-        raise Exception("We dont currently support stacking layers in dual-encoder serialization")
-    ff2 = tf_de.ff2
-    if isinstance(ff2, tf.keras.layers.Dense):
-        from_weight_array(ff2, d, f"{name}/ff2")
-    elif not isinstance(ff2, PassThru):
-        raise Exception("We dont currently support stacking layers in dual-encoder serialization")
+    if hasattr(tf_de, 'ff1'):
+        ff1 = tf_de.ff1
+        if isinstance(ff1, tf.keras.layers.Dense):
+            from_weight_array(ff1, d, f"{name}/ff1")
+        elif not isinstance(ff1, PassThru):
+            raise Exception("We dont currently support stacking layers in dual-encoder serialization")
+    if hasattr(tf_de, 'ff2'):
+        ff2 = tf_de.ff2
+        if isinstance(ff2, tf.keras.layers.Dense):
+            from_weight_array(ff2, d, f"{name}/ff2")
+        elif not isinstance(ff2, PassThru):
+            raise Exception("We dont currently support stacking layers in dual-encoder serialization")
 
 
 def load_tlm_npz(tf_tlm: tf.keras.layers.Layer, npz: str, embeddings_key: str = 'x', name: str = "TLM"):
