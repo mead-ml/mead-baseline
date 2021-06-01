@@ -24,6 +24,7 @@ try:
 except:
     pass
 
+
 __all__ = []
 export = exporter(__all__)
 
@@ -600,6 +601,47 @@ class SavableFastBPE:
 
 
 @export
+class NativeBPEVocab:
+    """
+    Use fastBPE for subwords.  If you want to use this class, make sure you have it installed
+    """
+    def __init__(self, vocab_path, codes_path, extra_tokens=["[CLS]", "[MASK]"]):
+        from vecxx import BPEVocab
+        codes_path = get_file_or_url(codes_path)
+        vocab_path = get_file_or_url(vocab_path)
+        with open(codes_path, 'rb') as rf:
+            self.codes = rf.read()
+        with open(vocab_path, 'rb') as rf:
+            self.vocab = rf.read()
+        self.extra_tokens = extra_tokens
+        self.bpe = BPEVocab(vocab_path, codes_path,
+                            pad=Offsets.PAD, start=Offsets.GO, end=Offsets.EOS, unk=Offsets.UNK,
+                            pad_str=Offsets.VALUES[Offsets.PAD],
+                            start_str=Offsets.VALUES[Offsets.GO],
+                            end_str=Offsets.VALUES[Offsets.EOS],
+                            unk_str=Offsets.VALUES[Offsets.UNK],
+                            extra_tokens=self.extra_tokens
+                            )
+
+    def __getstate__(self):
+        return {'codes': self.codes, 'vocab': self.vocab, 'extra_tokens': self.extra_tokens}
+
+    def __setstate__(self, state):
+        from vecxx import BPEVocab
+        with tempfile.NamedTemporaryFile() as codes, tempfile.NamedTemporaryFile() as vocab:
+            codes.write(state['codes'])
+            vocab.write(state['vocab'])
+            self.bpe = BPEVocab(vocab.name, codes.name,
+                                pad=Offsets.PAD, start=Offsets.GO, end=Offsets.EOS, unk=Offsets.UNK,
+                                pad_str=Offsets.VALUES[Offsets.PAD],
+                                start_str=Offsets.VALUES[Offsets.GO],
+                                end_str=Offsets.VALUES[Offsets.EOS],
+                                unk_str=Offsets.VALUES[Offsets.UNK],
+                                extra_tokens=self.extra_tokens
+                                )
+
+
+@export
 class HasPredefinedVocab:
     """Define an interface for predefined vocabs.  Using a sub-class of this means readers dont need to collect a vocab
     """
@@ -641,6 +683,311 @@ class HasSubwordTokens(HasPredefinedVocab):
         :return:
         """
 
+@export
+@register_vectorizer(name='vecxx-bpe1d')
+class BPENativeVectorizer1D(Vectorizer, HasSubwordTokens):
+
+
+    def __init__(self, model_file=None, vocab_file=None, transform_fn=None, emit_begin_tok=[], emit_end_tok=[],
+                 extra_tokens=["[CLS]", "[MASK]"],
+                 mxlen=-1,
+                 max_seen=128,
+                 **kwargs):
+        super().__init__()
+        from vecxx import VocabVectorizer
+        self._bpe_vocab = NativeBPEVocab(vocab_file, model_file, extra_tokens=extra_tokens)
+        # Why do this at all?
+        vocab_list = self.read_vocab(vocab_file)
+        self._vocab = {k: i for i, k in enumerate(vocab_list)}
+        self.transform_fn = transform_fn
+        self.emit_begin_tok = emit_begin_tok
+        self.emit_end_tok = emit_end_tok
+        if self.transform_fn:
+            self.v = VocabVectorizer(self._bpe_vocab.bpe, transform=transform_fn, emit_begin_tok=emit_begin_tok, emit_end_tok=emit_end_tok)
+        else:
+            self.v = VocabVectorizer(self._bpe_vocab.bpe, emit_begin_tok=emit_begin_tok, emit_end_tok=emit_end_tok)
+        self.mxlen = mxlen
+        self.max_seen = max_seen
+
+    @property
+    def vocab(self):
+        return self._vocab
+
+    @property
+    def special_tokens(self) -> Set[str]:
+        return self._bpe_vocab.bpe.special_tokens.keys()
+
+    @property
+    def subword_sentinel(self):
+        return "@@"
+
+    def iterable(self, tokens):
+        return self.v.convert_to_pieces(tokens)
+
+    def reset(self):
+        pass
+
+    def valid_label_indices(self, tokens: Iterable) -> List[int]:
+        indices = []
+        in_subword = False
+        for i, token in enumerate(tokens):
+            if token in self.special_tokens:
+                in_subword = False
+                continue
+            if not in_subword:
+                indices.append(i)
+                if token.endswith(self.subword_sentinel):
+                    in_subword = True
+            else:
+                if not token.endswith(self.subword_sentinel):
+                    in_subword = False
+        return indices
+
+    def read_vocab(self, file_or_url):
+        offset = max(self._bpe_vocab.bpe.special_tokens.values()) + 1
+        vocab = [f"_{i}" for i in range(offset)]
+        for k, v in self._bpe_vocab.bpe.special_tokens.items():
+            vocab[v] = k
+        with open_file_or_url(file_or_url, "r") as f:
+            for line in f.readlines():
+                token = line.split()[0].strip()
+                vocab.append(token)
+        return vocab
+
+    def count(self, tokens):
+        seen = 0
+        counter = collections.Counter()
+        for tok in self.iterable(tokens):
+            counter[tok] += 1
+            seen += 1
+        self.max_seen = max(self.max_seen, seen)
+        return counter
+
+    def run(self, tokens, vocab=None):
+        if vocab is not None and vocab != self.vocab:
+            raise Exception("Unexpected vocab")
+        if self.mxlen < 0:
+            self.mxlen = self.max_seen
+        return np.array(self.v.convert_to_ids(tokens, self.mxlen))
+
+    def get_dims(self):
+        return self.mxlen,
+
+@export
+@register_vectorizer(name='vecxx-bpe-secondary-feature-dict1d')
+class BPENativeSecondaryFeatureDict1DVectorizer(BPENativeVectorizer1D):
+    """We need to split on the primary feature but use a secondary feature's value
+
+    Some options concern what to do with the non primary index.  For a label, this would typically
+    be a `<PAD>` token in the non first position of a sub-word, but that may not be desirable here
+
+    To support bot ways, there is an optional `apply_all_subwords`, which defaults to True.  If this
+    is turned on, it means that we want to use the feature value of
+
+
+    """
+    def __init__(self, **kwargs):
+        self.s_emit_begin_tok = kwargs.pop('emit_begin_tok', [])
+        self.s_emit_end_tok = kwargs.pop('emit_end_tok', [])
+        super().__init__(emit_begin_tok=[], emit_end_tok=[], **kwargs)
+        self.field = kwargs.get('fields', kwargs.get('field'))
+        self.primary_feature = kwargs.get('primary_feature', 'text')
+        self.apply_all_subwords = kwargs.get('apply_all_subwords', True)
+
+    def iterable(self, tokens):
+        for t in self.s_emit_begin_tok:
+            yield t
+        for t in tokens:
+            t_word = t[self.primary_feature]
+            t_feature = t[self.field]
+            if t_word in Offsets.VALUES:
+                yield t_feature
+            elif t == '<unk>':
+                yield t_feature
+            elif t == '<eos>':
+                yield t_feature
+            else:
+                subwords = self.v.convert_to_pieces([t_word])
+                if self.apply_all_subwords:
+                    subwords = [t_feature] * len(subwords)
+                else:
+                    subwords = [Offsets.VALUES[Offsets.PAD]] * len(subwords)
+                    subwords[0] = t_feature
+                for x in subwords:
+                    yield x
+        for t in self.s_emit_end_tok:
+            yield t
+
+    def _next_element(self, tokens, vocab):
+        for atom in self.iterable(tokens):
+            value = vocab.get(atom, vocab.get(Offsets.VALUES[Offsets.UNK]))  # This shouldnt actually happen
+            yield value
+
+    def run(self, tokens, vocab):
+        if self.mxlen < 0:
+            self.mxlen = self.max_seen
+        i = 0
+        vec1d = pads(self.mxlen, dtype=np.long)
+        for i, atom in enumerate(self._next_element(tokens, vocab)):
+            if i == self.mxlen:
+                i -= len(self.emit_end_tok)
+                for j, x in enumerate(self.emit_end_tok):
+                    vec1d[i + j] = vocab.get(x)
+                i = self.mxlen - 1
+                break
+            vec1d[i] = atom
+        valid_length = i + 1
+        return vec1d, valid_length
+
+
+@export
+@register_vectorizer(name='vecxx-bpe-label-dict1d')
+class BPENativeLabelDict1DVectorizer(BPENativeVectorizer1D):
+
+    def __init__(self, **kwargs):
+        self.s_emit_begin_tok = kwargs.pop('emit_begin_tok', [])
+        self.s_emit_end_tok = kwargs.pop('emit_end_tok', [])
+        super().__init__(emit_begin_tok=[], emit_end_tok=[], **kwargs)
+        self.field = kwargs.get('fields', kwargs.get('field', 'text'))
+        self.label = kwargs.get('label', 'label')
+
+
+    def iterable(self, tokens):
+        for t in self.s_emit_begin_tok:
+            yield t
+        for t in tokens:
+            t_word = t[self.field]
+            t_label = t[self.label]
+            if t_word in Offsets.VALUES:
+                yield t_label
+            elif t == '<unk>':
+                yield t_label
+            elif t == '<eos>':
+                yield t_label
+            else:
+                subwords = self.v.convert_to_pieces([t_word])
+                subwords = [Offsets.VALUES[Offsets.PAD]] * len(subwords)
+                subwords[0] = t_label
+                for x in subwords:
+                    yield x
+        for t in self.s_emit_end_tok:
+            yield t
+
+    def _next_element(self, tokens, vocab):
+        for atom in self.iterable(tokens):
+            value = vocab.get(atom, vocab.get(Offsets.VALUES[Offsets.UNK]))  # This shouldnt actually happen
+            yield value
+
+    def run(self, tokens, vocab):
+        if self.mxlen < 0:
+            self.mxlen = self.max_seen
+        i = 0
+        vec1d = pads(self.mxlen, dtype=np.long)
+        for i, atom in enumerate(self._next_element(tokens, vocab)):
+            if i == self.mxlen:
+                i -= len(self.emit_end_tok)
+                for j, x in enumerate(self.emit_end_tok):
+                    vec1d[i + j] = vocab.get(x)
+                i = self.mxlen - 1
+                break
+            vec1d[i] = atom
+        valid_length = i + 1
+        return vec1d, valid_length
+
+@export
+@register_vectorizer(name='vecxx-bpe1d-dict1d')
+class BPENativeDict1DVectorizer(Vectorizer, HasSubwordTokens):
+
+    def __init__(self, model_file=None, vocab_file=None, transform_fn=None, emit_begin_tok=[], emit_end_tok=[],
+                 extra_tokens=["[CLS]", "[MASK]"],
+                 mxlen=-1,
+                 max_seen=128,
+                 fields="text", delim='~~',
+                 **kwargs):
+        super().__init__()
+        from vecxx import VocabMapVectorizer
+        self.fields = listify(fields)
+        self.delim = delim
+        self._bpe_vocab = NativeBPEVocab(vocab_file, model_file, extra_tokens=extra_tokens)
+        vocab_list = self.read_vocab(vocab_file)
+        self._vocab = {k: i for i, k in enumerate(vocab_list)}
+        self.emit_begin_tok = emit_begin_tok
+        self.emit_end_tok = emit_end_tok
+
+        if transform_fn:
+            self.v = VocabMapVectorizer(self._bpe_vocab.bpe, transform=transform_fn, emit_begin_tok=emit_begin_tok, emit_end_tok=emit_end_tok, fields=self.fields, delim=delim)
+        else:
+            self.v = VocabMapVectorizer(self._bpe_vocab.bpe, emit_begin_tok=emit_begin_tok, emit_end_tok=emit_end_tok, fields=self.fields, delim=delim)
+        self.mxlen = mxlen
+        self.max_seen = max_seen
+
+    @property
+    def vocab(self):
+        return self._vocab
+
+    @property
+    def special_tokens(self) -> Set[str]:
+        return self._bpe_vocab.special_tokens.keys()
+
+    @property
+    def subword_sentinel(self):
+        return "@@"
+
+    def iterable(self, tokens):
+        return self.v.convert_to_pieces(tokens)
+
+    def reset(self):
+        pass
+
+    def valid_label_indices(self, tokens: Iterable) -> List[int]:
+        indices = []
+        in_subword = False
+        for i, token in enumerate(tokens):
+            if token in self.special_tokens:
+                in_subword = False
+                continue
+            if not in_subword:
+                indices.append(i)
+                if token.endswith(self.subword_sentinel):
+                    in_subword = True
+            else:
+                if not token.endswith(self.subword_sentinel):
+                    in_subword = False
+        return indices
+
+    def read_vocab(self, file_or_url):
+        offset = max(self._bpe_vocab.bpe.special_tokens.values()) + 1
+        vocab = [f"_{i}" for i in range(offset)]
+        for k, v in self._bpe_vocab.bpe.special_tokens.items():
+            vocab[v] = k
+        with open_file_or_url(file_or_url, "r") as f:
+            for line in f.readlines():
+                token = line.split()[0].strip()
+                vocab.append(token)
+        return vocab
+
+    def count(self, tokens):
+        seen = 0
+        counter = collections.Counter()
+        for tok in self.iterable(tokens):
+            counter[tok] += 1
+            seen += 1
+        self.max_seen = max(self.max_seen, seen)
+        return counter
+
+    def run(self, tokens, vocab=None):
+        if vocab is not None and vocab != self.vocab:
+            raise Exception("Unexpected vocab")
+        if self.mxlen < 0:
+            self.mxlen = self.max_seen
+        return self.v.convert_to_ids(tokens, self.mxlen)
+
+    def get_dims(self):
+        return self.mxlen,
+
+
+
+
 # TODO: Most of our classes have the `Vectorizer` part of the name at the end
 @export
 @register_vectorizer(name='bpe1d')
@@ -663,6 +1010,7 @@ class BPEVectorizer1D(AbstractVectorizer, HasSubwordTokens):
     def __init__(self, **kwargs):
         """Loads a BPE tokenizer"""
         super().__init__(kwargs.get('transform_fn'), kwargs.get('emit_begin_tok', []), kwargs.get('emit_end_tok', []))
+
         self.max_seen = 128
         self.model_file = kwargs.get('model_file')
         self.vocab_file = kwargs.get('vocab_file')
