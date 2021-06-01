@@ -12,7 +12,7 @@ from baseline.vectorizers import BPEVectorizer1D
 from eight_mile.optz import *
 from eight_mile.tf.optz import *
 from eight_mile.tf.layers import create_distribute_strategy, read_yaml_tf, PairedModel
-from eight_mile.tf.serialize import save_transformer_seq2seq_npz
+from eight_mile.tf.serialize import save_transformer_de_npz
 
 logger = logging.getLogger(__file__)
 
@@ -274,7 +274,7 @@ def train():
                     logger.warning("Convert only flag specified.  Stopping after one step")
                     steps = optimizer.global_step.numpy()
                     npz_checkpoint = os.path.join(args.basedir, f'checkpoint-step-{steps}.npz')
-                    save_transformer_seq2seq_npz(model, npz_checkpoint)
+                    save_transformer_de_npz(model, npz_checkpoint)
                     return
 
                 if (i + 1) % report_on == 0:
@@ -287,7 +287,7 @@ def train():
                     if args.npz:
                         steps = optimizer.global_step.numpy()
                         npz_checkpoint = os.path.join(args.basedir, f'checkpoint-step-{steps}.npz')
-                        save_transformer_seq2seq_npz(model, npz_checkpoint)
+                        save_transformer_de_npz(model, npz_checkpoint)
 
             # How much time elapsed in minutes
             train_token_loss = avg_loss.avg

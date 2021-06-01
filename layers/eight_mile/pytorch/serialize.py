@@ -487,7 +487,7 @@ def from_attn_pool_array(pyt_attn_pool: nn.Module, d: Dict, name: str):
 
 
 def save_transformer_de_npz(pyt_de: nn.Module, npz: str, embeddings_keys: List[str] = None,
-                            name: str = "DE", verbose: bool = False):
+                            name: str = "TLM", verbose: bool = False):
     """Save a Transformer de file out
 
     A Dual-Encoder will have 2 transformer layers with shared weights.  Because of this, when we save we only
@@ -525,7 +525,7 @@ def save_transformer_de_npz(pyt_de: nn.Module, npz: str, embeddings_keys: List[s
 
 def load_transformer_de_npz(pyt: nn.Module,
                             npz: str, embeddings_keys: List[str] = None,
-                            name: str = "DE"):
+                            name: str = "TLM"):
     """Load a dual-encoder from NPZ
 
     A Dual-Encoder will have 2 transformer layers with shared weights.  Because of this, when we save we only
@@ -553,16 +553,18 @@ def load_transformer_de_npz(pyt: nn.Module,
 
     from_attn_pool_array(pyt.reduction_layer, d, name=f"{name}/ReductionLayer")
 
-    ff1 = pyt.ff1
-    if isinstance(ff1, nn.Linear):
-        from_weight_array(ff1, d, f"{name}/ff1")
-    elif not isinstance(ff1, nn.Identity):
-        raise Exception("We dont currently support stacking layers in dual-encoder serialization")
-    ff2 = pyt.ff2
-    if isinstance(ff2, nn.Linear):
-        from_weight_array(ff2, d, f"{name}/ff2")
-    elif not isinstance(ff2, nn.Identity):
-        raise Exception("We dont currently support stacking layers in dual-encoder serialization")
+    if hasattr(pyt, 'ff1'):
+        ff1 = pyt.ff1
+        if isinstance(ff1, nn.Linear):
+            from_weight_array(ff1, d, f"{name}/ff1")
+        elif not isinstance(ff1, nn.Identity):
+            raise Exception("We dont currently support stacking layers in dual-encoder serialization")
+    if hasattr(pyt, 'ff2'):
+        ff2 = pyt.ff2
+        if isinstance(ff2, nn.Linear):
+            from_weight_array(ff2, d, f"{name}/ff2")
+        elif not isinstance(ff2, nn.Identity):
+            raise Exception("We dont currently support stacking layers in dual-encoder serialization")
 
 
 def save_transformer_seq2seq_npz(pytorch_seq2seq: nn.Module, npz: str, src_embeddings_keys: List[str] = None,

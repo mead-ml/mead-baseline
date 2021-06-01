@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import baseline.embeddings
 import baseline.pytorch.embeddings
+from eight_mile.pytorch.serialize import load_transformer_de_npz
 from transformer_utils import MultiFileDatasetReader, TransformerBoWPairedModel
 from eight_mile.progress import create_progress_bar
 from eight_mile.utils import str2bool
@@ -121,7 +122,10 @@ if os.path.isdir(args.ckpt):
     logger.warning("Found latest checkpoint %s", checkpoint)
 else:
     checkpoint = args.ckpt
-model.load_state_dict(torch.load(checkpoint, map_location=torch.device('cpu')))
+if checkpoint.endswith(".npz"):
+    load_transformer_de_npz(model, checkpoint)
+else:
+    model.load_state_dict(torch.load(checkpoint, map_location=torch.device('cpu')))
 model.to(args.device)
 
 numerator = 0
