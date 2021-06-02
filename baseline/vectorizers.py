@@ -891,8 +891,8 @@ class BPENativeSecondaryFeatureDict1DVectorizer(BPENativeVectorizer1D):
 class BPENativeLabelDict1DVectorizer(BPENativeVectorizer1D):
 
     def __init__(self, **kwargs):
-        self.s_emit_begin_tok = kwargs.pop('emit_begin_tok', [])
-        self.s_emit_end_tok = kwargs.pop('emit_end_tok', [])
+        self.s_emit_begin_tok = listify(kwargs.pop('emit_begin_tok', []))
+        self.s_emit_end_tok = listify(kwargs.pop('emit_end_tok', []))
         super().__init__(emit_begin_tok=[], emit_end_tok=[], **kwargs)
         self.field = kwargs.get('fields', kwargs.get('field', 'text'))
         self.label = kwargs.get('label', 'label')
