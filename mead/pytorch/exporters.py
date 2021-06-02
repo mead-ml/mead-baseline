@@ -99,16 +99,20 @@ class PytorchONNXExporter(Exporter):
         return torch.ones((1, len(model.labels)))
 
     def create_model_inputs(self, model):
-        return [k for k, _ in model.embeddings.items()] + ['lengths']
+        return [k for k in model.embeddings.keys()] + ['lengths']
 
     def create_model_outputs(self, model):
+        if hasattr(model, 'output'):
+            if isinstance(model.output, nn.ModuleList):
+                logger.info("Multiheaded model")
+                return [f"output_{i}" for i in range(len(model.output))]
         return ['output']
 
     def create_dynamic_axes(self, model, vectorizers, inputs, outputs):
         dynamics = {}#'output': {1: 'sequence'}}
         for name in outputs:
             dynamics[name] = {1: 'sequence'}
-        for k, _ in model.embeddings.items():
+        for k in model.embeddings.keys():
             if k == 'char':
                 dynamics[k] = {1: 'sequence', 2: 'chars'}
             else:
