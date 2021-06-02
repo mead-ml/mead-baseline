@@ -631,6 +631,7 @@ class NativeBPEVocab:
         with tempfile.NamedTemporaryFile() as codes, tempfile.NamedTemporaryFile() as vocab:
             codes.write(state['codes'])
             vocab.write(state['vocab'])
+            self.extra_tokens = state['extra_tokens']
             self.bpe = BPEVocab(vocab.name, codes.name,
                                 pad=Offsets.PAD, start=Offsets.GO, end=Offsets.EOS, unk=Offsets.UNK,
                                 pad_str=Offsets.VALUES[Offsets.PAD],
@@ -684,7 +685,7 @@ class HasSubwordTokens(HasPredefinedVocab):
         """
 
 @export
-@register_vectorizer(name='vecxx-bpe1d')
+@register_vectorizer(name='bpe1d')
 class BPENativeVectorizer1D(Vectorizer, HasSubwordTokens):
 
 
@@ -700,14 +701,42 @@ class BPENativeVectorizer1D(Vectorizer, HasSubwordTokens):
         vocab_list = self.read_vocab(vocab_file)
         self._vocab = {k: i for i, k in enumerate(vocab_list)}
         self.transform_fn = transform_fn
-        self.emit_begin_tok = emit_begin_tok
-        self.emit_end_tok = emit_end_tok
+        self.emit_begin_tok = listify(emit_begin_tok)
+        self.emit_end_tok = listify(emit_end_tok)
         if self.transform_fn:
-            self.v = VocabVectorizer(self._bpe_vocab.bpe, transform=transform_fn, emit_begin_tok=emit_begin_tok, emit_end_tok=emit_end_tok)
+            self.v = VocabVectorizer(self._bpe_vocab.bpe, transform=transform_fn, emit_begin_tok=self.emit_begin_tok,
+                                     emit_end_tok=self.emit_end_tok)
         else:
-            self.v = VocabVectorizer(self._bpe_vocab.bpe, emit_begin_tok=emit_begin_tok, emit_end_tok=emit_end_tok)
+            self.v = VocabVectorizer(self._bpe_vocab.bpe, emit_begin_tok=self.emit_begin_tok, emit_end_tok=self.emit_end_tok)
         self.mxlen = mxlen
         self.max_seen = max_seen
+
+
+    def __getstate__(self):
+        return {
+            '_vocab': self._vocab,
+            'mxlen': self.mxlen,
+            'max_seen': self.max_seen,
+            'transform_fn': self.transform_fn,
+            '_bpe_vocab': self._bpe_vocab.__getstate__(),
+            'emit_begin_tok': self.emit_begin_tok,
+            'emit_end_tok': self.emit_end_tok
+        }
+
+    def __setstate__(self, state):
+        from vecxx import VocabVectorizer
+        self._vocab = state['_vocab']
+        self.mxlen = state['mxlen']
+        self.max_seen = state['max_seen']
+        self.transform_fn = state.get('transform_fn')
+        self._bpe_vocab.__setstate__(state['_bpe_vocab'])
+        self.emit_begin_tok = state['emit_begin_tok']
+        self.emit_end_tok = state['emit_end_tok']
+        if self.transform_fn:
+            self.v = VocabVectorizer(self._bpe_vocab.bpe, transform=self.transform_fn, emit_begin_tok=self.emit_begin_tok,
+                                     emit_end_tok=self.emit_end_tok)
+        else:
+            self.v = VocabVectorizer(self._bpe_vocab.bpe, emit_begin_tok=self.emit_begin_tok, emit_end_tok=self.emit_end_tok)
 
     @property
     def vocab(self):
@@ -774,7 +803,7 @@ class BPENativeVectorizer1D(Vectorizer, HasSubwordTokens):
         return self.mxlen,
 
 @export
-@register_vectorizer(name='vecxx-bpe-secondary-feature-dict1d')
+@register_vectorizer(name='bpe-secondary-feature-dict1d')
 class BPENativeSecondaryFeatureDict1DVectorizer(BPENativeVectorizer1D):
     """We need to split on the primary feature but use a secondary feature's value
 
@@ -793,6 +822,23 @@ class BPENativeSecondaryFeatureDict1DVectorizer(BPENativeVectorizer1D):
         self.field = kwargs.get('fields', kwargs.get('field'))
         self.primary_feature = kwargs.get('primary_feature', 'text')
         self.apply_all_subwords = kwargs.get('apply_all_subwords', True)
+
+    def __getstate__(self):
+        state = super().__getstate__()
+        state['s_emit_begin_tok'] = self.s_emit_begin_tok
+        state['s_emit_end_tok'] = self.s_emit_end_tok
+        state['field'] = self.field
+        state['primary_feature'] = self.primary_feature
+        state['apply_all_subwords'] = self.apply_all_subwords
+        return state
+
+    def __setstate__(self, state):
+        super().__setstate__(state)
+        self.s_emit_begin_tok = state['s_emit_begin_tok']
+        self.s_emit_end_tok = state['s_emit_end_tok']
+        self.field = state['field']
+        self.primary_feature = state['primary_feature']
+        self.apply_all_subwords = state['apply_all_subwords']
 
     def iterable(self, tokens):
         for t in self.s_emit_begin_tok:
@@ -841,7 +887,7 @@ class BPENativeSecondaryFeatureDict1DVectorizer(BPENativeVectorizer1D):
 
 
 @export
-@register_vectorizer(name='vecxx-bpe-label-dict1d')
+@register_vectorizer(name='bpe-label-dict1d')
 class BPENativeLabelDict1DVectorizer(BPENativeVectorizer1D):
 
     def __init__(self, **kwargs):
@@ -851,6 +897,21 @@ class BPENativeLabelDict1DVectorizer(BPENativeVectorizer1D):
         self.field = kwargs.get('fields', kwargs.get('field', 'text'))
         self.label = kwargs.get('label', 'label')
 
+
+    def __getstate__(self):
+        state = super().__getstate__()
+        state['s_emit_begin_tok'] = self.s_emit_begin_tok
+        state['s_emit_end_tok'] = self.s_emit_end_tok
+        state['field'] = self.field
+        state['label'] = self.label
+        return state
+
+    def __setstate__(self, state):
+        super().__setstate__(state)
+        self.s_emit_begin_tok = state['s_emit_begin_tok']
+        self.s_emit_end_tok = state['s_emit_end_tok']
+        self.field = state['field']
+        self.label = state['label']
 
     def iterable(self, tokens):
         for t in self.s_emit_begin_tok:
@@ -895,7 +956,7 @@ class BPENativeLabelDict1DVectorizer(BPENativeVectorizer1D):
         return vec1d, valid_length
 
 @export
-@register_vectorizer(name='vecxx-bpe1d-dict1d')
+@register_vectorizer(name='bpe-dict1d')
 class BPENativeDict1DVectorizer(Vectorizer, HasSubwordTokens):
 
     def __init__(self, model_file=None, vocab_file=None, transform_fn=None, emit_begin_tok=[], emit_end_tok=[],
@@ -911,15 +972,54 @@ class BPENativeDict1DVectorizer(Vectorizer, HasSubwordTokens):
         self._bpe_vocab = NativeBPEVocab(vocab_file, model_file, extra_tokens=extra_tokens)
         vocab_list = self.read_vocab(vocab_file)
         self._vocab = {k: i for i, k in enumerate(vocab_list)}
-        self.emit_begin_tok = emit_begin_tok
-        self.emit_end_tok = emit_end_tok
-
-        if transform_fn:
-            self.v = VocabMapVectorizer(self._bpe_vocab.bpe, transform=transform_fn, emit_begin_tok=emit_begin_tok, emit_end_tok=emit_end_tok, fields=self.fields, delim=delim)
+        self.emit_begin_tok = listify(emit_begin_tok)
+        self.emit_end_tok = listify(emit_end_tok)
+        self.transform_fn = transform_fn
+        if self.transform_fn:
+            self.v = VocabMapVectorizer(self._bpe_vocab.bpe, transform=self.transform_fn,
+                                        emit_begin_tok=self.emit_begin_tok, emit_end_tok=self.emit_end_tok,
+                                        fields=self.fields, delim=self.delim)
         else:
-            self.v = VocabMapVectorizer(self._bpe_vocab.bpe, emit_begin_tok=emit_begin_tok, emit_end_tok=emit_end_tok, fields=self.fields, delim=delim)
+            self.v = VocabMapVectorizer(self._bpe_vocab.bpe,
+                                        emit_begin_tok=self.emit_begin_tok, emit_end_tok=self.emit_end_tok,
+                                        fields=self.fields, delim=self.delim)
         self.mxlen = mxlen
         self.max_seen = max_seen
+
+    def __getstate__(self):
+        return {
+            '_vocab': self._vocab,
+            'mxlen': self.mxlen,
+            'max_seen': self.max_seen,
+            'transform_fn': self.transform_fn,
+            '_bpe_vocab': self._bpe_vocab.__getstate__(),
+            'emit_begin_tok': self.emit_begin_tok,
+            'emit_end_tok': self.emit_end_tok,
+            'fields': self.fields,
+            'delim': self.delim
+        }
+
+    def __setstate__(self, state):
+        from vecxx import VocabMapVectorizer
+        self._vocab = state['_vocab']
+        self.mxlen = state['mxlen']
+        self.max_seen = state['max_seen']
+        self.fields = state['fields']
+        self.transform_fn = state.get('transform_fn')
+        self._bpe_vocab = NativeBPEVocab.__new__(NativeBPEVocab)
+        self._bpe_vocab.__setstate__(state['_bpe_vocab'])
+
+        self.delim = state['delim']
+        self.emit_begin_tok = state['emit_begin_tok']
+        self.emit_end_tok = state['emit_end_tok']
+        if self.transform_fn:
+            self.v = VocabMapVectorizer(self._bpe_vocab.bpe, transform=self.transform_fn,
+                                        emit_begin_tok=self.emit_begin_tok, emit_end_tok=self.emit_end_tok, fields=self.fields, delim=self.delim)
+        else:
+            self.v = VocabMapVectorizer(self._bpe_vocab.bpe,
+                                        emit_begin_tok=self.emit_begin_tok, emit_end_tok=self.emit_end_tok, fields=self.fields, delim=self.delim)
+
+
 
     @property
     def vocab(self):
@@ -927,7 +1027,7 @@ class BPENativeDict1DVectorizer(Vectorizer, HasSubwordTokens):
 
     @property
     def special_tokens(self) -> Set[str]:
-        return self._bpe_vocab.special_tokens.keys()
+        return self._bpe_vocab.bpe.special_tokens.keys()
 
     @property
     def subword_sentinel(self):
@@ -990,7 +1090,7 @@ class BPENativeDict1DVectorizer(Vectorizer, HasSubwordTokens):
 
 # TODO: Most of our classes have the `Vectorizer` part of the name at the end
 @export
-@register_vectorizer(name='bpe1d')
+@register_vectorizer(name='bpe1d-compat')
 class BPEVectorizer1D(AbstractVectorizer, HasSubwordTokens):
     """Define a Baseline Vectorizer for BPE using fastBPE (https://github.com/glample/fastBPE) or
     subword-nmt (https://github.com/rsennrich/subword-nmt)
@@ -1118,7 +1218,7 @@ class BPEVectorizer1D(AbstractVectorizer, HasSubwordTokens):
 
 
 @export
-@register_vectorizer(name='bpe-secondary-feature-dict1d')
+@register_vectorizer(name='bpe-secondary-feature-dict1d-compat')
 class BPESecondaryFeatureDict1DVectorizer(BPEVectorizer1D):
     """We need to split on the primary feature but use a secondary feature's value
 
@@ -1166,7 +1266,7 @@ class BPESecondaryFeatureDict1DVectorizer(BPEVectorizer1D):
 
 
 @export
-@register_vectorizer(name='bpe-label-dict1d')
+@register_vectorizer(name='bpe-label-dict1d-compat')
 class BPELabelDict1DVectorizer(BPEVectorizer1D):
 
     def __init__(self, **kwargs):
@@ -1202,7 +1302,7 @@ class BPELabelDict1DVectorizer(BPEVectorizer1D):
 
 
 @export
-@register_vectorizer(name='bpe-dict1d')
+@register_vectorizer(name='bpe-dict1d-compat')
 class BPEDict1DVectorizer(BPEVectorizer1D):
 
     def __init__(self, **kwargs):
