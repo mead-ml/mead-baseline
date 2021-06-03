@@ -19,13 +19,7 @@ from baseline.utils import (
     find_model_basename,
 )
 from baseline.model import load_model_for
-from baseline.vectorizers import (
-    Dict1DVectorizer,
-    Char2DVectorizer,
-    Dict2DVectorizer,
-    Char1DVectorizer,
-    Token1DVectorizer,
-)
+
 from mead.utils import (
     get_output_paths,
     create_metadata,
@@ -38,13 +32,6 @@ export = exporter(__all__)
 logger = logging.getLogger('mead')
 
 REMOTE_MODEL_NAME = 'model'
-VECTORIZER_SHAPE_MAP = {
-    Token1DVectorizer: [1, 100],
-    Dict1DVectorizer: [1, 100],
-    Char2DVectorizer: [1, 100, 50],
-    Dict2DVectorizer: [1, 100, 50],
-    Char1DVectorizer: [1, 100],
-}
 
 FAKE_SENTENCE = """
 Common starlings may be kept as pets or as laboratory animals . Austrian <unk> Konrad Lorenz wrote of them in his book King Solomon 's Ring as " the poor man 's dog " and " something to love " , because nestlings are easily obtained from the wild and after careful hand rearing they are straightforward to look after . They adapt well to captivity , and thrive on a diet of standard bird feed and <unk> . Several birds may be kept in the same cage , and their <unk> makes them easy to train or study . The only disadvantages are their <unk> and indiscriminate defecation habits and the need to take precautions against diseases that may be transmitted to humans . As a laboratory bird , the common starling is second in numbers only to the domestic <unk> . 
@@ -65,10 +52,9 @@ def create_data_dict(vocabs, vectorizers, transpose=False, min_=0, max_=50, defa
     for k, v in vectorizers.items():
         data[k], feature_length = vectorizers[k].run(FAKE_SENTENCE.split(), vocabs[k])
         data[k] = torch.LongTensor(data[k]).unsqueeze(0)
+
         if not lengths:
             lengths = [feature_length]
-        # TODO: use the vectorizers, thats their job!!
-        # data[k][0][0] = 101
 
     lengths = torch.LongTensor(lengths)
 
