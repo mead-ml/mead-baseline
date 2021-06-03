@@ -33,24 +33,24 @@ logger = logging.getLogger('mead')
 
 REMOTE_MODEL_NAME = 'model'
 
-FAKE_SENTENCE = """
+S1D = """
 Common starlings may be kept as pets or as laboratory animals . Austrian <unk> Konrad Lorenz wrote of them in his book King Solomon 's Ring as " the poor man 's dog " and " something to love " , because nestlings are easily obtained from the wild and after careful hand rearing they are straightforward to look after . They adapt well to captivity , and thrive on a diet of standard bird feed and <unk> . Several birds may be kept in the same cage , and their <unk> makes them easy to train or study . The only disadvantages are their <unk> and indiscriminate defecation habits and the need to take precautions against diseases that may be transmitted to humans . As a laboratory bird , the common starling is second in numbers only to the domestic <unk> . 
 """
 
-def create_fake_data(shapes, vectorizers, order, min_=0, max_=50,):
-    data = {
-        k: torch.randint(min_, max_, shapes[type(v)]) for k, v in vectorizers.items()
-    }
-    ordered_data = tuple(data[k] for k in order.embeddings)
-    lengths = torch.LongTensor([data[list(data.keys())[0]].shape[1]])
-    return ordered_data, lengths
+S2D = [
+  "Common starlings may be kept as pets or as laboratory animals .",
+  "Austrian <unk> Konrad Lorenz wrote of them in his book King Solomon 's Ring as \" the poor man 's dog \" and \" something to love \" , because nestlings are easily obtained from the wild and after careful hand rearing they are straightforward to look after . ",
+  "They adapt well to captivity , and thrive on a diet of standard bird feed and <unk> . ",
+  "The only disadvantages are their <unk> and indiscriminate defecation habits and the need to take precautions against diseases that may be transmitted to humans . ",
+  "As a laboratory bird , the common starling is second in numbers only to the domestic <unk> ."
+]
 
 
-def create_data_dict(vocabs, vectorizers, transpose=False, min_=0, max_=50, default_size=100):
+def create_data_dict(vocabs, vectorizers, transpose=False):
     data = {}
     lengths = None
     for k, v in vectorizers.items():
-        data[k], feature_length = vectorizers[k].run(FAKE_SENTENCE.split(), vocabs[k])
+        data[k], feature_length = vectorizers[k].run(S1D.split(), vocabs[k])
         data[k] = torch.LongTensor(data[k]).unsqueeze(0)
 
         if not lengths:
@@ -66,6 +66,26 @@ def create_data_dict(vocabs, vectorizers, transpose=False, min_=0, max_=50, defa
     return data
 
 
+def create_data_dict_nbest(vocabs, vectorizers):
+    data = {}
+
+    length_tensor = None
+    for k, v in vectorizers.items():
+        lengths = []
+        vectors = []
+        for sentence in S2D:
+            vec, feature_length = vectorizers[k].run(sentence.split(), vocabs[k])
+            vectors.append(torch.LongTensor(vec))
+            lengths.append(torch.LongTensor([feature_length]))
+        data[k] = torch.stack(vectors).unsqueeze(0)
+
+        if not length_tensor:
+            length_tensor = torch.stack(lengths).reshape(1, -1)
+
+    data['lengths'] = length_tensor
+    return data
+
+
 @export
 class PytorchONNXExporter(Exporter):
     def __init__(self, task, **kwargs):
@@ -74,14 +94,20 @@ class PytorchONNXExporter(Exporter):
         self.tracing = kwargs.get('tracing', True)
         self.default_size = int(kwargs.get('default_size', 100))
         self.onnx_opset = int(kwargs.get('onnx_opset', 12))
+        self.nbest_inputs = bool(kwargs.get('nbest_input', False))
 
     def apply_model_patches(self, model):
         return model
 
     def create_example_input(self, vocabs, vectorizers):
-        return create_data_dict(vocabs, vectorizers, self.transpose, self.default_size)
+        if self.nbest_inputs:
+            return create_data_dict_nbest(vocabs, vectorizers)
+        return create_data_dict(vocabs, vectorizers, self.transpose)
 
     def create_example_output(self, model):
+        if hasattr(model, 'output'):
+            if isinstance(model.output, nn.ModuleList):
+                return [torch.ones((1, len(model.labels[i][1]))) for i in range(len(model.output))]
         return torch.ones((1, len(model.labels)))
 
     def create_model_inputs(self, model):
@@ -95,7 +121,7 @@ class PytorchONNXExporter(Exporter):
         return ['output']
 
     def create_dynamic_axes(self, model, vectorizers, inputs, outputs):
-        dynamics = {}#'output': {1: 'sequence'}}
+        dynamics = {}
         for name in outputs:
             dynamics[name] = {1: 'sequence'}
         for k in model.embeddings.keys():
@@ -103,6 +129,13 @@ class PytorchONNXExporter(Exporter):
                 dynamics[k] = {1: 'sequence', 2: 'chars'}
             else:
                 dynamics[k] = {1: 'sequence'}
+
+        if self.nbest_inputs:
+            for name in inputs:
+                if 'lengths' == name:
+                    dynamics[name] = {1: 'sequence'}
+                else:
+                    dynamics[name] = {1: 'nbest', 2: 'sequence'}
         return dynamics
 
     def _run(self, basename, output_dir, project=None, name=None, model_version=None, use_version=False, zip_results=True,
@@ -195,7 +228,7 @@ class Embedder(nn.ModuleList):
 @register_exporter(task='classify', name='embed')
 class EmbedPytorchONNXExporter(PytorchONNXExporter):
     def __init__(self, task, **kwargs):
-        super().__init__(task)
+        super().__init__(task, **kwargs)
         self.sig_name = 'embed_text'
 
     def load_model(self, model_dir):
@@ -216,7 +249,7 @@ class EmbedPytorchONNXExporter(PytorchONNXExporter):
 @register_exporter(task='classify', name='default')
 class ClassifyPytorchONNXExporter(PytorchONNXExporter):
     def __init__(self, task, **kwargs):
-        super().__init__(task)
+        super().__init__(task, **kwargs)
         self.sig_name = 'predict_text'
 
 
@@ -224,7 +257,7 @@ class ClassifyPytorchONNXExporter(PytorchONNXExporter):
 @register_exporter(task='tagger', name='default')
 class TaggerPytorchONNXExporter(PytorchONNXExporter):
     def __init__(self, task, **kwargs):
-        super().__init__(task)
+        super().__init__(task, **kwargs)
         self.sig_name = 'tag_text'
 
     def apply_model_patches(self, model):
@@ -244,7 +277,7 @@ class TaggerPytorchONNXExporter(PytorchONNXExporter):
 @register_exporter(task='deps', name='default')
 class DependencyParserPytorchONNXExporter(PytorchONNXExporter):
     def __init__(self, task, **kwargs):
-        super().__init__(task)
+        super().__init__(task, **kwargs)
         self.sig_name = 'deps_text'
 
     def create_example_output(self, model):
