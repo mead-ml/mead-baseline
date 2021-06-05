@@ -45,6 +45,7 @@ def main():
     parser.add_argument('--project', help='Name of project, used in path first', default=None)
     parser.add_argument('--name', help='Name of the model, used second in the path', default=None)
     parser.add_argument('--beam', help='beam_width', default=30, type=int)
+    parser.add_argument('--nbest_input', help='Is the input to this model N-best', default=False, type=str2bool)
     parser.add_argument('--is_remote', help='if True, separate items for remote server and client. If False bundle everything together (default True)', default=None)
     parser.add_argument('--backend', help='The deep learning backend to use')
     parser.add_argument('--reporting', help='reporting hooks', nargs='+')
@@ -103,7 +104,8 @@ def main():
     task.read_config(config_params, datasets, args.vecs, exporter_type=exporter_type)
     feature_exporter_field_map = create_feature_exporter_field_map(config_params['features'])
     exporter = create_exporter(task, exporter_type, return_labels=return_labels,
-                               feature_exporter_field_map=feature_exporter_field_map)
+                               feature_exporter_field_map=feature_exporter_field_map,
+                               nbest_input=args.nbest_input)
     exporter.run(args.model, output_dir, project, name, model_version, remote=is_remote, use_version=args.use_version, zip_results=args.zip)
 
 
