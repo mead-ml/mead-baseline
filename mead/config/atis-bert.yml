@@ -3,7 +3,7 @@ backend: pytorch
 conll_output: atis-bert.conll
 unif: 0.1
 dataset: atis
-
+basedir: atis-bert
 preproc: 
   mxlen: -1
   mxwlen: -1
