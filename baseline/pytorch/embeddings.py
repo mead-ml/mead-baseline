@@ -1,3 +1,4 @@
+import collections
 from baseline.embeddings import register_embeddings, create_embeddings
 from eight_mile.pytorch.embeddings import *
 from eight_mile.pytorch.serialize import load_tlm_npz, load_tlm_output_npz, tlm_load_state_dict
@@ -102,6 +103,8 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
                 self.vocab = load_bert_vocab(kwargs.get('vocab_file'))
         else:
             self.vocab = kwargs.get('vocab', kwargs.get('known_vocab'))
+            if self.vocab is None or isinstance(self.vocab, collections.Counter):
+                self.vocab = load_bert_vocab(None)
         # When we reload, allows skipping restoration of these embeddings
         # If the embedding wasnt trained with token types, this allows us to add them later
         self.skippable = set(listify(kwargs.get('skip_restore_embeddings', [])))
