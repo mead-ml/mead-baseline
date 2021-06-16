@@ -4421,3 +4421,63 @@ class CudaTimer:
             torch.cuda.synchronize()
             elapsed = self._start.elapsed_time(self._end)
             print(f"({os.getpid()}) {self._name} {elapsed}")
+
+
+class WeightedNLLLoss(nn.Module):
+    """Weight individual training examples
+    """
+    def __init__(self):
+        super().__init__()
+        self.loss = nn.NLLLoss(reduction='none')
+
+    def forward(self, pred, y, weight):
+        loss = self.loss(pred, y)
+        weight = weight.type_as(loss)
+        return torch.dot(loss, weight)/len(weight)
+
+class WeightedMultiHeadNLLLoss(nn.Module):
+    """Weight individual training examples with multiple heads
+    """
+    def __init__(self):
+        super().__init__()
+        self.loss = nn.NLLLoss(reduction='none')
+
+    def forward(self, preds, targets, weights):
+        loss = sum([self.loss(pred, targets[:, i]) for i, pred in enumerate(preds)])
+        weights = weights.type_as(loss)
+        return torch.dot(loss, weights)/len(weights)
+
+class WeightedSequenceLoss(nn.Module):
+    """Weight individual training examples
+
+    """
+    def __init__(self, LossFn: nn.Module = nn.NLLLoss, avg: str = "token"):
+        super().__init__()
+        self.avg = avg
+        self.crit = LossFn(ignore_index=Offsets.PAD, reduction="none")
+        if avg == 'token':
+            self._reduce = self._mean
+        else:
+            self._reduce = self._sum
+
+    def _mean(self, loss):
+        return loss.mean(axis=1)
+
+    def _sum(self, loss):
+        return loss.sum(axis=1)
+
+    def forward(self, inputs: torch.Tensor, targets: torch.Tensor, weight: torch.Tensor) -> torch.Tensor:
+        """Evaluate some loss over a sequence.
+        :param inputs: torch.FloatTensor, [B, T, C] The scores from the model. Batch First
+        :param targets: torch.LongTensor, [B, T] The labels.
+        :param weight: sample weights [B, ]
+        :returns: torch.FloatTensor, The loss.
+        """
+        total_sz = targets.nelement()
+        batchsz = weight.shape[0]
+        loss = self.crit(inputs.view(total_sz, -1), targets.view(total_sz)).view(batchsz, -1)  # [B, T]
+        loss = torch.dot(self._reduce(loss), weight.type_as(loss)) / batchsz
+        return loss
+
+    def extra_repr(self):
+        return f"reduction={self.avg}"

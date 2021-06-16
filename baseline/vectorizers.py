@@ -1878,6 +1878,72 @@ class CamembertSentencePieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
         return self.mxlen,
 
 
+@register_vectorizer(name='bpe-nbest1d')
+class BPENBestVectorizer1D(BPEVectorizer1D):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.nbest = kwargs.get('nbest', 3)
+        self.eou_tok = kwargs.get('eou_tok', '<EOU>')
+
+    def count(self, utts):
+        from collections import Counter
+        utts = utts[:self.nbest]
+        seen = 0
+        counter = Counter()
+        tokens = []
+        for utt in utts:
+            tokens += utt.split() + [self.eou_tok]
+        for tok in self.iterable(tokens):
+            counter[tok] += 1
+            seen += 1
+        self.max_seen = max(self.max_seen, seen)
+        return counter
+
+    def run(self, utts, vocab):
+        utts = utts[:self.nbest]
+        tokens = []
+        for utt in utts:
+            tokens += utt.split() + [self.eou_tok]
+        if self.mxlen < 0:
+            self.mxlen = self.max_seen
+        i = 0
+        vec1d = pads(self.mxlen, dtype=np.long)
+        for i, atom in enumerate(self._next_element(tokens, vocab)):
+            if i == self.mxlen:
+                i -= len(self.emit_end_tok)
+                for j, x in enumerate(self.emit_end_tok):
+                    vec1d[i + j] = vocab.get(x)
+                i = self.mxlen - 1
+                break
+            vec1d[i] = atom
+        valid_length = i + 1
+        return vec1d, valid_length
+
+
+@register_vectorizer(name='bpe-nbest2d')
+class BPENBestVectorizer2D(BPENBestVectorizer1D):
+    def run(self, utts, vocab):
+        utts = utts[:self.nbest]
+        vec2d = pads((self.nbest, self.mxlen), dtype=int)
+        # ensure empty utt also has the CLS token for cls pooling
+        vec2d[:, 0] = vocab.get('[CLS]', vocab.get('<s>', vocab.get('<UNK>')))
+        # we use utt length=1 to represent an empty utt. it's necessary for rnn, also consistent with CLS pooling
+        lengths = np.ones(self.nbest, dtype=int)
+        for i, utt in enumerate(utts):
+            for j, atom in enumerate(self._next_element(utt.split(), vocab)):
+                if j == self.mxlen:
+                    j -= len(self.emit_end_tok)
+                    for k, x in enumerate(self.emit_end_tok):
+                        vec2d[i, j + k] = vocab.get(x)
+                    j = self.mxlen - 1
+                    break
+                vec2d[i, j] = atom
+            lengths[i] = j + 1
+        return vec2d, lengths
+
+    def get_dims(self):
+        return self.nbest, self.mxlen
+
 @export
 def create_vectorizer(**kwargs):
     vec_type = kwargs.get('vectorizer_type', kwargs.get('type', 'token1d'))
