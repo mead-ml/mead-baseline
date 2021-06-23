@@ -1671,6 +1671,14 @@ class XLMRSentencePieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
     SPECIAL_TOKENS = {"<unk>", "<pad>", "<s>", "</s>"}
     VOCAB_OFFSETS = {'<s>': 0, '<pad>': 1, '</s>': 2, '<unk>': 3}
 
+    def _REWIRE_GLOBAL_OFFSETS(self):
+
+        Offsets.INDICES['PAD'] = self._vocab['<pad>']
+        Offsets.INDICES['GO'] = self._vocab['<s>']
+        Offsets.INDICES['EOS'] = self._vocab['</s>']
+        Offsets.INDICES['UNK'] = self._vocab['<unk>']
+
+
     def __init__(self,
                  **kwargs):
         """Loads a BPE tokenizer"""
@@ -1684,17 +1692,17 @@ class XLMRSentencePieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
 
         self._special_tokens = XLMRSentencePieceVectorizer1D.SPECIAL_TOKENS
         self._vocab = XLMRSentencePieceVectorizer1D.VOCAB_OFFSETS
-
         self.mxlen = kwargs.get('mxlen', -1)
+        self._REWIRE_GLOBAL_OFFSETS()
 
-        Offsets.INDICES['PAD'] = self._vocab['<pad>']
-        Offsets.INDICES['GO'] = self._vocab['<s>']
-        Offsets.INDICES['EOS'] = self._vocab['</s>']
-        Offsets.INDICES['UNK'] = self._vocab['<unk>']
         for i in range(3, len(self.tokenizer)):
             v = self.tokenizer.IdToPiece(i)
             self._vocab[v] = i + 1
         self._vocab['<mask>'] = len(self.tokenizer) + 1
+
+    def __setstate__(self, d):
+        self.__dict__ = d
+        self._REWIRE_GLOBAL_OFFSETS()
 
     @property
     def vocab(self):
@@ -1774,8 +1782,18 @@ class XLMRSentencePieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
 @register_vectorizer(name='camembert-spm1d')
 class CamembertSentencePieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
 
-    SPECIAL_TOKENS={"<unk>", "<pad>", "<s>", "</s>"}
-    VOCAB_OFFSETS={'<s>': 5, '<pad>': 1, '</s>': 6, '<unk>': 3}
+    SPECIAL_TOKENS = {"<unk>", "<pad>", "<s>", "</s>"}
+    VOCAB_OFFSETS = {'<s>': 5, '<pad>': 1, '</s>': 6, '<unk>': 3}
+
+    def _REWIRE_GLOBAL_OFFSETS(self):
+        """This function mutates the global state for Offsets, it is required for roberta-like models
+
+        :return:
+        """
+        Offsets.INDICES['PAD'] = self._vocab['<pad>']
+        Offsets.INDICES['GO'] = self._vocab['<s>']
+        Offsets.INDICES['EOS'] = self._vocab['</s>']
+        Offsets.INDICES['UNK'] = self._vocab['<unk>']
 
     def __init__(self,
                  **kwargs):
@@ -1790,18 +1808,18 @@ class CamembertSentencePieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
 
         self._special_tokens = CamembertSentencePieceVectorizer1D.SPECIAL_TOKENS
         self._vocab = copy.deepcopy(CamembertSentencePieceVectorizer1D.VOCAB_OFFSETS)
-
         self.mxlen = kwargs.get('mxlen', -1)
+        self._REWIRE_GLOBAL_OFFSETS()
 
-        Offsets.INDICES['PAD'] = self._vocab['<pad>']
-        Offsets.INDICES['GO'] = self._vocab['<s>']
-        Offsets.INDICES['EOS'] = self._vocab['</s>']
-        Offsets.INDICES['UNK'] = self._vocab['<unk>']
         offset = len(CamembertSentencePieceVectorizer1D.VOCAB_OFFSETS)
         for i in range(len(self.tokenizer)):
             v = self.tokenizer.IdToPiece(i)
             self._vocab[v] = i + offset
         self._vocab['<mask>'] = offset + len(self.tokenizer) + 1
+
+    def __setstate__(self, d):
+        self.__dict__ = d
+        self._REWIRE_GLOBAL_OFFSETS()
 
     @property
     def vocab(self):
