@@ -52,7 +52,6 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
         else:
             logger.warning("Requested training on CPU.  This will be slow.")
             self.crit = model.create_loss()
-            self.model = model
         self.nsteps = kwargs.get('nsteps', six.MAXSIZE)
 
     def _get_pytorch_model(self):
