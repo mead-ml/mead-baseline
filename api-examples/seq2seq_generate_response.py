@@ -6,7 +6,8 @@ import os
 import glob
 from argparse import ArgumentParser
 import baseline
-from transformer_utils import find_latest_checkpoint
+from eight_mile.pytorch.layers import find_latest_checkpoint
+from baseline.pytorch.embeddings import *
 from baseline.pytorch.seq2seq.model import TiedEmbeddingsSeq2SeqModel
 from eight_mile.pytorch.serialize import load_transformer_seq2seq_npz
 from eight_mile.utils import str2bool, read_json, Offsets, revlut
@@ -33,7 +34,6 @@ def decode_sentences(model, vectorizer, queries, word2index, index2word, beamsz)
         best_sentence_idx = candidate[0]
         best_sentence = ' '.join([index2word[x] for x in best_sentence_idx if x not in [Offsets.EOS, Offsets.PAD]])
         sentences.append(best_sentence.replace('@@ ', ''))
-    #torch.cuda.empty_cache()
     return sentences
 
 def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, d_k, activation, checkpoint_name, device):
