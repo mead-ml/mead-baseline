@@ -492,81 +492,6 @@ class DictTextNGramVectorizer(TextNGramVectorizer):
 
 
 @export
-class BPESubwordNMT:
-    """
-    Use subword_nmt for subwords.  If you want to use this class, make sure you have it installed
-    """
-    def __init__(self, codes_path, vocab_path, glossaries=None):
-        from subword_nmt.apply_bpe import BPE, read_vocabulary
-        import codecs
-        import sys
-        import re
-
-        glossaries = glossaries if glossaries else []
-        if not is_sequence(glossaries):
-            glossaries_path = get_file_or_url(glossaries)
-            with open(glossaries_path, 'rb') as rf:
-                glossaries = [l.strip() for l in rf.read()]
-
-        class BPEImpl(BPE):
-            def __init__(self, codes, merges=-1, separator='@@', vocab=None, glossaries=None):
-
-                codes.seek(0)
-                offset = 1
-
-                # check version information
-                firstline = codes.readline()
-                if firstline.startswith('#version:'):
-                    self.version = tuple([int(x) for x in re.sub(r'(\.0+)*$','', firstline.split()[-1]).split(".")])
-                    offset += 1
-                else:
-                    self.version = (0, 2)
-                    codes.seek(0)
-                self.bpe_codes = [tuple(item.strip('\r\n ').split(' ')) for (n, item) in enumerate(codes) if (n < merges or merges == -1)]
-                num_elements = len(self.bpe_codes[0])
-                if num_elements == 2:
-                    self.bpe_codes = dict([(code, i) for (i, code) in reversed(list(enumerate(self.bpe_codes)))])
-
-                else:
-                    self.bpe_codes = dict([((code[0], code[1]), i) for (i,code) in reversed(list(enumerate(self.bpe_codes)))])
-                self.bpe_codes_reverse = dict([(pair[0] + pair[1], pair) for pair, i in self.bpe_codes.items()])
-                self.separator = separator
-                self.vocab = vocab
-                self.glossaries = glossaries if glossaries else []
-                self.glossaries_regex = re.compile('^({})$'.format('|'.join(glossaries))) if glossaries else None
-                self.cache = {}
-        codes_path = get_file_or_url(codes_path)
-        vocab_path = get_file_or_url(vocab_path)
-        bpe_codes_fin = codecs.open(codes_path, encoding='utf-8')
-        bpe_vocab_fin = codecs.open(vocab_path, encoding='utf-8')
-        vocabulary = read_vocabulary(bpe_vocab_fin, threshold=None)
-
-        self.bpe = BPEImpl(bpe_codes_fin, merges=-1, separator='@@', vocab=vocabulary, glossaries=glossaries)
-
-    @property
-    def glossaries(self):
-        return self.bpe.glossaries
-
-    @property
-    def subword_sentinel(self):
-        return "@@"
-
-    def apply(self, sentences):
-        return list(self.apply_gen(sentences))
-
-    def apply_gen(self, sentences):
-        buffer = []
-        for x in self.bpe.segment_tokens(sentences, 0.0):
-            buffer.append(x)
-            if not x.endswith(self.subword_sentinel):
-                v = ' '.join(buffer)
-                buffer = []
-                yield v
-        if buffer:
-            yield ' '.join(buffer)
-
-
-@export
 class SavableFastBPE:
     """
     Use fastBPE for subwords.  If you want to use this class, make sure you have it installed
@@ -668,18 +593,11 @@ class BPEVectorizer1D(AbstractVectorizer, HasSubwordTokens):
         self.vocab_file = kwargs.get('vocab_file')
         use_fast_bpe = kwargs.get('use_fast_bpe', True)
         self._special_tokens = {"[CLS]", "<unk>", "<EOS>", "<UNK>", "<s>", "</s>"}
-
-        extra_tokens = []
-        if use_fast_bpe:
-            self.tokenizer = SavableFastBPE(self.model_file, self.vocab_file)
-        else:
-            glossaries = kwargs.get('glossaries')
-            self.tokenizer = BPESubwordNMT(self.model_file, self.vocab_file, glossaries)
-            extra_tokens = self.tokenizer.glossaries
-
+        self._extra_tokens = kwargs.get('extra_tokens', ['[CLS]', '[MASK]'])
+        self.tokenizer = SavableFastBPE(self.model_file, self.vocab_file)
         self.mxlen = kwargs.get('mxlen', -1)
         vocab_list = self.read_vocab(self.vocab_file)
-        self._vocab = {k: i for i, k in enumerate(vocab_list + extra_tokens)}
+        self._vocab = {k: i for i, k in enumerate(vocab_list)}
 
     @property
     def vocab(self):
@@ -688,6 +606,10 @@ class BPEVectorizer1D(AbstractVectorizer, HasSubwordTokens):
     @property
     def special_tokens(self) -> Set[str]:
         return self._special_tokens
+
+    @property
+    def extra_tokens(self) -> List[str]:
+        return self._extra_tokens
 
     @property
     def subword_sentinel(self):
@@ -710,7 +632,7 @@ class BPEVectorizer1D(AbstractVectorizer, HasSubwordTokens):
         return indices
 
     def read_vocab(self, file_or_url):
-        vocab = [] + Offsets.VALUES + ['[CLS]', '[MASK]']
+        vocab = [] + Offsets.VALUES + self._extra_tokens
         with open_file_or_url(file_or_url, "r") as f:
             for line in f.readlines():
                 token = line.split()[0].strip()
@@ -727,11 +649,12 @@ class BPEVectorizer1D(AbstractVectorizer, HasSubwordTokens):
         return counter
 
     def iterable(self, tokens):
+        outside_vocab = set(Offsets.VALUES + self._extra_tokens)
         for t in self.emit_begin_tok:
             yield t
 
         for t in tokens:
-            if t in Offsets.VALUES:
+            if t in outside_vocab:
                 yield t
             elif t == '<unk>':
                 yield Offsets.VALUES[Offsets.UNK]
@@ -746,7 +669,7 @@ class BPEVectorizer1D(AbstractVectorizer, HasSubwordTokens):
 
     def _next_element(self, tokens, vocab):
         for atom in self.iterable(tokens):
-            value = vocab.get(atom, vocab.get(Offsets.VALUES[Offsets.UNK]))  # This shouldnt actually happen
+            value = vocab.get(atom, Offsets.UNK)  # This shouldnt actually happen
             yield value
 
     def run(self, tokens, vocab):
