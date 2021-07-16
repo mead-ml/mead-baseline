@@ -207,7 +207,7 @@ parser.add_argument("--tok_on_eol", type=str, default="<EOS>")
 parser.add_argument("--cased", type=baseline.str2bool, default=True)
 parser.add_argument("--causal", type=baseline.str2bool, default=False, help="Generate for CLM, not MLM (X value only)")
 parser.add_argument("--pad_y", type=baseline.str2bool, default=True, help="Replace all non-masked Y values with <PAD>")
-
+parser.add_argument("--extra_tokens", type=str, nargs="+", default=['[CLS]', '[MASK]'])
 args = parser.parse_args()
 
 if os.path.isdir(args.input_files):
@@ -222,7 +222,7 @@ else:
 
 print(args.output)
 transform = baseline.lowercase if not args.cased else lambda x: x
-vectorizer = BPEVectorizer1D(transform_fn=transform, model_file=args.codes, vocab_file=args.vocab, mxlen=1024)
+vectorizer = BPEVectorizer1D(transform_fn=transform, model_file=args.codes, vocab_file=args.vocab, mxlen=1024, extra_tokens=args.extra_tokens)
 
 lookup_indices = []
 words = []
