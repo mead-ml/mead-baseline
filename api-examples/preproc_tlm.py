@@ -1,9 +1,15 @@
 import argparse
 import baseline
 from baseline.vectorizers import BPEVectorizer1D
-from eight_mile.utils import write_yaml, mlm_masking
+from eight_mile.utils import (
+    mlm_masking,
+    write_yaml,
+    register,
+    optional_params,
+    str2bool
+)
 import json
-import struct
+from typing import Optional
 import logging
 import numpy as np
 import os
@@ -14,7 +20,48 @@ except:
     pass
 
 
-def create_record(chunk, str_lookup, prefix, suffix, mask_value, vocab_size, causal=False, pad_y=True):
+MASKING_RULE_DEFS = {}
+
+
+@optional_params
+def register_masking(cls, name=None):
+    """Register a class as a handler for masking rules by key name"""
+    return register(cls, MASKING_RULE_DEFS, name, "masking rule defs")
+
+def create_masking(mask_type, vocab, pad_y):
+    Constructor = MASKING_RULE_DEFS.get(mask_type)
+    if not Constructor:
+        logger.warning("No masking algorithm for %s, treating as causal", mask_type)
+        return None
+    logger.info("Creating constructor %s for mask_type %s", str(Constructor), mask_type)
+    masking = Constructor(vocab, pad_y=pad_y)
+    return masking
+
+
+class Masking:
+    def __init__(self):
+        pass
+
+    def __call__(self, chunk: np.ndarray, ignore_prefix: bool, ignore_suffix: bool):
+        pass
+
+
+@register_masking("mlm")
+class MaskMLM(Masking):
+    def __init__(self, vocab, pad_y):
+        vocab_size = max(vocab.values()) + 1
+        mask_value = vocab['[MASK]']
+        self.mask_value = mask_value
+        self.vocab_size = vocab_size
+
+        self.pad_y = pad_y
+
+    def __call__(self, chunk: np.ndarray, ignore_prefix: bool, ignore_suffix: bool):
+
+        return mlm_masking(chunk, self.mask_value, self.vocab_size, ignore_prefix, ignore_suffix, pad_y=self.pad_y)
+
+
+def create_record(chunk: list, str_lookup: dict, prefix: Optional[str], suffix: Optional[str], masking: Optional[Masking]=None):
     """Emit a record
 
     :param chunk: A chunk of integer inputs
@@ -35,10 +82,10 @@ def create_record(chunk, str_lookup, prefix, suffix, mask_value, vocab_size, cau
         chunk = chunk + [suffix]
         ignore_suffix = True
 
-    if causal:
+    if not masking:
         inputs = np.array(chunk)
         return {'x': inputs, 'x_str': [str_lookup[s] for s in inputs]}
-    inputs, labels = mlm_masking(np.array(chunk), mask_value, vocab_size, ignore_prefix, ignore_suffix, pad_y=pad_y)
+    inputs, labels = masking(np.array(chunk), ignore_prefix, ignore_suffix)
     return {'x': inputs, 'y': labels, 'x_str': [str_lookup[s] for s in inputs], 'y_str': [str_lookup[s] for s in labels]}
 
 
@@ -205,7 +252,7 @@ parser.add_argument("--max_file_size", type=int, default=100, help="Shard size, 
 parser.add_argument("--stride", type=int, help="Tokens to stride before next read, defaults to `nctx`")
 parser.add_argument("--tok_on_eol", type=str, default="<EOS>")
 parser.add_argument("--cased", type=baseline.str2bool, default=True)
-parser.add_argument("--causal", type=baseline.str2bool, default=False, help="Generate for CLM, not MLM (X value only)")
+parser.add_argument("--mask_type", type=str, default="mlm", help="Masking rules, including 'mlm' and 'causal'")
 parser.add_argument("--pad_y", type=baseline.str2bool, default=True, help="Replace all non-masked Y values with <PAD>")
 parser.add_argument("--extra_tokens", type=str, nargs="+", default=['[CLS]', '[MASK]'])
 args = parser.parse_args()
@@ -227,11 +274,10 @@ vectorizer = BPEVectorizer1D(transform_fn=transform, model_file=args.codes, voca
 lookup_indices = []
 words = []
 indices2word = baseline.revlut(vectorizer.vocab)
-vocab_size = max(vectorizer.vocab.values()) + 1
 nctx = args.nctx
-mask_value = vectorizer.vocab['[MASK]']
 prefix = suffix = None
 root_dir = os.path.dirname(args.output)
+masking = create_masking(args.mask_type, vectorizer.vocab, args.pad_y)
 if not os.path.exists(root_dir):
     os.makedirs(root_dir)
 
@@ -257,7 +303,7 @@ for text in input_files:
             output, available = vectorizer.run(to_bpe, vectorizer.vocab)
             while available > 0:
                 if len(lookup_indices) == nctx:
-                    record = create_record(lookup_indices, indices2word, prefix, suffix, mask_value, vocab_size, causal=args.causal, pad_y=args.pad_y)
+                    record = create_record(lookup_indices, indices2word, prefix, suffix, masking=masking)
                     fw.write(record)
                     num_samples += 1
                     lookup_indices = []
@@ -266,7 +312,7 @@ for text in input_files:
                     lookup_indices += output[:needed].tolist()
                     output = output[needed:]
                     available -= needed
-                    record = create_record(lookup_indices, indices2word, prefix, suffix, mask_value, vocab_size, causal=args.causal, pad_y=args.pad_y)
+                    record = create_record(lookup_indices, indices2word, prefix, suffix, masking=masking)
                     fw.write(record)
                     num_samples += 1
                     lookup_indices = []
