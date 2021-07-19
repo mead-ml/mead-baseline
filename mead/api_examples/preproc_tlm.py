@@ -253,9 +253,14 @@ def main():
     parser.add_argument("--tok_on_eol", type=str, default="<EOS>")
     parser.add_argument("--cased", type=baseline.str2bool, default=True)
     parser.add_argument("--mask_type", type=str, default="mlm", help="Masking rules, including 'mlm' and 'causal'")
+    parser.add_argument("--module", default=None, help="Module containing custom masking rules")
     parser.add_argument("--pad_y", type=baseline.str2bool, default=True, help="Replace all non-masked Y values with <PAD>")
     parser.add_argument("--extra_tokens", type=str, nargs="+", default=['[CLS]', '[MASK]'])
     args = parser.parse_args()
+
+    if args.module:
+        logger.warning("Loading custom user module %s for masking rules", args.module)
+        baseline.import_user_module(args.module)
 
     if os.path.isdir(args.input_files):
         import glob
@@ -267,12 +272,11 @@ def main():
         if not args.output:
             args.output = f'{args.input_files}.records'
 
-    print(args.output)
+    logger.info('Output [%s]', args.output)
     transform = baseline.lowercase if not args.cased else lambda x: x
     vectorizer = BPEVectorizer1D(transform_fn=transform, model_file=args.codes, vocab_file=args.vocab, mxlen=1024, extra_tokens=args.extra_tokens)
 
     lookup_indices = []
-    words = []
     indices2word = baseline.revlut(vectorizer.vocab)
     nctx = args.nctx
     prefix = suffix = None
