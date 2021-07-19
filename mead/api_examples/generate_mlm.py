@@ -84,7 +84,7 @@ def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, d_k, c
     return model
 
 
-def run():
+def main():
     parser = ArgumentParser()
     parser.add_argument("--basedir", type=str)
     parser.add_argument("--checkpoint", type=str, help='Checkpoint name or directory to load')
@@ -142,4 +142,4 @@ def run():
 
     print('[Response]', ' '.join(bpe_out))
 
-run()
+main()

@@ -6,7 +6,6 @@ from eight_mile.utils import (
     write_yaml,
     register,
     optional_params,
-    str2bool
 )
 import json
 from typing import Optional
@@ -235,91 +234,96 @@ def create_file_writer(fmt, name, fields, max_file_size_mb):
     return TFRecordRollingWriter(name, fields, max_file_size_mb)
 
 
-parser = argparse.ArgumentParser(description='Convert text into MLM fixed width contexts')
+def main():
+    parser = argparse.ArgumentParser(description='Convert text into LM fixed width contexts')
 
-parser.add_argument('--input_files',
-                    help='The text to classify as a string, or a path to a file with each line as an example', type=str)
-parser.add_argument('--input_pattern', type=str, default='*.txt')
-parser.add_argument('--codes', help='BPE codes')
-parser.add_argument('--vocab', help='BPE vocab')
-parser.add_argument("--nctx", type=int, default=256, help="Max input length")
-parser.add_argument("--fmt", type=str, default='json', choices=['json', 'tsv', 'tfrecord'])
-parser.add_argument("--fields", type=str, nargs="+", default=["x_str", "y_str"])
-parser.add_argument("--output", type=str, help="Output base name, e.g. /path/to/output/record")
-parser.add_argument("--prefix", type=str, help="Prefix every line with this token")
-parser.add_argument("--suffix", type=str, help="Suffix every line with this token")
-parser.add_argument("--max_file_size", type=int, default=100, help="Shard size, defaults to 100MB")
-parser.add_argument("--stride", type=int, help="Tokens to stride before next read, defaults to `nctx`")
-parser.add_argument("--tok_on_eol", type=str, default="<EOS>")
-parser.add_argument("--cased", type=baseline.str2bool, default=True)
-parser.add_argument("--mask_type", type=str, default="mlm", help="Masking rules, including 'mlm' and 'causal'")
-parser.add_argument("--pad_y", type=baseline.str2bool, default=True, help="Replace all non-masked Y values with <PAD>")
-parser.add_argument("--extra_tokens", type=str, nargs="+", default=['[CLS]', '[MASK]'])
-args = parser.parse_args()
+    parser.add_argument('--input_files',
+                        help='The text to convert to LM or a path to a file with each line as an example', type=str)
+    parser.add_argument('--input_pattern', type=str, default='*.txt')
+    parser.add_argument('--codes', help='BPE codes')
+    parser.add_argument('--vocab', help='BPE vocab')
+    parser.add_argument("--nctx", type=int, default=256, help="Max input length")
+    parser.add_argument("--fmt", type=str, default='json', choices=['json', 'tsv', 'tfrecord'])
+    parser.add_argument("--fields", type=str, nargs="+", default=["x_str", "y_str"])
+    parser.add_argument("--output", type=str, help="Output base name, e.g. /path/to/output/record")
+    parser.add_argument("--prefix", type=str, help="Prefix every line with this token")
+    parser.add_argument("--suffix", type=str, help="Suffix every line with this token")
+    parser.add_argument("--max_file_size", type=int, default=100, help="Shard size, defaults to 100MB")
+    parser.add_argument("--stride", type=int, help="Tokens to stride before next read, defaults to `nctx`")
+    parser.add_argument("--tok_on_eol", type=str, default="<EOS>")
+    parser.add_argument("--cased", type=baseline.str2bool, default=True)
+    parser.add_argument("--mask_type", type=str, default="mlm", help="Masking rules, including 'mlm' and 'causal'")
+    parser.add_argument("--pad_y", type=baseline.str2bool, default=True, help="Replace all non-masked Y values with <PAD>")
+    parser.add_argument("--extra_tokens", type=str, nargs="+", default=['[CLS]', '[MASK]'])
+    args = parser.parse_args()
 
-if os.path.isdir(args.input_files):
-    import glob
-    input_files = list(glob.glob(os.path.join(args.input_files, args.input_pattern)))
-    if not args.output:
-        args.output = os.path.join(args.input_files, 'records')
-else:
-    input_files = [args.input_files]
-    if not args.output:
-        args.output = f'{args.input_files}.records'
+    if os.path.isdir(args.input_files):
+        import glob
+        input_files = list(glob.glob(os.path.join(args.input_files, args.input_pattern)))
+        if not args.output:
+            args.output = os.path.join(args.input_files, 'records')
+    else:
+        input_files = [args.input_files]
+        if not args.output:
+            args.output = f'{args.input_files}.records'
 
-print(args.output)
-transform = baseline.lowercase if not args.cased else lambda x: x
-vectorizer = BPEVectorizer1D(transform_fn=transform, model_file=args.codes, vocab_file=args.vocab, mxlen=1024, extra_tokens=args.extra_tokens)
+    print(args.output)
+    transform = baseline.lowercase if not args.cased else lambda x: x
+    vectorizer = BPEVectorizer1D(transform_fn=transform, model_file=args.codes, vocab_file=args.vocab, mxlen=1024, extra_tokens=args.extra_tokens)
 
-lookup_indices = []
-words = []
-indices2word = baseline.revlut(vectorizer.vocab)
-nctx = args.nctx
-prefix = suffix = None
-root_dir = os.path.dirname(args.output)
-masking = create_masking(args.mask_type, vectorizer.vocab, args.pad_y)
-if not os.path.exists(root_dir):
-    os.makedirs(root_dir)
+    lookup_indices = []
+    words = []
+    indices2word = baseline.revlut(vectorizer.vocab)
+    nctx = args.nctx
+    prefix = suffix = None
+    root_dir = os.path.dirname(args.output)
+    masking = create_masking(args.mask_type, vectorizer.vocab, args.pad_y)
+    if not os.path.exists(root_dir):
+        os.makedirs(root_dir)
 
-if args.prefix:
-    nctx -= 1
-    prefix = vectorizer.vocab[args.prefix]
+    if args.prefix:
+        nctx -= 1
+        prefix = vectorizer.vocab[args.prefix]
 
-if args.suffix:
-    nctx -= 1
-    suffix = vectorizer.vocab[args.suffix]
+    if args.suffix:
+        nctx -= 1
+        suffix = vectorizer.vocab[args.suffix]
 
-fw = create_file_writer(args.fmt, args.output, args.fields, args.max_file_size)
-num_samples = 0
-for text in input_files:
-    with open(text, encoding='utf-8') as rf:
-        print(f"Reading from {text}...")
-        for line in rf:
-            to_bpe = line.strip().split()
-            if not to_bpe:
-                continue
-            to_bpe += [args.tok_on_eol]
+    fw = create_file_writer(args.fmt, args.output, args.fields, args.max_file_size)
+    num_samples = 0
+    for text in input_files:
+        with open(text, encoding='utf-8') as rf:
+            print(f"Reading from {text}...")
+            for line in rf:
+                to_bpe = line.strip().split()
+                if not to_bpe:
+                    continue
+                to_bpe += [args.tok_on_eol]
 
-            output, available = vectorizer.run(to_bpe, vectorizer.vocab)
-            while available > 0:
-                if len(lookup_indices) == nctx:
-                    record = create_record(lookup_indices, indices2word, prefix, suffix, masking=masking)
-                    fw.write(record)
-                    num_samples += 1
-                    lookup_indices = []
-                needed = nctx - len(lookup_indices)
-                if available >= needed:
-                    lookup_indices += output[:needed].tolist()
-                    output = output[needed:]
-                    available -= needed
-                    record = create_record(lookup_indices, indices2word, prefix, suffix, masking=masking)
-                    fw.write(record)
-                    num_samples += 1
-                    lookup_indices = []
-                # The amount available is less than what we need, so read the whole thing
-                else:
-                    lookup_indices += output[:available].tolist()
-                    available = 0
+                output, available = vectorizer.run(to_bpe, vectorizer.vocab)
+                while available > 0:
+                    if len(lookup_indices) == nctx:
+                        record = create_record(lookup_indices, indices2word, prefix, suffix, masking=masking)
+                        fw.write(record)
+                        num_samples += 1
+                        lookup_indices = []
+                    needed = nctx - len(lookup_indices)
+                    if available >= needed:
+                        lookup_indices += output[:needed].tolist()
+                        output = output[needed:]
+                        available -= needed
+                        record = create_record(lookup_indices, indices2word, prefix, suffix, masking=masking)
+                        fw.write(record)
+                        num_samples += 1
+                        lookup_indices = []
+                    # The amount available is less than what we need, so read the whole thing
+                    else:
+                        lookup_indices += output[:available].tolist()
+                        available = 0
 
-fw.close()
-write_yaml({'num_samples': num_samples}, os.path.join(root_dir, 'md.yml'))
+    fw.close()
+    write_yaml({'num_samples': num_samples}, os.path.join(root_dir, 'md.yml'))
+
+
+if __name__ == '__main__':
+    main()

@@ -83,7 +83,7 @@ def run_step_s2s(x, y, model, loss_function, device, distributed):
     return loss
 
 
-def train():
+def main():
     parser = ArgumentParser()
     parser.add_argument("--basedir", type=str)
     parser.add_argument("--train_file", type=str, required=True, help='File path to use for train file')
@@ -368,4 +368,4 @@ def reload_from_checkpoint(model_type, restart_from, restart_tick_type, model, s
 
 
 if __name__ == "__main__":
-    train()
+    main()

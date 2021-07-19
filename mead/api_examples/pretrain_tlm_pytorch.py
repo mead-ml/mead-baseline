@@ -11,7 +11,7 @@ from eight_mile.optz import *
 from eight_mile.pytorch.layers import save_checkpoint, init_distributed
 from eight_mile.pytorch.optz import *
 from baseline.pytorch.lm import TransformerLanguageModel, TransformerMaskedLanguageModel
-from transformer_utils import MultiFileDatasetReader, on_demand_mlm_masking, get_lr_decay
+from .transformer_utils import MultiFileDatasetReader, on_demand_mlm_masking, get_lr_decay
 from eight_mile.pytorch.serialize import load_tlm_npz
 
 logger = logging.getLogger(__file__)
@@ -32,7 +32,7 @@ If the model is an MLM and the `preprocessed` value is false, on-demand MLM mask
 
 """
 
-def train():
+def main():
     parser = ArgumentParser()
     parser.add_argument("--basedir", type=str)
     parser.add_argument("--train_file", type=str, required=True, help='File path to use for train file')
@@ -319,5 +319,5 @@ def train():
 
 
 if __name__ == "__main__":
-    train()
+    main()
 

@@ -73,7 +73,7 @@ def get_num_samples(sample_md):
     return yml['num_samples']
 
 
-def train():
+def main():
     parser = ArgumentParser()
     parser.add_argument("--basedir", type=str)
     parser.add_argument("--train_dir", type=str, required=True, help='Training directory')
@@ -318,4 +318,4 @@ def train():
 
 
 if __name__ == "__main__":
-    train()
+    main()

@@ -71,7 +71,7 @@ def main():
         license='Apache 2.0',
         url=About.URL,
         download_url=About.DOWNLOAD_URL,
-        packages=find_packages(exclude=['tests', 'layers*', 'api-examples']),
+        packages=find_packages(exclude=['tests', 'layers*']),
         package_data={
             'mead': get_configs('mead/config'),
         },
@@ -102,6 +102,16 @@ def main():
                 'mead-hash = mead.hash_config:main',
                 'bleu = baseline.bleu:main',
                 'conlleval = baseline.conlleval:main',
+                'classify_text = mead.api_examples.classify_text:main',
+                'tag_text = mead.api_examples.tag_text:main',
+                'ed_text = mead.api_examples.ed_text:main',
+                'deps_text = mead.api_examples.deps_text:main',
+                'lm_text = mead.api_examples.lm_text:main',
+                'bio2iobes = mead.api_examples.bio_to_iobes:main',
+                'iob2bio = mead.api_examples.iob_to_bio.py:main',
+                'iob2iobes = mead.api_examples.iob_to_iobes:main',
+                'preproc_tlm = mead.api_examples.preproc_tlm:main',
+
             ]
         },
         classifiers={
