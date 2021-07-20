@@ -89,11 +89,13 @@ def main():
     parser.add_argument("--recall_k", type=int, default=100, help="select the response from how many candidates")
     parser.add_argument("--recall_top", type=int, default=1, help="whether the correct response is ranked top x")
     parser.add_argument("--num_batches", type=int, default=1_000_000)
+    parser.add_argument("--extra_tokens", help="What extra tokens should we use", nargs="+", default=["[CLS]", "[MASK]"])
     args = parser.parse_args()
 
     reader = MultiFileDatasetReader(args.nctx, args.nctx, model_file=args.subword_model_file,
                                     vocab_file=args.subword_vocab_file, file_type=args.file_type,
-                                    reader_type=args.reader_type, record_keys=args.record_keys)
+                                    reader_type=args.reader_type, record_keys=args.record_keys,
+                                    extra_tokens=args.extra_tokens)
 
     vocab = reader.build_vocab()
     # If we are not using chars, then use 'x' for both input and output

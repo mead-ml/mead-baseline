@@ -45,7 +45,8 @@ def run(basedir=None, train_file=None, valid_file=None, dataset_key='tlm', embed
         dropout=0.1, ffn_pdrop=0.0, layer_drop=0.0, lr_scheduler='cosine', lr_decay_steps=None, lr_decay_rate=None,
         lr_alpha=0.0, optim='adamw', lr=4.0e-4, clip=1.0, weight_decay=1.0e-2, epochs=32, restart_from=None,
         restart_tt=None, warmup_steps=10000, saves_per_epoch=10, mlm=True, preprocessed=True, rpr_k=[8],
-        rpr_value_on=True, windowed_ra=False, device="cuda", distributed=False, local_rank=-1, **kwargs):
+        rpr_value_on=True, windowed_ra=False, device="cuda", distributed=False, local_rank=-1,
+        extra_tokens=["[CLS]", "[MASK]"], **kwargs):
     if basedir is None:
         basedir = 'lm-{}-bpe-{}'.format(dataset_key, os.getpid())
     logging.basicConfig(level=logging.INFO if local_rank in [-1, 0] else logging.WARN)
@@ -69,7 +70,8 @@ def run(basedir=None, train_file=None, valid_file=None, dataset_key='tlm', embed
         reader_type = 'lang'
     reader = MultiFileDatasetReader(src_nctx=nctx, model_file=subword_model_file,
                                     vocab_file=subword_vocab_file, file_type=file_type,
-                                    reader_type=reader_type, record_keys=['x', 'y'] if mlm else ['x'])
+                                    reader_type=reader_type, record_keys=['x', 'y'] if mlm else ['x'],
+                                    extra_tokens=extra_tokens)
 
     # This looks a bit funny but the streaming reader ignores our vocab and gives us the one from the subword_model
     # However, we do need to get counts from our dataset for validation so we can calculate the perplexity
@@ -330,6 +332,7 @@ def parse_args(argv):
                         type=int,
                         default=-1,
                         help="Local rank for distributed training (-1 means use the environment variables to find)")
+    parser.add_argument("--extra_tokens", help="What extra tokens should we use", nargs="+", default=["[CLS]", "[MASK]"])
     args = parser.parse_args(argv)
     return args
 

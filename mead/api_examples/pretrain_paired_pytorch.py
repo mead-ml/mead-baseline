@@ -83,7 +83,7 @@ def run_step_s2s(x, y, model, loss_function, device, distributed):
 
 def main(argv):
     args = parse_args(argv)
-    run(args)
+    run(**vars(args))
 
 
 def parse_args(argv):
@@ -163,6 +163,7 @@ def parse_args(argv):
                         type=int,
                         default=-1,
                         help="Local rank for distributed training (-1 means use the environment variables to find)")
+    parser.add_argument("--extra_tokens", help="What extra tokens should we use", nargs="+", default=["[CLS]", "[MASK]"])
     parser.add_argument("--save_npz", type=str2bool, default=False, help="Whether save npz checkpoint")
     args = parser.parse_args(argv)
     return args
@@ -177,7 +178,8 @@ def run(basedir=None, train_file=None, valid_file=None, dataset_key='paired', em
         reduction_d_k=64, reduction_type='2ha', unfreeze_after_step=0, stacking_layers=[], layer_drop=0.0, ff_pdrop=0.1,
         reader_type='preprocessed', model_type='dual-encoder', src_begin_tok=[], src_end_tok=['<EOS>'],
         tgt_begin_tok=['<GO>'], tgt_end_tok=['<EOS>'], lower=False, loss='symmetric', learn_temp=True, init_temp=None,
-        rpr_k=[8], device='cuda', distributed=False, local_rank=-1, save_npz=False, **kwargs):
+        rpr_k=[8], device='cuda', distributed=False, local_rank=-1, save_npz=False,
+        extra_tokens=["[CLS]", "[MASK]"], **kwargs):
     if basedir is None:
         basedir = '{}-{}-paired-{}-bpe-{}'.format(model_type, reader_type, dataset_key, os.getpid())
     logging.basicConfig(level=logging.INFO if local_rank in [-1, 0] else logging.WARN)
@@ -192,7 +194,7 @@ def run(basedir=None, train_file=None, valid_file=None, dataset_key='paired', em
     reader = MultiFileDatasetReader(nctx, tgt_nctx, src_begin_tok, src_end_tok, tgt_begin_tok,
                                     tgt_end_tok, subword_model_file, subword_vocab_file,
                                     file_type, reader_type=reader_type, record_keys=record_keys,
-                                    lower=lower)
+                                    lower=lower, extra_tokens=extra_tokens)
     vocab = reader.build_vocab()
     # If we are not using chars, then use 'x' for both input and output
     preproc_data = baseline.embeddings.load_embeddings('x', dsz=d_model, known_vocab=vocab['x'],
