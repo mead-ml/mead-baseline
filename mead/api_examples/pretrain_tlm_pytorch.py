@@ -46,7 +46,7 @@ def run(basedir=None, train_file=None, valid_file=None, dataset_key='tlm', embed
         lr_alpha=0.0, optim='adamw', lr=4.0e-4, clip=1.0, weight_decay=1.0e-2, epochs=32, restart_from=None,
         restart_tt=None, warmup_steps=10000, saves_per_epoch=10, mlm=True, preprocessed=True, rpr_k=[8],
         rpr_value_on=True, windowed_ra=False, device="cuda", distributed=False, local_rank=-1,
-        extra_tokens=["[CLS]", "[MASK]"], **kwargs):
+        extra_tokens=["[CLS]", "[MASK]"], do_early_stopping=False, **kwargs):
     if basedir is None:
         basedir = 'lm-{}-bpe-{}'.format(dataset_key, os.getpid())
     logging.basicConfig(level=logging.INFO if local_rank in [-1, 0] else logging.WARN)
@@ -270,7 +270,9 @@ def run(basedir=None, train_file=None, valid_file=None, dataset_key='tlm', embed
                 metrics['average_valid_loss'] = valid_token_loss
                 metrics['average_valid_word_ppl'] = valid_token_ppl
                 logger.info(metrics)
-                if valid_token_loss < best_valid_loss:
+                if not do_early_stopping:
+                    save_checkpoint(model, model_base, steps, tick_type='step')
+                elif valid_token_loss < best_valid_loss:
                     best_valid_loss = valid_token_loss
                     logger.info(f"New best valid loss: {best_valid_loss}. Saving checkpoint...")
                     save_checkpoint(model, model_base, steps, tick_type='step')
@@ -336,6 +338,8 @@ def parse_args(argv):
                         default=-1,
                         help="Local rank for distributed training (-1 means use the environment variables to find)")
     parser.add_argument("--extra_tokens", help="What extra tokens should we use", nargs="+", default=["[CLS]", "[MASK]"])
+    parser.add_argument("--do_early_stopping", type=str2bool, default=False,
+                        help="if True, only save checkpoint when valid loss improves")
     args = parser.parse_args(argv)
     return args
 
