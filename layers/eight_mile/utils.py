@@ -1641,9 +1641,9 @@ def to_numpy(x):
 
 
 @export
-def mlm_masking(inputs, mask_value, vocab_size, ignore_prefix, ignore_suffix, pad_y=True):
+def mlm_masking(inputs, mask_value, vocab_size, ignore_prefix, ignore_suffix, pad_y=True, mask_prob=0.15):
     labels = np.copy(inputs)
-    masked_indices = np.random.binomial(size=len(inputs), n=1, p=0.15)
+    masked_indices = np.random.binomial(size=len(inputs), n=1, p=mask_prob)
     masked_indices = masked_indices & (labels != Offsets.PAD)
     masked_indices[np.random.randint(1, sum(labels != Offsets.PAD))] = 1  #ensure at least one token is masked
     if ignore_prefix:

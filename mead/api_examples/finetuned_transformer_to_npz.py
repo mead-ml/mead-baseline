@@ -27,8 +27,6 @@ def main():
     parser.add_argument('--no_output_layer', action='store_true', help='If set, we wont store the final layers')
     args = parser.parse_args()
 
-    logger = logging.getLogger(__file__)
-
     for module in args.modules:
         import_user_module(module)
 

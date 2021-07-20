@@ -1,3 +1,4 @@
+import sys
 import argparse
 import baseline
 from baseline.vectorizers import BPEVectorizer1D
@@ -8,7 +9,6 @@ from eight_mile.utils import (
 from typing import Optional
 import numpy as np
 import os
-
 
 
 def create_record(chunk: list, str_lookup: dict, prefix: Optional[str], suffix: Optional[str], masking: Optional[Masking]=None):
@@ -39,67 +39,44 @@ def create_record(chunk: list, str_lookup: dict, prefix: Optional[str], suffix: 
     return {'x': inputs, 'y': labels, 'x_str': [str_lookup[s] for s in inputs], 'y_str': [str_lookup[s] for s in labels]}
 
 
-def main():
-    parser = argparse.ArgumentParser(description='Convert text into LM fixed width contexts')
+def run(input_files=[], input_pattern='*.txt', codes=None, vocab=None, nctx=256, fmt='json', fields=['x_str', 'y_str'],
+        output=None, prefix=None, suffix=None, max_file_size=100, tok_on_eol="<EOS>", cased=True,
+        mask_type="mlm", module=None, pad_y=True, extra_tokens=['[CLS]', '[MASK]'], **kwargs):
 
-    parser.add_argument('--input_files',
-                        help='The text to convert to LM or a path to a file with each line as an example', type=str)
-    parser.add_argument('--input_pattern', type=str, default='*.txt')
-    parser.add_argument('--codes', help='BPE codes')
-    parser.add_argument('--vocab', help='BPE vocab')
-    parser.add_argument("--nctx", type=int, default=256, help="Max input length")
-    parser.add_argument("--fmt", type=str, default='json', choices=['json', 'tsv', 'tfrecord'])
-    parser.add_argument("--fields", type=str, nargs="+", default=["x_str", "y_str"])
-    parser.add_argument("--output", type=str, help="Output base name, e.g. /path/to/output/record")
-    parser.add_argument("--prefix", type=str, help="Prefix every line with this token")
-    parser.add_argument("--suffix", type=str, help="Suffix every line with this token")
-    parser.add_argument("--max_file_size", type=int, default=100, help="Shard size, defaults to 100MB")
-    parser.add_argument("--stride", type=int, help="Tokens to stride before next read, defaults to `nctx`")
-    parser.add_argument("--tok_on_eol", type=str, default="<EOS>")
-    parser.add_argument("--cased", type=baseline.str2bool, default=True)
-    parser.add_argument("--mask_type", type=str, default="mlm", help="Masking rules, including 'mlm' and 'causal'")
-    parser.add_argument("--module", default=None, help="Module containing custom masking rules")
-    parser.add_argument("--pad_y", type=baseline.str2bool, default=True, help="Replace all non-masked Y values with <PAD>")
-    parser.add_argument("--extra_tokens", type=str, nargs="+", default=['[CLS]', '[MASK]'])
-    args = parser.parse_args()
+    if module:
+        logger.warning("Loading custom user module %s for masking rules", module)
+        baseline.import_user_module(module)
 
-    if args.module:
-        logger.warning("Loading custom user module %s for masking rules", args.module)
-        baseline.import_user_module(args.module)
-        print('module', MASKING_RULE_DEFS)
-
-    if os.path.isdir(args.input_files):
+    if os.path.isdir(input_files):
         import glob
-        input_files = list(glob.glob(os.path.join(args.input_files, args.input_pattern)))
-        if not args.output:
-            args.output = os.path.join(args.input_files, 'records')
+        input_files = list(glob.glob(os.path.join(input_files, input_pattern)))
+        if not output:
+            output = os.path.join(input_files, 'records')
     else:
-        input_files = [args.input_files]
-        if not args.output:
-            args.output = f'{args.input_files}.records'
+        input_files = [input_files]
+        if not output:
+            output = f'{input_files}.records'
 
-    logger.info('Output [%s]', args.output)
-    transform = baseline.lowercase if not args.cased else lambda x: x
-    vectorizer = BPEVectorizer1D(transform_fn=transform, model_file=args.codes, vocab_file=args.vocab, mxlen=1024, extra_tokens=args.extra_tokens)
+    logger.info('Output [%s]', output)
+    transform = baseline.lowercase if not cased else lambda x: x
+    vectorizer = BPEVectorizer1D(transform_fn=transform, model_file=codes, vocab_file=vocab, mxlen=1024, extra_tokens=extra_tokens)
 
     lookup_indices = []
     indices2word = baseline.revlut(vectorizer.vocab)
-    nctx = args.nctx
-    prefix = suffix = None
-    root_dir = os.path.dirname(args.output)
-    masking = create_masking(args.mask_type, vectorizer.vocab, args.pad_y)
+    root_dir = os.path.dirname(output)
+    masking = create_masking(mask_type, vectorizer.vocab, pad_y)
     if not os.path.exists(root_dir):
         os.makedirs(root_dir)
 
-    if args.prefix:
+    if prefix:
         nctx -= 1
-        prefix = vectorizer.vocab[args.prefix]
+        prefix = vectorizer.vocab[prefix]
 
-    if args.suffix:
+    if suffix:
         nctx -= 1
-        suffix = vectorizer.vocab[args.suffix]
+        suffix = vectorizer.vocab[suffix]
 
-    fw = create_file_writer(args.fmt, args.output, args.fields, args.max_file_size)
+    fw = create_file_writer(fmt, output, fields, max_file_size)
     num_samples = 0
     for text in input_files:
         with open(text, encoding='utf-8') as rf:
@@ -108,7 +85,7 @@ def main():
                 to_bpe = line.strip().split()
                 if not to_bpe:
                     continue
-                to_bpe += [args.tok_on_eol]
+                to_bpe += [tok_on_eol]
 
                 output, available = vectorizer.run(to_bpe, vectorizer.vocab)
                 while available > 0:
@@ -135,5 +112,36 @@ def main():
     write_yaml({'num_samples': num_samples}, os.path.join(root_dir, 'md.yml'))
 
 
+def main(argv):
+    args = parse_args(argv)
+    run(**vars(args))
+
+
+def parse_args(argv):
+    parser = argparse.ArgumentParser(description='Convert text into LM fixed width contexts')
+    parser.add_argument('--input_files',
+                        help='The text to convert to LM or a path to a file with each line as an example', type=str)
+    parser.add_argument('--input_pattern', type=str, default='*.txt')
+    parser.add_argument('--codes', help='BPE codes')
+    parser.add_argument('--vocab', help='BPE vocab')
+    parser.add_argument("--nctx", type=int, default=256, help="Max input length")
+    parser.add_argument("--fmt", type=str, default='json', choices=['json', 'tsv', 'tfrecord'])
+    parser.add_argument("--fields", type=str, nargs="+", default=["x_str", "y_str"])
+    parser.add_argument("--output", type=str, help="Output base name, e.g. /path/to/output/record")
+    parser.add_argument("--prefix", type=str, help="Prefix every line with this token")
+    parser.add_argument("--suffix", type=str, help="Suffix every line with this token")
+    parser.add_argument("--max_file_size", type=int, default=100, help="Shard size, defaults to 100MB")
+    parser.add_argument("--stride", type=int, help="Tokens to stride before next read, defaults to `nctx`")
+    parser.add_argument("--tok_on_eol", type=str, default="<EOS>")
+    parser.add_argument("--cased", type=baseline.str2bool, default=True)
+    parser.add_argument("--mask_type", type=str, default="mlm", help="Masking rules, including 'mlm' and 'causal'")
+    parser.add_argument("--module", default=None, help="Module containing custom masking rules")
+    parser.add_argument("--pad_y", type=baseline.str2bool, default=True,
+                        help="Replace all non-masked Y values with <PAD>")
+    parser.add_argument("--extra_tokens", type=str, nargs="+", default=['[CLS]', '[MASK]'])
+    args = parser.parse_args(argv)
+    return args
+
+
 if __name__ == '__main__':
-    main()
+    main(sys.argv[1:])

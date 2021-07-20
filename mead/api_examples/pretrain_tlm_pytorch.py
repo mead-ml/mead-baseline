@@ -1,5 +1,6 @@
 import logging
 import os
+import sys
 from argparse import ArgumentParser
 import baseline
 from torch.nn.parallel import DistributedDataParallel
@@ -32,7 +33,246 @@ If the model is an MLM and the `preprocessed` value is false, on-demand MLM mask
 
 """
 
-def main():
+
+def main(argv):
+    args = parse_args(argv)
+    run(**vars(args))
+
+
+def run(basedir=None, train_file=None, valid_file=None, dataset_key='tlm', embed_type='default',
+        d_model=512, d_ff=2048, d_k=None, num_heads=8, num_layers=8, num_train_workers=4,
+        nctx=256, file_type='json', batch_size=256, subword_model_file=None, subword_vocab_file=None,
+        dropout=0.1, ffn_pdrop=0.0, layer_drop=0.0, lr_scheduler='cosine', lr_decay_steps=None, lr_decay_rate=None,
+        lr_alpha=0.0, optim='adamw', lr=4.0e-4, clip=1.0, weight_decay=1.0e-2, epochs=32, restart_from=None,
+        restart_tt=None, warmup_steps=10000, saves_per_epoch=10, mlm=True, preprocessed=True, rpr_k=[8],
+        rpr_value_on=True, windowed_ra=False, device="cuda", distributed=False, local_rank=-1, **kwargs):
+    if basedir is None:
+        basedir = 'lm-{}-bpe-{}'.format(dataset_key, os.getpid())
+    logging.basicConfig(level=logging.INFO if local_rank in [-1, 0] else logging.WARN)
+
+    num_gpus = get_num_gpus_multiworker()
+    distributed = distributed or num_gpus > 1
+    logger.info(f"Using {num_gpus} GPUs in this job.")
+
+    do_on_demand_masking = mlm and not preprocessed
+    if do_on_demand_masking:
+        logger.info(f"On-demand masking is turned on")
+    if distributed:
+        device, updated_local_rank = init_distributed(local_rank)
+        local_rank = updated_local_rank
+
+    if file_type == 'tfrecord':
+        reader_type = 'tfrecord'
+    elif preprocessed:
+        reader_type = 'preprocessed'
+    else:
+        reader_type = 'lang'
+    reader = MultiFileDatasetReader(src_nctx=nctx, model_file=subword_model_file,
+                                    vocab_file=subword_vocab_file, file_type=file_type,
+                                    reader_type=reader_type, record_keys=['x', 'y'] if mlm else ['x'])
+
+    # This looks a bit funny but the streaming reader ignores our vocab and gives us the one from the subword_model
+    # However, we do need to get counts from our dataset for validation so we can calculate the perplexity
+    vocab = reader.build_vocab([valid_file])
+    # If we are not using chars, then use 'x' for both input and output
+    preproc_data = baseline.embeddings.load_embeddings('x', dsz=d_model, known_vocab=vocab['x'],
+                                                       preserve_vocab_indices=True,
+                                                       embed_type=embed_type)
+    vocabs = preproc_data['vocab']
+
+    os.makedirs(basedir, exist_ok=True)
+    # We want to make sure to save our input vocab into the basedir for reuse later
+    write_json(vocabs, os.path.join(basedir, 'vocabs.json'))
+    embeddings = {'x': preproc_data['embeddings']}
+    logger.info("Loaded embeddings")
+
+    train_set = reader.load(train_file, vocabs)
+    valid_set = reader.load(valid_file, vocabs, distribute=False, shuffle=False)
+
+    train_loader = DataLoader(train_set, batch_size=batch_size, num_workers=num_train_workers)
+    valid_loader = DataLoader(valid_set, batch_size=batch_size)
+    logger.info("Loaded datasets")
+    logger.info("Using embedding type [%s]", embed_type)
+
+    if mlm:
+        mask_from = vocabs
+        vocab_size = len(mask_from)
+        mask_value = mask_from.get("[MASK]")
+        if mask_value == -1:
+            logger.error("We could not find a suitable masking token in the vocab")
+            return
+
+    if len(rpr_k) == 0 or rpr_k[0] < 1:
+        rpr_k = None
+    elif len(rpr_k) == 1:
+        rpr_k = rpr_k[0]
+    else:
+        rpr_k = rpr_k
+
+    TLM = TransformerMaskedLanguageModel if mlm else TransformerLanguageModel
+    model = TLM.create(embeddings,
+                       hsz=d_model,
+                       d_ff=d_ff,
+                       tie_weights=True,
+                       dropout=dropout,
+                       gpu=False,
+                       num_heads=num_heads,
+                       layers=num_layers,
+                       rpr_k=rpr_k,
+                       d_k=d_k,
+                       ffn_pdrop=ffn_pdrop,
+                       windowed_ra=windowed_ra,
+                       rpr_value_on=rpr_value_on,
+                       layer_drop=layer_drop,
+                       src_keys=['x'], tgt_key='x')
+
+    model.to(device)
+    loss_function = model.create_loss()
+    loss_function.to(device)
+
+    logger.info("Loaded model and loss")
+
+    steps_per_epoch = len(train_loader) // num_gpus
+    valid_steps = len(valid_loader)
+    update_on = steps_per_epoch // saves_per_epoch
+    report_on = max(10, update_on) // 10
+    logger.info(f"Steps per epoch per GPU: {steps_per_epoch}. Saving checkpoint every {update_on} steps.")
+    lr_decay = get_lr_decay(lr_scheduler, lr, steps_per_epoch, epochs, logger,
+                            decay_steps=lr_decay_steps, decay_rate=lr_decay_rate, alpha=lr_alpha)
+    linear_warmup = WarmupLinearSchedulerPyTorch(warmup_steps, lr=lr)
+    lr_sched = CompositeLRScheduler(linear_warmup, lr_decay, lr=lr)
+
+    global_step = 0
+    start_epoch = 0
+    if restart_from:
+
+        if restart_from.endswith('npz'):
+            load_tlm_npz(model, restart_from)
+        else:
+            model.load_state_dict(torch.load(restart_from))
+        vec = restart_from.split("-")
+
+        if restart_tt:
+            tick_type = restart_tt
+        else:
+            tick_type = vec[-2]
+        step_num = int(vec[-1].split(".")[0])
+        if tick_type == 'epoch':
+            start_epoch = step_num
+            global_step = start_epoch * steps_per_epoch
+
+        elif tick_type == 'step':
+            start_epoch = step_num // steps_per_epoch
+            global_step = step_num
+        else:
+            logger.warning(f"The previous tick was {step_num} but command-line specifies to ignore, setting to 0")
+
+        logger.info("Restarting from a previous checkpoint %s.\n\tStarting at global_step=%d, epoch=%d",
+                    restart_from, global_step, start_epoch+1)
+
+    optimizer = OptimizerManager(model, global_step, optim=optim, lr=lr, lr_function=lr_sched, weight_decay=weight_decay)
+    logger.info("Model has {:,} parameters".format(sum(p.numel() for p in model.parameters() if p.requires_grad)))
+
+    # Prepare model for distributed training if needed
+    if distributed:
+        # This program assume pure data parallelism, each model is on a single gpu
+        # If we wanted to support model and data parallelism we would need to update
+        # the selection of gpus based on rank, it would need to select multiple ids
+        # based on rank, here we select only a single gpu and use it for input and
+        # output.
+        model = DistributedDataParallel(model, device_ids=[device], output_device=device)
+        logger.info("Model located on %s", device)
+
+    model_base = os.path.join(basedir, 'checkpoint')
+    steps = global_step
+
+    timer = Timer()
+    for epoch in range(start_epoch, epochs):
+        avg_loss = Average('average_train_loss')
+        metrics = {}
+        optimizer.zero_grad()
+        timer.start()
+        model.train()
+        train_itr = iter(train_loader)
+        for i in range(steps_per_epoch):
+            batch = next(train_itr)
+            steps += 1
+            x, y = batch
+            inputs = x.to(device)
+            labels = y.to(device)
+            if do_on_demand_masking:
+                inputs, labels, _ = on_demand_mlm_masking(inputs, labels, mask_value, vocab_size)
+            inputs = {'x': inputs}
+
+            labels = labels.transpose(0, 1).contiguous()
+            logits = model(inputs, None)[0].transpose(0, 1).contiguous()
+            if mlm:
+                loss = loss_function(logits, labels)
+            else:
+                shift_logits = logits[:-1]
+                shift_labels = labels[1:]
+                loss = loss_function(shift_logits, shift_labels)
+            loss.backward()
+            avg_loss.update(loss.item())
+
+            torch.nn.utils.clip_grad_norm_(model.parameters(), clip)
+            optimizer.step()
+            optimizer.zero_grad()
+            if (i + 1) % report_on == 0:
+                logging.info(avg_loss)
+
+            if (i + 1) % update_on == 0 and local_rank < 1:
+                elapsed = timer.elapsed(True)
+                logging.info('elapsed time this epoch %d min', elapsed)
+                logging.info('elapsed step time %f steps/min', i/elapsed)
+                logging.info('LR: %f',  optimizer.current_lr)
+                save_checkpoint(model, model_base, steps, tick_type='step')
+
+        # How much time elapsed in minutes
+        elapsed = timer.elapsed(True)
+        train_token_loss = avg_loss.avg
+        # This is the average training token-level loss across all machines
+        # This is the token-level training perplexity
+        train_token_ppl = math.exp(train_token_loss)
+        metrics['train_elapsed_min'] = elapsed
+        metrics['average_train_loss'] = train_token_loss
+        metrics['train_ppl'] = train_token_ppl
+        if local_rank < 1:
+            avg_valid_loss = Average('average_valid_loss')
+            timer.start()
+            model.eval()
+            valid_itr = iter(valid_loader)
+            for j in range(valid_steps):
+                batch = next(valid_itr)
+                with torch.no_grad():
+                    x, y = batch
+                    inputs = x.to(device)
+                    labels = y.to(device)
+
+                    if do_on_demand_masking:
+                        inputs, labels, _ = on_demand_mlm_masking(inputs, labels, mask_value, vocab_size)
+                    inputs = {'x': inputs}
+                    labels = labels.transpose(0, 1).contiguous()
+                    logits = model(inputs, None)[0].transpose(0, 1).contiguous()
+                    if mlm:
+                        loss = loss_function(logits, labels)
+                    else:
+                        shift_logits = logits[:-1]
+                        shift_labels = labels[1:]
+                        loss = loss_function(shift_logits, shift_labels)
+                    avg_valid_loss.update(loss.item())
+
+            valid_token_loss = avg_valid_loss.avg
+            valid_token_ppl = math.exp(valid_token_loss)
+
+            metrics['valid_elapsed_min'] = timer.elapsed(True)
+            metrics['average_valid_loss'] = valid_token_loss
+            metrics['average_valid_word_ppl'] = valid_token_ppl
+            logger.info(metrics)
+            save_checkpoint(model, model_base, epoch, save_npz=True)
+
+
+def parse_args(argv):
     parser = ArgumentParser()
     parser.add_argument("--basedir", type=str)
     parser.add_argument("--train_file", type=str, required=True, help='File path to use for train file')
@@ -66,7 +306,8 @@ def main():
     parser.add_argument("--weight_decay", type=float, default=1.0e-2, help="Weight decay")
     parser.add_argument("--epochs", type=int, default=32, help="Num training epochs")
     parser.add_argument("--restart_from", type=str, help="Option allows you to restart from a previous checkpoint")
-    parser.add_argument("--restart_tt", type=str, help="Optional param for legacy checkpoints", choices=['step', 'epoch', 'ignore'])
+    parser.add_argument("--restart_tt", type=str, help="Optional param for legacy checkpoints",
+                        choices=['step', 'epoch', 'ignore'])
     parser.add_argument("--warmup_steps", type=int, default=10000, help="Num warmup steps")
     parser.add_argument("--saves_per_epoch", type=int, default=10, help="The number of checkpoints to save per epoch")
     parser.add_argument("--mlm", type=str2bool, default=True, help="Use Masked Language Model (MLM) objective")
@@ -89,235 +330,9 @@ def main():
                         type=int,
                         default=-1,
                         help="Local rank for distributed training (-1 means use the environment variables to find)")
-
-    args = parser.parse_args()
-
-    if args.basedir is None:
-        args.basedir = 'lm-{}-bpe-{}'.format(args.dataset_key, os.getpid())
-    logging.basicConfig(level=logging.INFO if args.local_rank in [-1, 0] else logging.WARN)
-
-    num_gpus = get_num_gpus_multiworker()
-    args.distributed = args.distributed or num_gpus > 1
-    logger.info(f"Using {num_gpus} GPUs in this job.")
-
-    do_on_demand_masking = args.mlm and not args.preprocessed
-    if do_on_demand_masking:
-        logger.info(f"On-demand masking is turned on")
-    if args.distributed:
-        args.device, updated_local_rank = init_distributed(args.local_rank)
-        args.local_rank = updated_local_rank
-
-    if args.file_type == 'tfrecord':
-        reader_type = 'tfrecord'
-    elif args.preprocessed:
-        reader_type = 'preprocessed'
-    else:
-        reader_type = 'lang'
-    reader = MultiFileDatasetReader(src_nctx=args.nctx, model_file=args.subword_model_file,
-                                    vocab_file=args.subword_vocab_file, file_type=args.file_type,
-                                    reader_type=reader_type, record_keys=['x', 'y'] if args.mlm else ['x'])
-
-    # This looks a bit funny but the streaming reader ignores our vocab and gives us the one from the subword_model
-    # However, we do need to get counts from our dataset for validation so we can calculate the perplexity
-    vocab = reader.build_vocab([args.valid_file])
-    # If we are not using chars, then use 'x' for both input and output
-    preproc_data = baseline.embeddings.load_embeddings('x', dsz=args.d_model, known_vocab=vocab['x'],
-                                                       preserve_vocab_indices=True,
-                                                       embed_type=args.embed_type)
-    vocabs = preproc_data['vocab']
-
-    os.makedirs(args.basedir, exist_ok=True)
-    # We want to make sure to save our input vocab into the basedir for reuse later
-    write_json(vocabs, os.path.join(args.basedir, 'vocabs.json'))
-    embeddings = {'x': preproc_data['embeddings']}
-    logger.info("Loaded embeddings")
-
-    train_set = reader.load(args.train_file, vocabs)
-    valid_set = reader.load(args.valid_file, vocabs, distribute=False, shuffle=False)
-
-    train_loader = DataLoader(train_set, batch_size=args.batch_size, num_workers=args.num_train_workers)
-    valid_loader = DataLoader(valid_set, batch_size=args.batch_size)
-    logger.info("Loaded datasets")
-    logger.info("Using embedding type [%s]", args.embed_type)
-
-    if args.mlm:
-        mask_from = vocabs
-        vocab_size = len(mask_from)
-        mask_value = mask_from.get("[MASK]")
-        if mask_value == -1:
-            logger.error("We could not find a suitable masking token in the vocab")
-            return
-
-    if len(args.rpr_k) == 0 or args.rpr_k[0] < 1:
-        rpr_k = None
-    elif len(args.rpr_k) == 1:
-        rpr_k = args.rpr_k[0]
-    else:
-        rpr_k = args.rpr_k
-
-    TLM = TransformerMaskedLanguageModel if args.mlm else TransformerLanguageModel
-    model = TLM.create(embeddings,
-                       hsz=args.d_model,
-                       d_ff=args.d_ff,
-                       tie_weights=True,
-                       dropout=args.dropout,
-                       gpu=False,
-                       num_heads=args.num_heads,
-                       layers=args.num_layers,
-                       rpr_k=rpr_k,
-                       d_k=args.d_k,
-                       ffn_pdrop=args.ffn_pdrop,
-                       windowed_ra=args.windowed_ra,
-                       rpr_value_on=args.rpr_value_on,
-                       layer_drop=args.layer_drop,
-                       src_keys=['x'], tgt_key='x')
-
-    model.to(args.device)
-    loss_function = model.create_loss()
-    loss_function.to(args.device)
-
-    logger.info("Loaded model and loss")
-
-    steps_per_epoch = len(train_loader) // num_gpus
-    valid_steps = len(valid_loader)
-    update_on = steps_per_epoch // args.saves_per_epoch
-    report_on = max(10, update_on) // 10
-    logger.info(f"Steps per epoch per GPU: {steps_per_epoch}. Saving checkpoint every {update_on} steps.")
-    lr_decay = get_lr_decay(args.lr_scheduler, args.lr, steps_per_epoch, args.epochs, logger,
-                            decay_steps=args.lr_decay_steps, decay_rate=args.lr_decay_rate, alpha=args.lr_alpha)
-    linear_warmup = WarmupLinearSchedulerPyTorch(args.warmup_steps, lr=args.lr)
-    lr_sched = CompositeLRScheduler(linear_warmup, lr_decay, lr=args.lr)
-
-    global_step = 0
-    start_epoch = 0
-    if args.restart_from:
-
-        if args.restart_from.endswith('npz'):
-            load_tlm_npz(model, args.restart_from)
-        else:
-            model.load_state_dict(torch.load(args.restart_from))
-        vec = args.restart_from.split("-")
-
-        if args.restart_tt:
-            tick_type = args.restart_tt
-        else:
-            tick_type = vec[-2]
-        step_num = int(vec[-1].split(".")[0])
-        if tick_type == 'epoch':
-            start_epoch = step_num
-            global_step = start_epoch * steps_per_epoch
-
-        elif tick_type == 'step':
-            start_epoch = step_num // steps_per_epoch
-            global_step = step_num
-        else:
-            logger.warning(f"The previous tick was {step_num} but command-line specifies to ignore, setting to 0")
-
-        logger.info("Restarting from a previous checkpoint %s.\n\tStarting at global_step=%d, epoch=%d",
-                    args.restart_from, global_step, start_epoch+1)
-
-    optimizer = OptimizerManager(model, global_step, optim=args.optim, lr=args.lr, lr_function=lr_sched, weight_decay=args.weight_decay)
-    logger.info("Model has {:,} parameters".format(sum(p.numel() for p in model.parameters() if p.requires_grad)))
-
-    # Prepare model for distributed training if needed
-    if args.distributed:
-        # This program assume pure data parallelism, each model is on a single gpu
-        # If we wanted to support model and data parallelism we would need to update
-        # the selection of gpus based on rank, it would need to select multiple ids
-        # based on rank, here we select only a single gpu and use it for input and
-        # output.
-        model = DistributedDataParallel(model, device_ids=[args.device], output_device=args.device)
-        logger.info("Model located on %s", args.device)
-
-    model_base = os.path.join(args.basedir, 'checkpoint')
-    steps = global_step
-
-    timer = Timer()
-    for epoch in range(start_epoch, args.epochs):
-        avg_loss = Average('average_train_loss')
-        metrics = {}
-        optimizer.zero_grad()
-        timer.start()
-        model.train()
-        train_itr = iter(train_loader)
-        for i in range(steps_per_epoch):
-            batch = next(train_itr)
-            steps += 1
-            x, y = batch
-            inputs = x.to(args.device)
-            labels = y.to(args.device)
-            if do_on_demand_masking:
-                inputs, labels, _ = on_demand_mlm_masking(inputs, labels, mask_value, vocab_size)
-            inputs = {'x': inputs}
-
-            labels = labels.transpose(0, 1).contiguous()
-            logits = model(inputs, None)[0].transpose(0, 1).contiguous()
-            if args.mlm:
-                loss = loss_function(logits, labels)
-            else:
-                shift_logits = logits[:-1]
-                shift_labels = labels[1:]
-                loss = loss_function(shift_logits, shift_labels)
-            loss.backward()
-            avg_loss.update(loss.item())
-
-            torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip)
-            optimizer.step()
-            optimizer.zero_grad()
-            if (i + 1) % report_on == 0:
-                logging.info(avg_loss)
-
-            if (i + 1) % update_on == 0 and args.local_rank < 1:
-                elapsed = timer.elapsed(True)
-                logging.info('elapsed time this epoch %d min', elapsed)
-                logging.info('elapsed step time %f steps/min', i/elapsed)
-                logging.info('LR: %f',  optimizer.current_lr)
-                save_checkpoint(model, model_base, steps, tick_type='step')
-
-        # How much time elapsed in minutes
-        elapsed = timer.elapsed(True)
-        train_token_loss = avg_loss.avg
-        # This is the average training token-level loss across all machines
-        # This is the token-level training perplexity
-        train_token_ppl = math.exp(train_token_loss)
-        metrics['train_elapsed_min'] = elapsed
-        metrics['average_train_loss'] = train_token_loss
-        metrics['train_ppl'] = train_token_ppl
-        if args.local_rank < 1:
-            avg_valid_loss = Average('average_valid_loss')
-            timer.start()
-            model.eval()
-            valid_itr = iter(valid_loader)
-            for j in range(valid_steps):
-                batch = next(valid_itr)
-                with torch.no_grad():
-                    x, y = batch
-                    inputs = x.to(args.device)
-                    labels = y.to(args.device)
-
-                    if do_on_demand_masking:
-                        inputs, labels, _ = on_demand_mlm_masking(inputs, labels, mask_value, vocab_size)
-                    inputs = {'x': inputs}
-                    labels = labels.transpose(0, 1).contiguous()
-                    logits = model(inputs, None)[0].transpose(0, 1).contiguous()
-                    if args.mlm:
-                        loss = loss_function(logits, labels)
-                    else:
-                        shift_logits = logits[:-1]
-                        shift_labels = labels[1:]
-                        loss = loss_function(shift_logits, shift_labels)
-                    avg_valid_loss.update(loss.item())
-
-            valid_token_loss = avg_valid_loss.avg
-            valid_token_ppl = math.exp(valid_token_loss)
-
-            metrics['valid_elapsed_min'] = timer.elapsed(True)
-            metrics['average_valid_loss'] = valid_token_loss
-            metrics['average_valid_word_ppl'] = valid_token_ppl
-            logger.info(metrics)
-            save_checkpoint(model, model_base, epoch, save_npz=True)
+    args = parser.parse_args(argv)
+    return args
 
 
 if __name__ == "__main__":
-    main()
-
+    main(sys.argv[1:])
