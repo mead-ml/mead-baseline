@@ -18,7 +18,7 @@ from eight_mile.pytorch.layers import (
 )
 from baseline.pytorch.seq2seq.model import TiedEmbeddingsSeq2SeqModel
 from eight_mile.pytorch.optz import *
-from .transformer_utils import MultiFileDatasetReader, get_lr_decay
+from mead.api_examples.transformer_utils import MultiFileDatasetReader, get_lr_decay
 
 
 logger = logging.getLogger(__file__)

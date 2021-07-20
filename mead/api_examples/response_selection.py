@@ -6,7 +6,7 @@ import torch.nn.functional as F
 import baseline.embeddings
 import baseline.pytorch.embeddings
 from eight_mile.pytorch.serialize import load_transformer_de_npz
-from transformer_utils import MultiFileDatasetReader, TransformerBoWPairedModel
+from mead.api_examples.transformer_utils import MultiFileDatasetReader, TransformerBoWPairedModel
 from eight_mile.progress import create_progress_bar
 from eight_mile.utils import str2bool
 from eight_mile.pytorch.layers import find_latest_checkpoint, PairedModel

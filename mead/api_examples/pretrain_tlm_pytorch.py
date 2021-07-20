@@ -12,7 +12,7 @@ from eight_mile.optz import *
 from eight_mile.pytorch.layers import save_checkpoint, init_distributed
 from eight_mile.pytorch.optz import *
 from baseline.pytorch.lm import TransformerLanguageModel, TransformerMaskedLanguageModel
-from .transformer_utils import MultiFileDatasetReader, on_demand_mlm_masking, get_lr_decay
+from mead.api_examples.transformer_utils import MultiFileDatasetReader, on_demand_mlm_masking, get_lr_decay
 from eight_mile.pytorch.serialize import load_tlm_npz
 
 logger = logging.getLogger(__file__)

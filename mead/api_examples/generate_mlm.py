@@ -11,7 +11,7 @@ from baseline.pytorch.lm import TransformerMaskedLanguageModel
 from eight_mile.utils import str2bool, read_json, Offsets, revlut
 from baseline.vectorizers import Token1DVectorizer, BPEVectorizer1D
 from baseline.pytorch.embeddings import *
-from .transformer_utils import find_latest_checkpoint
+from mead.api_examples.transformer_utils import find_latest_checkpoint
 logger = logging.getLogger(__file__)
 
 
