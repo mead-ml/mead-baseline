@@ -17,8 +17,7 @@ from eight_mile.pytorch.layers import checkpoint_for, rm_old_checkpoints, save_c
 logger = logging.getLogger(__file__)
 from baseline.pytorch.lm import TransformerMaskedLanguageModel
 from eight_mile.pytorch.layers import TransformerDiscriminator
-from transformer_utils import MultiFileDatasetReader, find_latest_checkpoint, \
-    TensorWordDatasetReader, load_data_caching, get_lr_decay, on_demand_mlm_masking
+from mead.api_examples.transformer_utils import MultiFileDatasetReader, find_latest_checkpoint, get_lr_decay, on_demand_mlm_masking
 
 """Pre-train an discriminator Transformer model in PyTorch
 

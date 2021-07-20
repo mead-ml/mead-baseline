@@ -315,64 +315,69 @@ def write_files(annot_files, doc_files, fw, output_dir, pg_name):
     fw.close()
     write_yaml({'num_samples': num_samples}, os.path.join(output_dir, 'md.yml'))
 
-parser = argparse.ArgumentParser(description='Convert text into MLM fixed width contexts')
+def main():
+    parser = argparse.ArgumentParser(description='Convert text into MLM fixed width contexts')
 
-parser.add_argument('--input_files',
-                    help='The text to classify as a string, or a path to a file with each line as an example', type=str)
-parser.add_argument('--annot_files',
-                    help='The text to classify as a string, or a path to a file with each line as an example', type=str)
-parser.add_argument('--codes', help='BPE codes')
-parser.add_argument('--vocab', help='BPE vocab')
-parser.add_argument("--nctx", type=int, default=256, help="Max input length")
-parser.add_argument("--fmt", type=str, default='json', choices=['json', 'tsv', 'tfrecord'])
-parser.add_argument("--fields", type=str, nargs="+", default=["x_str", "y_str"])
-parser.add_argument("--output_dir", type=str, help="Output base name, e.g. /path/to/output/record")
-parser.add_argument("--max_file_size", type=int, default=100, help="Shard size, defaults to 100MB")
-parser.add_argument("--stride", type=int, help="Tokens to stride before next read, defaults to `nctx`")
-parser.add_argument("--tok_on_eol", type=str, default="<EOS>")
-parser.add_argument("--cased", type=baseline.str2bool, default=True)
-parser.add_argument("--document_vocab", type=str, default="document.vocab")
-parser.add_argument("--label_vocab", type=str, default="label.vocab")
-parser.add_argument("--valid_split", type=float, default=0.05)
-parser.add_argument("--prefix", default="<GO>")
-parser.add_argument("--suffix", default="<EOS>")
-parser.add_argument("--pg_name", choices=["tqdm", "default"], default="default")
+    parser.add_argument('--input_files',
+                        help='The text to classify as a string, or a path to a file with each line as an example', type=str)
+    parser.add_argument('--annot_files',
+                        help='The text to classify as a string, or a path to a file with each line as an example', type=str)
+    parser.add_argument('--codes', help='BPE codes')
+    parser.add_argument('--vocab', help='BPE vocab')
+    parser.add_argument("--nctx", type=int, default=256, help="Max input length")
+    parser.add_argument("--fmt", type=str, default='json', choices=['json', 'tsv', 'tfrecord'])
+    parser.add_argument("--fields", type=str, nargs="+", default=["x_str", "y_str"])
+    parser.add_argument("--output_dir", type=str, help="Output base name, e.g. /path/to/output/record")
+    parser.add_argument("--max_file_size", type=int, default=100, help="Shard size, defaults to 100MB")
+    parser.add_argument("--stride", type=int, help="Tokens to stride before next read, defaults to `nctx`")
+    parser.add_argument("--tok_on_eol", type=str, default="<EOS>")
+    parser.add_argument("--cased", type=baseline.str2bool, default=True)
+    parser.add_argument("--document_vocab", type=str, default="document.vocab")
+    parser.add_argument("--label_vocab", type=str, default="label.vocab")
+    parser.add_argument("--valid_split", type=float, default=0.05)
+    parser.add_argument("--prefix", default="<GO>")
+    parser.add_argument("--suffix", default="<EOS>")
+    parser.add_argument("--pg_name", choices=["tqdm", "default"], default="default")
 
 
-args = parser.parse_args()
-annot_files = list(Path(args.annot_files).iterdir())
-valid_split = int(len(annot_files) * args.valid_split)
-VALID_FILES = annot_files[:valid_split]
-TRAIN_FILES = annot_files[valid_split:]
+    args = parser.parse_args()
+    annot_files = list(Path(args.annot_files).iterdir())
+    valid_split = int(len(annot_files) * args.valid_split)
+    VALID_FILES = annot_files[:valid_split]
+    TRAIN_FILES = annot_files[valid_split:]
 
-VECTORIZER = BPEVectorizer1D(transform_fn=baseline.lowercase if not args.cased else lambda x: x,
-                             model_file=args.codes, vocab_file=args.vocab, mxlen=1024)
-NCTX = args.nctx - 2
-PREFIX = (VECTORIZER.vocab[args.prefix], Offsets.GO,)
-SUFFIX = (VECTORIZER.vocab[args.suffix], Offsets.EOS,)
+    VECTORIZER = BPEVectorizer1D(transform_fn=baseline.lowercase if not args.cased else lambda x: x,
+                                 model_file=args.codes, vocab_file=args.vocab, mxlen=1024)
+    NCTX = args.nctx - 2
+    PREFIX = (VECTORIZER.vocab[args.prefix], Offsets.GO,)
+    SUFFIX = (VECTORIZER.vocab[args.suffix], Offsets.EOS,)
 
-DOC2WORD = read_vocab_file(args.document_vocab)
-label2word = read_vocab_file(args.label_vocab)
-LABELS = {Offsets.VALUES[k]:k for k in range(Offsets.OFFSET)}
-for label in label2word.values():
-    for prefix in ["B", "I", "E", "S"]:
-        LABELS[f"{prefix}-{label}"] = len(LABELS)
+    DOC2WORD = read_vocab_file(args.document_vocab)
+    label2word = read_vocab_file(args.label_vocab)
+    LABELS = {Offsets.VALUES[k]:k for k in range(Offsets.OFFSET)}
+    for label in label2word.values():
+        for prefix in ["B", "I", "E", "S"]:
+            LABELS[f"{prefix}-{label}"] = len(LABELS)
 
-LABELS["O"] = len(LABELS)
+    LABELS["O"] = len(LABELS)
 
-if not os.path.exists(args.output_dir):
-    os.makedirs(args.output_dir)
-write_json(LABELS, os.path.join(args.output_dir, 'labels.json'))
-valid_dir = os.path.join(args.output_dir, 'valid')
-train_dir = os.path.join(args.output_dir, 'train')
-makedir_if_none(args.output_dir)
-makedir_if_none(train_dir)
-makedir_if_none(valid_dir)
+    if not os.path.exists(args.output_dir):
+        os.makedirs(args.output_dir)
+    write_json(LABELS, os.path.join(args.output_dir, 'labels.json'))
+    valid_dir = os.path.join(args.output_dir, 'valid')
+    train_dir = os.path.join(args.output_dir, 'train')
+    makedir_if_none(args.output_dir)
+    makedir_if_none(train_dir)
+    makedir_if_none(valid_dir)
 
-logger.info("Converting validation files")
-fw_valid = create_file_writer(args.fmt, os.path.join(valid_dir, 'valid'), args.fields, args.max_file_size)
-write_files(VALID_FILES, args.input_files, fw_valid, valid_dir, args.pg_name)
+    logger.info("Converting validation files")
+    fw_valid = create_file_writer(args.fmt, os.path.join(valid_dir, 'valid'), args.fields, args.max_file_size)
+    write_files(VALID_FILES, args.input_files, fw_valid, valid_dir, args.pg_name)
 
-logger.info("Converting training files")
-fw_train = create_file_writer(args.fmt, os.path.join(train_dir, 'train'), args.fields, args.max_file_size)
-write_files(TRAIN_FILES, args.input_files, fw_train, train_dir, args.pg_name)
+    logger.info("Converting training files")
+    fw_train = create_file_writer(args.fmt, os.path.join(train_dir, 'train'), args.fields, args.max_file_size)
+    write_files(TRAIN_FILES, args.input_files, fw_train, train_dir, args.pg_name)
+
+
+if __name__ == '__main__':
+    main()

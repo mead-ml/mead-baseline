@@ -11,7 +11,7 @@ from baseline.pytorch.lm import TransformerMaskedLanguageModel
 from eight_mile.utils import str2bool, read_json, Offsets, revlut
 from baseline.vectorizers import Token1DVectorizer, BPEVectorizer1D
 from baseline.pytorch.embeddings import *
-from transformer_utils import find_latest_checkpoint
+from mead.api_examples.transformer_utils import find_latest_checkpoint
 logger = logging.getLogger(__file__)
 
 
@@ -84,7 +84,7 @@ def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, d_k, c
     return model
 
 
-def run():
+def main():
     parser = ArgumentParser()
     parser.add_argument("--basedir", type=str)
     parser.add_argument("--checkpoint", type=str, help='Checkpoint name or directory to load')
@@ -142,4 +142,4 @@ def run():
 
     print('[Response]', ' '.join(bpe_out))
 
-run()
+main()

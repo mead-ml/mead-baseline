@@ -94,6 +94,7 @@ def run():
     parser.add_argument("--device", type=str,
                         default="cuda" if torch.cuda.is_available() else "cpu",
                         help="Device (cuda or cpu)")
+    parser.add_argument("--extra_tokens", help="What extra tokens should we use", nargs="+", default=["[CLS]", "[MASK]"])
     args = parser.parse_args()
 
     if torch.cuda.device_count() == 1:
@@ -107,7 +108,7 @@ def run():
         checkpoint = args.checkpoint
 
     vectorizer = BPEVectorizer1D(model_file=args.subword_model_file, vocab_file=args.subword_vocab_file,
-                                 mxlen=args.nctx, emit_end_tok=args.end_token)
+                                 mxlen=args.nctx, emit_end_tok=args.end_token, extra_tokens=args.extra_tokens)
     vocab = vectorizer.vocab
     # If we are not using chars, then use 'x' for both input and output
     preproc_data = baseline.embeddings.load_embeddings('x', dsz=args.d_model, counts=False, known_vocab=vocab, embed_type=args.embed_type)
