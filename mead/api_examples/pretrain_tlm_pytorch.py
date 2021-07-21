@@ -46,7 +46,7 @@ def run(basedir=None, train_file=None, valid_file=None, dataset_key='tlm', embed
         lr_alpha=0.0, optim='adamw', lr=4.0e-4, clip=1.0, weight_decay=1.0e-2, epochs=32, restart_from=None,
         restart_tt=None, warmup_steps=10000, saves_per_epoch=10, mlm=True, preprocessed=True, rpr_k=[8],
         rpr_value_on=True, windowed_ra=False, device="cuda", distributed=False, local_rank=-1,
-        extra_tokens=["[CLS]", "[MASK]"], **kwargs):
+        extra_tokens=["[CLS]", "[MASK]"], do_early_stopping=False, **kwargs):
     if basedir is None:
         basedir = 'lm-{}-bpe-{}'.format(dataset_key, os.getpid())
     logging.basicConfig(level=logging.INFO if local_rank in [-1, 0] else logging.WARN)
@@ -187,8 +187,10 @@ def run(basedir=None, train_file=None, valid_file=None, dataset_key='tlm', embed
 
     model_base = os.path.join(basedir, 'checkpoint')
     steps = global_step
+    best_valid_loss = np.inf
 
     timer = Timer()
+    valid_timer = Timer()
     for epoch in range(start_epoch, epochs):
         avg_loss = Average('average_train_loss')
         metrics = {}
@@ -228,50 +230,53 @@ def run(basedir=None, train_file=None, valid_file=None, dataset_key='tlm', embed
                 logging.info('elapsed time this epoch %d min', elapsed)
                 logging.info('elapsed step time %f steps/min', i/elapsed)
                 logging.info('LR: %f',  optimizer.current_lr)
-                save_checkpoint(model, model_base, steps, tick_type='step')
 
-        # How much time elapsed in minutes
-        elapsed = timer.elapsed(True)
-        train_token_loss = avg_loss.avg
-        # This is the average training token-level loss across all machines
-        # This is the token-level training perplexity
-        train_token_ppl = math.exp(train_token_loss)
-        metrics['train_elapsed_min'] = elapsed
-        metrics['average_train_loss'] = train_token_loss
-        metrics['train_ppl'] = train_token_ppl
-        if local_rank < 1:
-            avg_valid_loss = Average('average_valid_loss')
-            timer.start()
-            model.eval()
-            valid_itr = iter(valid_loader)
-            for j in range(valid_steps):
-                batch = next(valid_itr)
-                with torch.no_grad():
-                    x, y = batch
-                    inputs = x.to(device)
-                    labels = y.to(device)
+                train_token_loss = avg_loss.avg
+                # This is the average training token-level loss across all machines
+                # This is the token-level training perplexity
+                train_token_ppl = math.exp(train_token_loss)
+                metrics['train_elapsed_min'] = elapsed
+                metrics['average_train_loss'] = train_token_loss
+                metrics['train_ppl'] = train_token_ppl
 
-                    if do_on_demand_masking:
-                        inputs, labels, _ = on_demand_mlm_masking(inputs, labels, mask_value, vocab_size)
-                    inputs = {'x': inputs}
-                    labels = labels.transpose(0, 1).contiguous()
-                    logits = model(inputs, None)[0].transpose(0, 1).contiguous()
-                    if mlm:
-                        loss = loss_function(logits, labels)
-                    else:
-                        shift_logits = logits[:-1]
-                        shift_labels = labels[1:]
-                        loss = loss_function(shift_logits, shift_labels)
-                    avg_valid_loss.update(loss.item())
+                avg_valid_loss = Average('average_valid_loss')
+                valid_timer.start()
+                model.eval()
+                valid_itr = iter(valid_loader)
+                for j in range(valid_steps):
+                    batch = next(valid_itr)
+                    with torch.no_grad():
+                        x, y = batch
+                        inputs = x.to(device)
+                        labels = y.to(device)
 
-            valid_token_loss = avg_valid_loss.avg
-            valid_token_ppl = math.exp(valid_token_loss)
+                        if do_on_demand_masking:
+                            inputs, labels, _ = on_demand_mlm_masking(inputs, labels, mask_value, vocab_size)
+                        inputs = {'x': inputs}
+                        labels = labels.transpose(0, 1).contiguous()
+                        logits = model(inputs, None)[0].transpose(0, 1).contiguous()
+                        if mlm:
+                            loss = loss_function(logits, labels)
+                        else:
+                            shift_logits = logits[:-1]
+                            shift_labels = labels[1:]
+                            loss = loss_function(shift_logits, shift_labels)
+                        avg_valid_loss.update(loss.item())
 
-            metrics['valid_elapsed_min'] = timer.elapsed(True)
-            metrics['average_valid_loss'] = valid_token_loss
-            metrics['average_valid_word_ppl'] = valid_token_ppl
-            logger.info(metrics)
-            save_checkpoint(model, model_base, epoch, save_npz=True)
+                valid_token_loss = avg_valid_loss.avg
+                valid_token_ppl = math.exp(valid_token_loss)
+
+                metrics['valid_elapsed_min'] = valid_timer.elapsed(True)
+                metrics['average_valid_loss'] = valid_token_loss
+                metrics['average_valid_word_ppl'] = valid_token_ppl
+                logger.info(metrics)
+                if not do_early_stopping:
+                    save_checkpoint(model, model_base, steps, tick_type='step')
+                elif valid_token_loss < best_valid_loss:
+                    best_valid_loss = valid_token_loss
+                    logger.info(f"New best valid loss: {best_valid_loss}. Saving checkpoint...")
+                    save_checkpoint(model, model_base, steps, tick_type='step')
+                model.train()
 
 
 def parse_args(argv):
@@ -333,6 +338,8 @@ def parse_args(argv):
                         default=-1,
                         help="Local rank for distributed training (-1 means use the environment variables to find)")
     parser.add_argument("--extra_tokens", help="What extra tokens should we use", nargs="+", default=["[CLS]", "[MASK]"])
+    parser.add_argument("--do_early_stopping", type=str2bool, default=False,
+                        help="if True, only save checkpoint when valid loss improves")
     args = parser.parse_args(argv)
     return args
 
