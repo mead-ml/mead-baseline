@@ -135,7 +135,6 @@ def run(basedir=None, train_file=None, valid_file=None, dataset_key='tlm', embed
     logger.info("Loaded model and loss")
 
     steps_per_epoch = len(train_loader) // num_gpus
-    valid_steps = len(valid_loader)
     update_on = steps_per_epoch // saves_per_epoch
     report_on = max(10, update_on) // 10
     logger.info(f"Steps per epoch per GPU: {steps_per_epoch}. Saving checkpoint every {update_on} steps.")
@@ -190,7 +189,6 @@ def run(basedir=None, train_file=None, valid_file=None, dataset_key='tlm', embed
     best_valid_loss = np.inf
 
     timer = Timer()
-    valid_timer = Timer()
     for epoch in range(start_epoch, epochs):
         avg_loss = Average('average_train_loss')
         metrics = {}
@@ -231,52 +229,67 @@ def run(basedir=None, train_file=None, valid_file=None, dataset_key='tlm', embed
                 logging.info('elapsed step time %f steps/min', i/elapsed)
                 logging.info('LR: %f',  optimizer.current_lr)
 
-                train_token_loss = avg_loss.avg
-                # This is the average training token-level loss across all machines
-                # This is the token-level training perplexity
-                train_token_ppl = math.exp(train_token_loss)
-                metrics['train_elapsed_min'] = elapsed
-                metrics['average_train_loss'] = train_token_loss
-                metrics['train_ppl'] = train_token_ppl
-
-                avg_valid_loss = Average('average_valid_loss')
-                valid_timer.start()
-                model.eval()
-                valid_itr = iter(valid_loader)
-                for j in range(valid_steps):
-                    batch = next(valid_itr)
-                    with torch.no_grad():
-                        x, y = batch
-                        inputs = x.to(device)
-                        labels = y.to(device)
-
-                        if do_on_demand_masking:
-                            inputs, labels, _ = on_demand_mlm_masking(inputs, labels, mask_value, vocab_size)
-                        inputs = {'x': inputs}
-                        labels = labels.transpose(0, 1).contiguous()
-                        logits = model(inputs, None)[0].transpose(0, 1).contiguous()
-                        if mlm:
-                            loss = loss_function(logits, labels)
-                        else:
-                            shift_logits = logits[:-1]
-                            shift_labels = labels[1:]
-                            loss = loss_function(shift_logits, shift_labels)
-                        avg_valid_loss.update(loss.item())
-
-                valid_token_loss = avg_valid_loss.avg
-                valid_token_ppl = math.exp(valid_token_loss)
-
-                metrics['valid_elapsed_min'] = valid_timer.elapsed(True)
-                metrics['average_valid_loss'] = valid_token_loss
-                metrics['average_valid_word_ppl'] = valid_token_ppl
-                logger.info(metrics)
                 if not do_early_stopping:
                     save_checkpoint(model, model_base, steps, tick_type='step')
-                elif valid_token_loss < best_valid_loss:
-                    best_valid_loss = valid_token_loss
-                    logger.info(f"New best valid loss: {best_valid_loss}. Saving checkpoint...")
-                    save_checkpoint(model, model_base, steps, tick_type='step')
-                model.train()
+                else:
+                    valid_token_loss = validate(model, loss_function, valid_loader, avg_loss, timer, metrics,
+                                                do_on_demand_masking, mlm, mask_value, vocab_size, device)
+                    if valid_token_loss < best_valid_loss:
+                        best_valid_loss = valid_token_loss
+                        logger.info(f"New best valid loss: {best_valid_loss}. Saving checkpoint...")
+                        save_checkpoint(model, model_base, steps, tick_type='step')
+                    model.train()
+
+        if not do_early_stopping:
+            _ = validate(model, loss_function, valid_loader, avg_loss, timer, metrics, do_on_demand_masking, mlm,
+                         mask_value, vocab_size, device)
+            save_checkpoint(model, model_base, epoch, tick_type='epoch')
+
+
+def validate(model, loss_function, valid_loader, avg_train_loss, train_timer, metrics, do_on_demand_masking, mlm,
+             mask_value, vocab_size, device):
+    train_token_loss = avg_train_loss.avg
+    # This is the average training token-level loss across all machines
+    # This is the token-level training perplexity
+    train_token_ppl = math.exp(train_token_loss)
+    metrics['train_elapsed_min'] = train_timer.elapsed(True)
+    metrics['average_train_loss'] = train_token_loss
+    metrics['train_ppl'] = train_token_ppl
+
+    avg_valid_loss = Average('average_valid_loss')
+    valid_timer = Timer()
+    valid_timer.start()
+    model.eval()
+    valid_steps = len(valid_loader)
+    valid_itr = iter(valid_loader)
+    for j in range(valid_steps):
+        batch = next(valid_itr)
+        with torch.no_grad():
+            x, y = batch
+            inputs = x.to(device)
+            labels = y.to(device)
+
+            if do_on_demand_masking:
+                inputs, labels, _ = on_demand_mlm_masking(inputs, labels, mask_value, vocab_size)
+            inputs = {'x': inputs}
+            labels = labels.transpose(0, 1).contiguous()
+            logits = model(inputs, None)[0].transpose(0, 1).contiguous()
+            if mlm:
+                loss = loss_function(logits, labels)
+            else:
+                shift_logits = logits[:-1]
+                shift_labels = labels[1:]
+                loss = loss_function(shift_logits, shift_labels)
+            avg_valid_loss.update(loss.item())
+
+    valid_token_loss = avg_valid_loss.avg
+    valid_token_ppl = math.exp(valid_token_loss)
+
+    metrics['valid_elapsed_min'] = valid_timer.elapsed(True)
+    metrics['average_valid_loss'] = valid_token_loss
+    metrics['average_valid_word_ppl'] = valid_token_ppl
+    logger.info(metrics)
+    return valid_token_loss
 
 
 def parse_args(argv):
