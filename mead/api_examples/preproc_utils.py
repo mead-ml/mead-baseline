@@ -60,9 +60,9 @@ def in_bytes(mb):
 
 
 class RollingWriter:
-    def __init__(self, name, fields, max_file_size_mb):
+    def __init__(self, name, fields, max_file_size_mb, counter=1):
         self.name = name
-        self.counter = 1
+        self.counter = counter
         self.fields = fields
         self.current_file_size = 0
         self.writer = None
@@ -100,8 +100,6 @@ class RollingWriter:
 
 
 class TSVWriter(RollingWriter):
-    def __init__(self, name, fields, max_file_size_mb):
-        super().__init__(name, fields, max_file_size_mb)
 
     def _to_str(self, value):
         if isinstance(value, np.ndarray):
@@ -120,9 +118,6 @@ class TSVWriter(RollingWriter):
 
 class JSONLWriter(RollingWriter):
 
-    def __init__(self, name, fields, max_file_size_mb):
-        super().__init__(name, fields, max_file_size_mb)
-
     def write(self, record):
         r = {}
         for f in self.fields:
@@ -140,12 +135,12 @@ class JSONLWriter(RollingWriter):
 
 
 class TFRecordRollingWriter(RollingWriter):
-    def __init__(self, name, fields, max_file_size_mb):
+    def __init__(self, name, fields, max_file_size_mb, counter=1):
         try:
             self.RecordWriterClass = tf.io.TFRecordWriter
         except Exception as e:
             raise Exception("tfrecord package could not be loaded, pip install that first, along with crc32c")
-        super().__init__(name, fields, max_file_size_mb)
+        super().__init__(name, fields, max_file_size_mb, counter)
 
     @staticmethod
     def _bytes_feature(value):
@@ -193,10 +188,12 @@ class TFRecordRollingWriter(RollingWriter):
         return 'tfrecord'
 
 
-def create_file_writer(fmt, name, fields, max_file_size_mb):
+def create_file_writer(fmt, name, fields, max_file_size_mb, counter=1):
+    ClassDef = TFRecordRollingWriter
     if fmt == 'tsv':
-        return TSVWriter(name, fields, max_file_size_mb)
-    if fmt == 'json':
-        return JSONLWriter(name, fields, max_file_size_mb)
-    return TFRecordRollingWriter(name, fields, max_file_size_mb)
+        ClassDef = TSVWriter
+    elif fmt.startswith('json'):
+        ClassDef = JSONLWriter
+    return ClassDef(name, fields, max_file_size_mb, counter)
+
 

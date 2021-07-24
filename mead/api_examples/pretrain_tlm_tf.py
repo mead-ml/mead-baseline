@@ -188,8 +188,6 @@ def main():
                                                        preserve_vocab_indices=True,
                                                        embed_type=args.embed_type)
     vocabs = preproc_data['vocab']
-    vocab_size = max(vocabs.values())
-
 
     train_md = args.train_md if args.train_md else os.path.join(args.train_dir, 'md.yml')
     num_train_samples = get_num_samples(train_md)
