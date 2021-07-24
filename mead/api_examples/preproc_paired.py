@@ -81,8 +81,8 @@ def run(input_files=[], input_pattern='*.txt', codes=None, vocab=None, nctx=256,
 
     # Create a file writer for this shard
     fw = create_file_writer(fmt, output, fields, max_file_size, 1000 * world_offset)
-    num_samples = 0
     num_read = -1
+    num_samples_this_worker = 0
 
     for text in input_files:
         with open(text, encoding='utf-8') as rf:
@@ -115,9 +115,10 @@ def run(input_files=[], input_pattern='*.txt', codes=None, vocab=None, nctx=256,
                 y_t[:len(y)] = y
                 record = {'x': x_t, 'y': y_t, 'x_str': [indices2word[s] for s in x_t], 'y_str': [indices2word[s] for s in y_t]}
                 fw.write(record)
+                num_samples_this_worker += 1
 
     fw.close()
-    write_yaml({'num_samples': num_samples}, os.path.join(root_dir, 'md.yml'))
+    write_yaml({'num_samples': num_read}, os.path.join(root_dir, f'md-{world_offset}.yml'))
 
 
 def main():
