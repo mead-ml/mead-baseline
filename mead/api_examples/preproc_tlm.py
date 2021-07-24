@@ -112,7 +112,8 @@ def run(input_files=[], input_pattern='*.txt', codes=None, vocab=None, nctx=256,
     write_yaml({'num_samples': num_samples}, os.path.join(root_dir, 'md.yml'))
 
 
-def main(argv):
+def main():
+    argv = sys.argv[1:]
     args = parse_args(argv)
     run(**vars(args))
 
@@ -144,4 +145,4 @@ def parse_args(argv):
 
 
 if __name__ == '__main__':
-    main(sys.argv[1:])
+    main()

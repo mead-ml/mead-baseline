@@ -81,7 +81,8 @@ def run_step_s2s(x, y, model, loss_function, device, distributed):
     return loss
 
 
-def main(argv):
+def main():
+    argv = sys.argv[1:]
     args = parse_args(argv)
     run(**vars(args))
 
@@ -373,4 +374,4 @@ def reload_from_checkpoint(model_type, restart_from, restart_tick_type, model, s
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    main()
