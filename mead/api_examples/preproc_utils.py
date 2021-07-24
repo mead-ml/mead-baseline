@@ -17,8 +17,8 @@ MASKING_RULE_DEFS = {}
 def register_masking(cls, name=None):
     """Register a class as a handler for masking rules by key name"""
     r = register(cls, MASKING_RULE_DEFS, name, "masking rule defs")
-    print('registered', MASKING_RULE_DEFS)
     return r
+
 
 def create_masking(mask_type, vocab, pad_y):
     print('creating', MASKING_RULE_DEFS)
@@ -52,8 +52,6 @@ class MaskMLM(Masking):
     def __call__(self, chunk: np.ndarray, ignore_prefix: bool, ignore_suffix: bool):
 
         return mlm_masking(chunk, self.mask_value, self.vocab_size, ignore_prefix, ignore_suffix, pad_y=self.pad_y)
-
-
 
 def in_bytes(mb):
     return mb * 1024 * 1024

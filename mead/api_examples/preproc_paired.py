@@ -4,7 +4,7 @@ import baseline
 from baseline.vectorizers import BPEVectorizer1D
 from mead.api_examples.preproc_utils import *
 from eight_mile.utils import (
-    write_yaml,
+    write_yaml, Timer
 )
 from typing import Optional
 import numpy as np
@@ -43,6 +43,7 @@ def run(input_files=[], input_pattern='*.txt', codes=None, vocab=None, nctx=256,
         output=None, x_prefix=None, x_suffix=None, y_prefix=None, y_suffix=None, max_file_size=100, cased=True,
         mask_type="mlm", module=None, pad_y=True, extra_tokens=['[CLS]', '[MASK]'],
         tgt_nctx=None, world_size=1, world_offset=0, **kwargs):
+    timer = Timer()
 
     if module:
         logger.warning("Loading custom user module %s for masking rules", module)
@@ -118,7 +119,9 @@ def run(input_files=[], input_pattern='*.txt', codes=None, vocab=None, nctx=256,
                 num_samples_this_worker += 1
 
     fw.close()
-    write_yaml({'num_samples': num_read}, os.path.join(root_dir, f'md-{world_offset}.yml'))
+    duration = timer.elapsed()
+    logger.warning("Processed {:,} samples in {:.2f}s".format(num_samples_this_worker, duration))
+    write_yaml({'num_samples': num_samples_this_worker}, os.path.join(root_dir, f'md-{world_offset}.yml'))
 
 
 def main():
