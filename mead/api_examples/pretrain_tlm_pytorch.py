@@ -34,7 +34,8 @@ If the model is an MLM and the `preprocessed` value is false, on-demand MLM mask
 """
 
 
-def main(argv):
+def main():
+    argv = sys.argv[1:]
     args = parse_args(argv)
     run(**vars(args))
 
@@ -345,4 +346,4 @@ def parse_args(argv):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    main()
