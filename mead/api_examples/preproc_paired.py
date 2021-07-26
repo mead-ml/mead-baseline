@@ -120,7 +120,7 @@ def run(input_files=[], input_pattern='*.txt', codes=None, vocab=None, nctx=256,
 
     fw.close()
     duration = timer.elapsed()
-    logger.warning("Processed {:,} samples in {:.2f}s".format(num_samples_this_worker, duration))
+    print("Processed {:,} samples in {:.2f}s".format(num_samples_this_worker, duration))
     write_yaml({'num_samples': num_samples_this_worker}, os.path.join(root_dir, f'md-{world_offset}.yml'))
 
 
@@ -148,7 +148,6 @@ def parse_args(argv):
     parser.add_argument("--y_prefix", type=str, help="Prefix every y with this token")
     parser.add_argument("--y_suffix", type=str, help="Suffix every y with this token")
     parser.add_argument("--max_file_size", type=int, default=100, help="Shard size, defaults to 100MB")
-    parser.add_argument("--stride", type=int, help="Tokens to stride before next read, defaults to `nctx`")
     parser.add_argument("--cased", type=baseline.str2bool, default=True)
     parser.add_argument("--mask_type", type=str, default="mlm", help="Masking rules, including 'mlm' and 'causal'")
     parser.add_argument("--module", default=None, help="Module containing custom masking rules")
