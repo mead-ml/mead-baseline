@@ -41,7 +41,7 @@ def create_record(chunk: list, str_lookup: dict, prefix: Optional[str], suffix: 
 
 def run(input_files=[], input_pattern='*.txt', codes=None, vocab=None, nctx=256, fmt='json', fields=['x_str', 'y_str'],
         output=None, prefix=None, suffix=None, max_file_size=100, tok_on_eol="<EOS>", cased=True,
-        mask_type="mlm", module=None, pad_y=True, extra_tokens=['[CLS]', '[MASK]'], **kwargs):
+        mask_type="mlm", module=None, pad_y=True, extra_tokens=['[CLS]', '[MASK]'], world_size=1, world_offset=0, **kwargs):
 
     if module:
         logger.warning("Loading custom user module %s for masking rules", module)
@@ -56,6 +56,9 @@ def run(input_files=[], input_pattern='*.txt', codes=None, vocab=None, nctx=256,
         input_files = [input_files]
         if not output:
             output = f'{input_files}.records'
+
+    if len(input_files) < world_size:
+        raise Exception(f"The number of input shards ({len(input_files)})should be greater than the world_size: {world_size}")
 
     logger.info('Output [%s]', output)
     transform = baseline.lowercase if not cased else lambda x: x
@@ -76,9 +79,12 @@ def run(input_files=[], input_pattern='*.txt', codes=None, vocab=None, nctx=256,
         nctx -= 1
         suffix = vectorizer.vocab[suffix]
 
-    fw = create_file_writer(fmt, output, fields, max_file_size)
+    fw = create_file_writer(fmt, output, fields, max_file_size, 1000 * world_offset)
     num_samples = 0
-    for text in input_files:
+    for i, text in enumerate(input_files):
+
+        if i % world_size != world_offset:
+            continue
         with open(text, encoding='utf-8') as rf:
             print(f"Reading from {text}...")
             for line in rf:
@@ -109,7 +115,8 @@ def run(input_files=[], input_pattern='*.txt', codes=None, vocab=None, nctx=256,
                         available = 0
 
     fw.close()
-    write_yaml({'num_samples': num_samples}, os.path.join(root_dir, 'md.yml'))
+    f_name = f'md-{world_offset}.yml' if world_size > 1 else 'md.yml'
+    write_yaml({'num_samples': num_samples}, os.path.join(root_dir, f_name))
 
 
 def main():
@@ -131,6 +138,8 @@ def parse_args(argv):
     parser.add_argument("--output", type=str, help="Output base name, e.g. /path/to/output/record")
     parser.add_argument("--prefix", type=str, help="Prefix every line with this token")
     parser.add_argument("--suffix", type=str, help="Suffix every line with this token")
+    parser.add_argument('--world_size', type=int, default=1, help="Can be used as decimation factor, or to support multiproc")
+    parser.add_argument('--world_offset', type=int, default=0, help="Offset for decimation or processor")
     parser.add_argument("--max_file_size", type=int, default=100, help="Shard size, defaults to 100MB")
     parser.add_argument("--stride", type=int, help="Tokens to stride before next read, defaults to `nctx`")
     parser.add_argument("--tok_on_eol", type=str, default="<EOS>")

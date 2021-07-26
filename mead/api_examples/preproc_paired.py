@@ -121,7 +121,8 @@ def run(input_files=[], input_pattern='*.txt', codes=None, vocab=None, nctx=256,
     fw.close()
     duration = timer.elapsed()
     print("Processed {:,} samples in {:.2f}s".format(num_samples_this_worker, duration))
-    write_yaml({'num_samples': num_samples_this_worker}, os.path.join(root_dir, f'md-{world_offset}.yml'))
+    f_name = f'md-{world_offset}.yml' if world_size > 1 else 'md.yml'
+    write_yaml({'num_samples': num_samples_this_worker}, os.path.join(root_dir, f_name))
 
 
 def main():
