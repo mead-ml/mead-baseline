@@ -111,7 +111,7 @@ def run(input_files=[], input_pattern='*.txt', codes=None, vocab=None, nctx=256,
                 x = x[:nctx]
                 y = y[:tgt_nctx]
                 x_t = np.zeros(nctx, dtype=output.dtype)
-                y_t = np.zeros(tgt_nctx)
+                y_t = np.zeros(tgt_nctx, dtype=output.dtype)
                 x_t[:len(x)] = x
                 y_t[:len(y)] = y
                 record = {'x': x_t, 'y': y_t, 'x_str': [indices2word[s] for s in x_t], 'y_str': [indices2word[s] for s in y_t]}
