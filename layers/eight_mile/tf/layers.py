@@ -2877,6 +2877,22 @@ class AttentionReduction(tf.keras.layers.Layer):
         :return: sentence-level encoding with dim [B, d_model]
         """
 
+class PassThruReduction(tf.keras.layers.Layer):
+    """A pass-through or identity function that gives back the query
+    """
+
+    def __init__(self, name=None):
+        super().__init__(name=name)
+
+    def call(self, qkvm: Tuple[tf.Tensor, tf.Tensor, tf.Tensor, tf.Tensor]) -> tf.Tensor:
+        """Output the first index (for the query)
+        :param query: a query for alignment. Can come from self in case of self-attn or decoder in case of E/D
+        :param key: (ignored)
+        :param value: (ignored)
+        :param mask: (ignored)
+        :return The query vector input
+        """
+        return qkvm[0]
 
 class SingleHeadReduction(AttentionReduction):
     """
@@ -3147,6 +3163,8 @@ class PairedModel(DualEncoderModel):
             self.reduction_layer = SingleHeadReduction(d_model, dropout, scale=False, d_k=reduction_d_k, pooling="mean")
         elif reduction_type == "sha_max":
             self.reduction_layer = SingleHeadReduction(d_model, dropout, scale=False, d_k=reduction_d_k, pooling="max")
+        elif reduction_type == "none":
+            self.reduction_layer = PassThruReduction()
         else:
             raise Exception("Unknown exception type")
 

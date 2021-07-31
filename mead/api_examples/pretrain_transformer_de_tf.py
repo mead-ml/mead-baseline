@@ -1,7 +1,4 @@
-import logging
-import json
-import time
-import os
+import sys
 from argparse import ArgumentParser
 import baseline
 import baseline.tf
@@ -17,6 +14,40 @@ from collections.abc import Mapping
 
 logger = logging.getLogger(__file__)
 
+
+class MUttLoss(tf.keras.layers.Layer):
+    MASK_TOKEN = 5
+    EOU_TOKEN = 8
+    def __init__(self, t=1.0, train_temperature=True):
+        super().__init__()
+        if t is None:
+            t = 1.0
+        self.t = self.add_weight("temperature", shape=[1], initializer=tf.constant_initializer(t),
+                                 trainable=train_temperature)
+
+    def call(self, model, inputs, targets):
+        query = model.encode_query(inputs)  # [B, T, H]
+        B = get_shape_as_list(query)[0]
+        response = model.encode_response(targets)  # [B, T, H]
+        x_pool_idx = tf.where(tf.equal(inputs, MUttLoss.MASK_TOKEN))
+        x_pool_idx = tf.squeeze(x_pool_idx) + 1
+
+        y_pool_idx = tf.where(tf.equal(targets, Offsets.GO))
+        y_pool_idx = tf.squeeze(y_pool_idx)
+        query = tf.gather_nd(query, x_pool_idx)
+        response = tf.gather_nd(response, y_pool_idx)
+        query = tf.math.l2_normalize(query, axis=1)
+        response = tf.math.l2_normalize(response, axis=1)
+
+        labels = tf.range(0, B)
+        logits = tf.matmul(query, response, transpose_b=True) * tf.exp(self.t)
+        loss_1 = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=labels, logits=logits)
+        loss_2 = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=labels, logits=tf.transpose(logits, [1, 0]))
+        loss_1 = tf.reduce_mean(loss_1)
+        loss_2 = tf.reduce_mean(loss_2)
+
+        loss = (loss_1 + loss_2) * 0.5
+        return loss
 
 
 feature_description = {
@@ -119,7 +150,7 @@ def main():
                         help="If using a dual encoder, specifies the reduction type")
     parser.add_argument("--stacking_layers", type=int, nargs='+', default=[])
     parser.add_argument("--loss", type=str, default='symmetric',
-                        choices=['contrastive', 'symmetric'])
+                        choices=['contrastive', 'symmetric', 'mutt'])
     parser.add_argument("--learn_temp", type=str2bool, default=True,
                         help="If 'constrastive' or 'symmetric' loss, should we learn the temperature scaling")
     parser.add_argument("--init_temp", type=float,
@@ -231,7 +262,10 @@ def main():
                         ffn_pdrop=args.ff_pdrop,
                         reduction_type=args.reduction_type, freeze_encoders=False)
 
-    loss_function = model.create_loss(loss_type=args.loss, init_temp=args.init_temp, learn_temp=args.learn_temp)
+    if args.loss == 'mutt':
+        loss_function = MUttLoss(t=args.init_temp, train_temperature=args.learn_temp)
+    else:
+        loss_function = model.create_loss(loss_type=args.loss, init_temp=args.init_temp, learn_temp=args.learn_temp)
     logger.info("Loaded model and loss")
     if is_curriculum:
         steps_per_epoch = 0

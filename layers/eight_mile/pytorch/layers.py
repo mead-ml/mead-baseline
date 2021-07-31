@@ -3736,8 +3736,26 @@ class AttentionReduction(nn.Module):
         :param key: a set of keys from encoder or self
         :param value: a set of values from encoder or self
         :param mask: masking (for destination) to prevent seeing what we shouldnt
-        :return: sentence-level encoding with dim [B, d_model]
+    def forward(self, qkvm: Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]) -> torch.Tensor:
         """
+
+
+class PassThruReduction(AttentionReduction):
+    """A pass-through or identity function that gives back the query
+    """
+
+    def __init__(self, _, name=None):
+        super().__init__(name=name)
+
+    def forward(self, qkvm: Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]) -> torch.Tensor:
+        """Output the first index (for the query)
+        :param query: a query for alignment. Can come from self in case of self-attn or decoder in case of E/D
+        :param key: (ignored)
+        :param value: (ignored)
+        :param mask: (ignored)
+        :return The query vector input
+        """
+        return qkvm[0]
 
 
 class SingleHeadReduction(AttentionReduction):
@@ -4274,6 +4292,8 @@ class PairedModel(DualEncoderModel):
             self.reduction_layer = SingleHeadReduction(d_model, dropout, scale=False, d_k=reduction_d_k, pooling="mean")
         elif reduction_type == "sha_max":
             self.reduction_layer = SingleHeadReduction(d_model, dropout, scale=False, d_k=reduction_d_k, pooling="max")
+        elif reduction_type == "none":
+            self.reduction_layer = PassThruReduction()
         else:
             raise Exception("Unknown exception type")
         self.weight_std = weight_std
