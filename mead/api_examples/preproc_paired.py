@@ -115,8 +115,9 @@ def run(input_files=[], input_pattern='*.txt', codes=None, vocab=None, nctx=256,
                 x_t[:len(x)] = x
                 y_t[:len(y)] = y
                 record = {'x': x_t, 'y': y_t, 'x_str': [indices2word[s] for s in x_t], 'y_str': [indices2word[s] for s in y_t]}
-                fw.write(record)
-                num_samples_this_worker += 1
+                if masking.is_valid(record):
+                    fw.write(record)
+                    num_samples_this_worker += 1
 
     fw.close()
     duration = timer.elapsed()
