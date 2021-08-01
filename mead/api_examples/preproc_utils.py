@@ -38,6 +38,9 @@ class Masking:
     def __call__(self, chunk: np.ndarray, ignore_prefix: bool, ignore_suffix: bool):
         pass
 
+    def is_valid(self, record: dict) -> bool:
+        return True
+
 
 @register_masking("mlm")
 class MaskMLM(Masking):
@@ -50,8 +53,8 @@ class MaskMLM(Masking):
         self.pad_y = pad_y
 
     def __call__(self, chunk: np.ndarray, ignore_prefix: bool, ignore_suffix: bool):
-
         return mlm_masking(chunk, self.mask_value, self.vocab_size, ignore_prefix, ignore_suffix, pad_y=self.pad_y)
+
 
 def in_bytes(mb):
     return mb * 1024 * 1024
