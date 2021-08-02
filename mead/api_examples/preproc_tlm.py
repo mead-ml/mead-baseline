@@ -1,3 +1,5 @@
+import glob
+import gzip
 import sys
 import argparse
 import baseline
@@ -39,20 +41,45 @@ def create_record(chunk: list, str_lookup: dict, prefix: Optional[str], suffix: 
     return {'x': inputs, 'y': labels, 'x_str': [str_lookup[s] for s in inputs], 'y_str': [str_lookup[s] for s in labels]}
 
 
+class TextFile:
+    def __init__(self, filename):
+        self.filename = filename
+        self.file = None
+
+    def _open(self):
+        if self.filename.endswith('.gz'):
+            self.file = gzip.open(self.filename, mode='rt', encoding='utf-8')
+        else:
+            self.file = open(self.filename, encoding="utf-8")
+
+    def __enter__(self):
+        self._open()
+        return self.file
+
+    def __exit__(self, exc_type, exc_value, exc_traceback):
+        self.file.close()
+
+
 def run(input_files=[], input_pattern='*.txt', codes=None, vocab=None, nctx=256, fmt='json', fields=['x_str', 'y_str'],
         output=None, prefix=None, suffix=None, max_file_size=100, tok_on_eol="<EOS>", cased=True,
-        mask_type="mlm", module=None, pad_y=True, extra_tokens=['[CLS]', '[MASK]'], world_size=1, world_offset=0, **kwargs):
+        mask_type="mlm", module=None, pad_y=True, extra_tokens=['[CLS]', '[MASK]'], world_size=1, world_offset=0, input_field='text', **kwargs):
+
+    def parse_jsonl(x): return json.loads(x)[input_field].split()
 
     if module:
         logger.warning("Loading custom user module %s for masking rules", module)
         baseline.import_user_module(module)
 
+    parse_line = lambda x: x.strip().split()
     if os.path.isdir(input_files):
-        import glob
+        if '.json' in input_pattern:
+            parse_line = parse_jsonl
         input_files = list(glob.glob(os.path.join(input_files, input_pattern)))
         if not output:
             output = os.path.join(input_files, 'records')
     else:
+        if '.json' in input_files:
+            parse_line = parse_jsonl
         input_files = [input_files]
         if not output:
             output = f'{input_files}.records'
@@ -85,10 +112,11 @@ def run(input_files=[], input_pattern='*.txt', codes=None, vocab=None, nctx=256,
 
         if i % world_size != world_offset:
             continue
-        with open(text, encoding='utf-8') as rf:
+
+        with TextFile(text) as rf:
             print(f"Reading from {text}...")
             for line in rf:
-                to_bpe = line.strip().split()
+                to_bpe = parse_line(line)
                 if not to_bpe:
                     continue
                 to_bpe += [tok_on_eol]
