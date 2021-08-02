@@ -2,6 +2,7 @@ import sys
 from argparse import ArgumentParser
 import baseline
 import baseline.tf
+#baseline.tf.set_tf_eager_debug(True)
 from eight_mile.utils import str2bool, write_json, Average, get_env_gpus, get_num_gpus_multiworker, get_version, Timer
 from baseline.tf.embeddings import *
 import baseline.embeddings
@@ -28,14 +29,16 @@ class MUttLoss(tf.keras.layers.Layer):
     def call(self, model, inputs, targets):
         query = model.encode_query(inputs)  # [B, T, H]
         B = get_shape_as_list(query)[0]
+        T = get_shape_as_list(query)[1]
         response = model.encode_response(targets)  # [B, T, H]
-        x_pool_idx = tf.where(tf.equal(inputs, MUttLoss.MASK_TOKEN))
-        x_pool_idx = tf.squeeze(x_pool_idx) + 1
 
-        y_pool_idx = tf.where(tf.equal(targets, Offsets.GO))
-        y_pool_idx = tf.squeeze(y_pool_idx)
+        x_pool_idx = tf.reduce_max(tf.where(inputs == MUttLoss.MASK_TOKEN, x=tf.range(T)+1, y=0), axis=1)
+        batch_sequence = tf.range(B)
+        x_pool_idx = tf.transpose([batch_sequence, x_pool_idx])
         query = tf.gather_nd(query, x_pool_idx)
-        response = tf.gather_nd(response, y_pool_idx)
+        response = tf.gather_nd(response, tf.transpose([batch_sequence, tf.zeros_like(batch_sequence)]))
+
+        tf.debugging.assert_equal(tf.shape(query), tf.shape(response))
         query = tf.math.l2_normalize(query, axis=1)
         response = tf.math.l2_normalize(response, axis=1)
 
@@ -343,13 +346,10 @@ def main():
             timer.start()
             train_iter = iter(train_loader)
             for i in range(steps_per_epoch):
-                try:
-                    loss = _distributed_train_step(next(train_iter))
-                    avg_loss.update(loss.numpy().item())
-                    tf.summary.scalar("train_loss", data=loss, step=optimizer.global_step)
-                except Exception as e:
-                    logger.error(f"Exception at training step {i+1}/{steps_per_epoch}. Skipping")
-                    pass
+
+                loss = _distributed_train_step(next(train_iter))
+                avg_loss.update(loss.numpy().item())
+                tf.summary.scalar("train_loss", data=loss, step=optimizer.global_step)
 
                 if args.convert_only:
                     logger.warning("Convert only flag specified.  Stopping after one step")
@@ -385,13 +385,9 @@ def main():
             SET_TRAIN_FLAG(False)
             valid_iter = iter(valid_loader)
             for i in range(steps_per_valid_epoch):
-                try:
-                    valid_loss = _distributed_test_step(next(valid_iter))
-                    tf.summary.scalar('valid_loss', data=valid_loss, step=optimizer.global_step)
-                    avg_valid_loss.update(valid_loss.numpy().item())
-                except Exception as e:
-                    logger.error(f"Exception at validation step {i+1}/{steps_per_valid_epoch}. Skipping")
-                    pass
+                valid_loss = _distributed_test_step(next(valid_iter))
+                tf.summary.scalar('valid_loss', data=valid_loss, step=optimizer.global_step)
+                avg_valid_loss.update(valid_loss.numpy().item())
 
             valid_token_loss = avg_valid_loss.avg
             valid_token_ppl = math.exp(valid_token_loss)
