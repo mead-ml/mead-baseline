@@ -27,12 +27,7 @@ parser.add_argument('--data', help="The data to test calibration on in the label
 parser.add_argument('--bins', help="The number of bins to use in calibration", default=10, type=int)
 parser.add_argument('--hist-bins', '--hist_bins', help="The number of bins to use when creating the confidence histogram", default=100, type=int)
 parser.add_argument('--output', help="The name of the output pickle that holds calibration stats")
-parser.add_argument('--prefer_eager', help="If running in TensorFlow, should we prefer eager model", type=bl.str2bool, default=False)
 args = parser.parse_args()
-
-if args.backend == 'tf':
-    from eight_mile.tf.layers import set_tf_eager_mode
-    set_tf_eager_mode(args.prefer_eager)
 
 # Read in the dataset
 labels, texts = bl.read_label_first_data(args.data)

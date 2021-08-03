@@ -21,9 +21,6 @@ from baseline.model import DependencyParserModel, register_model
 from baseline.tf.tfy import (
     TRAIN_FLAG,
     reload_embeddings,
-    new_placeholder_dict,
-    tf_device_wrapper,
-    create_session,
     BaseLayer,
     TensorDef
 )
@@ -155,7 +152,6 @@ class DependencyParserModelBase(tf.keras.Model, DependencyParserModel):
         return self.labels
 
     @classmethod
-    @tf_device_wrapper
     def load(cls, basename: str, **kwargs) -> 'DependencyParserModelBase':
         """Reload the model from a graph file and a checkpoint
 

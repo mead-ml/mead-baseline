@@ -24,10 +24,6 @@ SHUF_BUF_SZ = 5000
 
 log = logging.getLogger('baseline.timing')
 
-TF_VERSION = get_version(tf)
-if TF_VERSION < 2:
-    tf.enable_eager_execution()
-
 
 def loss(model, x, y):
     y_ = model(x)

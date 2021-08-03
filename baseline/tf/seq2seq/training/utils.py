@@ -2,8 +2,6 @@ import os
 import time
 import numpy as np
 import tensorflow as tf
-from eight_mile.tf.layers import create_session, reload_checkpoint
-from eight_mile.tf.optz import optimizer
 from eight_mile.progress import create_progress_bar
 from eight_mile.bleu import bleu
 

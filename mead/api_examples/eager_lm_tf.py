@@ -158,6 +158,7 @@ def loss(model, h, x, y):
 
 
 optimizer = EagerOptimizer(loss, optim="adam", lr=args.lr)
+timer = Timer()
 for epoch in range(args.epochs):
 
 

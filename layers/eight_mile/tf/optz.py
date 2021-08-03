@@ -191,9 +191,6 @@ class LinearDecaySchedulerTensorFlow(LearningRateScheduler, tf.keras.optimizers.
         return scaled_lr
 
 
-register(ExponentialDecaySchedulerTensorFlow, MEAD_LAYERS_LR_SCHEDULERS, "exponential", "lr_scheduler")
-
-
 class EagerOptimizer:
     def __init__(self, loss, optimizer=None, **kwargs):
         self.loss = loss
