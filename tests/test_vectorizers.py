@@ -5,7 +5,7 @@ import random
 import numpy as np
 from typing import Optional, List, Set, Tuple
 from itertools import chain
-from baseline.utils import Offsets
+from eight_mile.utils import Offsets
 from baseline.vectorizers import (
     Token1DVectorizer,
     Char1DVectorizer,

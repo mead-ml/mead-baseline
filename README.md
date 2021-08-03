@@ -23,7 +23,7 @@ Baseline can be installed as a Python package.
 
 `pip install mead-baseline`
 
-If you are using tensorflow 2 as your deep learning backend you will need to have
+You will need to have
 `tensorflow_addons` already installed or have it get installed directly with: 
 
 `pip install mead-baseline[tf2]`
@@ -52,7 +52,7 @@ Links to the latest dockerhub images can be found there
 ## A Note About Versions
 
 Deep Learning Frameworks are evolving quickly and changes are not always
-backwards compatible. We recommend recent versions of whichever framework is being used underneath.  We currently run on TF versions between 1.13 and 2.4.1.
+backwards compatible. We recommend recent versions of whichever framework is being used underneath.  We currently test on TF versions 2.1.0 and 2.4.1.
 The PyTorch backend requires at least version 1.3.0, though we recommend using a more recent version.
 
 ## Citing

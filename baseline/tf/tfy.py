@@ -96,6 +96,7 @@ def dense_layer(output_layer_depth):
     output_layer = tf.layers.Dense(output_layer_depth, use_bias=False, dtype=tf.float32, name="dense")
     return output_layer
 
+
 def setup_tf2_checkpoints(optimizer: EagerOptimizer, model: tf.keras.layers.Layer, checkpoint_dir: str, max_to_keep: Optional[int] = 5) -> Tuple[tf.train.Checkpoint, tf.train.CheckpointManager]:
     """This sets up eager checkpointing, and restores existing checkpoints if they exist
 
@@ -121,3 +122,4 @@ def setup_tf2_checkpoints(optimizer: EagerOptimizer, model: tf.keras.layers.Laye
         print(f'Restarting from: {restore_file}')
         _checkpoint.restore(restore_file)
     return _checkpoint, checkpoint_manager
+

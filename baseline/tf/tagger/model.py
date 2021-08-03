@@ -4,11 +4,11 @@ from baseline.model import TaggerModel
 from itertools import chain
 from baseline.tf.tfy import *
 from eight_mile.tf.layers import *
-from baseline.utils import ls_props, read_json, write_json, MAGIC_VARS
+from eight_mile.utils import ls_props, read_json, write_json, listify, Offsets
+from baseline.utils import MAGIC_VARS
 from baseline.tf.embeddings import *
 from baseline.version import __version__
 from baseline.model import register_model
-from baseline.utils import listify, Offsets
 
 logger = logging.getLogger('baseline')
 
@@ -140,26 +140,15 @@ class TaggerModelBase(tf.keras.Model, TaggerModel):
         :return: A dictionary representation of this batch suitable for processing
         """
         y = batch_dict.get('y', None)
-        if not tf.executing_eagerly():
-            batch_for_model = new_placeholder_dict(train)
 
-            for k in self.embeddings.keys():
-                batch_for_model["{}:0".format(k)] = self.drop_inputs(k, batch_dict[k], train)
+        SET_TRAIN_FLAG(train)
+        batch_for_model = {}
+        for k in self.embeddings.keys():
+            batch_for_model[k] = self.drop_inputs(k, batch_dict[k], train)
 
-            # Allow us to track a length, which is needed for BLSTMs
-            batch_for_model[self.lengths] = batch_dict[self.lengths_key]
-
-            if y is not None:
-                batch_for_model[self.y] = y
-        else:
-            SET_TRAIN_FLAG(train)
-            batch_for_model = {}
-            for k in self.embeddings.keys():
-                batch_for_model[k] = self.drop_inputs(k, batch_dict[k], train)
-
-            # Allow us to track a length, which is needed for BLSTMs
-            if self.lengths_key is not None:
-                batch_for_model["lengths"] = batch_dict[self.lengths_key]
+        # Allow us to track a length, which is needed for BLSTMs
+        if self.lengths_key is not None:
+            batch_for_model["lengths"] = batch_dict[self.lengths_key]
 
         return batch_for_model
 
@@ -183,7 +172,6 @@ class TaggerModelBase(tf.keras.Model, TaggerModel):
         self.save_values(basename)
 
     @classmethod
-    @tf_device_wrapper
     def load(cls, basename, **kwargs):
         """Reload the model from a graph file and a checkpoint
         The model that is loaded is independent of the pooling and stacking layers, making this class reusable
@@ -199,47 +187,22 @@ class TaggerModelBase(tf.keras.Model, TaggerModel):
         :return: A restored model
         """
         _state = read_json("{}.state".format(basename))
-        # FIXME: Somehow not writing this anymore
-        #if __version__ != _state['version']:
-        #    logger.warning("Loaded model is from baseline version %s, running version is %s", _state['version'], __version__)
-        if not tf.executing_eagerly():
 
-            _state['sess'] = kwargs.pop('sess', create_session())
-            embeddings_info = _state.pop("embeddings")
+        embeddings_info = _state.pop('embeddings')
+        embeddings = reload_embeddings(embeddings_info, basename)
 
-            with _state['sess'].graph.as_default():
-                embeddings = reload_embeddings(embeddings_info, basename)
-                for k in embeddings_info:
-                    if k in kwargs:
-                        _state[k] = kwargs[k]
-                labels = read_json("{}.labels".format(basename))
-                # FIXME: referring to the `constraint_mask` in the base where its not mentioned isnt really clean
-                if _state.get('constraint_mask') is not None:
-                    # Dummy constraint values that will be filled in by the check pointing
-                    _state['constraint_mask'] = [np.zeros((len(labels), len(labels))) for _ in range(2)]
-                model = cls.create(embeddings, labels, **_state)
-                model._state = _state
-                model.create_loss()
-                if kwargs.get('init', True):
-                    model.sess.run(tf.compat.v1.global_variables_initializer())
-                model.saver = tf.compat.v1.train.Saver()
-                model.saver.restore(model.sess, basename)
-        else:
-            embeddings_info = _state.pop('embeddings')
-            embeddings = reload_embeddings(embeddings_info, basename)
-
-            for k in embeddings_info:
-                if k in kwargs:
-                    _state[k] = kwargs[k]
-            # TODO: convert labels into just another vocab and pass number of labels to models.
-            labels = read_json("{}.labels".format(basename))
-            # FIXME: referring to the `constraint_mask` in the base where its not mentioned isnt really clean
-            if _state.get('constraint_mask') is not None:
-                # Dummy constraint values that will be filled in by the check pointing
-                _state['constraint_mask'] = [np.zeros((len(labels), len(labels))) for _ in range(2)]
-            model = cls.create(embeddings, labels, **_state)
-            model._state = _state
-            model.load_weights(f"{basename}.wgt")
+        for k in embeddings_info:
+            if k in kwargs:
+                _state[k] = kwargs[k]
+        # TODO: convert labels into just another vocab and pass number of labels to models.
+        labels = read_json("{}.labels".format(basename))
+        # FIXME: referring to the `constraint_mask` in the base where its not mentioned isnt really clean
+        if _state.get('constraint_mask') is not None:
+            # Dummy constraint values that will be filled in by the check pointing
+            _state['constraint_mask'] = [np.zeros((len(labels), len(labels))) for _ in range(2)]
+        model = cls.create(embeddings, labels, **_state)
+        model._state = _state
+        model.load_weights(f"{basename}.wgt")
         return model
 
     def save_using(self, saver):
@@ -263,12 +226,8 @@ class TaggerModelBase(tf.keras.Model, TaggerModel):
         :param batch_dict: A `Dict[str, tensor]` that is to be predicted
         :return: A batch-sized list of predictions
         """
-        lengths = batch_dict[self.lengths_key]
         batch_dict = self.make_input(batch_dict)
-        if not tf.executing_eagerly():
-            return self.sess.run(self.best, feed_dict=batch_dict)
-        else:
-            return self(batch_dict).numpy()
+        return self(batch_dict).numpy()
 
     def call(self, inputs: Dict[str, TensorDef]) -> TensorDef:
         """Take the input and produce the best path of labels out
@@ -302,19 +261,6 @@ class TaggerModelBase(tf.keras.Model, TaggerModel):
         model = cls()
 
         model.lengths_key = kwargs.get('lengths_key')
-
-        if not tf.executing_eagerly():
-
-            inputs = {}
-            for k, embedding in embeddings.items():
-                x = kwargs.get(k, embedding.create_placeholder(name=k))
-                inputs[k] = x
-            model._unserializable.append(model.lengths_key)
-            model.lengths = kwargs.get('lengths', tf.compat.v1.placeholder(tf.int32, [None], name="lengths"))
-            inputs['lengths'] = model.lengths
-            model.y = kwargs.get('y', tf.compat.v1.placeholder(tf.int32, [None, None], name="y"))
-            model.sess = kwargs.get('sess', create_session())
-
         model._record_state(embeddings, **kwargs)
         model.labels = labels
         # This only exists to make exporting easier
@@ -325,8 +271,6 @@ class TaggerModelBase(tf.keras.Model, TaggerModel):
         model.span_type = kwargs.get('span_type')
 
         model.create_layers(embeddings, **kwargs)
-        if not tf.executing_eagerly():
-            model.best = model(inputs)
         return model
 
     def create_loss(self):

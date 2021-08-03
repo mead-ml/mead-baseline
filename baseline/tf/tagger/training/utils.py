@@ -4,7 +4,7 @@ import time
 import numpy as np
 import tensorflow as tf
 import logging
-from eight_mile.tf.optz import optimizer
+
 from eight_mile.utils import to_spans, Offsets, revlut, span_f1, per_entity_f1, conlleval_output, write_sentence_conll
 
 from eight_mile.progress import create_progress_bar
@@ -12,7 +12,7 @@ from baseline.train import EpochReportingTrainer, create_trainer, register_train
 from baseline.tf.tfy import TRAIN_FLAG
 from baseline.model import create_model_for
 from baseline.utils import get_model_file, get_metric_cmp
-from eight_mile.tf.layers import reload_checkpoint
+
 
 logger = logging.getLogger('baseline')
 
@@ -145,139 +145,3 @@ class TaggerEvaluatorTf:
 
         return metrics
 
-
-@register_trainer(task='tagger', name='default')
-class TaggerTrainerTf(EpochReportingTrainer):
-    """A Trainer to use if not using eager mode
-
-    The trainer can run in 2 modes: `dataset` and `feed_dict`.  When the former, the graph is assumed to
-    be connected by features attached to the input so the `feed_dict` will only be used to pass dropout information.
-
-    When the latter, we will use the baseline DataFeed to read the object into the `feed_dict`
-    """
-    def __init__(self, model_params, **kwargs):
-        """Create a Trainer, and give it the parameters needed to instantiate the model
-
-        :param model_params: The model parameters
-        :param kwargs: See below
-
-        :Keyword Arguments:
-
-          * *nsteps* (`int`) -- If we should report every n-steps, this should be passed
-          * *ema_decay* (`float`) -- If we are doing an exponential moving average, what decay to us4e
-          * *clip* (`int`) -- If we are doing gradient clipping, what value to use
-          * *optim* (`str`) -- The name of the optimizer we are using
-          * *lr* (`float`) -- The learning rate we are using
-          * *mom* (`float`) -- If we are using SGD, what value to use for momentum
-          * *beta1* (`float`) -- Adam-specific hyper-param, defaults to `0.9`
-          * *beta2* (`float`) -- Adam-specific hyper-param, defaults to `0.999`
-          * *epsilon* (`float`) -- Adam-specific hyper-param, defaults to `1e-8
-
-        """
-        super().__init__()
-        if type(model_params) is dict:
-            self.model = create_model_for('tagger', **model_params)
-        else:
-            self.model = model_params
-        self.sess = self.model.sess
-        self.loss = self.model.create_loss()
-        span_type = kwargs.get('span_type', 'iob')
-        verbose = kwargs.get('verbose', False)
-        self.evaluator = TaggerEvaluatorTf(self.model, span_type, verbose)
-        self.global_step, self.train_op = optimizer(self.loss, colocate_gradients_with_ops=True, variables=self.model.trainable_variables, **kwargs)
-        self.nsteps = kwargs.get('nsteps', six.MAXSIZE)
-        tables = tf.compat.v1.tables_initializer()
-        self.model.sess.run(tables)
-        init = tf.compat.v1.global_variables_initializer()
-        self.model.sess.run(init)
-        saver = tf.compat.v1.train.Saver()
-        self.model.save_using(saver)
-        checkpoint = kwargs.get('checkpoint')
-        if checkpoint is not None:
-            skip_blocks = kwargs.get('blocks_to_skip', ['OptimizeLoss'])
-            reload_checkpoint(self.model.sess, checkpoint, skip_blocks)
-
-    def checkpoint(self):
-        """This method saves a checkpoint
-
-        :return: None
-        """
-        checkpoint_dir = '{}-{}'.format("./tf-tagger", os.getpid())
-        self.model.saver.save(self.sess, os.path.join(checkpoint_dir, 'tagger'),
-                              global_step=self.global_step,
-                              write_meta_graph=False)
-
-    def recover_last_checkpoint(self):
-        """Recover the last saved checkpoint
-
-        :return: None
-        """
-        checkpoint_dir = '{}-{}'.format("./tf-tagger", os.getpid())
-        latest = tf.train.latest_checkpoint(checkpoint_dir)
-        print('Reloading ' + latest)
-        self.model.saver.restore(self.model.sess, latest)
-
-    @staticmethod
-    def _get_batchsz(batch_dict):
-        return batch_dict['y'].shape[0]
-
-    def _train(self, ts, **kwargs):
-        """Train an epoch of data using either the input loader or using `tf.dataset`
-
-        In non-`tf.dataset` mode, we cycle the loader data feed, and pull a batch and feed it to the feed dict
-        When we use `tf.dataset`s under the hood, this function simply uses the loader to know how many steps
-        to train.  We do use a `feed_dict` for passing the `TRAIN_FLAG` in either case
-
-        :param ts: A data feed
-        :param kwargs: See below
-
-        :Keyword Arguments:
-         * *dataset* (`bool`) Set to `True` if using `tf.dataset`s, defaults to `True`
-         * *reporting_fns* (`list`) A list of reporting hooks to use
-
-        :return: Metrics
-        """
-        reporting_fns = kwargs.get('reporting_fns', [])
-        epoch_loss = 0
-        epoch_div = 0
-        steps = len(ts)
-        pg = create_progress_bar(steps)
-        for batch_dict in pg(ts):
-            feed_dict = self.model.make_input(batch_dict, True)
-            _, step, lossv = self.sess.run([self.train_op, self.global_step, self.loss], feed_dict=feed_dict)
-
-            batchsz = self._get_batchsz(batch_dict)
-            report_loss = lossv * batchsz
-            epoch_loss += report_loss
-            epoch_div += batchsz
-            self.nstep_agg += report_loss
-            self.nstep_div += batchsz
-            if (step + 1) % self.nsteps == 0:
-                metrics = self.calc_metrics(self.nstep_agg, self.nstep_div)
-                self.report(
-                    step + 1, metrics, self.nstep_start,
-                    'Train', 'STEP', reporting_fns, self.nsteps
-                )
-                self.reset_nstep()
-
-        metrics = self.calc_metrics(epoch_loss, epoch_div)
-        return metrics
-
-    def _test(self, ts):
-        """Test an epoch of data using either the input loader or using `tf.dataset`
-
-        In non-`tf.dataset` mode, we cycle the loader data feed, and pull a batch and feed it to the feed dict
-        When we use `tf.dataset`s under the hood, this function simply uses the loader to know how many steps
-        to train.
-
-        :param loader: A data feed
-        :param kwargs: See below
-
-        :Keyword Arguments:
-          * *dataset* (`bool`) Set to `True` if using `tf.dataset`s, defaults to `True`
-          * *reporting_fns* (`list`) A list of reporting hooks to use
-          * *verbose* (`dict`) A dictionary containing `console` boolean and `file` name if on
-
-        :return: Metrics
-        """
-        return self.evaluator.test(ts)
