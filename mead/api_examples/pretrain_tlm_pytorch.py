@@ -11,8 +11,9 @@ import baseline.embeddings
 from eight_mile.optz import *
 from eight_mile.pytorch.layers import save_checkpoint, init_distributed
 from eight_mile.pytorch.optz import *
-from baseline.pytorch.lm import TransformerLanguageModel, TransformerMaskedLanguageModel
 from mead.api_examples.transformer_utils import MultiFileDatasetReader, on_demand_mlm_masking, get_lr_decay
+from baseline.pytorch.lm import TransformerLanguageModel, TransformerMaskedLanguageModel, GatedMLPLanguageModel
+
 from eight_mile.pytorch.serialize import load_tlm_npz
 
 logger = logging.getLogger(__file__)
@@ -47,7 +48,7 @@ def run(basedir=None, train_file=None, valid_file=None, dataset_key='tlm', embed
         lr_alpha=0.0, optim='adamw', lr=4.0e-4, clip=1.0, weight_decay=1.0e-2, epochs=32, restart_from=None,
         restart_tt=None, warmup_steps=10000, saves_per_epoch=10, mlm=True, preprocessed=True, rpr_k=[8],
         rpr_value_on=True, windowed_ra=False, device="cuda", distributed=False, local_rank=-1,
-        extra_tokens=["[CLS]", "[MASK]"], do_early_stopping=False, **kwargs):
+        extra_tokens=["[CLS]", "[MASK]"], do_early_stopping=False, mlp=False, **kwargs):
     if basedir is None:
         basedir = 'lm-{}-bpe-{}'.format(dataset_key, os.getpid())
     logging.basicConfig(level=logging.INFO if local_rank in [-1, 0] else logging.WARN)
@@ -105,31 +106,44 @@ def run(basedir=None, train_file=None, valid_file=None, dataset_key='tlm', embed
             logger.error("We could not find a suitable masking token in the vocab")
             return
 
-    if len(rpr_k) == 0 or rpr_k[0] < 1:
-        rpr_k = None
-    elif len(rpr_k) == 1:
-        rpr_k = rpr_k[0]
+    if mlp and not mlm:
+        raise Exception("causal gMLP not implemented yet!")
+    elif mlp:
+        model = GatedMLPLanguageModel.create(embeddings,
+                                             nctx=nctx,
+                                             hsz=d_model,
+                                             d_ff=d_ff,
+                                             tie_weights=True,
+                                             dropout=dropout,
+                                             gpu=False,
+                                             layers=num_layers,
+                                             layer_drop=layer_drop,
+                                             ffn_drop=ffn_pdrop,
+                                             src_keys=['x'], tgt_key='x')
     else:
-        rpr_k = rpr_k
+        if len(rpr_k) == 0 or rpr_k[0] < 1:
+            rpr_k = None
+        elif len(rpr_k) == 1:
+            rpr_k = rpr_k[0]
 
-    TLM = TransformerMaskedLanguageModel if mlm else TransformerLanguageModel
-    model = TLM.create(embeddings,
-                       hsz=d_model,
-                       d_ff=d_ff,
-                       tie_weights=True,
-                       dropout=dropout,
-                       gpu=False,
-                       num_heads=num_heads,
-                       layers=num_layers,
-                       rpr_k=rpr_k,
-                       d_k=d_k,
-                       ffn_pdrop=ffn_pdrop,
-                       windowed_ra=windowed_ra,
-                       rpr_value_on=rpr_value_on,
-                       layer_drop=layer_drop,
-                       src_keys=['x'], tgt_key='x')
-
+        TLM = TransformerMaskedLanguageModel if mlm else TransformerLanguageModel
+        model = TLM.create(embeddings,
+                           hsz=d_model,
+                           d_ff=d_ff,
+                           tie_weights=True,
+                           dropout=dropout,
+                           gpu=False,
+                           num_heads=num_heads,
+                           layers=num_layers,
+                           rpr_k=rpr_k,
+                           d_k=d_k,
+                           ffn_pdrop=ffn_pdrop,
+                           windowed_ra=windowed_ra,
+                           rpr_value_on=rpr_value_on,
+                           layer_drop=layer_drop,
+                           src_keys=['x'], tgt_key='x')
     model.to(device)
+
     loss_function = model.create_loss()
     loss_function.to(device)
 
@@ -319,6 +333,7 @@ def parse_args(argv):
     parser.add_argument("--warmup_steps", type=int, default=10000, help="Num warmup steps")
     parser.add_argument("--saves_per_epoch", type=int, default=10, help="The number of checkpoints to save per epoch")
     parser.add_argument("--mlm", type=str2bool, default=True, help="Use Masked Language Model (MLM) objective")
+    parser.add_argument("--mlp", type=str2bool, default=True, help="Use Gated MLP model")
     parser.add_argument("--preprocessed", type=str2bool, default=True, help="Has the data already been preprocessed?")
     parser.add_argument('--rpr_k',
                         help='Relative attention positional sizes pass 0 if you dont want relative attention',

@@ -8,7 +8,10 @@ from eight_mile.tf.layers import (
     MultiHeadedAttention,
     PassThru,
     FFN,
-    SingleHeadReduction
+    SingleHeadReduction,
+    SpatialGatingUnit,
+    GatedMLPEncoder,
+    GatedMLPEncoderStack
 )
 from eight_mile.tf.embeddings import LookupTableEmbeddings, LearnedPositionalLookupTableEmbeddingsWithBias, LearnedPositionalLookupTableEmbeddings
 
@@ -116,6 +119,27 @@ def from_attn_array(tf_attn: tf.keras.layers.Layer, d: Dict, name: str):
         tf_attn.rpr_value.set_weights([d[f"{name}/rpr_value"]])
 
 
+def to_sgu_array(tf_sgu: SpatialGatingUnit, name: str) -> Dict:
+    d = {}
+    d.update(to_weight_array(tf_sgu.norm, f"{name}/norm"))
+    d.update(to_weight_array(tf_sgu.proj, f"{name}/proj"))
+    return d
+
+
+def to_gmlp_encoder_array(tf_encoder: GatedMLPEncoder, name: str) -> Dict:
+    """Convert a `GatedMLPEncoder` layer to an set of numpy arrays
+
+    :param tf_encoder: A `GatedMLPEncoder` layer
+    :param name: The layer name
+    :return: A Dict of arrays by key
+    """
+    d = {}
+    d.update(to_weight_array(tf_encoder.to_ffn, f"{name}/to_ffn"))
+    d.update(to_weight_array(tf_encoder.from_sgu, f"{name}/from_sgu"))
+    d.update(to_weight_array(tf_encoder.norm, f"{name}/norm"))
+    d.update(to_sgu_array(tf_encoder.spatial_gating_unit, f"{name}/spatial_gating_unit"))
+    return d
+
 def to_encoder_array(tf_encoder: TransformerEncoder, name: str) -> Dict:
     """Convert a `TransformerEncoder` layer to an set of numpy arrays
 
@@ -207,6 +231,22 @@ def from_embed_array(tf_embed: tf.keras.layers.Layer, d: Dict, name: str, bias=N
     tf_embed.set_weights(weights)
 
 
+def to_gmlp_encoder_stack_array(
+        tf_encoder_stack: GatedMLPEncoderStack, name: str = "GatedMLPEncoderStack"
+) -> Dict:
+    """Convert a `TransformerEncoderStack` to a set of weigths
+
+    :param tf_encoder_stack: A transformer encoder stack
+    :param name: A name
+    :return: A Dict containing a set of weights
+    """
+    d = {}
+    if isinstance(tf_encoder_stack.ln, tf.keras.layers.LayerNormalization):
+        d.update(to_weight_array(tf_encoder_stack.ln, f"{name}/ln"))
+    for i, enc_tf in enumerate(tf_encoder_stack.encoders):
+        d.update(to_gmlp_encoder_array(enc_tf, f"{name}/{i}"))
+    return d
+
 def to_encoder_stack_array(
     tf_encoder_stack: TransformerEncoderStack, name: str = "TransformerEncoderStack"
 ) -> Dict:
@@ -297,7 +337,10 @@ def to_tlm_array(tf_tlm: tf.keras.layers.Layer, embeddings_keys: List[str] = Non
     """
     d = {}
     transformer = tf_tlm.transformer if hasattr(tf_tlm, 'transformer') else tf_tlm.generator
-    d.update(to_encoder_stack_array(transformer, name=f"{name}/TransformerEncoderStack"))
+    if isinstance(transformer, GatedMLPEncoderStack):
+        d.update(to_gmlp_encoder_stack_array(transformer, name=f"{name}/GatedMLPEncoderStack"))
+    else:
+        d.update(to_encoder_stack_array(transformer, name=f"{name}/TransformerEncoderStack"))
     keys_to_write = embeddings_keys if embeddings_keys else list(tf_tlm.embeddings.keys())
 
     for embeddings_key in keys_to_write:

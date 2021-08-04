@@ -11,6 +11,9 @@ from eight_mile.pytorch.layers import (
     EmbeddingsStack,
     WithDropout,
     SingleHeadReduction,
+    SpatialGatingUnit,
+    GatedMLPEncoder,
+    GatedMLPEncoderStack,
 )
 from eight_mile.pytorch.embeddings import LookupTableEmbeddings, LearnedPositionalLookupTableEmbeddingsWithBias
 
@@ -297,6 +300,25 @@ def to_encoder_array(pytorch_encoder: TransformerEncoder, name: str) -> Dict:
     d.update(to_attn_array(pytorch_encoder.self_attn, f"{name}/attn"))
     d.update(to_ffn_array(pytorch_encoder.ffn, f"{name}/ffn"))
     return d
+
+
+def from_sgu_array(pytorch_sgu: SpatialGatingUnit, d: Dict, name: str) -> Dict:
+    from_weight_array(pytorch_sgu.norm, d, f"{name}/norm")
+    from_weight_array(pytorch_sgu.proj, d, f"{name}/proj")
+
+def from_gmlp_encoder_array(pytorch_encoder: GatedMLPEncoder, d: Dict, name: str):
+    """Restore a `TransformerEncoder` layer from a set of numpy arrays
+
+    :param pytorch_encoder: A `TransformerEncoder` layer
+    :param d: A Dict of arrays by key
+    :param name: The layer name
+    :return: None
+    """
+    from_weight_array(pytorch_encoder.to_ffn, d, f"{name}/to_ffn")
+    from_weight_array(pytorch_encoder.from_sgu, d, f"{name}/from_sgu")
+    from_weight_array(pytorch_encoder.norm, d, f"{name}/norm")
+    from_sgu_array(pytorch_encoder.spatial_gating_unit, d, f"{name}/spatial_gating_unit")
+
 
 
 def from_encoder_array(pytorch_encoder: TransformerEncoder, d: Dict, name: str):
@@ -615,6 +637,22 @@ def to_encoder_stack_array(
     return d
 
 
+def from_gmlp_encoder_stack_array(
+        pytorch_encoder_stack: GatedMLPEncoderStack, d: Dict, name: str = "GatedMLPEncoderStack"
+):
+    """Restore weights from a `GatedMLPEncoderStack`
+
+    :param pytorch_encoder_stack: A gMLP encoder stack
+    :param d: A Dict containing sets of arrays
+    :param name: A name for this primitive
+    :return: None
+    """
+    if isinstance(pytorch_encoder_stack.ln, nn.LayerNorm):
+        from_weight_array(pytorch_encoder_stack.ln, d, f"{name}/ln")
+    for i, enc_pyt in enumerate(pytorch_encoder_stack.encoders):
+        from_gmlp_encoder_array(enc_pyt, d, f"{name}/{i}")
+
+
 def from_encoder_stack_array(
     pytorch_encoder_stack: TransformerEncoderStack, d: Dict, name: str = "TransformerEncoderStack"
 ):
@@ -677,7 +715,10 @@ def from_tlm_array(pytorch_tlm: nn.Module, d: Dict, embeddings_keys: List[str] =
     :return:
     """
     transformer = pytorch_tlm.transformer if hasattr(pytorch_tlm, 'transformer') else pytorch_tlm.generator
-    from_encoder_stack_array(transformer, d, name=f"{name}/TransformerEncoderStack")
+    if isinstance(transformer, GatedMLPEncoderStack):
+        from_gmlp_encoder_stack_array(transformer, d, name=f"{name}/GatedMLPEncoderStack")
+    else:
+        from_encoder_stack_array(transformer, d, name=f"{name}/TransformerEncoderStack")
     keys_to_restore = embeddings_keys if embeddings_keys else list(pytorch_tlm.embeddings.keys())
     for embeddings_key in keys_to_restore:
         from_embed_array(pytorch_tlm.embeddings[embeddings_key], d, f"{name}/Embeddings/{embeddings_key}")
