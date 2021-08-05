@@ -241,3 +241,50 @@ class TransformerMaskedLanguageModel(TransformerLanguageModel):
 
     def create_mask(self, bth):
         return None
+
+
+@register_model(task='lm', name='gmlp-mlm')
+class GatedMLPLanguageModel(AbstractGeneratorLanguageModel):
+
+    def __init__(self):
+        super().__init__()
+
+    @property
+    def requires_state(self):
+        False
+
+    def init_layer_weights(self, module):
+        if isinstance(module, (nn.Linear, nn.Embedding, nn.LayerNorm)):
+            module.weight.data.normal_(mean=0.0, std=self.weight_std)
+        if isinstance(module, (nn.Linear, nn.LayerNorm)) and module.bias is not None:
+            module.bias.data.zero_()
+
+    def init_generate(self, **kwargs):
+        pdrop = float(kwargs.get('dropout', 0.1))
+        layers = kwargs.get('layers', kwargs.get('num_layers', 1))
+        d_model = int(kwargs.get('d_model', kwargs.get('hsz')))
+        d_ff = int(kwargs.get('d_ff', 4 * d_model))
+        activation = kwargs.get('activation', 'gelu')
+        ffn_pdrop = kwargs.get('ffn_pdrop', 0.0)
+        layer_norm_eps = kwargs.get('layer_norm_eps', 1e-12)
+        layer_drop = kwargs.get('layer_drop', 0.0)
+        nctx = int(kwargs.get('nctx', 256))
+
+        return GatedMLPEncoderStack(d_model=d_model, pdrop=pdrop,
+                                    layers=layers, nctx=nctx, d_ff=d_ff,
+                                    activation=activation,
+                                    ffn_pdrop=ffn_pdrop,
+                                    layer_norm_eps=layer_norm_eps,
+                                    layer_drop=layer_drop)
+
+    def create_layers(self, embeddings, **kwargs):
+        super().create_layers(embeddings, **kwargs)
+        self.weight_std = kwargs.get('weight_std', 0.02)
+        self.apply(self.init_layer_weights)
+
+    def create_mask(self, bth):
+        return None
+
+    def generate(self, bth, _):
+        mask = self.create_mask(bth)
+        return self.generator((bth, mask)), None

@@ -2693,6 +2693,84 @@ class TransformerEncoder(tf.keras.layers.Layer):
         return x
 
 
+class SpatialGatingUnit(tf.keras.layers.Layer):
+    """Spatial gating unit
+
+    There are 2 ways we can look at this unit, as an MLP or a Conv with kernel length 1
+
+    l = nn.Linear(T, T)
+    c = nn.Conv1d(T, T, 1)
+
+    l(x.transpose(1, 2)).transpose(1, 2)
+    c(x)
+
+    """
+    def __init__(self,
+                 d_ffn: int,
+                 nctx: int,
+                 layer_norm_eps: float = 1.0e-6,
+                 name: Optional[str] = None,
+        ):
+        super().__init__(name=name)
+        self.norm = tf.keras.layers.LayerNormalization(epsilon=layer_norm_eps)
+        self.proj = tf.keras.layers.Conv1D(filters=nctx, kernel_size=1, data_format="channels_first", bias_initializer='ones')
+
+    def call(self, x):
+        u, v = tf.split(x, 2, axis=-1)
+        # "channel" layer norm
+        v = self.norm(v)
+        v = self.proj(v)
+
+        return u * v
+
+
+class GatedMLPEncoder(tf.keras.layers.Layer):
+    """Following https://arxiv.org/pdf/2105.08050.pdf
+    """
+    def __init__(
+            self,
+            d_model: int,
+            pdrop: float,
+            nctx: int = 256,
+            activation_type: str = "gelu",
+            d_ff: Optional[int] = None,
+            ffn_pdrop: Optional[float] = 0.0,
+            layer_norm_eps: float = 1.0e-6,
+            name: Optional[str] = None,
+    ):
+        super().__init__(name=name)
+        # to properly execute BERT models, we have to follow T2T and do layer norms after
+        self.d_model = d_model
+        self.d_ff = d_ff if d_ff is not None else 4 * d_model
+        self.to_ffn = tf.keras.layers.Dense(self.d_ff)
+        self.activation = get_activation(activation_type)
+        self.ffn_drop = tf.keras.layers.Dropout(ffn_pdrop)
+        self.from_sgu = tf.keras.layers.Dense(self.d_model)
+        self.norm = tf.keras.layers.LayerNormalization(epsilon=layer_norm_eps)
+        self.dropout = tf.keras.layers.Dropout(pdrop)
+        self.spatial_gating_unit = SpatialGatingUnit(d_ff, nctx, layer_norm_eps)
+
+
+    def call(self, inputs):
+        """
+        :param inputs: `(x, mask)`
+        :return: The output tensor
+        """
+        # The shortcut here happens pretty early
+        shortcut, mask = inputs
+        # A "channel" norm
+        x = self.norm(shortcut)
+        # A "channel" FFN
+        x = self.dropout(self.to_ffn(x))
+        # gelu according to https://arxiv.org/pdf/2105.08050.pdf
+        x = self.activation(x)
+        # "spatial" projection (over T)
+        x = self.spatial_gating_unit(x)
+        # "channel" projection
+        x = self.from_sgu(x)
+        x = self.dropout(x)
+        return x + shortcut
+
 class TransformerDecoder(tf.keras.layers.Layer):
     def __init__(
         self,
@@ -2742,6 +2820,45 @@ class TransformerDecoder(tf.keras.layers.Layer):
         if self.layer_norms_after:
             x = self.ln1(x)
         return x
+
+
+class GatedMLPEncoderStack(tf.keras.layers.Layer):
+    """Following https://arxiv.org/pdf/2105.08050.pdf
+    """
+    def __init__(
+            self,
+            d_model: int,
+            pdrop: float,
+            layers: int = 1,
+            nctx: int = 256,
+            activation: str = "gelu",
+            d_ff: Optional[int] = None,
+            ffn_pdrop: Optional[float] = 0.0,
+            layer_norm_eps: float = 1.0e-6,
+            layer_drop: float = 0.0,
+            name: Optional[str] = None,
+            **kwargs,
+    ):
+
+        super().__init__(name=name)
+        self.encoders = []
+        self.ln = tf.keras.layers.LayerNormalization(epsilon=layer_norm_eps)
+        self.output_dim = d_model
+        self.layer_drop = layer_drop
+        for i in range(layers):
+            self.encoders.append(
+                GatedMLPEncoder(
+                    d_model, pdrop, nctx, activation, d_ff,
+                    ffn_pdrop=ffn_pdrop,
+                    layer_norm_eps=layer_norm_eps,
+                )
+            )
+
+    def call(self, inputs):
+        x, mask = inputs
+        for layer in self.encoders:
+            x = layer((x, mask))
+        return self.ln(x)
 
 
 class TransformerEncoderStack(tf.keras.layers.Layer):

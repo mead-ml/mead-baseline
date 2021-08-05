@@ -3198,6 +3198,88 @@ class TransformerEncoder(nn.Module):
         return x
 
 
+class SpatialGatingUnit(nn.Module):
+    """Spatial gating unit
+
+    There are 2 ways we can look at this unit, as an MLP or a Conv with kernel length 1
+
+    l = nn.Linear(T, T)
+    c = nn.Conv1d(T, T, 1)
+
+    l(x.transpose(1, 2)).transpose(1, 2)
+    c(x)
+
+    """
+    def __init__(self,
+                 d_ffn: int,
+                 nctx: int,
+                 layer_norm_eps: float = 1.0e-6):
+        super().__init__()
+        self.norm = nn.LayerNorm(d_ffn // 2, eps=layer_norm_eps)
+        self.proj = pytorch_conv1d(nctx, nctx, 1)
+        nn.init.constant_(self.proj.bias, 1.0)
+
+    def split(self, x):
+        u, v = x.chunk(2, dim=-1)
+        return u, v
+
+    def forward(self, x):
+        u, v = self.split(x)
+        v = self.norm(v)
+        v = self.proj(v)
+
+        return u * v
+
+
+class GatedMLPEncoder(nn.Module):
+    """Following https://arxiv.org/pdf/2105.08050.pdf
+    """
+    def __init__(
+            self,
+            d_model: int,
+            pdrop: float,
+            nctx: int = 256,
+            activation_type: str = "gelu",
+            d_ff: Optional[int] = None,
+            ffn_pdrop: Optional[float] = 0.0,
+            layer_norm_eps: float = 1.0e-6
+    ):
+        super().__init__()
+        self.d_model = d_model
+        self.d_ff = d_ff if d_ff is not None else 4 * d_model
+        self.to_ffn = Dense(self.d_model, self.d_ff)
+        self.activation = get_activation(activation_type)
+        self.ffn_drop = nn.Dropout(ffn_pdrop)
+        self.from_sgu = Dense(self.d_ff//2, self.d_model)
+        self.norm = nn.LayerNorm(self.d_model, eps=layer_norm_eps)
+        self.dropout = nn.Dropout(pdrop)
+        self.spatial_gating_unit = SpatialGatingUnit(self.d_ff, nctx, layer_norm_eps)
+
+    def forward(self, inputs: Tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
+        """Do gMLP forward
+
+        TODO: we arent using the mask ATM
+        :param inputs: `(x, mask)`
+        :return: The output tensor
+        """
+
+
+        # The shortcut here happens pretty early
+        shortcut, mask = inputs
+        # A "channel" norm
+        x = self.norm(shortcut)
+        # A "channel" FFN
+        x = self.dropout(self.to_ffn(x))
+        # gelu according to https://arxiv.org/pdf/2105.08050.pdf
+        x = self.activation(x)
+        # "spatial" projection (over T)
+        x = self.spatial_gating_unit(x)
+        # "channel" projection
+        x = self.from_sgu(x)
+        x = self.dropout(x)
+        return x + shortcut
+
+
 class TransformerDecoder(nn.Module):
     def __init__(
         self,
@@ -3289,6 +3371,45 @@ class TransformerEncoderStack(nn.Module):
                     num_heads, d_model, pdrop, scale, activation, d_ff, d_k,
                     rpr_k=rpr_k[i], ffn_pdrop=ffn_pdrop, layer_norms_after=layer_norms_after,
                     layer_norm_eps=layer_norm_eps, windowed_ra=windowed_ra, rpr_value_on=rpr_value_on
+                )
+            )
+
+    def forward(self, inputs: Tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
+        x, mask = inputs
+        for layer in self.encoders:
+            pdrop = np.random.random()
+            if not self.training or (pdrop >= self.layer_drop):
+                x = layer((x, mask))
+        return self.ln(x)
+
+
+class GatedMLPEncoderStack(nn.Module):
+    """Following https://arxiv.org/pdf/2105.08050.pdf
+    """
+    def __init__(
+            self,
+            d_model: int,
+            pdrop: float,
+            layers: int = 1,
+            nctx: int = 256,
+            activation: str = "gelu",
+            d_ff: Optional[int] = None,
+            ffn_pdrop: Optional[float] = 0.0,
+            layer_norm_eps: float = 1.0e-6,
+            layer_drop: float = 0.0,
+            **kwargs,
+    ):
+        super().__init__()
+        self.encoders = nn.ModuleList()
+        self.ln = nn.LayerNorm(d_model, eps=layer_norm_eps)
+        self.output_dim = d_model
+        self.layer_drop = layer_drop
+        for i in range(layers):
+            self.encoders.append(
+                GatedMLPEncoder(
+                    d_model, pdrop, nctx, activation, d_ff,
+                    ffn_pdrop=ffn_pdrop,
+                    layer_norm_eps=layer_norm_eps,
                 )
             )
 

@@ -10,10 +10,10 @@ import baseline.tf.embeddings
 import baseline.embeddings
 from baseline.vectorizers import BPEVectorizer1D
 from eight_mile.utils import Average, Timer, get_num_gpus_multiworker
-from eight_mile.tf.layers import create_distribute_strategy, read_yaml_tf
+from eight_mile.tf.layers import create_distribute_strategy, read_yaml_tf, SET_TRAIN_FLAG
 from eight_mile.optz import *
 from eight_mile.tf.optz import *
-from baseline.tf.lm import SET_TRAIN_FLAG, TransformerLanguageModel, TransformerMaskedLanguageModel
+from baseline.tf.lm import TransformerLanguageModel, TransformerMaskedLanguageModel, GatedMLPLanguageModel
 from eight_mile.tf.serialize import save_tlm_npz
 from collections.abc import Mapping
 import tensorflow as tf
@@ -148,6 +148,7 @@ def main():
     parser.add_argument("--restart", type=str2bool, help="Option allows you to restart from a previous checkpoint")
     parser.add_argument("--warmup_steps", type=int, default=10000, help="Num warmup steps")
     parser.add_argument("--causal", type=str2bool, default=False, help="Use CLM (causal) instead of MLM")
+    parser.add_argument("--mlp", type=str2bool, default=False, help="Use Gated MLP")
     parser.add_argument("--saves_per_epoch", type=int, default=10, help="The number of checkpoints to save per epoch")
     parser.add_argument('--rpr_k',
                         help='Relative attention positional sizes pass 0 if you dont want relative attention',
@@ -248,30 +249,9 @@ def main():
 
     logger.info("Loaded datasets")
     logger.info("Using embedding type [%s]", args.embed_type)
-    if len(args.rpr_k) == 0 or args.rpr_k[0] < 1:
-        rpr_k = None
-    elif len(args.rpr_k) == 1:
-        rpr_k = args.rpr_k[0]
-    else:
-        rpr_k = args.rpr_k
-
-    TLM = TransformerLanguageModel if args.causal else TransformerMaskedLanguageModel
-    model = TLM.create(embeddings,
-                       hsz=args.d_model,
-                       d_ff=args.d_ff,
-                       tie_weights=True,
-                       dropout=args.dropout,
-                       gpu=False,
-                       num_heads=args.num_heads,
-                       layers=args.num_layers,
-                       rpr_k=rpr_k,
-                       d_k=args.d_k,
-                       ffn_pdrop=args.ffn_pdrop,
-                       windowed_ra=args.windowed_ra,
-                       rpr_value_on=args.rpr_value_on,
-                       layer_drop=args.layer_drop,
-                       src_keys=['x'], tgt_key='x')
-
+    model = create_model(args, embeddings)
+    if isinstance(model, GatedMLPLanguageModel) and is_curriculum:
+        raise Exception("Variable tensor lengths not currently supported for gMLP")
     logger.info("Loaded model and loss")
 
     if is_curriculum:
@@ -406,6 +386,49 @@ def main():
             metrics['average_valid_loss'] = valid_token_loss
             metrics['average_valid_word_ppl'] = valid_token_ppl
             logger.info(json.dumps(metrics, indent=4))
+
+
+def create_model(args, embeddings):
+    if args.mlp and args.causal:
+        raise Exception("causal gMLP not implemented yet!")
+
+    if args.mlp:
+        model = GatedMLPLanguageModel.create(embeddings,
+                                             nctx=args.nctx,
+                                             hsz=args.d_model,
+                                             d_ff=args.d_ff,
+                                             tie_weights=True,
+                                             dropout=args.dropout,
+                                             gpu=False,
+                                             layers=args.num_layers,
+                                             layer_drop=args.layer_drop,
+                                             ffn_drop=args.ffn_pdrop,
+                                             src_keys=['x'], tgt_key='x')
+    else:
+
+        if len(args.rpr_k) == 0 or args.rpr_k[0] < 1:
+            rpr_k = None
+        elif len(args.rpr_k) == 1:
+            rpr_k = args.rpr_k[0]
+        else:
+            rpr_k = args.rpr_k
+        TLM = TransformerLanguageModel if args.causal else TransformerMaskedLanguageModel
+        model = TLM.create(embeddings,
+                           hsz=args.d_model,
+                           d_ff=args.d_ff,
+                           tie_weights=True,
+                           dropout=args.dropout,
+                           gpu=False,
+                           num_heads=args.num_heads,
+                           layers=args.num_layers,
+                           rpr_k=rpr_k,
+                           d_k=args.d_k,
+                           ffn_pdrop=args.ffn_pdrop,
+                           windowed_ra=args.windowed_ra,
+                           rpr_value_on=args.rpr_value_on,
+                           layer_drop=args.layer_drop,
+                           src_keys=['x'], tgt_key='x')
+    return model
 
 
 if __name__ == "__main__":

@@ -157,11 +157,19 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
         activation = kwargs.get('activation', 'gelu')
         windowed_ra = kwargs.get('windowed_ra', False)
         rpr_value_on = kwargs.get('rpr_value_on', True)
-        self.transformer = TransformerEncoderStack(num_heads, d_model=self.d_model, pdrop=pdrop, scale=True,
-                                                   layers=num_layers, d_ff=d_ff, rpr_k=rpr_k, d_k=d_k,
-                                                   activation=activation, ffn_pdrop=ff_pdrop,
-                                                   layer_norms_after=layer_norms_after, layer_norm_eps=layer_norm_eps,
-                                                   windowed_ra=windowed_ra, rpr_value_on=rpr_value_on)
+        is_mlp = kwargs.get("mlp", False)
+        if is_mlp:
+            self.transformer = GatedMLPEncoderStack(self.d_model, pdrop=pdrop, layers=num_layers,
+                                                    nctx=kwargs.get('nctx', 256),
+                                                    activation=activation, ffn_pdrop=ff_pdrop,
+                                                    layer_norm_eps=layer_norm_eps)
+        else:
+
+            self.transformer = TransformerEncoderStack(num_heads, d_model=self.d_model, pdrop=pdrop, scale=True,
+                                                       layers=num_layers, d_ff=d_ff, rpr_k=rpr_k, d_k=d_k,
+                                                       activation=activation, ffn_pdrop=ff_pdrop,
+                                                       layer_norms_after=layer_norms_after, layer_norm_eps=layer_norm_eps,
+                                                       windowed_ra=windowed_ra, rpr_value_on=rpr_value_on)
         self.mlm = kwargs.get('mlm', True)
         self.finetune = kwargs.get('finetune', True)
 
