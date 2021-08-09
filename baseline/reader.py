@@ -324,9 +324,15 @@ class SeqPredictReader:
 
     def build_vocab(self, files, **kwargs):
 
+        if _all_predefined_vocabs(self.vectorizers):
+            vocabs = {k: v.vocab for k, v in self.vectorizers.items()}
+            have_vocabs = True
+        else:
+            have_vocabs = False
+            vocabs = {k: Counter() for k in self.vectorizers.keys()}
         # TODO: Im not sure we should even support this option
         label2index = _try_read_labels(**kwargs)
-        if label2index and _all_predefined_vocabs(self.vectorizers):
+        if label2index and have_vocabs:
             offset = len(label2index)
 
             # If the label list contains all of our special tokens, just reassign to the read in labels
@@ -337,15 +343,15 @@ class SeqPredictReader:
             else:
                 self.label2index.update({k: v + offset} for k, v in label2index.items())
             logger.info("Skipping building vocabulary.  All vectorizers have predefined vocabs and a label file was given!")
-            return {k: v.vocab for k, v in self.vectorizers.items()}
+            return vocabs
         pre_vocabs = None
-        vocabs = {k: Counter() for k in self.vectorizers.keys()}
 
-        vocab_file = kwargs.get('vocab_file')
+        if not have_vocabs:
+            vocab_file = kwargs.get('vocab_file')
 
-        if vocab_file:
-            _vocab_allowed(self.vectorizers)
-            pre_vocabs = _build_vocab_for_col(0, listify(vocab_file), self.vectorizers)
+            if vocab_file:
+                _vocab_allowed(self.vectorizers)
+                pre_vocabs = _build_vocab_for_col(0, listify(vocab_file), self.vectorizers)
 
         labels = Counter()
 
@@ -356,19 +362,22 @@ class SeqPredictReader:
             examples = self.read_examples(file)
             for example in examples:
                 labels.update(self.label_vectorizer.count(example))
-                for k, vectorizer in self.vectorizers.items():
-                    vocab_example = vectorizer.count(example)
-                    vocabs[k].update(vocab_example)
+                if not have_vocabs:
+                    for k, vectorizer in self.vectorizers.items():
+                        vocab_example = vectorizer.count(example)
+                        vocabs[k].update(vocab_example)
 
-        if label2index and not pre_vocabs:
+        if label2index:
+            logger.info("Collected vocabs via counting, labels via file")
             return vocabs
 
-        vocabs = _filter_vocab(vocabs, kwargs.get('min_f', {}))
+        if not have_vocabs:
+            vocabs = _filter_vocab(vocabs, kwargs.get('min_f', {}))
         base_offset = len(self.label2index)
         labels.pop(Offsets.VALUES[Offsets.PAD], None)
         for i, k in enumerate(labels.keys()):
             self.label2index[k] = i + base_offset
-        if pre_vocabs:
+        if not have_vocabs and pre_vocabs:
             vocabs = pre_vocabs
         return vocabs
 
@@ -376,7 +385,6 @@ class SeqPredictReader:
         pass
 
     def load(self, filename, vocabs, batchsz, shuffle=False, sort_key=None):
-
         ts = []
         texts = self.read_examples(filename)
         if sort_key is not None and not sort_key.endswith('_lengths'):
@@ -388,11 +396,11 @@ class SeqPredictReader:
                 example[k], lengths = vectorizer.run(example_tokens, vocabs[k])
                 if lengths is not None:
                     example['{}_lengths'.format(k)] = lengths
+
             example['y'], lengths = self.label_vectorizer.run(example_tokens, self.label2index)
             example['y_lengths'] = lengths
             example['ids'] = i
             ts.append(example)
-
         examples = baseline.data.DictExamples(ts, do_shuffle=shuffle, sort_key=sort_key)
         return baseline.data.ExampleDataFeed(examples, batchsz=batchsz, shuffle=shuffle, trim=self.trim, truncate=self.truncate), texts
 

@@ -1600,6 +1600,7 @@ class XLMRSentencePieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
         Offsets.INDICES['GO'] = self._vocab['<s>']
         Offsets.INDICES['EOS'] = self._vocab['</s>']
         Offsets.INDICES['UNK'] = self._vocab['<unk>']
+        Offsets.VALUES = ["<GO>", "<PAD>", "<EOS>", "<UNK>"]
 
 
     def __init__(self,
@@ -1700,6 +1701,55 @@ class XLMRSentencePieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
 
     def get_dims(self):
         return self.mxlen,
+
+
+@export
+@register_vectorizer(name='xlmr-spm-dict1d')
+class XLMRSentencePieceDict1DVectorizer(XLMRSentencePieceVectorizer1D):
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.field = kwargs.get('fields', kwargs.get('field', 'text'))
+        self.delim = kwargs.get('token_delim', '~~')
+
+    def iterable(self, tokens):
+        tok = [t[self.field] if isinstance(t, dict) else t for t in tokens]
+
+        return super().iterable(tok)
+
+@export
+@register_vectorizer(name='xlmr-spm-label-dict1d')
+class XLMRSentencePieceLabelDict1DVectorizer(XLMRSentencePieceVectorizer1D):
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.field = kwargs.get('fields', kwargs.get('field', 'text'))
+        self.label = kwargs.get('label', 'label')
+
+    def iterable(self, tokens):
+        for t in self.emit_begin_tok:
+            yield t
+        for t in tokens:
+            t_word = t[self.field]
+            t_label = t[self.label]
+            if t_word in Offsets.VALUES:
+                yield t_label
+            elif t == '<unk>':
+                yield t_label
+            elif t == '<eos>':
+                yield t_label
+            else:
+                subwords = self.tokenizer.EncodeAsPieces(t_word)  # TODO: is this right?
+                #subwords = self.tokenizer.apply([self.transform_fn(t_word)])[0].split()
+                subwords = [Offsets.VALUES[Offsets.PAD]] * len(subwords)
+                subwords[0] = t_label
+                for x in subwords:
+                    yield x
+        for t in self.emit_end_tok:
+            yield t
+
+    def run(self, tokens, vocab):
+        return super().run(tokens, vocab)
 
 
 @register_vectorizer(name='camembert-spm1d')

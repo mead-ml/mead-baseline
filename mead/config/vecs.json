@@ -169,6 +169,20 @@
     "model_file": "https://www.dropbox.com/s/dzdhgamoh4nqvbz/xlm-roberta-base-sentencepiece.bpe.model?dl=1"
   },
   {
+    "label": "xlmr-base-dict1d",
+    "type": "xlmr-spm-dict1d",
+    "emit_begin_tok": "<s>",
+    "emit_end_tok": "</s>",
+    "model_file": "https://www.dropbox.com/s/dzdhgamoh4nqvbz/xlm-roberta-base-sentencepiece.bpe.model?dl=1"
+  },
+  {
+    "label": "xlmr-base-label-dict1d",
+    "type": "xlmr-spm-label-dict1d",
+    "emit_begin_tok": "<s>",
+    "emit_end_tok": "</s>",
+    "model_file": "https://www.dropbox.com/s/dzdhgamoh4nqvbz/xlm-roberta-base-sentencepiece.bpe.model?dl=1"
+  },
+  {
     "label": "xlmr-base-nostart",
     "type": "xlmr-spm1d",
     "emit_end_tok": "</s>",
