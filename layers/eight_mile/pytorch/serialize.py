@@ -10,6 +10,7 @@ from eight_mile.pytorch.layers import (
     TransformerDecoder,
     EmbeddingsStack,
     WithDropout,
+    PassThruReduction,
     SingleHeadReduction,
 )
 from eight_mile.pytorch.embeddings import LookupTableEmbeddings, LearnedPositionalLookupTableEmbeddingsWithBias
@@ -458,7 +459,7 @@ def to_attn_pool_array(pyt_attn_pool: nn.Module, name: str) -> Dict:
     if isinstance(pyt_attn_pool, SingleHeadReduction):
         d.update(to_weight_array(pyt_attn_pool.w_Q, f"{name}/w_Q"))
         d.update(to_weight_array(pyt_attn_pool.w_K, f"{name}/w_K"))
-    else:
+    elif not isinstance(pyt_attn_pool, PassThruReduction):
         d.update(to_weight_array(pyt_attn_pool.reduction1.w_Q, f"{name}/reduction1/w_Q"))
         d.update(to_weight_array(pyt_attn_pool.reduction1.w_K, f"{name}/reduction1/w_K"))
 
@@ -479,7 +480,7 @@ def from_attn_pool_array(pyt_attn_pool: nn.Module, d: Dict, name: str):
         from_weight_array(pyt_attn_pool.w_Q, d, f"{name}/w_Q")
         from_weight_array(pyt_attn_pool.w_K, d, f"{name}/w_K")
 
-    else:
+    elif not isinstance(pyt_attn_pool, PassThruReduction):
         from_weight_array(pyt_attn_pool.reduction1.w_Q, d, f"{name}/reduction1/w_Q")
         from_weight_array(pyt_attn_pool.reduction1.w_K, d, f"{name}/reduction1/w_K")
         from_weight_array(pyt_attn_pool.reduction2.w_Q, d, f"{name}/reduction2/w_Q")

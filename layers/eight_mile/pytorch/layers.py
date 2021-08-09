@@ -3744,8 +3744,8 @@ class PassThruReduction(AttentionReduction):
     """A pass-through or identity function that gives back the query
     """
 
-    def __init__(self, _, name=None):
-        super().__init__(name=name)
+    def __init__(self):
+        super().__init__()
 
     def forward(self, qkvm: Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]) -> torch.Tensor:
         """Output the first index (for the query)

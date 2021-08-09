@@ -7,6 +7,7 @@ from eight_mile.tf.layers import (
     TransformerDecoder,
     MultiHeadedAttention,
     PassThru,
+    PassThruReduction,
     FFN,
     SingleHeadReduction
 )
@@ -444,12 +445,13 @@ def to_attn_pool_array(tf_attn_pool: tf.keras.layers.Layer, name: str) -> Dict:
     if isinstance(tf_attn_pool, SingleHeadReduction):
         d.update(to_weight_array(tf_attn_pool.w_Q, f"{name}/w_Q"))
         d.update(to_weight_array(tf_attn_pool.w_K, f"{name}/w_K"))
-    else:
+    elif not isinstance(tf_attn_pool, PassThruReduction):
         d.update(to_weight_array(tf_attn_pool.reduction1.w_Q, f"{name}/reduction1/w_Q"))
         d.update(to_weight_array(tf_attn_pool.reduction1.w_K, f"{name}/reduction1/w_K"))
 
         d.update(to_weight_array(tf_attn_pool.reduction2.w_Q, f"{name}/reduction2/w_Q"))
         d.update(to_weight_array(tf_attn_pool.reduction2.w_K, f"{name}/reduction2/w_K"))
+
     return d
 
 
