@@ -865,7 +865,7 @@ class IndexPairLabelReader(SeqLabelReader):
                "!": " ! ",
                }
 
-    def __init__(self, vectorizers, trim=False, truncate=False, **kwargs):
+    def __init__(self, vectorizers, trim=False, truncate=False, has_header=True, **kwargs):
         super().__init__()
 
         self.label2index = {}
@@ -884,7 +884,7 @@ class IndexPairLabelReader(SeqLabelReader):
         self.col_keys = kwargs.get('col_keys', ['pairID', 'sentence1', 'sentence2', 'gold_label'])
         example_type = kwargs.get('example_type', 'single')
         self.convert_to_example = self.convert_to_example_dual if example_type == 'dual' else self.convert_to_example_single
-        self.has_header = True
+        self.has_header = has_header
 
     @staticmethod
     def splits(text):
@@ -1103,6 +1103,8 @@ class TSVIndexPairLabelReader(IndexPairLabelReader):
 
     def index_pair_label(self, line, clean_fn, header):
         cols = line.strip().split('\t')
+        if header is None:
+            return cols
         header = [h.strip() for h in header.split('\t')]
         col_indices = [header.index(c) for c in self.col_keys]
         # QQP files have some invalid samples
@@ -1110,6 +1112,7 @@ class TSVIndexPairLabelReader(IndexPairLabelReader):
         #    raise Exception(f"Error: {cols}")
         index_pair_label_list = [cols[c] for c in col_indices]
         index, text1, text2, label = index_pair_label_list
+
         text1 = ' '.join(list(filter(lambda s: len(s) != 0, [clean_fn(w) for w in text1.split()])))
         text2 = ' '.join(list(filter(lambda s: len(s) != 0, [clean_fn(w) for w in text2.split()])))
         return index, text1, text2, label
