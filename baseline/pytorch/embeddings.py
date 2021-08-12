@@ -334,7 +334,8 @@ class TransformerLMPooledEmbeddingsWithOutputModel(TransformerLMPooledEmbeddings
                 logger.warning("Restoring only key [%s]", ' '.join(filtered_keys))
             load_tlm_output_npz(c, embeddings, filtered_keys)
         else:
-            tlm_load_state_dict(c, embeddings)
+            tlm_load_state_dict(c, embeddings,
+                                str_map={'model.embeddings.embeddings.0.':'', 'model.output_layer': 'output_layer'})
         return c
 
 @register_embeddings(name='tlm-words-embed-pooled2d')
