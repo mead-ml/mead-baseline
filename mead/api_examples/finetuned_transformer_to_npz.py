@@ -16,6 +16,8 @@ import logging
 from baseline.utils import import_user_module
 from eight_mile.pytorch.serialize import save_tlm_output_npz, save_tlm_npz
 
+logger = logging.getLogger(__file__)
+
 def main():
     parser = argparse.ArgumentParser(
         description='Convert finetuned transformer model trained with PyTorch classifier to an TLM NPZ'
@@ -38,7 +40,7 @@ def main():
 
     keys = list(tpt_embed_dict.keys())
     if len(keys) > 1:
-        raise Exception(
+        logger.warning(
             "Unsupported model! Multiple embeddings are applied in this model, "
             "but this converter only supports a single embedding"
         )
