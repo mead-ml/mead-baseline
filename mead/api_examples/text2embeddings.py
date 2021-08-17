@@ -8,10 +8,10 @@ from baseline.embeddings import *
 from baseline.vectorizers import *
 from mead.utils import convert_path, parse_extra_args, configure_logger, parse_and_merge_overrides, read_config_file_or_json, index_by_label
 import pandas as pd
-logger = logging.getLogger(__file__)
+logging.basicConfig(format='%(asctime)s : %(message)s', level=logging.DEBUG)
+
 DEFAULT_SETTINGS_LOC = 'config/mead-settings.json'
 DEFAULT_DATASETS_LOC = 'config/datasets.json'
-DEFAULT_LOGGING_LOC = 'config/logging.json'
 DEFAULT_EMBEDDINGS_LOC = 'config/embeddings.json'
 DEFAULT_VECTORIZERS_LOC = 'config/vecs.json'
 
@@ -26,7 +26,6 @@ def main():
     parser.add_argument('--column', required=True)
     parser.add_argument('--output', default='embeddings.npz')
     parser.add_argument('--pool', help='Should a reduction be applied on the embeddings?', choices=['max', 'mean'], default='mean')
-    parser.add_argument('--max_len1d', type=int, default=100)
     parser.add_argument('--embeddings', help='index of embeddings: local file, remote URL or mead-ml/hub ref', type=convert_path)
     parser.add_argument('--vecs', help='index of vectorizers: local file, remote URL or hub mead-ml/ref', type=convert_path)
     parser.add_argument('--cuda', type=baseline.str2bool, default=True)

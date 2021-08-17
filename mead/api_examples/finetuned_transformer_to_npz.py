@@ -1,4 +1,4 @@
-"""Convert a fine-tuned Transformer model from Baseline PyTorcy output to NPZ
+"""Convert a fine-tuned Transformer model from Baseline PyTorch output to NPZ
 
 These models will have the entire transformer inside the primary embeddings key,
 and a single output layer on the model.  We will use
