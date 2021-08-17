@@ -1,3 +1,20 @@
+"""Run any MEAD embeddings within the SentEval framework
+
+The SentEval framework (https://github.com/facebookresearch/SentEval) facilitates
+testing the quality of sentence embeddings.  To prepare your data, you can clone
+that repo and do a `pip install -e .`.  This program allows you to control which
+sets of tasks are run.  By default, it will run all STS and classification probing
+examples.
+
+Please note that its common when evaluating against STS to use a different approach
+from the one in SentEval (following SentenceBERT).  A drop-in replacement is available
+from the SimCSE repository (https://github.com/princeton-nlp/SimCSE).
+
+To use their modified benchmark, clone that repo instead
+and within their SentEval directory, do a `pip install -e .`, and pay attention instead
+to the ALL Spearman metrics:
+
+"""
 import argparse
 import baseline
 import sys
@@ -18,6 +35,7 @@ SUBWORD_EXTRA = 30
 def main():
     parser = argparse.ArgumentParser(description='Run senteval harness')
     parser.add_argument('--nctx', default=512, type=int)
+    parser.add_argument('--tasks', nargs="+", default=['sts', 'class', 'probe'])
     parser.add_argument('--batchsz', default=20, type=int)
     parser.add_argument('--pool', help='Should a reduction be applied on the embeddings?  Only use if your embeddings arent already pooled', type=str)
     parser.add_argument('--vec_id', help='Reference to a specific embedding type')
@@ -105,12 +123,17 @@ def main():
         return encoding
 
     se = senteval.engine.SE(params_senteval, batcher, prepare)
-    transfer_tasks = ['STS12', 'STS13', 'STS14', 'STS15', 'STS16',
-                      'MR', 'CR', 'MPQA', 'SUBJ', 'SST2', 'SST5', 'TREC', 'MRPC',
-                      'SICKEntailment', 'SICKRelatedness', 'STSBenchmark',
-                      'Length', 'WordContent', 'Depth', 'TopConstituents',
-                      'BigramShift', 'Tense', 'SubjNumber', 'ObjNumber',
-                      'OddManOut', 'CoordinationInversion']
+    transfer_tasks = []
+    if 'sts' in args.tasks:
+        transfer_tasks += ['STS12', 'STS13', 'STS14', 'STS15', 'STS16', 'SICKRelatedness', 'STSBenchmark']
+    if 'class' in args.tasks:
+        transfer_tasks += ['MR', 'CR', 'MPQA', 'SUBJ', 'SST2', 'SST5', 'TREC', 'MRPC',
+                           'SICKEntailment']
+    if 'probe' in args.tasks:
+        transfer_tasks += ['Length', 'WordContent', 'Depth', 'TopConstituents',
+                           'BigramShift', 'Tense', 'SubjNumber', 'ObjNumber',
+                           'OddManOut', 'CoordinationInversion']
+
     results = se.eval(transfer_tasks)
     print(results)
 
