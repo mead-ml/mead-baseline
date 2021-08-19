@@ -4383,6 +4383,7 @@ class PairedModel(DualEncoderModel):
         super().__init__(2*d_model if reduction_type.startswith("2") else d_model, stacking_layers, d_out, ffn_pdrop)
 
         reduction_type = reduction_type.lower()
+        self.reduce_fn = self._reduce_3
         if reduction_type == "2ha":
             self.reduction_layer = TwoHeadConcat(d_model, dropout, scale=False, d_k=reduction_d_k)
         elif reduction_type == "2ha_mean":
@@ -4395,6 +4396,12 @@ class PairedModel(DualEncoderModel):
             self.reduction_layer = SingleHeadReduction(d_model, dropout, scale=False, d_k=reduction_d_k, pooling="mean")
         elif reduction_type == "sha_max":
             self.reduction_layer = SingleHeadReduction(d_model, dropout, scale=False, d_k=reduction_d_k, pooling="max")
+        elif reduction_type == 'max':
+            self.reduce_fn = self._reduce_1
+            self.reduction_layer = MaxPool1D(self.output_dim)
+        elif reduction_type == 'mean':
+            self.reduce_fn = self._reduce_1
+            self.reduction_layer = MeanPool1D(self.output_dim)
         else:
             raise Exception("Unknown exception type")
         self.weight_std = weight_std
@@ -4413,6 +4420,13 @@ class PairedModel(DualEncoderModel):
         if isinstance(module, (nn.Linear, nn.LayerNorm)) and module.bias is not None:
             module.bias.data.zero_()
 
+    def _reduce_3(self, encoded, att_mask):
+        return self.reduction_layer((encoded, encoded, encoded, att_mask))
+
+    def _reduce_1(self, encoded, att_mask):
+        lengths = att_mask.squeeze(1).squeeze(1).sum(-1)
+        return self.reduction_layer((encoded, lengths))
+
     def encode_query_base(self, query):
         query_mask = (query != Offsets.PAD)
         att_mask = query_mask.unsqueeze(1).unsqueeze(1)
@@ -4421,7 +4435,7 @@ class PairedModel(DualEncoderModel):
             embedded = self.embeddings({'x': query})
             encoded_query = self.transformer((embedded, att_mask))
 
-        encoded_query = self.reduction_layer((encoded_query, encoded_query, encoded_query, att_mask))
+        encoded_query = self.reduce_fn(encoded_query, att_mask)
         return encoded_query
 
     def encode_response_base(self, response):
@@ -4430,7 +4444,7 @@ class PairedModel(DualEncoderModel):
         with torch.no_grad() if self.freeze else contextlib.ExitStack():
             embedded = self.embeddings({'x': response})
             encoded_response = self.transformer((embedded, att_mask))
-        encoded_response = self.reduction_layer((encoded_response, encoded_response, encoded_response, att_mask))
+        encoded_response = self.reduce_fn(encoded_response, att_mask)
         return encoded_response
 
 
