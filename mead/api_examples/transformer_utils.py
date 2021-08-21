@@ -229,15 +229,18 @@ class MultiFileLoader(IterableDataset):
 
 class NextTurnPredictionFileLoader(MultiFileLoader):
 
+    KEYS_TO_COLS = {'y': 1, 'x': 0}
     def get_pair_order(self, pair):
-        if self.record_keys == ['y', 'x']:
-            return pair[1], pair[0]
-        return pair[0], pair[1]
+        p1 = NextTurnPredictionFileLoader.KEYS_TO_COLS[self.record_keys[0]]
+        if len(self.record_keys) == 1:
+            return pair[p1], pair[p1]
+        p2 = NextTurnPredictionFileLoader.KEYS_TO_COLS[self.record_keys[1]]
+        return pair[p1], pair[p2]
 
     def process_line(self, line):
         pair = line.strip().split('\t')
         # Unfortunately, this occassionally happens, a bunch of blank turns etc.
-        if len(pair) != 2:
+        if len(pair) != 2 and len(self.record_keys) > 1:
             return None
         q, r = self.get_pair_order(pair)
         if q == '' or r == '':
