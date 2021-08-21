@@ -12,7 +12,6 @@ logger = logging.getLogger('baseline')
 
 MASKING_RULE_DEFS = {}
 
-
 @optional_params
 def register_masking(cls, name=None):
     """Register a class as a handler for masking rules by key name"""
@@ -21,7 +20,6 @@ def register_masking(cls, name=None):
 
 
 def create_masking(mask_type, vocab, pad_y):
-    print('creating', MASKING_RULE_DEFS)
     Constructor = MASKING_RULE_DEFS.get(mask_type)
     if not Constructor:
         logger.warning("No masking algorithm for %s, treating as causal", mask_type)
@@ -54,6 +52,22 @@ class MaskMLM(Masking):
 
     def __call__(self, chunk: np.ndarray, ignore_prefix: bool, ignore_suffix: bool):
         return mlm_masking(chunk, self.mask_value, self.vocab_size, ignore_prefix, ignore_suffix, pad_y=self.pad_y)
+
+
+TOKENIZER_DEFS = {}
+
+@optional_params
+def register_tokenizer(cls, name=None):
+    r = register(cls, TOKENIZER_DEFS, name, "tokenizer defs")
+    return r
+
+def create_tokenizer(tokenizer_type):
+    FactoryFunction = TOKENIZER_DEFS.get(tokenizer_type)
+    if not FactoryFunction:
+        return str.split
+    logger.info("Creating constructor %s for tokenizer %s", str(FactoryFunction), tokenizer_type)
+    tokenizer = FactoryFunction()
+    return tokenizer
 
 
 def in_bytes(mb):

@@ -62,24 +62,25 @@ class TextFile:
 
 def run(input_files=[], input_pattern='*.txt', codes=None, vocab=None, nctx=256, fmt='json', fields=['x_str', 'y_str'],
         output=None, prefix=None, suffix=None, max_file_size=100, tok_on_eol="<EOS>", cased=True,
-        mask_type="mlm", module=None, pad_y=True, extra_tokens=['[CLS]', '[MASK]'], world_size=1, world_offset=0, input_field='text', **kwargs):
+        mask_type="mlm", module=None, pad_y=True, extra_tokens=['[CLS]', '[MASK]'], world_size=1, world_offset=0,
+        input_field='text', tokenizer_type=None, **kwargs):
 
-    def parse_jsonl(x): return json.loads(x)[input_field].split()
+    def parse_json_line(x): return json.loads(x)[input_field]
 
     if module:
-        logger.warning("Loading custom user module %s for masking rules", module)
+        logger.warning("Loading custom user module %s for masking rules and tokenizers", module)
         baseline.import_user_module(module)
 
-    parse_line = lambda x: x.strip().split()
+    get_line = lambda x: x.strip()
     if os.path.isdir(input_files):
         if '.json' in input_pattern:
-            parse_line = parse_jsonl
+            get_line = parse_json_line
         input_files = list(glob.glob(os.path.join(input_files, input_pattern)))
         if not output:
             output = os.path.join(input_files, 'records')
     else:
         if '.json' in input_files:
-            parse_line = parse_jsonl
+            get_line = parse_json_line
         input_files = [input_files]
         if not output:
             output = f'{input_files}.records'
@@ -94,6 +95,7 @@ def run(input_files=[], input_pattern='*.txt', codes=None, vocab=None, nctx=256,
     lookup_indices = []
     indices2word = baseline.revlut(vectorizer.vocab)
     root_dir = os.path.dirname(output)
+    tokenizer = create_tokenizer(tokenizer_type)
     masking = create_masking(mask_type, vectorizer.vocab, pad_y)
     if not os.path.exists(root_dir):
         os.makedirs(root_dir)
@@ -116,7 +118,7 @@ def run(input_files=[], input_pattern='*.txt', codes=None, vocab=None, nctx=256,
         with TextFile(text) as rf:
             print(f"Reading from {text}...")
             for line in rf:
-                to_bpe = parse_line(line)
+                to_bpe = tokenizer(get_line(line))
                 if not to_bpe:
                     continue
                 to_bpe += [tok_on_eol]
@@ -173,6 +175,7 @@ def parse_args(argv):
     parser.add_argument("--tok_on_eol", type=str, default="<EOS>")
     parser.add_argument("--cased", type=baseline.str2bool, default=True)
     parser.add_argument("--mask_type", type=str, default="mlm", help="Masking rules, including 'mlm' and 'causal'")
+    parser.add_argument("--tokenizer_type", type=str, help="Optional tokenizer, default is to use string split")
     parser.add_argument("--module", default=None, help="Module containing custom masking rules")
     parser.add_argument("--pad_y", type=baseline.str2bool, default=True,
                         help="Replace all non-masked Y values with <PAD>")
