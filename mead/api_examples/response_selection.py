@@ -35,17 +35,19 @@ def get_next_k(l, k):
                     yield b_x, b_y
 
 def create_model(model_type, embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, d_k, reduction_d_k,
-                 stacking_layers, windowed_ra, logger):
+                 stacking_layers, windowed_ra, reduction_type, logger):
 
     if model_type == 'transformer-bow':
         model = TransformerBoWPairedModel(embeddings, d_model, d_ff, 0, num_heads, num_layers, rpr_k=rpr_k, d_k=d_k,
                                           reduction_d_k=reduction_d_k, stacking_layers=stacking_layers, ffn_pdrop=0,
+                                          reduction_type=reduction_type,
                                           windowed_ra=windowed_ra)
 
 
     else:
         model = PairedModel(embeddings, d_model, d_ff, 0, num_heads, num_layers, rpr_k=rpr_k, d_k=d_k,
                             reduction_d_k=reduction_d_k, stacking_layers=stacking_layers,
+                            reduction_type=reduction_type,
                             windowed_ra=windowed_ra)
 
     logger.info(model)
@@ -72,6 +74,7 @@ def main():
     parser.add_argument("--subword_vocab_file", type=str, help="The BPE subword vocab", required=True)
     parser.add_argument("--reduction_d_k", type=int, default=64, help="Dimensions of Key and Query in the single headed"
                                                                       "reduction layers")
+    parser.add_argument("--reduction_type", type=str, default="2ha", help="Method of reduction, defaults to 2-headed attention")
     parser.add_argument("--stacking_layers", type=int, nargs='+',
                         help="Hidden sizes of the dense stack (ff2 from the convert paper)")
 
@@ -118,6 +121,7 @@ def main():
                          num_heads=args.num_heads, num_layers=args.num_layers,
                          rpr_k=args.rpr_k, d_k=args.d_k, reduction_d_k=args.reduction_d_k,
                          stacking_layers=args.stacking_layers, windowed_ra=args.windowed_ra,
+                         reduction_type=args.reduction_type,
                          logger=logger)
 
     if os.path.isdir(args.ckpt):
@@ -141,7 +145,6 @@ def main():
 
         if i >= num_batches or batch[0].shape[0] != args.recall_k:
             break
-        uniq = set()
         with torch.no_grad():
             inputs, targets = batch
             inputs = inputs.to(args.device)
