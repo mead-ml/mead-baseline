@@ -1119,7 +1119,7 @@ class WordpieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
         self.tokenizer = WordpieceTokenizer(self.read_vocab(kwargs.get('vocab_file')))
         self.mxlen = kwargs.get('mxlen', -1)
         self.dtype = kwargs.get('dtype', 'int')
-        self._special_tokens = {"[CLS]", "<unk>", "<EOS>"}
+        self._special_tokens = {"[CLS]", "[UNK]", "[SEP]"}
 
     def read_vocab(self, file):
         return load_bert_vocab(file)
@@ -1173,7 +1173,7 @@ class WordpieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
             if i == self.mxlen:
                 i -= len(self.emit_end_tok)
                 for j, x in enumerate(self.emit_end_tok):
-                    vec1d[i + j] = vocab.get(x)
+                    vec1d[i + j] = vocab.get(x, vocab['[UNK]'])
                 i = self.mxlen - 1
                 break
             vec1d[i] = atom

@@ -4379,7 +4379,8 @@ class PairedModel(DualEncoderModel):
                  windowed_ra=False,
                  rpr_value_on=False,
                  reduction_type="2ha",
-                 freeze_encoders=False):
+                 freeze_encoders=False,
+                 layer_norms_after=False):
         super().__init__(2*d_model if reduction_type.startswith("2") else d_model, stacking_layers, d_out, ffn_pdrop)
 
         reduction_type = reduction_type.lower()
@@ -4408,7 +4409,8 @@ class PairedModel(DualEncoderModel):
         self.transformer = TransformerEncoderStack(num_heads=num_heads, d_model=d_model,
                                                    pdrop=dropout, layers=num_layers, activation='gelu', d_ff=d_ff,
                                                    ffn_pdrop=ffn_pdrop,
-                                                   d_k=d_k, rpr_k=rpr_k, windowed_ra=windowed_ra, rpr_value_on=rpr_value_on)
+                                                   d_k=d_k, rpr_k=rpr_k, windowed_ra=windowed_ra, rpr_value_on=rpr_value_on,
+                                                   layer_norms_after=layer_norms_after)
 
         self.embeddings = EmbeddingsStack({'x': embeddings})
         self.freeze = freeze_encoders
@@ -4469,7 +4471,8 @@ class TransformerBoWPairedModel(DualEncoderModel):
                  windowed_ra=False,
                  rpr_value_on=False,
                  reduction_type_1="2ha",
-                 freeze_encoders=False):
+                 freeze_encoders=False,
+                 layer_norms_after=False):
         super().__init__(d_model, stacking_layers, d_out, ffn_pdrop)
 
         reduction_type_1 = reduction_type_1.lower()
@@ -4495,7 +4498,8 @@ class TransformerBoWPairedModel(DualEncoderModel):
         self.transformer = TransformerEncoderStack(num_heads=num_heads, d_model=d_model,
                                                    pdrop=dropout, layers=num_layers, activation='gelu', d_ff=d_ff,
                                                    ffn_pdrop=ffn_pdrop,
-                                                   d_k=d_k, rpr_k=rpr_k, windowed_ra=windowed_ra, rpr_value_on=rpr_value_on)
+                                                   d_k=d_k, rpr_k=rpr_k, windowed_ra=windowed_ra, rpr_value_on=rpr_value_on,
+                                                   layer_norms_after=layer_norms_after)
 
         self.embeddings = EmbeddingsStack({'x': embeddings})
         self.freeze = freeze_encoders

@@ -725,7 +725,8 @@ def from_tlm_array(pytorch_tlm: nn.Module, d: Dict, embeddings_keys: List[str] =
         if isinstance(pytorch_tlm.embeddings[embeddings_key], LearnedPositionalLookupTableEmbeddingsWithBias):
             tt = LookupTableEmbeddings(vsz=2, dsz=pytorch_tlm.embeddings.output_dim)
             from_embed_array(tt, d, f"{name}/Embeddings/tt")
-            pytorch_tlm.embeddings[embeddings_key].bias = nn.Parameter(tt.embeddings.weight[0])
+            device = pytorch_tlm.embeddings[embeddings_key].embeddings.weight.device
+            pytorch_tlm.embeddings[embeddings_key].bias = nn.Parameter(tt.embeddings.weight[0].to(device=device))
         else:
             from_embed_array(pytorch_tlm.embeddings[embeddings_key], d, f"{name}/Embeddings/{embeddings_key}")
     if hasattr(pytorch_tlm.embeddings.reduction, 'ln'):
@@ -816,7 +817,8 @@ def seq2seq_enc_from_tlm_array(pytorch_tlm: nn.Module, d: Dict, embeddings_keys:
         if isinstance(pytorch_tlm.src_embeddings[embeddings_key], LearnedPositionalLookupTableEmbeddingsWithBias):
             tt = LookupTableEmbeddings(vsz=2, dsz=pytorch_tlm.embeddings.output_dim)
             from_embed_array(tt, d, f"{name}/Embeddings/tt")
-            pytorch_tlm.src_embeddings[embeddings_key].bias = nn.Parameter(tt.embeddings.weight[0])
+            device = pytorch_tlm.embeddings[embeddings_key].embeddings.weight.device
+            pytorch_tlm.src_embeddings[embeddings_key].bias = nn.Parameter(tt.embeddings.weight[0].to(device=device))
         else:
             from_embed_array(pytorch_tlm.src_embeddings[embeddings_key], d, f"{name}/Embeddings/{embeddings_key}")
     if hasattr(pytorch_tlm.src_embeddings.reduction, 'ln'):
