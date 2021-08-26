@@ -149,9 +149,9 @@ def _vocab_allowed(vectorizers):
 @export
 class ParallelCorpusReader:
 
-    def __init__(self, vectorizers, trim=False, truncate=False):
+    def __init__(self, vectorizers, trim=False, truncate=False, backend=None):
         super().__init__()
-
+        self.backend = backend
         self.src_vectorizers = {}
         self.tgt_vectorizer = None
         for k, vectorizer in vectorizers.items():
@@ -174,16 +174,16 @@ class ParallelCorpusReader:
 
     def load(self, tsfile, vocab1, vocab2, batchsz, shuffle=False, sort_key=None):
         examples = self.load_examples(tsfile, vocab1, vocab2, shuffle, sort_key)
-        return baseline.data.ExampleDataFeed(examples, batchsz,
-                                             shuffle=shuffle, trim=self.trim, sort_key=sort_key, truncate=self.truncate)
+        return baseline.data.data_feed(examples, batchsz,
+                                       shuffle=shuffle, trim=self.trim, truncate=self.truncate, backend=self.backend)
 
 
 @register_reader(task='seq2seq', name='tsv')
 class TSVParallelCorpusReader(ParallelCorpusReader):
 
     def __init__(self, vectorizers,
-                 trim=False, truncate=False, src_col_num=0, tgt_col_num=1, **kwargs):
-        super().__init__(vectorizers, trim, truncate)
+                 trim=False, truncate=False, src_col_num=0, tgt_col_num=1, backend=None, **kwargs):
+        super().__init__(vectorizers, trim, truncate, backend)
         self.src_col_num = src_col_num
         self.tgt_col_num = tgt_col_num
 
@@ -232,8 +232,8 @@ class TSVParallelCorpusReader(ParallelCorpusReader):
 @register_reader(task='seq2seq', name='default')
 class MultiFileParallelCorpusReader(ParallelCorpusReader):
 
-    def __init__(self, vectorizers, trim=False, truncate=False, **kwargs):
-        super().__init__(vectorizers, trim, truncate)
+    def __init__(self, vectorizers, trim=False, truncate=False, backend=None, **kwargs):
+        super().__init__(vectorizers, trim, truncate, backend)
         pair_suffix = kwargs['pair_suffix']
 
         self.src_suffix = pair_suffix[0]
@@ -294,11 +294,13 @@ def _try_read_labels(**kwargs):
         label2index = {l: i for i, l in enumerate(label_list)}
     return label2index
 
+
 @export
 class SeqPredictReader:
 
-    def __init__(self, vectorizers, trim=False, truncate=False, mxlen=-1, **kwargs):
+    def __init__(self, vectorizers, trim=False, truncate=False, mxlen=-1, backend=None, **kwargs):
         super().__init__()
+        self.backend = backend
         self.vectorizers = vectorizers
         self.trim = trim
         self.truncate = truncate
@@ -402,14 +404,16 @@ class SeqPredictReader:
             example['ids'] = i
             ts.append(example)
         examples = baseline.data.DictExamples(ts, do_shuffle=shuffle, sort_key=sort_key)
-        return baseline.data.ExampleDataFeed(examples, batchsz=batchsz, shuffle=shuffle, trim=self.trim, truncate=self.truncate), texts
+        return baseline.data.data_feed(examples, batchsz, shuffle=shuffle, trim=self.trim,
+                                       truncate=self.truncate, backend=self.backend), texts
 
 
 @export
 class MultiLabelSeqPredictReader:
 
-    def __init__(self, vectorizers, trim=False, truncate=False, mxlen=-1, **kwargs):
+    def __init__(self, vectorizers, trim=False, truncate=False, mxlen=-1, backend=None, **kwargs):
         super().__init__()
+        self.backend = backend
         self.vectorizers = vectorizers
         self.trim = trim
         self.truncate = truncate
@@ -499,15 +503,16 @@ class MultiLabelSeqPredictReader:
             ts.append(example)
 
         examples = baseline.data.DictExamples(ts, do_shuffle=shuffle, sort_key=sort_key)
-        return baseline.data.ExampleDataFeed(examples, batchsz=batchsz, shuffle=shuffle, trim=self.trim, truncate=self.truncate), texts
+        return baseline.data.data_feed(examples, batchsz, shuffle=shuffle, trim=self.trim,
+                                       truncate=self.truncate, backend=self.backend), texts
 
 
 @export
 @register_reader(task='tagger', name='default')
 class CONLLSeqReader(SeqPredictReader):
 
-    def __init__(self, vectorizers, trim=False, truncate=False, mxlen=-1, **kwargs):
-        super().__init__(vectorizers, trim, truncate, mxlen, **kwargs)
+    def __init__(self, vectorizers, trim=False, truncate=False, mxlen=-1, backend=None, **kwargs):
+        super().__init__(vectorizers, trim, truncate, mxlen, backend, **kwargs)
         self.named_fields = kwargs.get('named_fields', {})
 
     def read_examples(self, tsfile):
@@ -545,8 +550,8 @@ class CONLLSeqReader(SeqPredictReader):
 @register_reader(task='deps', name='default')
 class CONLLParserSeqReader(MultiLabelSeqPredictReader):
 
-    def __init__(self, vectorizers, trim=False, truncate=False, mxlen=-1, **kwargs):
-        super().__init__(vectorizers, trim, truncate, mxlen, **kwargs)
+    def __init__(self, vectorizers, trim=False, truncate=False, mxlen=-1, backend=None, **kwargs):
+        super().__init__(vectorizers, trim, truncate, mxlen, backend, **kwargs)
         self.named_fields = kwargs.get('named_fields', {})
 
     def read_examples(self, tsfile):
@@ -585,8 +590,8 @@ class SRLSeqReader(SeqPredictReader):
     """Read data in the format described by https://github.com/luheng/deep_srl tested on CoNLL2012 SRL data
 
     """
-    def __init__(self, vectorizers, trim=False, truncate=False, mxlen=-1, **kwargs):
-        super().__init__(vectorizers, trim, truncate, mxlen, **kwargs)
+    def __init__(self, vectorizers, trim=False, truncate=False, mxlen=-1, backend=None, **kwargs):
+        super().__init__(vectorizers, trim, truncate, mxlen, backend, **kwargs)
         self.named_fields = kwargs.get('named_fields', {})
 
     def read_examples(self, tsfile):
@@ -651,9 +656,9 @@ class LineSeqLabelReader(SeqLabelReader):
                 "!": " ! ",
                 }
 
-    def __init__(self, vectorizers, trim=False, truncate=False, **kwargs):
+    def __init__(self, vectorizers, trim=False, truncate=False, backend=None, **kwargs):
         super().__init__()
-
+        self.backend = backend
         self.label2index = {}
         self.vectorizers = vectorizers
         self.clean_fn = kwargs.get('clean_fn')
@@ -785,10 +790,9 @@ class LineSeqLabelReader(SeqLabelReader):
 
                 example_dict['y'] = y
                 examples.append(example_dict)
-        return baseline.data.ExampleDataFeed(baseline.data.DictExamples(examples,
-                                                                        do_shuffle=shuffle,
-                                                                        sort_key=sort_key),
-                                             batchsz=batchsz, shuffle=shuffle, trim=self.trim, truncate=self.truncate), texts
+        return baseline.data.data_feed(baseline.data.DictExamples(examples, do_shuffle=shuffle, sort_key=sort_key),
+                                       batchsz, shuffle=shuffle, trim=self.trim,
+                                       truncate=self.truncate, backend=self.backend), texts
 
     def load(self, filename, vocabs, batchsz, **kwargs):
     
@@ -814,10 +818,9 @@ class LineSeqLabelReader(SeqLabelReader):
             
                 example_dict['y'] = y
                 examples.append(example_dict)
-        return baseline.data.ExampleDataFeed(baseline.data.DictExamples(examples,
-                                                                        do_shuffle=shuffle,
-                                                                        sort_key=sort_key),
-                                             batchsz=batchsz, shuffle=shuffle, trim=self.trim, truncate=self.truncate)
+        return baseline.data.data_feed(baseline.data.DictExamples(examples, do_shuffle=shuffle, sort_key=sort_key),
+                                       batchsz, shuffle=shuffle, trim=self.trim,
+                                       truncate=self.truncate, backend=self.backend)
 
 
 @export
@@ -865,9 +868,9 @@ class IndexPairLabelReader(SeqLabelReader):
                "!": " ! ",
                }
 
-    def __init__(self, vectorizers, trim=False, truncate=False, has_header=True, **kwargs):
+    def __init__(self, vectorizers, trim=False, truncate=False, has_header=True, backend=None, **kwargs):
         super().__init__()
-
+        self.backend = backend
         self.label2index = {}
         self.vectorizers = vectorizers
         self.clean_fn = kwargs.get('clean_fn')
@@ -997,11 +1000,9 @@ class IndexPairLabelReader(SeqLabelReader):
                 example_dict['idx'] = idx
                 examples.append(example_dict)
 
-        return baseline.data.ExampleDataFeed(baseline.data.DictExamples(examples,
-                                                                        do_shuffle=shuffle,
-                                                                        sort_key=sort_key),
-                                             batchsz=batchsz, shuffle=shuffle, trim=self.trim,
-                                             truncate=self.truncate), texts
+        return baseline.data.data_feed(baseline.data.DictExamples(examples, do_shuffle=shuffle, sort_key=sort_key),
+                                       batchsz, shuffle=shuffle, trim=self.trim,
+                                       truncate=self.truncate, backend=self.backend), texts
 
     def convert_to_example_dual(self, vocabs: Dict[str, str], text1: List[str], text2: List[str]) -> Dict[str, object]:
         """Convert to 2 vectors, Useful for dual-encoder-style models
@@ -1091,10 +1092,9 @@ class IndexPairLabelReader(SeqLabelReader):
                 except Exception as e:
                     logger.warning(f'Skipping invalid line {il}')
 
-        return baseline.data.ExampleDataFeed(baseline.data.DictExamples(examples,
-                                                                        do_shuffle=shuffle,
-                                                                        sort_key=sort_key),
-                                             batchsz=batchsz, shuffle=shuffle, trim=self.trim, truncate=self.truncate)
+        return baseline.data.data_feed(baseline.data.DictExamples(examples, do_shuffle=shuffle, sort_key=sort_key),
+                                       batchsz, shuffle=shuffle, trim=self.trim,
+                                       truncate=self.truncate, backend=self.backend)
 
 
 @export
@@ -1122,8 +1122,8 @@ class TSVIndexPairLabelReader(IndexPairLabelReader):
 @register_reader(task='classify', name='jsonl-paired-shared-vec')
 class JSONLIndexPairLabelReader(IndexPairLabelReader):
 
-    def __init__(self, vectorizers, trim=False, truncate=False, **kwargs):
-        super().__init__(vectorizers, trim, truncate, **kwargs)
+    def __init__(self, vectorizers, trim=False, truncate=False, backend=None, **kwargs):
+        super().__init__(vectorizers, trim, truncate, backend, **kwargs)
         self.has_header = False
 
     def index_pair_label(self, line, clean_fn, header):
@@ -1139,7 +1139,8 @@ class JSONLIndexPairLabelReader(IndexPairLabelReader):
 @register_reader(task='lm', name='default')
 class LineSeqReader:
 
-    def __init__(self, vectorizers, trim=False, **kwargs):
+    def __init__(self, vectorizers, trim=False, backend=None, **kwargs):
+        self.backend = backend
         self.nctx = kwargs['nctx']
         self.vectorizers = vectorizers
 
@@ -1170,7 +1171,6 @@ class LineSeqReader:
         return vocabs
 
     def load(self, filename, vocabs, batchsz, tgt_key='x'):
-
         x = dict()
         with codecs.open(filename, encoding='utf-8', mode='r') as f:
             sentences = []
@@ -1183,4 +1183,27 @@ class LineSeqReader:
                 shp[0] = valid_lengths
                 x['{}_dims'.format(k)] = tuple(shp)
 
-        return baseline.data.SeqWordCharDataFeed(x, self.nctx, batchsz, tgt_key=tgt_key)
+        tgt_key = 'x' if tgt_key is None else tgt_key
+        num_examples = x['{}_dims'.format(tgt_key)][0]
+        rest = num_examples // batchsz
+        if rest % self.nctx == 0:
+            rest = rest-1
+
+        for k in x.keys():
+            if k.endswith('_dims'):
+                continue
+            dim_key = '{}_dims'.format(k)
+            shp = x[dim_key]
+            if len(shp) == 2:
+                width = shp[1]
+            else:
+                width = 1
+            trunc = batchsz * rest * width
+            x[k] = x[k].reshape(-1)[:trunc]
+            logger.info('Truncating %s from %d to %d', k, num_examples, trunc)
+            if len(shp) == 2:
+                x[dim_key] = (trunc//width, width)
+            else:
+                x[dim_key] = (trunc,)
+
+        return baseline.data.lm_data_feed(x, self.nctx, batchsz, tgt_key, backend=self.backend)

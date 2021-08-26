@@ -59,7 +59,6 @@ class Token1DPreprocessor(TensorFlowPreprocessor):
     def __init__(self, feature, vectorizer, index, vocab, **kwargs):
         super().__init__(feature, vectorizer, index, vocab, **kwargs)
         self.hard_mxlen = self.vectorizer.mxlen
-        # 10000 is just a large max, six.MAXSIZE was causing issues
         self.hard_mxlen = self.hard_mxlen if self.hard_mxlen != -1 else 10000
 
         transform_fn = self.vectorizer.transform_fn.__name__
@@ -93,7 +92,6 @@ class Char2DPreprocessor(TensorFlowPreprocessor):
     def __init__(self, feature, vectorizer, index, vocab, **kwargs):
         super().__init__(feature, vectorizer, index, vocab, **kwargs)
         self.hard_mxlen = self.vectorizer.mxlen
-        # 10000 is just a large max, six.MAXSIZE was causing issues
         self.hard_mxlen = self.hard_mxlen if self.hard_mxlen != -1 else 10000
         self.mxwlen = self.vectorizer.mxwlen
         transform_fn = self.vectorizer.transform_fn.__name__

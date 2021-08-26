@@ -117,6 +117,24 @@ def register_trainer(cls, task, name=None):
     return cls
 
 
+BASELINE_TRAIN_TARGET = {}
+
+
+@export
+@optional_params
+def register_train_target(cls, task, name=None):
+    """Register a function as a plug-in
+
+    Use this pattern if you want to provide an override to a `Trainer` class.
+
+    """
+    if task not in BASELINE_TRAIN_TARGET:
+        BASELINE_TRAIN_TARGET[task] = {}
+    if name is None:
+        name = cls.__name__
+    BASELINE_TRAIN_TARGET[task][name] = cls
+    return cls
+
 BASELINE_FIT_FUNC = {}
 
 
@@ -185,6 +203,24 @@ def create_trainer(model_params, **kwargs):
     else:
         task_name = model_params.task_name
     Constructor = BASELINE_TRAINERS[task_name][trainer_type]
+    return Constructor(model_params, **kwargs)
+
+
+@export
+def create_train_target(model_params, **kwargs):
+    """Create the default trainer, or a user-defined one if `trainer_type` is not `default`
+
+    :param default_create_model_fn: The constructor for the default trainer (defined in each platform/task)
+    :param model: The model to train
+    :param kwargs:
+    :return:
+    """
+    trainer_type = kwargs.get('trainer_type', 'default')
+    if type(model_params) is dict:
+        task_name = model_params['task']
+    else:
+        task_name = model_params.task_name
+    Constructor = BASELINE_TRAIN_TARGET[task_name][trainer_type]
     return Constructor(model_params, **kwargs)
 
 

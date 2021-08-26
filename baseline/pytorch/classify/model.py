@@ -55,8 +55,12 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
         self.gpu = True
         return super().cuda(device=device)
 
-    def create_loss(self):
+    def create_loss(self, **kwargs):
         return nn.NLLLoss()
+
+    @property
+    def num_classes(self):
+        return len(self.labels)
 
     def make_input(self, batch_dict, perm=False, numpy_to_tensor=False):
 

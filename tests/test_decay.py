@@ -1,4 +1,4 @@
-import six
+import sys
 import pytest
 import numpy as np
 from mock import patch, MagicMock
@@ -182,7 +182,7 @@ def test_composite_calls_rest():
     warm.warmup_steps = warmup_steps
     rest = MagicMock()
     lr = CompositeLRScheduler(warm=warm, rest=rest)
-    step = np.random.randint(warmup_steps + 1, six.MAXSIZE)
+    step = np.random.randint(warmup_steps + 1, sys.maxsize)
     _ = lr(step)
     warm.assert_not_called()
     rest.assert_called_once_with(step - warmup_steps)

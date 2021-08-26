@@ -7,7 +7,7 @@ import torch
 import torch.autograd
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.data import IterableDataset, Dataset
+from torch.utils.data import IterableDataset, Dataset, DataLoader
 from baseline.utils import lookup_sentence, get_version, Offsets
 from eight_mile.pytorch.layers import *
 

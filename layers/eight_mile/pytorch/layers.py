@@ -234,6 +234,32 @@ class LabelSmoothingLoss(nn.Module):
         return f"label_smoothing={self.label_smoothing}"
 
 
+class KLDivTrainLoss(nn.Module):
+    """Do KL-Divergence at train time, and NLLLoss() at test time
+
+    For this model, we assume that the test data is either 1-hot or a distribution that we can use
+    argmax on to find the hard-target values, and during training we assue it is always a distribution.
+    """
+    def __init__(self, log_target: bool = False, reduction="mean"):
+        """Wraps PyTorch KLDivLoss, but at test time use NLLLoss
+        """
+        super().__init__()
+        self.train_loss = nn.KLDivLoss(reduction=reduction, log_target=log_target)
+
+
+    def forward(self, output: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        """
+        :param output: The model outputs, [B, V]
+        :param target: The target labels, [B]
+        """
+        if self.training:
+            return self.train_loss(output, target)
+        if target.dtype == torch.float32:
+            return F.nll_loss(output, torch.argmax(target, -1), ignore_index=Offsets.PAD)
+        return F.nll_loss(output, target, ignore_index=Offsets.PAD)
+
+
+
 class MeanPool1D(nn.Module):
     """Do a mean pool while accounting for the length of a sequence
     """
@@ -1931,6 +1957,7 @@ class FineTuneModel(nn.Module):
             self.finetuned = EmbeddingsStack(embeddings)
         else:
             self.finetuned = embeddings
+        self.num_classes = nc
         self.stack_model = stack_model
         output_dim = self.finetuned.output_dim if stack_model is None else stack_model.output_dim
         self.output_layer = Dense(output_dim, nc, activation="log_softmax")
@@ -1988,6 +2015,7 @@ class EmbedPoolStackModel(nn.Module):
         self.stack_model = stack_model if stack_model else nn.Identity()
         output_dim = self.pool_model.output_dim if stack_model is None else stack_model.output_dim
         self.output_layer = Dense(output_dim, nc, activation="log_softmax") if output_model is None else output_model
+        self.num_classes = nc
 
     def forward(self, inputs: Dict[str, torch.Tensor]):
         lengths = inputs["lengths"]
@@ -2363,6 +2391,8 @@ class TaggerGreedyDecoder(nn.Module):
     def neg_log_loss(self, inputs, tags, lengths):
         unaries = self.to_batch_first(inputs)
         tags = self.to_batch_first(tags)
+        max_length = torch.max(lengths)
+        tags = tags[:, :max_length]
         return self.loss(unaries, tags)
 
     def forward(self, inputs) -> torch.Tensor:
@@ -2448,6 +2478,10 @@ class CRF(nn.Module):
         :return: torch.FloatTensor: [B]
         """
         # Convert from [B, T, N] -> [T, B, N]
+
+        max_length = torch.max(lengths)
+        tags = tags[:, :max_length]
+
         if self.batch_first:
             unary = unary.transpose(0, 1)
             tags = tags.transpose(0, 1)
@@ -2471,7 +2505,6 @@ class CRF(nn.Module):
         """
         batch_size = lengths.shape[0]
         assert lengths.shape[0] == unary.shape[1]
-
         trans = self.transitions.squeeze(0)  # [N, N]
         start = torch.full((1, batch_size), self.start_idx, dtype=tags.dtype, device=tags.device)  # [1, B]
         tags = torch.cat([start, tags], 0)  # [T + 1, B]
@@ -3786,7 +3819,7 @@ def find_latest_checkpoint(checkpoint_dir: str, wildcard="checkpoint") -> Tuple[
             step_num = this_step_num
     return checkpoint, step_num
 
-def save_checkpoint(model: torch.nn.Module, model_base: str, count: int, tick_type: str = 'epoch', save_npz: bool = False):
+def save_checkpoint(model: torch.nn.Module, model_base: str, count: int, tick_type: str = 'epoch', save_npz: bool = False, rm_wrapper=True):
     from eight_mile.pytorch.serialize import save_tlm_npz, save_transformer_seq2seq_npz, save_transformer_de_npz
     checkpoint_name = checkpoint_for(model_base, count, tick_type=tick_type)
     # Its possible due to how its called that we might save the same checkpoint twice if we dont check first
@@ -3795,7 +3828,8 @@ def save_checkpoint(model: torch.nn.Module, model_base: str, count: int, tick_ty
         return
     logger.info("Creating checkpoint: %s", checkpoint_name)
     if hasattr(model, 'module'):
-        torch.save(model.module.state_dict(), checkpoint_name+'.pth')
+        to_save = model if not rm_wrapper else model.module
+        torch.save(to_save.state_dict(), checkpoint_name+'.pth')
         if save_npz:
             if hasattr(model.module, 'decoder'):
                 save_transformer_seq2seq_npz(model.module, checkpoint_name+'.npz')

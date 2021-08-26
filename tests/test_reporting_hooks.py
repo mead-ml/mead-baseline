@@ -2,8 +2,8 @@ import os
 import string
 import pytest
 from mock import patch
+pytest.importorskip("torch.utils.tensorboard")
 
-pytest.importorskip("tensorboardX")
 import numpy as np
 import baseline.reporting
 from baseline.reporting import TensorBoardReporting

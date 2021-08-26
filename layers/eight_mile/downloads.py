@@ -4,7 +4,7 @@ import logging
 import os
 import shutil
 import zipfile
-from six.moves.urllib.request import urlretrieve
+from urllib.request import urlretrieve
 from eight_mile.utils import (
     mime_type,
     exporter,

@@ -1,4 +1,4 @@
-import six
+import sys
 import logging
 import torch
 import torch.autograd
@@ -52,7 +52,8 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
         else:
             logger.warning("Requested training on CPU.  This will be slow.")
             self.crit = model.create_loss()
-        self.nsteps = kwargs.get('nsteps', six.MAXSIZE)
+            self.model = model
+        self.nsteps = kwargs.get('nsteps', sys.maxsize)
 
     def _get_pytorch_model(self):
         return self.model.module if self.gpus > 1 else self.model

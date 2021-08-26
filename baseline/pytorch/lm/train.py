@@ -1,5 +1,6 @@
 import time
 import logging
+
 from baseline.pytorch.torchy import *
 from eight_mile.utils import listify, revlut
 from eight_mile.pytorch.optz import OptimizerManager

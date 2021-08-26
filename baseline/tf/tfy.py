@@ -96,3 +96,71 @@ def dense_layer(output_layer_depth):
     output_layer = tf.layers.Dense(output_layer_depth, use_bias=False, dtype=tf.float32, name="dense")
     return output_layer
 
+
+SHUF_BUF_SZ = 5000
+
+class TFDataAdapter:
+
+    def __init__(self, ts, batchsz, shuffle=True, prefetch=2, is_distributed=False, truncate=False, num_workers=None):
+        self.is_distributed = is_distributed
+        self.length = len(ts) // batchsz
+        self.examples = self._tensorize(ts)
+        self.dataset = tf.data.Dataset.from_tensor_slices(self.examples)
+        if shuffle:
+            self.dataset = self.dataset.shuffle(buffer_size=SHUF_BUF_SZ)
+        self.dataset = self.dataset.batch(batchsz, drop_remainder=truncate)
+        self.dataset = self.dataset.prefetch(prefetch)
+
+    def _tensorize(self, example_list):
+
+        ex = example_list[0]
+        keys = ex.keys()
+        batch = {}
+
+        for k in keys:
+            batch[k] = []
+        sz = len(example_list)
+
+        for i in range(sz):
+            ex = example_list[i]
+            for k in keys:
+                batch[k].append(ex[k])
+
+        for k in keys:
+            batch[k] = np.stack(batch[k])
+        return batch
+
+    def __len__(self):
+        return self.length
+
+    def __iter__(self):
+        return iter(self.dataset)
+
+
+# TODO: make this more efficient
+class TFSeqDataAdapter:
+
+    def __init__(self, ts, prefetch=2, is_distributed=False):
+        self.is_distributed = is_distributed
+        self.examples = self._tensorize(ts)
+        self.dataset = tf.data.Dataset.from_tensor_slices(self.examples)
+        self.dataset = self.dataset.prefetch(prefetch)
+
+    def _tensorize(self, examples):
+        keys = [k for k in examples.keys() if 'dims' not in k]
+        dataset = {k: [] for k in keys}
+        for batch in examples:
+            for k in keys:
+                dataset[k].append(batch[k])
+        for k in keys:
+            if dataset[k]:
+                dataset[k] = np.stack(dataset[k])
+            else:
+                del dataset[k]
+        return dataset
+
+    def __len__(self):
+        return len(self.examples)
+
+    def __iter__(self):
+        return iter(self.dataset)

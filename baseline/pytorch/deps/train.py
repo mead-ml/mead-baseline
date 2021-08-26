@@ -2,7 +2,7 @@ import logging
 import torch
 import torch.autograd
 import os
-import six
+import sys
 from eight_mile.utils import listify, Offsets
 from eight_mile.pytorch.optz import OptimizerManager
 from eight_mile.metrics import UCM, LCM, UAS, LAS
@@ -43,7 +43,7 @@ class DependencyParserTrainerPyTorch(EpochReportingTrainer):
             logger.warning("Requested training on CPU.  This will be slow.")
             self.crit = model.create_loss()
             self.model = model
-        self.nsteps = kwargs.get('nsteps', six.MAXSIZE)
+        self.nsteps = kwargs.get('nsteps', sys.maxsize)
 
     def _get_pytorch_model(self):
         return self.model.module if self.gpus > 1 else self.model

@@ -1,6 +1,5 @@
 import re
 import sys
-import six
 from eight_mile.utils import exporter, register, optional_params
 
 
@@ -100,7 +99,7 @@ class ProgressBarTerminal(Progress):
         self.fmt = re.sub(r"(?P<name>%\(.+?\))d", r"\g<name>%dd" % len(str(total)), fmt)
 
         self.current = 0
-        self.print_ = six.print_ if sys.stdout.isatty() else lambda *args, **kwargs: None
+        self.print_ = print if sys.stdout.isatty() else lambda *args, **kwargs: None
         # Force initial print of pg for when steps are long.
         self.update(step=0)
 

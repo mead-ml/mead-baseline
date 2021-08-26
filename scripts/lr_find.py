@@ -1,4 +1,4 @@
-import six
+import sys
 import argparse
 from copy import deepcopy
 from itertools import chain
@@ -23,7 +23,7 @@ def fit(model, ts, vs, es, **kwargs):
     use_val = kwargs.get('use_val', False)
     beta = kwargs.get('smooth_beta', 0.05)
     log = kwargs.get('log_scale', True)
-    best_loss = six.MAXSIZE
+    best_loss = sys.maxsize
     diverge_threshold = kwargs.get('diverge_threshold', 5)
     stop = False
     i = 0

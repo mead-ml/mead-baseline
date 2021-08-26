@@ -1,4 +1,4 @@
-import six
+import sys
 import os
 import time
 from itertools import zip_longest
@@ -9,14 +9,10 @@ from eight_mile.utils import Timer, listify, revlut, to_spans, write_sentence_co
 from eight_mile.tf.layers import TRAIN_FLAG, SET_TRAIN_FLAG, reload_checkpoint, get_shape_as_list, autograph_options
 from eight_mile.tf.optz import EagerOptimizer
 from eight_mile.progress import create_progress_bar
-from baseline.model import create_model_for
 from baseline.train import register_training_func, EpochReportingTrainer
+from baseline.model import create_model_for
 from baseline.utils import get_model_file, get_metric_cmp
-from baseline.tf.tagger.training.utils import to_tensors
-# Number of batches to prefetch if using tf.datasets
-NUM_PREFETCH = 2
-# The shuffle buffer
-SHUF_BUF_SZ = 5000
+from eight_mile.tf.layers import reload_checkpoint
 
 logger = logging.getLogger('baseline')
 
@@ -104,7 +100,10 @@ class TaggerEvaluatorEagerTf:
         try:
             pg = create_progress_bar(steps)
             metrics = {}
-            for (features, y), batch in pg(zip_longest(ts, kwargs.get('batches', []), fillvalue={})):
+            for inputs, batch in pg(zip_longest(ts, kwargs.get('batches', []), fillvalue={})):
+                features = inputs.copy()
+                y = features.pop('y')
+                features['lengths'] = features.pop(self.model.lengths_key)
                 correct, count, golds, guesses = self.process_batch(features, y, handle=handle, txts=kwargs.get("txts"), ids=batch.get("ids"))
                 total_correct += correct
                 total_sum += count
@@ -158,7 +157,7 @@ class TaggerTrainerEagerTf(EpochReportingTrainer):
         verbose = kwargs.get('verbose', False)
         self.evaluator = TaggerEvaluatorEagerTf(self.model, span_type, verbose)
         self.optimizer = EagerOptimizer(loss, **kwargs)
-        self.nsteps = kwargs.get('nsteps', six.MAXSIZE)
+        self.nsteps = kwargs.get('nsteps', sys.maxsize)
         self._checkpoint = tf.train.Checkpoint(optimizer=self.optimizer.optimizer, model=self.model)
         checkpoint_dir = '{}-{}'.format("./tf-tagger", os.getpid())
 
@@ -211,7 +210,9 @@ class TaggerTrainerEagerTf(EpochReportingTrainer):
 
         @tf.function
         def _train_step(inputs):
-            features, y = inputs
+            features = inputs.copy()
+            y = features.pop('y')
+            features['lengths'] = features.pop(self.model.lengths_key)
             loss = self.optimizer.update(self.model, features, y)
             batchsz = get_shape_as_list(y)[0]
             report_loss = loss * batchsz
@@ -225,7 +226,7 @@ class TaggerTrainerEagerTf(EpochReportingTrainer):
                 epoch_div.assign_add(step_batchsz)
                 nstep_div.assign_add(step_batchsz)
 
-                step = self.optimizer.global_step.numpy() + 1
+                step = self.optimizer.global_step + 1
                 if step % self.nsteps == 0:
                     metrics = self.calc_metrics(nstep_loss.numpy(), nstep_div.numpy())
                     self.report(
@@ -309,15 +310,6 @@ def fit_eager(model_params, ts, vs, es=None, **kwargs):
     test_batchsz = kwargs.get('test_batchsz', batchsz)
     lengths_key = model_params.get('lengths_key')
 
-    train_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(ts, lengths_key))
-    train_dataset = train_dataset.shuffle(buffer_size=SHUF_BUF_SZ)
-    train_dataset = train_dataset.batch(batchsz, drop_remainder=False)
-    train_dataset = train_dataset.prefetch(NUM_PREFETCH)
-
-    valid_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(vs, lengths_key))
-    valid_dataset = valid_dataset.batch(batchsz, drop_remainder=False)
-    valid_dataset = valid_dataset.prefetch(NUM_PREFETCH)
-
     best_metric = 0
     if do_early_stopping:
         early_stopping_metric = kwargs.get('early_stopping_metric', 'acc')
@@ -335,8 +327,8 @@ def fit_eager(model_params, ts, vs, es=None, **kwargs):
     SET_TRAIN_FLAG(True)
 
     for epoch in range(epochs):
-        trainer.train(train_dataset, reporting_fns, steps=len(ts))
-        test_metrics = trainer.test(valid_dataset, reporting_fns, phase='Valid', steps=len(vs))
+        trainer.train(ts, reporting_fns, steps=len(ts))
+        test_metrics = trainer.test(vs, reporting_fns, phase='Valid', steps=len(vs))
         if do_early_stopping is False:
             trainer.checkpoint()
             trainer.model.save(model_file)
@@ -358,12 +350,9 @@ def fit_eager(model_params, ts, vs, es=None, **kwargs):
     if es is not None:
         print('Reloading best checkpoint')
         trainer.recover_last_checkpoint()
-        test_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(es, lengths_key))
-        test_dataset = test_dataset.batch(test_batchsz, drop_remainder=False)
-        test_dataset = test_dataset.prefetch(NUM_PREFETCH)
         evaluator = TaggerEvaluatorEagerTf(trainer.model, span_type, verbose)
         timer = Timer()
-        test_metrics = evaluator.test(test_dataset, conll_output=conll_output, txts=txts, batches=es, steps=len(es))
+        test_metrics = evaluator.test(es, conll_output=conll_output, txts=txts, batches=es, steps=len(es))
         duration = timer.elapsed()
         for reporting in reporting_fns:
             reporting(test_metrics, 0, 'Test')

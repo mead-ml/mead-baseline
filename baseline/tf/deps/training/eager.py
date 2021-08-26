@@ -1,11 +1,11 @@
-import six
+import sys
 import os
 import time
 import logging
 import tensorflow as tf
 
 from eight_mile.progress import create_progress_bar
-from eight_mile.utils import listify, get_version, Offsets
+from eight_mile.utils import listify, Offsets
 from eight_mile.metrics import LCM, UCM, LAS, UAS
 from eight_mile.tf.layers import SET_TRAIN_FLAG, get_shape_as_list, autograph_options, masked_fill
 from eight_mile.tf.optz import *
@@ -13,11 +13,6 @@ from baseline.utils import get_model_file, get_metric_cmp
 from baseline.train import EpochReportingTrainer, register_trainer, register_training_func
 from baseline.model import create_model_for
 import numpy as np
-
-# Number of batches to prefetch if using tf.datasets
-NUM_PREFETCH = 2
-# The shuffle buffer
-SHUF_BUF_SZ = 5000
 
 log = logging.getLogger('baseline.timing')
 
@@ -102,7 +97,7 @@ class DependencyParserTrainerEagerTf(EpochReportingTrainer):
             self.model = model_params
 
         self.optimizer = EagerOptimizer(arc_label_loss, **kwargs)
-        self.nsteps = kwargs.get('nsteps', six.MAXSIZE)
+        self.nsteps = kwargs.get('nsteps', sys.maxsize)
         self.punct_eval = kwargs.get('punct_eval', False)
         self._checkpoint = tf.train.Checkpoint(optimizer=self.optimizer.optimizer, model=self.model)
         checkpoint_dir = '{}-{}'.format("./tf-deps", os.getpid())
@@ -140,13 +135,16 @@ class DependencyParserTrainerEagerTf(EpochReportingTrainer):
         @tf.function
         def _train_step(inputs):
             """Replicated training step."""
-            features, y = inputs
-            loss = self.optimizer.update(self.model, features, y)
-            batchsz = len(y[0])
+            features = inputs.copy()
+            features['lengths'] = features[self.lengths_key]
+            del features[self.lengths_key]
+            heads = features.pop('heads')
+            labels = features.pop('labels')
+
+            loss = self.optimizer.update(self.model, features, (heads, labels))
+            batchsz = len(heads[0])
             report_loss = loss * batchsz
             return report_loss, batchsz
-
-        #with autograph_options({"function_optimization": False, "layout_optimizer": False}):
 
         for inputs in pg(loader):
             step_report_loss, step_batchsz = _train_step(inputs)
@@ -194,8 +192,13 @@ class DependencyParserTrainerEagerTf(EpochReportingTrainer):
         pg = create_progress_bar(steps)
 
         SET_TRAIN_FLAG(False)
-        for features, y in pg(loader):
-            heads_gold, labels_gold = y
+        for inputs in pg(loader):
+            features = inputs.copy()
+            features['lengths'] = features[self.lengths_key]
+            del features[self.lengths_key]
+            heads_gold = features.pop('heads')
+            labels_gold = features.pop('labels')
+
             greedy_heads_pred, greedy_labels_pred = self.model.decode(features)
             B, T = get_shape_as_list(greedy_labels_pred)[:2]
             labels_gold_trimmed = labels_gold[:, :T].numpy()
@@ -270,16 +273,6 @@ def fit_eager(model_params, ts, vs, es=None, **kwargs):
     batchsz = kwargs['batchsz']
     lengths_key = model_params.get('lengths_key')
 
-    test_batchsz = kwargs.get('test_batchsz', batchsz)
-    train_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(ts, lengths_key))
-    train_dataset = train_dataset.shuffle(buffer_size=SHUF_BUF_SZ)
-    train_dataset = train_dataset.batch(batchsz, drop_remainder=False)
-    train_dataset = train_dataset.prefetch(NUM_PREFETCH)
-
-    valid_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(vs, lengths_key))
-    valid_dataset = valid_dataset.batch(batchsz, drop_remainder=False)
-    valid_dataset = valid_dataset.prefetch(NUM_PREFETCH)
-
     best_metric = 0
     if do_early_stopping:
         early_stopping_metric = kwargs.get('early_stopping_metric', 'acc')
@@ -295,8 +288,8 @@ def fit_eager(model_params, ts, vs, es=None, **kwargs):
 
     for epoch in range(epochs):
 
-        trainer.train(train_dataset, reporting_fns, steps=len(ts))
-        test_metrics = trainer.test(valid_dataset, reporting_fns, phase='Valid', steps=len(vs))
+        trainer.train(ts, reporting_fns, steps=len(ts))
+        test_metrics = trainer.test(vs, reporting_fns, phase='Valid', steps=len(vs))
 
         if do_early_stopping is False:
             trainer.checkpoint()
@@ -319,7 +312,4 @@ def fit_eager(model_params, ts, vs, es=None, **kwargs):
     if es is not None:
         print('Reloading best checkpoint')
         trainer.recover_last_checkpoint()
-        test_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(es, lengths_key))
-        test_dataset = test_dataset.batch(test_batchsz, drop_remainder=False)
-        test_dataset = test_dataset.prefetch(NUM_PREFETCH)
-        trainer.test(test_dataset, reporting_fns, phase='Test', verbose=verbose, steps=len(es))
+        trainer.test(es, reporting_fns, phase='Test', verbose=verbose, steps=len(es))

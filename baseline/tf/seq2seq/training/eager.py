@@ -10,7 +10,6 @@ from baseline.utils import get_model_file, get_metric_cmp, convert_seq2seq_golds
 from eight_mile.bleu import bleu
 from baseline.model import create_model_for
 from baseline.train import register_training_func, Trainer
-from baseline.tf.seq2seq.training.utils import to_tensors, SHUF_BUF_SZ, NUM_PREFETCH
 
 
 class Seq2SeqLoss(tf.keras.layers.Layer):
@@ -121,18 +120,21 @@ class Seq2SeqTrainerEagerTf(Trainer):
         start = time.perf_counter()
 
         @tf.function
-        def _train_step(features, y):
+        def _train_step(inputs):
             """Replicated training step."""
-
-            loss = self.optimizer.update(self.model, features, y)
-            toks = self._num_toks(features['tgt_len'])
+            features = inputs.copy()
+            tgt = features.pop('tgt')
+            features['src_len'] = features.pop(self.model.src_lengths_key)
+            features['tgt_len'] = features.pop('tgt_lengths')
+            features['dst'] = tgt[:, :-1]
+            loss = self.optimizer.update(self.model, features, tgt)
+            toks = tf.cast(self._num_toks(features['tgt_len']), tf.int32)
             report_loss = loss * tf.cast(toks, tf.float32)
             return report_loss, toks
 
         with autograph_options({"function_optimization": False, "layout_optimizer": False}):
-            for features, y in ts:
-                features['dst'] = y[:, :-1]
-                step_report_loss, step_toks = _train_step(features, y)
+            for features in ts:
+                step_report_loss, step_toks = _train_step(features)
                 epoch_loss.assign_add(step_report_loss)
                 nstep_loss.assign_add(step_report_loss)
                 epoch_div.assign_add(step_toks)
@@ -175,9 +177,12 @@ class Seq2SeqTrainerEagerTf(Trainer):
         golds = []
         start = time.perf_counter()
 
-        for features, tgt in es:
+        for inputs in es:
+            features = inputs.copy()
+            tgt = features.pop('tgt')
+            features['src_len'] = features.pop(self.model.src_lengths_key)
+            tgt_lens = features.pop('tgt_lengths')
             features['dst'] = tgt[:, :-1]
-            tgt_lens = features.pop('tgt_len')
             top_preds = self.model.predict(features, make_input=False, **kwargs)[0]
             preds.extend(convert_seq2seq_preds(top_preds[:, 0, :], self.tgt_rlut))
             golds.extend(convert_seq2seq_golds(tgt, tgt_lens, self.tgt_rlut))
@@ -214,7 +219,11 @@ class Seq2SeqTrainerEagerTf(Trainer):
         golds = []
 
         start = time.perf_counter()
-        for features, tgt in vs:
+        for inputs in vs:
+            features = inputs.copy()
+            tgt = features.pop('tgt')
+            features['src_len'] = features.pop(self.model.src_lengths_key)
+            features['tgt_len'] = features.pop('tgt_lengths')
             features['dst'] = tgt[:, :-1]
             top_preds = self.model.predict(features, beam=1, make_input=False)[0]
             loss_value = self.loss(self.model, features, tgt).numpy()
@@ -288,17 +297,8 @@ def fit_eager(model_params, ts, vs, es=None, **kwargs):
 
     batchsz = kwargs['batchsz']
     test_batchsz = kwargs.get('test_batchsz', batchsz)
-    tgt_key = model_params.get('tgt_key')
 
     src_lengths_key = model_params.get('src_lengths_key')
-    train_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(ts, src_lengths_key))
-    train_dataset = train_dataset.shuffle(buffer_size=SHUF_BUF_SZ)
-    train_dataset = train_dataset.batch(batchsz, drop_remainder=False)
-    train_dataset = train_dataset.prefetch(NUM_PREFETCH)
-
-    valid_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(vs, src_lengths_key))
-    valid_dataset = valid_dataset.batch(batchsz, drop_remainder=False)
-    valid_dataset = valid_dataset.prefetch(NUM_PREFETCH)
 
     trainer = Seq2SeqTrainerEagerTf(model_params, **kwargs)
     last_improved = 0
@@ -306,8 +306,8 @@ def fit_eager(model_params, ts, vs, es=None, **kwargs):
 
     for epoch in range(epochs):
 
-        trainer.train(train_dataset, reporting_fns)
-        test_metrics = trainer.test(valid_dataset, reporting_fns, phase='Valid')
+        trainer.train(ts, reporting_fns)
+        test_metrics = trainer.test(vs, reporting_fns, phase='Valid')
 
         if do_early_stopping is False:
             trainer.checkpoint()
@@ -330,8 +330,5 @@ def fit_eager(model_params, ts, vs, es=None, **kwargs):
     if es is not None:
         print('Reloading best checkpoint')
         trainer.recover_last_checkpoint()
-        test_dataset = tf.data.Dataset.from_tensor_slices(to_tensors(es, src_lengths_key))
-        test_dataset = test_dataset.batch(test_batchsz, drop_remainder=False)
-        test_dataset = test_dataset.prefetch(NUM_PREFETCH)
-        trainer.test(test_dataset, reporting_fns, phase='Test')
+        trainer.test(es, reporting_fns, phase='Test')
 
