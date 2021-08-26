@@ -3787,31 +3787,26 @@ def find_latest_checkpoint(checkpoint_dir: str, wildcard="checkpoint") -> Tuple[
     return checkpoint, step_num
 
 def save_checkpoint(model: torch.nn.Module, model_base: str, count: int, tick_type: str = 'epoch', save_npz: bool = False):
-    from eight_mile.pytorch.serialize import save_tlm_npz, save_transformer_seq2seq_npz, save_transformer_de_npz
+    from eight_mile.pytorch.serialize import save_tlm_npz, save_tlm_output_npz, save_transformer_seq2seq_npz, save_transformer_de_npz
     checkpoint_name = checkpoint_for(model_base, count, tick_type=tick_type)
     # Its possible due to how its called that we might save the same checkpoint twice if we dont check first
     if os.path.exists(checkpoint_name):
         logger.info("Checkpoint already exists: %s", checkpoint_name)
         return
     logger.info("Creating checkpoint: %s", checkpoint_name)
-    if hasattr(model, 'module'):
-        torch.save(model.module.state_dict(), checkpoint_name+'.pth')
-        if save_npz:
-            if hasattr(model.module, 'decoder'):
-                save_transformer_seq2seq_npz(model.module, checkpoint_name+'.npz')
-            elif hasattr(model.module, 'reduction_layer'):
-                save_transformer_de_npz(model.module, checkpoint_name+'.npz')
-            else:
-                save_tlm_npz(model.module, checkpoint_name+'.npz')
-    else:
-        torch.save(model.state_dict(), checkpoint_name+'.pth')
-        if save_npz:
-            if hasattr(model, 'decoder'):
-                save_transformer_seq2seq_npz(model, checkpoint_name+'.npz')
-            elif hasattr(model, 'reduction_layer'):
-                save_transformer_de_npz(model, checkpoint_name+'.npz')
-            else:
-                save_tlm_npz(model, checkpoint_name+'.npz')
+    model_ = model.module if hasattr(model, 'module') else model
+
+    torch.save(model_.state_dict(), checkpoint_name+'.pth')
+    if save_npz:
+        if hasattr(model_, 'decoder'):
+            save_transformer_seq2seq_npz(model_, checkpoint_name+'.npz')
+        elif hasattr(model_, 'reduction_layer'):
+            save_transformer_de_npz(model_, checkpoint_name+'.npz')
+        elif hasattr(model_, 'output_layer'):
+            save_tlm_output_npz(model_, checkpoint_name+'.npz')
+        else:
+            save_tlm_npz(model_, checkpoint_name+'.npz')
+
     if tick_type == 'epoch':
         rm_old_checkpoints(model_base, count)
 
