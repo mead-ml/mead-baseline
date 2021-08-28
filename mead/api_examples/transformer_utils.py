@@ -374,7 +374,7 @@ class MultiFileDatasetReader:
 
     def __init__(self, src_nctx=64, tgt_nctx=64, src_begin_tok=[], src_end_tok=['<EOS>'], tgt_begin_tok=['<GO>'],
                  tgt_end_tok=['<EOS>'], model_file=None, vocab_file=None, file_type='txt', reader_type="ntp",
-                 record_keys=None, lower=False, extra_tokens=["[CLS]", "[MASK]"]):
+                 record_keys=None, lower=False, extra_tokens=["[CLS]", "[MASK]"], subword_type="bpe"):
         self.src_nctx = src_nctx
         self.tgt_nctx = tgt_nctx
         self.pattern = f'*.{file_type}'
@@ -383,13 +383,29 @@ class MultiFileDatasetReader:
             src_begin_tok = ['[CLS]']
         self.record_keys = record_keys if record_keys else ['x', 'y']
         transform_fn = None if not lower else baseline.lowercase
-        self.src_vectorizer = BPEVectorizer1D(model_file=model_file, vocab_file=vocab_file, mxlen=src_nctx,
-                                              emit_begin_tok=src_begin_tok, emit_end_tok=src_end_tok,
-                                              transform_fn=transform_fn, extra_tokens=extra_tokens)
-        self.tgt_vectorizer = BPEVectorizer1D(model_file=model_file, vocab_file=vocab_file, mxlen=tgt_nctx,
-                                              emit_begin_tok=tgt_begin_tok, emit_end_tok=tgt_end_tok,
-                                              transform_fn=transform_fn, extra_tokens=extra_tokens)
+        self.subword_type = subword_type
+        self.src_vectorizer = self._create_subword_vectorizer(
+            model_file=model_file, vocab_file=vocab_file, mxlen=src_nctx,
+            emit_begin_tok=src_begin_tok, emit_end_tok=src_end_tok,
+            transform_fn=transform_fn, extra_tokens=extra_tokens,
+        )
+        self.tgt_vectorizer = self._create_subword_vectorizer(
+            model_file=model_file, vocab_file=vocab_file, mxlen=tgt_nctx,
+            emit_begin_tok=tgt_begin_tok, emit_end_tok=tgt_end_tok,
+            transform_fn=transform_fn, extra_tokens=extra_tokens,
+        )
 
+    def _create_subword_vectorizer(self, mxlen=None, model_file=None, vocab_file=None, emit_begin_tok=None, emit_end_tok=None, transform_fn=None, extra_tokens=None):
+        if self.subword_type == 'wordpiece':
+            return WordpieceVectorizer1D(
+                vocab_file=vocab_file,
+                mxlen=mxlen,
+                emit_begin_tok=emit_begin_tok,
+                emit_end_tok=emit_end_tok,
+                transform_fn=transform_fn)
+        return BPEVectorizer1D(model_file=model_file, vocab_file=vocab_file, mxlen=mxlen,
+                               emit_begin_tok=emit_begin_tok, emit_end_tok=emit_end_tok,
+                               transform_fn=transform_fn, extra_tokens=extra_tokens)
     def build_vocab(self, _=None):
         return {'x': self.src_vectorizer.vocab}
 

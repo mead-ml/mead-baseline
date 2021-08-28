@@ -32,9 +32,11 @@ This file uses Baseline to train a Transformer model using fastBPE with query-re
   
 """
 def create_model(embeddings, d_model, d_ff, dropout, num_heads, num_layers, model_type, rpr_k, d_k, reduction_d_k,
-                 stacking_layers, ff_pdrop, windowed_ra, reduction_type, layer_drop, logger):
+                 stacking_layers, ff_pdrop, windowed_ra, reduction_type, layer_drop, logger, layer_norms_after=False):
     if model_type == "encoder-decoder":
         logger.info("Creating tied encoder decoder model")
+        if layer_norms_after:
+            raise Exception("Unsupported option, require pre layer norm")
         hps = {"dsz": d_model,
                "hsz": d_model,
                "d_ff": d_ff,
@@ -51,11 +53,11 @@ def create_model(embeddings, d_model, d_ff, dropout, num_heads, num_layers, mode
     elif model_type == 'transformer-bow':
         model = TransformerBoWPairedModel(embeddings, d_model, d_ff, dropout, num_heads, num_layers, rpr_k=rpr_k, d_k=d_k,
                                           reduction_d_k=reduction_d_k, stacking_layers=stacking_layers, ffn_pdrop=ff_pdrop, windowed_ra=windowed_ra,
-                                          reduction_type_1=reduction_type, freeze_encoders=True)
+                                          reduction_type_1=reduction_type, freeze_encoders=True, layer_norms_after=layer_norms_after)
     else:
         model = PairedModel(embeddings, d_model, d_ff, dropout, num_heads, num_layers, rpr_k=rpr_k, d_k=d_k,
                             reduction_d_k=reduction_d_k, stacking_layers=stacking_layers, ffn_pdrop=ff_pdrop,
-                            windowed_ra=windowed_ra, reduction_type=reduction_type, freeze_encoders=True)
+                            windowed_ra=windowed_ra, reduction_type=reduction_type, freeze_encoders=True, layer_norms_after=layer_norms_after)
 
     logger.info(model)
     return model
@@ -95,7 +97,7 @@ def parse_args(argv):
     parser.add_argument("--dataset_key", default="paired",
                         help="dataset key for basedir")
     parser.add_argument("--embed_type", type=str, default='default',
-                        choices=["default", "positional", "learned-positional"],
+                        choices=["default", "positional", "learned-positional", "learned-positional-w-bias"],
                         help="register label of the embeddings")
     parser.add_argument("--d_model", type=int, default=512, help="Model dimension (and embedding dsz)")
     parser.add_argument("--d_ff", type=int, default=2048, help="FFN dimension")
@@ -109,9 +111,11 @@ def parse_args(argv):
     parser.add_argument("--file_type", default='json', help="Suffix for data")
     parser.add_argument("--record_keys", default=['x', 'y'], nargs='+')
     parser.add_argument("--batch_size", type=int, default=256, help="Batch Size")
-    parser.add_argument("--subword_model_file", type=str, help="The BPE model file", required=True)
+    parser.add_argument("--subword_type", type=str, choices=["bpe", "wordpiece"], default="bpe")
+    parser.add_argument("--subword_model_file", type=str, help="The BPE model file")
     parser.add_argument("--subword_vocab_file", type=str, help="The BPE subword vocab", required=True)
     parser.add_argument("--dropout", type=float, default=0.1, help="Dropout")
+    parser.add_argument("--layer_norms_after", type=str2bool, default=False, help="Layer norms after (set True for BERT)")
     parser.add_argument("--lr_scheduler", type=str, default='cosine', help="The type of learning rate decay scheduler")
     parser.add_argument("--lr_decay_steps", type=int, help="decay steps of lr scheduler")
     parser.add_argument("--lr_decay_rate", type=float, help="decay rate of lr scheduler")
@@ -179,8 +183,8 @@ def run(basedir=None, train_file=None, valid_file=None, dataset_key='paired', em
         reduction_d_k=64, reduction_type='2ha', unfreeze_after_step=0, stacking_layers=[], layer_drop=0.0, ff_pdrop=0.1,
         reader_type='preprocessed', model_type='dual-encoder', src_begin_tok=[], src_end_tok=['<EOS>'],
         tgt_begin_tok=['<GO>'], tgt_end_tok=['<EOS>'], lower=False, loss='symmetric', learn_temp=True, init_temp=None,
-        rpr_k=[8], device='cuda', distributed=False, local_rank=-1, save_npz=False,
-        extra_tokens=["[CLS]", "[MASK]"], **kwargs):
+        rpr_k=[8], device='cuda', distributed=False, local_rank=-1, save_npz=False, layer_norms_after=False,
+        extra_tokens=["[CLS]", "[MASK]"], subword_type='bpe', **kwargs):
     if basedir is None:
         basedir = '{}-{}-paired-{}-bpe-{}'.format(model_type, reader_type, dataset_key, os.getpid())
     logging.basicConfig(level=logging.INFO if local_rank in [-1, 0] else logging.WARN)
@@ -195,7 +199,7 @@ def run(basedir=None, train_file=None, valid_file=None, dataset_key='paired', em
     reader = MultiFileDatasetReader(nctx, tgt_nctx, src_begin_tok, src_end_tok, tgt_begin_tok,
                                     tgt_end_tok, subword_model_file, subword_vocab_file,
                                     file_type, reader_type=reader_type, record_keys=record_keys,
-                                    lower=lower, extra_tokens=extra_tokens)
+                                    lower=lower, extra_tokens=extra_tokens, subword_type=subword_type)
     vocab = reader.build_vocab()
     # If we are not using chars, then use 'x' for both input and output
     preproc_data = baseline.embeddings.load_embeddings('x', dsz=d_model, known_vocab=vocab['x'],
@@ -225,6 +229,7 @@ def run(basedir=None, train_file=None, valid_file=None, dataset_key='paired', em
                          stacking_layers=stacking_layers, ff_pdrop=ff_pdrop, windowed_ra=windowed_ra,
                          reduction_type=reduction_type,
                          layer_drop=layer_drop,
+                         layer_norms_after=layer_norms_after,
                          logger=logger)
     model.to(device)
     if model_type == 'encoder-decoder':
@@ -331,7 +336,10 @@ def reload_from_checkpoint(model_type, restart_from, restart_tick_type, model, s
         restart_from, _ = find_latest_checkpoint(restart_from)
         print(f'Latest checkpoint: {restart_from}')
     vec = restart_from.split("-")
-    step_num = int(vec[-1].split(".")[0])
+    try:
+        step_num = int(vec[-1].split(".")[0])
+    except:
+        step_num = 0
     start_epoch = 0
     if restart_tick_type:
         tick_type = restart_tick_type
