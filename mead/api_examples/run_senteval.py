@@ -18,6 +18,7 @@ to the ALL Spearman metrics:
 import argparse
 import baseline
 import sys
+from mead.api_examples.preproc_utils import *
 from baseline.embeddings import load_embeddings_overlay
 from eight_mile.utils import read_config_stream
 from baseline.pytorch.embeddings import *
@@ -35,8 +36,10 @@ SUBWORD_EXTRA = 30
 def main():
     parser = argparse.ArgumentParser(description='Run senteval harness')
     parser.add_argument('--nctx', default=512, type=int)
+    parser.add_argument("--module", default=None, help="Module containing custom tokenizers")
     parser.add_argument('--tasks', nargs="+", default=['sts', 'class', 'probe'])
     parser.add_argument('--batchsz', default=20, type=int)
+    parser.add_argument('--tok', help='Optional tokenizer, e.g. "gpt2" or "basic". These can be defined in extra module')
     parser.add_argument('--pool', help='Should a reduction be applied on the embeddings?  Only use if your embeddings arent already pooled', type=str)
     parser.add_argument('--vec_id', help='Reference to a specific embedding type')
     parser.add_argument('--embed_id', help='What type of embeddings to use')
@@ -48,6 +51,13 @@ def main():
     parser.add_argument('--data', help="Path to senteval data",
                         default=os.path.expanduser("~/dev/work/SentEval/data"))
     args = parser.parse_args()
+
+    if args.module:
+        logger.warning("Loading custom user module %s for masking rules and tokenizers", args.module)
+        baseline.import_user_module(args.module)
+
+
+    tokenizer = create_tokenizer(args.tok) if args.tok else None
 
     args.embeddings = convert_path(DEFAULT_EMBEDDINGS_LOC) if args.embeddings is None else args.embeddings
     args.embeddings = read_config_stream(args.embeddings)
@@ -81,6 +91,13 @@ def main():
         seq_lengths = mask.sum(1).unsqueeze(-1)
         return embeddings.sum(1)/seq_lengths
 
+    def _zero_tok_pool(inputs, embeddings):
+        # Would prefer
+        # tensor[inputs == self.cls_index]
+        # but ONNX export fails
+        pooled = embeddings[:, 0]
+        return pooled
+
     def _max_pool(inputs, embeddings):
         mask = (inputs != 0)
         embeddings = embeddings.masked_fill(mask.unsqueeze(-1) == False, -1e8)
@@ -88,7 +105,12 @@ def main():
 
 
     if args.pool:
-        pool = _max_pool if args.pool == 'max' else _mean_pool
+        if args.pool == 'max':
+            pool = _max_pool
+        elif args.pool == 'zero' or args.pool == 'cls':
+            pool = _zero_tok_pool
+        else:
+            pool = _mean_pool
     else:
         pool = lambda x, y: y
 
@@ -109,7 +131,11 @@ def main():
         logging.info('num_samples %d, mxlen set to %d', max_sample, vectorizer.mxlen)
 
     def batcher(params, batch):
-        batch = [sent if sent != [] else ['.'] for sent in batch]
+        if not tokenizer:
+            batch = [sent if sent != [] else ['.'] for sent in batch]
+        else:
+            batch = [tokenizer(' '.join(sent)) for sent in batch]
+
         vs = []
         for sent in batch:
             v, l = vectorizer.run(sent, vectorizer.vocab)

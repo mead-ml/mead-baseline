@@ -70,6 +70,20 @@ def create_tokenizer(tokenizer_type):
     return tokenizer
 
 
+@register_tokenizer('gpt2')
+def create_bpe2():
+    import regex
+    BPE_PATTERN = regex.compile(r"""'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+""")
+    return lambda text: [w.strip() for w in regex.findall(BPE_PATTERN, text)]
+
+
+@register_tokenizer('basic')
+def create_basic():
+    from baseline.vectorizers import BasicTokenizer
+    basic_tokenizer = BasicTokenizer(do_lower_case=False)
+    return lambda text: list(basic_tokenizer.tokenize(text))
+
+
 def in_bytes(mb):
     return mb * 1024 * 1024
 

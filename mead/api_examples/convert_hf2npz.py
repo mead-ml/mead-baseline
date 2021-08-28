@@ -112,7 +112,7 @@ def create_transformer_lm(config_url: str) -> Tuple[TransformerMaskedLanguageMod
 
 
 def convert_checkpoint(bert_checkpoint: str, num_layers: int, target_dir: str, checkpoint_disk_loc: str,
-                       nested_layer_map, flat_map) -> Dict:
+                       nested_layer_map, flat_map, model_type) -> Dict:
 
     if os.path.exists(checkpoint_disk_loc):
         print(f'Checkpoint found at {checkpoint_disk_loc}')
@@ -120,6 +120,13 @@ def convert_checkpoint(bert_checkpoint: str, num_layers: int, target_dir: str, c
         print(f'Downloading {bert_checkpoint} to {checkpoint_disk_loc}')
         web_downloader(bert_checkpoint, checkpoint_disk_loc)
     state_dict = torch.load(checkpoint_disk_loc)
+    if model_type:
+        keys = list(state_dict.keys())
+        for k in keys:
+            v = state_dict[k]
+            if not k.startswith(model_type):
+                state_dict[f'{model_type}.{k}'] = v
+                del state_dict[k]
 
     mapped_keys = convert_transformers_keys(num_layers, state_dict, nested_layer_map=nested_layer_map, flat_map=flat_map)
     return mapped_keys
@@ -153,7 +160,7 @@ else:
 model, num_layers = create_transformer_lm(config_url)
 mapped_keys = convert_checkpoint(pt_checkpoint, num_layers, args.target_dir, checkpoint_disk_loc,
                                  nested_layer_map=MODEL_MAPS[args.model_type]['layers'],
-                                 flat_map=MODEL_MAPS[args.model_type]['embed'])
+                                 flat_map=MODEL_MAPS[args.model_type]['embed'], model_type=args.model_type)
 unknown_keys = model.load_state_dict(mapped_keys, strict=False)
 for k in unknown_keys.missing_keys:
     if k not in ['output_layer.weight', 'output_layer.bias']:
