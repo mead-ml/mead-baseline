@@ -1119,7 +1119,7 @@ class WordpieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
         self.tokenizer = WordpieceTokenizer(self.read_vocab(kwargs.get('vocab_file')))
         self.mxlen = kwargs.get('mxlen', -1)
         self.dtype = kwargs.get('dtype', 'int')
-        self._special_tokens = {"[CLS]", "[UNK]", "[SEP]"}
+        self._special_tokens = {"[CLS]", "<unk>", "<EOS>"}
 
     def read_vocab(self, file):
         return load_bert_vocab(file)
