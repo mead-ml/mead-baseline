@@ -100,7 +100,6 @@ def main():
         embeddings = embeddings.masked_fill(mask.unsqueeze(-1) == False, -1e8)
         return torch.max(embeddings, 1, False)[0]
 
-
     if args.pool:
         if args.pool == 'max':
             pool = _max_pool
