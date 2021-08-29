@@ -91,10 +91,7 @@ def main():
         seq_lengths = mask.sum(1).unsqueeze(-1)
         return embeddings.sum(1)/seq_lengths
 
-    def _zero_tok_pool(inputs, embeddings):
-        # Would prefer
-        # tensor[inputs == self.cls_index]
-        # but ONNX export fails
+    def _zero_tok_pool(_, embeddings):
         pooled = embeddings[:, 0]
         return pooled
 

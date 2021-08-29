@@ -4375,7 +4375,8 @@ class PairedModel(DualEncoderModel):
                  rpr_value_on=False,
                  reduction_type="2ha",
                  freeze_encoders=False,
-                 layer_norms_after=False):
+                 layer_norms_after=False,
+                 embeddings_reduction='sum'):
         super().__init__(2*d_model if reduction_type.startswith("2") else d_model, stacking_layers, d_out, ffn_pdrop)
 
         reduction_type = reduction_type.lower()
@@ -4407,7 +4408,7 @@ class PairedModel(DualEncoderModel):
                                                    d_k=d_k, rpr_k=rpr_k, windowed_ra=windowed_ra, rpr_value_on=rpr_value_on,
                                                    layer_norms_after=layer_norms_after)
 
-        self.embeddings = EmbeddingsStack({'x': embeddings})
+        self.embeddings = EmbeddingsStack({'x': embeddings}, 0.0, False, embeddings_reduction)
         self.freeze = freeze_encoders
         self.apply(self.init_layer_weights)
 
