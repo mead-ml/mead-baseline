@@ -4281,7 +4281,8 @@ class DualEncoderModel(nn.Module):
 
 
     """
-    def __init__(self, in_sz: int, stacking_layers: Union[int, List[int]] = None, d_out: int = 512, ffn_pdrop=0.1, in_sz_2=None):
+    def __init__(self, in_sz: int, stacking_layers: Union[int, List[int]] = None, d_out: int = 512,
+                 ffn_pdrop=0.1, in_sz_2=None, output_layer=False, output_activation='tanh', output_shared=False):
         super().__init__()
 
         if not in_sz_2:
@@ -4291,9 +4292,13 @@ class DualEncoderModel(nn.Module):
         if stacking_layers:
             self.ff1 = ConveRTFFN(in_sz, stacking_layers, d_out, ffn_pdrop)
             self.ff2 = ConveRTFFN(in_sz_2, stacking_layers, d_out, ffn_pdrop)
-        elif in_sz != d_out or in_sz != in_sz_2:
-            self.ff1 = nn.Linear(in_sz, d_out)
-            self.ff2 = nn.Linear(in_sz_2, d_out)
+        elif output_layer or in_sz != d_out or in_sz != in_sz_2:
+            activation = output_activation if output_layer else None
+            self.ff1 = Dense(in_sz, d_out, activation=activation)
+            if in_sz == in_sz_2 and output_shared:
+                self.ff2 = self.ff1
+            else:
+                self.ff2 = Dense(in_sz_2, d_out, activation=activation)
         else:
             self.ff1 = nn.Identity()
             self.ff2 = nn.Identity()
@@ -4365,7 +4370,7 @@ class PairedModel(DualEncoderModel):
                  num_heads,
                  num_layers,
                  stacking_layers=None,
-                 d_out=512,
+                 d_out=None,
                  d_k=None,
                  weight_std=0.02,
                  rpr_k=None,
@@ -4376,8 +4381,14 @@ class PairedModel(DualEncoderModel):
                  reduction_type="2ha",
                  freeze_encoders=False,
                  layer_norms_after=False,
-                 embeddings_reduction='sum'):
-        super().__init__(2*d_model if reduction_type.startswith("2") else d_model, stacking_layers, d_out, ffn_pdrop)
+                 embeddings_reduction='sum',
+                 layer_norm_eps=1e-6,
+                 output_layer=False,
+                 output_activation='tanh',
+                 output_shared=False):
+        super().__init__(2*d_model if reduction_type.startswith("2") else d_model, stacking_layers,
+                         d_out if d_out is not None else d_model, ffn_pdrop, None, output_layer,
+                         output_activation, output_shared)
 
         reduction_type = reduction_type.lower()
         self.reduce_fn = self._reduce_3
@@ -4399,6 +4410,8 @@ class PairedModel(DualEncoderModel):
         elif reduction_type == 'mean':
             self.reduce_fn = self._reduce_1
             self.reduction_layer = MeanPool1D(self.output_dim)
+        elif reduction_type == 'cls' or reduction_type == 'zero':
+            self.reduce_fn = self._reduce_0
         else:
             raise Exception("Unknown exception type")
         self.weight_std = weight_std
@@ -4406,7 +4419,7 @@ class PairedModel(DualEncoderModel):
                                                    pdrop=dropout, layers=num_layers, activation='gelu', d_ff=d_ff,
                                                    ffn_pdrop=ffn_pdrop,
                                                    d_k=d_k, rpr_k=rpr_k, windowed_ra=windowed_ra, rpr_value_on=rpr_value_on,
-                                                   layer_norms_after=layer_norms_after)
+                                                   layer_norms_after=layer_norms_after, layer_norm_eps=layer_norm_eps)
 
         self.embeddings = EmbeddingsStack({'x': embeddings}, 0.0, False, embeddings_reduction)
         self.freeze = freeze_encoders
@@ -4419,11 +4432,21 @@ class PairedModel(DualEncoderModel):
             module.bias.data.zero_()
 
     def _reduce_3(self, encoded, att_mask):
+        """The attention modules originally created for DE have 3 (redundant) inputs, so use all 3 here
+        """
         return self.reduction_layer((encoded, encoded, encoded, att_mask))
 
     def _reduce_1(self, encoded, att_mask):
+        """The standard reduction modules use an input and a length
+        """
         lengths = att_mask.squeeze(1).squeeze(1).sum(-1)
         return self.reduction_layer((encoded, lengths))
+
+    def _reduce_0(self, encoded, _):
+        """The [CLS] or <s> reduction on the first token just needs the first timestep
+        """
+        return encoded[:, 0]
+
 
     def encode_query_base(self, query):
         query_mask = (query != Offsets.PAD)
