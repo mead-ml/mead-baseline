@@ -3,7 +3,7 @@ name: Publish to DockerHub
 on:
     push:
         branches:
-        - 'master'
+        - 'feature/docker-builds'
 
 jobs:
     build:
@@ -11,9 +11,6 @@ jobs:
         steps:
         - name: Checkout
           uses: actions/checkout@v2
-          with:
-              ref: ${{ github.head_ref }}
-              token: ${{ secrets.MACHINE_PAT }}
         - name: Build & Push PyTorch CUDA 10 image
           uses: docker/build-push-action@v1
           with:
