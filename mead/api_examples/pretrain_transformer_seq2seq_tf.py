@@ -129,7 +129,6 @@ def train():
     parser.add_argument("--layer_drop", type=float, default=0.0, help="LayerDrop to apply")
     parser.add_argument("--ff_pdrop", type=float, default=0.1, help="Dropout in the dense stack")
     parser.add_argument("--optim", default="adamw", type=str, help="Optimizer to use (defaults to adamw)")
-    parser.add_argument("--encoder_type", default="transformer", type=str, help="Encoder to use")
     parser.add_argument("--lr", type=float, default=4.0e-4, help="Learning rate")
     parser.add_argument("--clip", type=float, default=1.0, help="Clipping gradient norm")
     parser.add_argument("--weight_decay", type=float, default=1.0e-2, help="Weight decay")
@@ -137,6 +136,7 @@ def train():
     parser.add_argument("--restart", type=str2bool, help="Option allows you to restart from a previous checkpoint")
     parser.add_argument("--warmup_steps", type=int, default=10000, help="Num warmup steps")
     parser.add_argument("--saves_per_epoch", type=int, default=10, help="The number of checkpoints to save per epoch")
+    parser.add_argument("--encoder_type", default="transformer", type=str, help="Encoder to use")
     parser.add_argument('--rpr_k',
                         help='Relative attention positional sizes pass 0 if you dont want relative attention',
                         type=int, default=[8], nargs='+')

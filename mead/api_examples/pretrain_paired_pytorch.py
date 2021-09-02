@@ -32,7 +32,8 @@ This file uses Baseline to train a Transformer model using fastBPE with query-re
   
 """
 def create_model(embeddings, d_model, d_ff, dropout, num_heads, num_layers, model_type, rpr_k, d_k, reduction_d_k,
-                 stacking_layers, ff_pdrop, windowed_ra, reduction_type, layer_drop, logger, layer_norms_after=False):
+                 stacking_layers, ff_pdrop, windowed_ra, reduction_type, layer_drop, logger, layer_norms_after=False,
+                 encoder_type='transformer'):
     if model_type == "encoder-decoder":
         logger.info("Creating tied encoder decoder model")
         if layer_norms_after:
@@ -43,7 +44,7 @@ def create_model(embeddings, d_model, d_ff, dropout, num_heads, num_layers, mode
                "dropout": dropout,
                "num_heads": num_heads,
                "layers": num_layers,
-               "encoder_type": "transformer",
+               "encoder_type": encoder_type,
                "decoder_type": "transformer",
                "src_lengths_key": "x_lengths",
                "d_k": d_k,
@@ -129,6 +130,7 @@ def parse_args(argv):
     parser.add_argument("--restart_tt", type=str, help="Optional param for legacy checkpoints (step|epoch)")
     parser.add_argument("--warmup_steps", type=int, default=10000, help="Num warmup steps")
     parser.add_argument("--saves_per_epoch", type=int, default=10, help="The number of checkpoints to save per epoch")
+    parser.add_argument("--encoder_type", default="transformer", type=str, help="Encoder to use")
     parser.add_argument("--reduction_d_k", type=int, default=64, help="Dimensions of Key and Query in the single headed"
                                                                       "reduction layers")
     parser.add_argument("--reduction_type", type=str, default="2ha",
@@ -184,7 +186,7 @@ def run(basedir=None, train_file=None, valid_file=None, dataset_key='paired', em
         reader_type='preprocessed', model_type='dual-encoder', src_begin_tok=[], src_end_tok=['<EOS>'],
         tgt_begin_tok=['<GO>'], tgt_end_tok=['<EOS>'], lower=False, loss='symmetric', learn_temp=True, init_temp=None,
         rpr_k=[8], device='cuda', distributed=False, local_rank=-1, save_npz=False, layer_norms_after=False,
-        extra_tokens=["[CLS]", "[MASK]"], subword_type='bpe', **kwargs):
+        extra_tokens=["[CLS]", "[MASK]"], subword_type='bpe', encoder_type='transformer', **kwargs):
     if basedir is None:
         basedir = '{}-{}-paired-{}-bpe-{}'.format(model_type, reader_type, dataset_key, os.getpid())
     logging.basicConfig(level=logging.INFO if local_rank in [-1, 0] else logging.WARN)
@@ -230,7 +232,8 @@ def run(basedir=None, train_file=None, valid_file=None, dataset_key='paired', em
                          reduction_type=reduction_type,
                          layer_drop=layer_drop,
                          layer_norms_after=layer_norms_after,
-                         logger=logger)
+                         logger=logger,
+                         encoder_type=encoder_type)
     model.to(device)
     if model_type == 'encoder-decoder':
         run_step = run_step_s2s
