@@ -70,3 +70,40 @@ class TransformerEncoderWrapper(tf.keras.layers.Layer):
         bth = self.proj(bth)
         output = self.transformer((bth, src_mask))
         return TransformerEncoderOutput(output=output, src_mask=src_mask)
+
+@register_encoder(name='transformer-zero-offset')
+class ZeroOffsetPoolEncoderWrapper(tf.keras.layers.Layer):
+
+    def __init__(self, dsz, hsz=None, num_heads=4, layers=1, dropout=0.5, name='encoder', scope='TransformerEncoder', **kwargs):
+        super().__init__(name=name)
+        if hsz is None:
+            hsz = dsz
+        self.proj = tf.keras.layers.Dense(hsz) if hsz != dsz else self._identity
+        d_ff = int(kwargs.get('d_ff', 4 * hsz))
+        rpr_k = kwargs.get('rpr_k')
+        d_k = kwargs.get('d_k')
+        activation = kwargs.get('activation', 'relu')
+        scale = bool(kwargs.get('scale', True))
+        layer_drop = float(kwargs.get('layer_drop', 0.0))
+        self.transformer = TransformerEncoderStack(num_heads, d_model=hsz, d_ff=d_ff,
+                                                   pdrop=dropout, scale=scale, layers=layers,
+                                                   rpr_k=rpr_k, d_k=d_k, activation=activation, layer_drop=layer_drop,
+                                                   scope=scope)
+
+    def _identity(self, x):
+        return x
+
+    def call(self, inputs):
+        bth, lengths = inputs
+        T = get_shape_as_list(bth)[1]
+        src_mask = tf.sequence_mask(lengths, T, dtype=tf.float32)
+        shp = get_shape_as_list(src_mask)
+        new_shp = [shp[0]] + [1, 1] + shp[1:]
+        src_mask = tf.reshape(src_mask, new_shp)
+
+        bth = self.proj(bth)
+
+        output = self.transformer((bth, src_mask))
+        output = tf.expand_dims(output[:, 0], 1)
+        src_mask = tf.ones([shp[0]] + [1, 1, 1])
+        return TransformerEncoderOutput(output=output, src_mask=src_mask)

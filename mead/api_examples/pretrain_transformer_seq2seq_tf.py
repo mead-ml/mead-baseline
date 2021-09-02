@@ -129,6 +129,7 @@ def train():
     parser.add_argument("--layer_drop", type=float, default=0.0, help="LayerDrop to apply")
     parser.add_argument("--ff_pdrop", type=float, default=0.1, help="Dropout in the dense stack")
     parser.add_argument("--optim", default="adamw", type=str, help="Optimizer to use (defaults to adamw)")
+    parser.add_argument("--encoder_type", default="transformer", type=str, help="Encoder to use")
     parser.add_argument("--lr", type=float, default=4.0e-4, help="Learning rate")
     parser.add_argument("--clip", type=float, default=1.0, help="Clipping gradient norm")
     parser.add_argument("--weight_decay", type=float, default=1.0e-2, help="Weight decay")
@@ -248,7 +249,7 @@ def train():
            "layer_drop": args.layer_drop,
            "num_heads": args.num_heads,
            "layers": args.num_layers,
-           "encoder_type": "transformer",
+           "encoder_type": args.encoder_type,
            "decoder_type": "transformer",
            "src_lengths_key": "x_lengths",
            "d_k": args.d_k,
