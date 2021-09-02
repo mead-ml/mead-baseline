@@ -33,7 +33,7 @@ class Masking:
     def __init__(self):
         pass
 
-    def __call__(self, chunk: np.ndarray, ignore_prefix: bool, ignore_suffix: bool):
+    def __call__(self, chunk: np.ndarray, ignore_prefix: bool, ignore_suffix: bool, **kwargs):
         pass
 
     def is_valid(self, record: dict) -> bool:
@@ -50,7 +50,7 @@ class MaskMLM(Masking):
 
         self.pad_y = pad_y
 
-    def __call__(self, chunk: np.ndarray, ignore_prefix: bool, ignore_suffix: bool):
+    def __call__(self, chunk: np.ndarray, ignore_prefix: bool, ignore_suffix: bool, **kwargs):
         return mlm_masking(chunk, self.mask_value, self.vocab_size, ignore_prefix, ignore_suffix, pad_y=self.pad_y)
 
 
