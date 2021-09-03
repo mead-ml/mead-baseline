@@ -346,7 +346,7 @@ def parse_args(argv):
     parser.add_argument("--warmup_steps", type=int, default=10000, help="Num warmup steps")
     parser.add_argument("--saves_per_epoch", type=int, default=10, help="The number of checkpoints to save per epoch")
     parser.add_argument("--mlm", type=str2bool, default=True, help="Use Masked Language Model (MLM) objective")
-    parser.add_argument("--mlp", type=str2bool, default=True, help="Use Gated MLP model")
+    parser.add_argument("--mlp", type=str2bool, default=False, help="Use Gated MLP model")
     parser.add_argument("--preprocessed", type=str2bool, default=True, help="Has the data already been preprocessed?")
     parser.add_argument('--rpr_k',
                         help='Relative attention positional sizes pass 0 if you dont want relative attention',
