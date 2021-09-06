@@ -8,7 +8,7 @@ import baseline.tf
 from eight_mile.utils import str2bool, write_json, Average, get_env_gpus, get_num_gpus_multiworker, get_version, Timer
 from baseline.tf.embeddings import *
 import baseline.embeddings
-from baseline.vectorizers import BPEVectorizer1D
+from baseline.vectorizers import BPEVectorizer1D, WordpieceVectorizer1D
 from eight_mile.optz import *
 from eight_mile.tf.optz import *
 from eight_mile.tf.layers import create_distribute_strategy, read_yaml_tf, PairedModel
@@ -97,8 +97,9 @@ def main():
     parser.add_argument("--nctx", type=int, default=256, help="Max input length (x)")
     parser.add_argument("--file_type", default='tfrecord', choices=['json', 'jsonl', 'tfrecord'], help="Glob pattern for data")
     parser.add_argument("--batch_size", type=int, default=256, help="Batch Size")
-    parser.add_argument("--subword_model_file", type=str, help="The BPE model file", required=True)
+    parser.add_argument("--subword_model_file", type=str, help="The BPE model file", required=False)
     parser.add_argument("--subword_vocab_file", type=str, help="The BPE subword vocab", required=True)
+    parser.add_argument("--subword_type", type=str, choices=["bpe", "wordpiece"], default="bpe")
     parser.add_argument("--dropout", type=float, default=0.1, help="Dropout")
     parser.add_argument("--layer_drop", type=float, default=0.0, help="LayerDrop to apply")
     parser.add_argument("--ff_pdrop", type=float, default=0.1, help="Dropout in the dense stack")
@@ -152,9 +153,11 @@ def main():
     strategy = create_distribute_strategy(args.distribute, args.tpu_ep, len(get_env_gpus(None)))
     num_replicas = strategy.num_replicas_in_sync
     logger.info(f"Using {num_replicas} replicas in this job.")
-    vectorizer = BPEVectorizer1D(model_file=args.subword_model_file,
-                                 vocab_file=args.subword_vocab_file, mxlen=args.nctx, extra_tokens=args.extra_tokens)
-    vocab = {'x': vectorizer.vocab}
+    Vec1D = BPEVectorizer1D if args.subword_type == 'bpe' else WordpieceVectorizer1D
+    vectorizer = Vec1D(model_file=args.subword_model_file,
+                       vocab_file=args.subword_vocab_file,
+                       mxlen=args.nctx,
+                       extra_tokens=args.extra_tokens)
     preproc_data = baseline.embeddings.load_embeddings('x', dsz=args.d_model, known_vocab=vocab['x'],
                                                        preserve_vocab_indices=True,
                                                        embed_type=args.embed_type)
