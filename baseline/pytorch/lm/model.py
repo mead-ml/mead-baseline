@@ -103,7 +103,7 @@ class AbstractGeneratorLanguageModel(LanguageModelBase):
 
     def forward(self, input: Dict[str, TensorDef], hidden: TensorDef) -> Tuple[TensorDef, TensorDef]:
         emb = self.embed(input)
-        output, hidden = self.generate(emb, hidden)
+        output, hidden = self.generate(emb, hidden, input)
         return self.output_layer(output), hidden
 
     def embed(self, input):
@@ -139,7 +139,7 @@ class AbstractGeneratorLanguageModel(LanguageModelBase):
     def init_generate(self, **kwargs):
         pass
 
-    def generate(self, emb, hidden):
+    def generate(self, emb, hidden, _):
         return self.generator((emb, hidden))
 
     def init_output(self, embeddings, **kwargs):
@@ -184,6 +184,12 @@ class TransformerLanguageModel(AbstractGeneratorLanguageModel):
 
     def __init__(self):
         super().__init__()
+        self.mask_pad = False
+
+    def _pad_mask(self, inputs):
+        x = inputs[self.src_keys[0]]
+        return torch.zeros(x.shape, device=x.device, dtype=torch.long).masked_fill(x != Offsets.PAD, 1).unsqueeze(1).unsqueeze(1)
+
 
     @property
     def requires_state(self):
@@ -211,7 +217,7 @@ class TransformerLanguageModel(AbstractGeneratorLanguageModel):
         layer_drop = kwargs.get('layer_drop', 0.0)
         windowed_ra = kwargs.get('windowed_ra', False)
         rpr_value_on = kwargs.get('rpr_value_on', True)
-
+        self.mask_pad = kwargs.get('mask_pad', False)
         return TransformerEncoderStack(num_heads, d_model=d_model, pdrop=pdrop, scale=scale,
                                        layers=layers, d_ff=d_ff, rpr_k=rpr_k, d_k=d_k,
                                        activation=activation,
@@ -226,21 +232,27 @@ class TransformerLanguageModel(AbstractGeneratorLanguageModel):
         self.weight_std = kwargs.get('weight_std', 0.02)
         self.apply(self.init_layer_weights)
 
-    def create_mask(self, bth):
+    def create_mask(self, bth, inputs):
         T = bth.shape[1]
         mask = subsequent_mask(T).type_as(bth)
-        return mask
+        if not self.mask_pad:
+            return mask
 
-    def generate(self, bth, _):
-        mask = self.create_mask(bth)
+        return mask * self._pad_mask(inputs)
+
+    def generate(self, bth, _, inputs):
+        mask = self.create_mask(bth, inputs)
         return self.generator((bth, mask)), None
 
 
 @register_model(task='lm', name='transformer-mlm')
 class TransformerMaskedLanguageModel(TransformerLanguageModel):
 
-    def create_mask(self, bth):
-        return None
+    def create_mask(self, bth, inputs):
+        if not self.mask_pad:
+            return None
+
+        return self._pad_mask(inputs)
 
 
 @register_model(task='lm', name='gmlp-mlm')
@@ -248,6 +260,11 @@ class GatedMLPLanguageModel(AbstractGeneratorLanguageModel):
 
     def __init__(self):
         super().__init__()
+        self.mask_pad = False
+
+    def _pad_mask(self, inputs):
+        mask_pad = inputs[self.src_keys[0]] != Offsets.PAD
+        return mask_pad.unsqueeze(0).unsqueeze(0)
 
     @property
     def requires_state(self):
@@ -269,7 +286,7 @@ class GatedMLPLanguageModel(AbstractGeneratorLanguageModel):
         layer_norm_eps = kwargs.get('layer_norm_eps', 1e-12)
         layer_drop = kwargs.get('layer_drop', 0.0)
         nctx = int(kwargs.get('nctx', 256))
-
+        self.mask_pad = kwargs.get('mask_pad', False)
         return GatedMLPEncoderStack(d_model=d_model, pdrop=pdrop,
                                     layers=layers, nctx=nctx, d_ff=d_ff,
                                     activation=activation,
@@ -282,9 +299,12 @@ class GatedMLPLanguageModel(AbstractGeneratorLanguageModel):
         self.weight_std = kwargs.get('weight_std', 0.02)
         self.apply(self.init_layer_weights)
 
-    def create_mask(self, bth):
-        return None
+    def create_mask(self, bth, inputs):
+        if not self.mask_pad:
+            return None
 
-    def generate(self, bth, _):
-        mask = self.create_mask(bth)
+        return self._pad_mask(inputs)
+
+    def generate(self, bth, _, inputs):
+        mask = self.create_mask(bth, inputs)
         return self.generator((bth, mask)), None
