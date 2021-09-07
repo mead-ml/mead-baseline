@@ -36,7 +36,7 @@ def decode_sentences(model, vectorizer, queries, word2index, index2word, beamsz)
         sentences.append(best_sentence.replace('@@ ', ''))
     return sentences
 
-def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, d_k, activation, checkpoint_name, device):
+def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, d_k, activation, checkpoint_name, encoder_type, device):
     if len(rpr_k) == 0 or rpr_k[0] < 1:
         rpr_k = [None]
     else:
@@ -48,7 +48,7 @@ def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, d_k, a
            "dropout": 0.0,
            "num_heads": num_heads,
            "layers": num_layers,
-           "encoder_type": "transformer",
+           "encoder_type": encoder_type,
            "decoder_type": "transformer",
            "src_lengths_key": "x_lengths",
            "d_k": d_k,
@@ -77,6 +77,7 @@ def run():
     parser.add_argument("--d_k", type=int, default=None, help="Dimension per head.  Use if num_heads=1 to reduce dims")
     parser.add_argument("--num_heads", type=int, default=8, help="Number of heads")
     parser.add_argument("--num_layers", type=int, default=8, help="Number of layers")
+    parser.add_argument("--encoder_type", default="transformer", type=str, help="Encoder to use")
     parser.add_argument("--nctx", type=int, default=256, help="Max context length (for both encoder and decoder)")
     parser.add_argument("--embed_type", type=str, default='default',
                         help="register label of the embeddings, so far support positional or learned-positional")
@@ -87,7 +88,6 @@ def run():
     parser.add_argument("--activation", type=str, default='relu')
     parser.add_argument('--rpr_k', help='Relative attention positional sizes pass 0 if you dont want relative attention',
                         type=int, default=[8]*8, nargs='+')
-    #parser.add_argument("--go_token", default="<GO>")
     parser.add_argument("--end_token", default="<EOS>")
     parser.add_argument("--output_file", type=str)
     parser.add_argument("--show_query", type=str2bool, default=False, help="Show the original query as well")
@@ -115,7 +115,7 @@ def run():
     embeddings = preproc_data['embeddings']
     vocab = preproc_data['vocab']
     model = create_model(embeddings, d_model=args.d_model, d_ff=args.d_ff, num_heads=args.num_heads, num_layers=args.num_layers,
-                         rpr_k=args.rpr_k, d_k=args.d_k, checkpoint_name=checkpoint, activation=args.activation,
+                         rpr_k=args.rpr_k, d_k=args.d_k, checkpoint_name=checkpoint, activation=args.activation, encoder_type=args.encoder_type,
                          device=args.device)
     model.to(args.device)
 
