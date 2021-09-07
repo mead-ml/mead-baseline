@@ -33,7 +33,7 @@ This file uses Baseline to train a Transformer model using fastBPE with query-re
 """
 def create_model(embeddings, d_model, d_ff, dropout, num_heads, num_layers, model_type, rpr_k, d_k, reduction_d_k,
                  stacking_layers, ff_pdrop, windowed_ra, reduction_type, layer_drop, logger, layer_norms_after=False,
-                 encoder_type='transformer'):
+                 encoder_type='transformer', decoder_layers=None):
     if model_type == "encoder-decoder":
         logger.info("Creating tied encoder decoder model")
         if layer_norms_after:
@@ -46,6 +46,7 @@ def create_model(embeddings, d_model, d_ff, dropout, num_heads, num_layers, mode
                "layers": num_layers,
                "encoder_type": encoder_type,
                "decoder_type": "transformer",
+               "decoder_layers": decoder_layers,
                "src_lengths_key": "x_lengths",
                "d_k": d_k,
                "layer_drop": layer_drop,
@@ -140,6 +141,7 @@ def parse_args(argv):
     parser.add_argument("--stacking_layers", type=int, nargs='+', default=[],
                         help="Hidden sizes of the dense stack (ff2 from the convert paper)")
     parser.add_argument("--layer_drop", type=float, default=0.0, help="LayerDrop to apply")
+    parser.add_argument("--decoder_layers", type=int, help="Use different number of decoder layers, default is to use num_layers")
     parser.add_argument("--ff_pdrop", type=float, default=0.1, help="Dropout in the dense stack")
     parser.add_argument("--reader_type", type=str, default='preprocessed',
                         choices=['ntp', 'nsp', 'preprocessed', 'tfrecord'])
@@ -186,7 +188,7 @@ def run(basedir=None, train_file=None, valid_file=None, dataset_key='paired', em
         reader_type='preprocessed', model_type='dual-encoder', src_begin_tok=[], src_end_tok=['<EOS>'],
         tgt_begin_tok=['<GO>'], tgt_end_tok=['<EOS>'], lower=False, loss='symmetric', learn_temp=True, init_temp=None,
         rpr_k=[8], device='cuda', distributed=False, local_rank=-1, save_npz=False, layer_norms_after=False,
-        extra_tokens=["[CLS]", "[MASK]"], subword_type='bpe', encoder_type='transformer', **kwargs):
+        extra_tokens=["[CLS]", "[MASK]"], subword_type='bpe', encoder_type='transformer', decoder_layers=None, **kwargs):
     if basedir is None:
         basedir = '{}-{}-paired-{}-bpe-{}'.format(model_type, reader_type, dataset_key, os.getpid())
     logging.basicConfig(level=logging.INFO if local_rank in [-1, 0] else logging.WARN)
@@ -233,7 +235,8 @@ def run(basedir=None, train_file=None, valid_file=None, dataset_key='paired', em
                          layer_drop=layer_drop,
                          layer_norms_after=layer_norms_after,
                          logger=logger,
-                         encoder_type=encoder_type)
+                         encoder_type=encoder_type,
+                         decoder_layers=decoder_layers)
     model.to(device)
     if model_type == 'encoder-decoder':
         run_step = run_step_s2s

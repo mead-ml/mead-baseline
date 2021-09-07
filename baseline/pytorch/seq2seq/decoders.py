@@ -339,10 +339,10 @@ class TransformerDecoderWrapper(torch.nn.Module):
         activation = kwargs.get('activation', 'relu')
         layer_drop = float(kwargs.get('layer_drop', 0.0))
         scale = bool(kwargs.get('scale', True))
-
+        decoder_layers = kwargs.get('decoder_layers', layers)
         self.transformer_decoder = TransformerDecoderStack(num_heads, d_model=hsz, d_ff=d_ff,
                                                            pdrop=dropout, scale=scale,
-                                                           layers=layers, rpr_k=rpr_k, d_k=d_k,
+                                                           layers=decoder_layers, rpr_k=rpr_k, d_k=d_k,
                                                            activation_type=activation,
                                                            layer_drop=layer_drop)
 

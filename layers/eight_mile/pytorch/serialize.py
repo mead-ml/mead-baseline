@@ -301,8 +301,11 @@ def from_attn_array(pytorch_attn: nn.Module, d: Dict, name: str):
 
     if hasattr(pytorch_attn, 'rpr_value'):
         device = pytorch_attn.rpr_key.weight.device
-        pytorch_attn.rpr_value.weight = torch.nn.Parameter(torch.from_numpy(d[f"{name}/rpr_value"]).to(device=device))
-
+        try:
+            pytorch_attn.rpr_value.weight = torch.nn.Parameter(torch.from_numpy(d[f"{name}/rpr_value"]).to(device=device))
+        except:
+            print('Warning: no rpr_value was found in the weights, using rpr_key')
+            pytorch_attn.rpr_value.weight = torch.nn.Parameter(torch.from_numpy(d[f"{name}/rpr_key"]).to(device=device))
 
 def to_encoder_array(pytorch_encoder: TransformerEncoder, name: str) -> Dict:
     """Convert a `TransformerEncoder` layer to an set of numpy arrays
