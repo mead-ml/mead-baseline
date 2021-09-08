@@ -127,12 +127,14 @@ def main():
             pooled_batch = pool(vecs, embedding).cpu().numpy()
             batches += [x for x in pooled_batch]
 
+    np.savez(args.output, embeddings=batches, text=as_list)
     if args.faiss_index:
         import faiss
         index = faiss.IndexFlatIP(batches[0].shape[-1])
-        index.add(np.stack(batches))
+        batches = np.stack(batches)
+        faiss.normalize_L2(batches)
+        index.add(batches)
         faiss.write_index(index, args.faiss_index)
-    np.savez(args.output, embeddings=batches, text=as_list)
 
 
 if __name__ == '__main__':
