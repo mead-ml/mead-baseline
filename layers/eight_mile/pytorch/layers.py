@@ -2746,14 +2746,17 @@ class SeqScaledDotProductAttentionALiBi(SequenceSequenceAttention):
         # (., H, T_q, T_k) = (., H, T_q, D) x (., H, D, T_k)
         d_k = query.size(-1)
         scores = torch.matmul(query, key.transpose(-2, -1)) / math.sqrt(d_k)
-        if mask is not None:
-            scores = scores.masked_fill(mask == MASK_FALSE, -1e9)  # [B, 1, 1, T_k] broadcast to [B, 1, T_q, T_k]
         B = scores.shape[0]
         T = scores.shape[-1]
         alibi = self.slopes.unsqueeze(1).unsqueeze(1) * torch.arange(T, device=self.slopes.device).unsqueeze(0).unsqueeze(0).expand(self.num_heads, -1, -1)
         alibi = alibi.view(1, self.num_heads, 1, -1)
+        scores += alibi.repeat(B, 1, 1, 1)
 
-        return F.softmax(scores + alibi.repeat(B, 1, 1, 1), dim=-1)
+        if mask is not None:
+            scores = scores.masked_fill(mask == MASK_FALSE, -1e9)  # [B, 1, 1, T_k] broadcast to [B, 1, T_q, T_k]
+
+
+        return F.softmax(scores, dim=-1)
 
 
 class SeqDotProductAttention(SequenceSequenceAttention):
@@ -2776,13 +2779,15 @@ class SeqDotProductAttentionALiBi(SequenceSequenceAttention):
 
     def _attention(self, query: torch.Tensor, key: torch.Tensor, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         scores = torch.matmul(query, key.transpose(-2, -1))
-        if mask is not None:
-            scores = scores.masked_fill(mask == MASK_FALSE, -1e9)
         B = scores.shape[0]
         T = scores.shape[-1]
         alibi = self.slopes.unsqueeze(1).unsqueeze(1) * torch.arange(T, device=self.slopes.device).unsqueeze(0).unsqueeze(0).expand(self.num_heads, -1, -1)
         alibi = alibi.view(1, self.num_heads, 1, -1)
-        return F.softmax(scores + alibi.repeat(B, 1, 1, 1), dim=-1)
+        scores += alibi.repeat(B, 1, 1, 1)
+        if mask is not None:
+            scores = scores.masked_fill(mask == MASK_FALSE, -1e9)
+
+        return F.softmax(scores, dim=-1)
 
 
 class SequenceSequenceRelativeAttention(nn.Module):
