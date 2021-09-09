@@ -48,7 +48,8 @@ def run(basedir=None, train_file=None, valid_file=None, dataset_key='tlm', embed
         lr_alpha=0.0, optim='adamw', lr=4.0e-4, clip=1.0, weight_decay=1.0e-2, epochs=32, restart_from=None,
         restart_tt=None, warmup_steps=10000, saves_per_epoch=10, mlm=True, preprocessed=True, rpr_k=[8],
         rpr_value_on=False, windowed_ra=False, device="cuda", distributed=False, local_rank=-1,
-        extra_tokens=["[CLS]", "[MASK]"], do_early_stopping=False, model_type='transformer-mlm', modules=[], **kwargs):
+        extra_tokens=["[CLS]", "[MASK]"], do_early_stopping=False, model_type='transformer-mlm', modules=[],
+        alibi=False, **kwargs):
     if basedir is None:
         basedir = 'lm-{}-bpe-{}'.format(dataset_key, os.getpid())
     logging.basicConfig(level=logging.INFO if local_rank in [-1, 0] else logging.WARN)
@@ -130,6 +131,7 @@ def run(basedir=None, train_file=None, valid_file=None, dataset_key='tlm', embed
         rpr_value_on=rpr_value_on,
         layer_drop=layer_drop,
         model_type=model_type,
+        alibi=alibi,
         src_keys=['x'], tgt_key='x')
     model.to(device)
 
@@ -345,6 +347,7 @@ def parse_args(argv):
     parser.add_argument('--rpr_value_on', type=str2bool, default=False,
                         help="In relative attention, whether add positional correction to values in addition to the "
                              "correction to attention matrix")
+    parser.add_argument("--alibi", action="store_true")
     parser.add_argument("--windowed_ra", type=str2bool, default=False, help="whether prevent attention beyond rpr_k")
     parser.add_argument("--device", type=str,
                         default="cuda" if torch.cuda.is_available() else "cpu",

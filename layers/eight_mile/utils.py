@@ -16,7 +16,7 @@ from typing import List, Tuple, Union, Optional, Dict, Any, Set, Pattern, TextIO
 from functools import partial, update_wrapper, wraps
 import numpy as np
 from six.moves.urllib.request import urlretrieve
-
+import math
 
 logger = logging.getLogger("mead.layers")
 
@@ -147,6 +147,19 @@ def sequence_mask(lengths, max_len: int = -1):
     row = np.arange(0, max_len).reshape(1, -1)
     col = np.reshape(lengths, (-1, 1))
     return (row < col).astype(np.uint8)
+
+@export
+def get_alibi_slopes(n):
+    """from https://github.com/ofirpress/attention_with_linear_biases/blob/master/fairseq/models/transformer.py"""
+    def get_slopes_power_of_2(n):
+        start = (2**(-2**-(math.log2(n)-3)))
+        ratio = start
+        return [start*ratio**i for i in range(n)]
+
+    if math.log2(n).is_integer():
+        return get_slopes_power_of_2(n)
+    closest_power_of_2 = 2**math.floor(math.log2(n))
+    return get_slopes_power_of_2(closest_power_of_2) + get_alibi_slopes(2*closest_power_of_2)[0::2][:n-closest_power_of_2]
 
 
 @export
