@@ -78,7 +78,6 @@ def run():
     parser = ArgumentParser()
     parser.add_argument("--basedir", type=str)
     parser.add_argument("--checkpoint", type=str, help='Checkpoint name or directory to load')
-    parser.add_argument("--sample", type=str2bool, help='Sample from the decoder?  Defaults to `false`', default=0)
     parser.add_argument("--vocab", type=str, help='Vocab file to load', required=False)
     parser.add_argument("--input", type=str, default='hello how are you ?')
     parser.add_argument("--dataset_cache", type=str, default=os.path.expanduser('~/.bl-data'),
