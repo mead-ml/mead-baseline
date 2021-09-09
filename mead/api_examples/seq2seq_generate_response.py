@@ -10,15 +10,20 @@ from eight_mile.pytorch.layers import find_latest_checkpoint
 from baseline.pytorch.embeddings import *
 from baseline.pytorch.seq2seq.model import TiedEmbeddingsSeq2SeqModel
 from eight_mile.pytorch.serialize import load_transformer_seq2seq_npz
-from eight_mile.utils import str2bool, read_json, Offsets, revlut
-from baseline.vectorizers import Token1DVectorizer, BPEVectorizer1D
+from eight_mile.utils import str2bool, Offsets, revlut
+from baseline.vectorizers import BPEVectorizer1D, WordpieceVectorizer1D
 
 logger = logging.getLogger(__file__)
 
 
-def decode_sentences(model, vectorizer, queries, word2index, index2word, beamsz):
+def decode_sentences(model, vectorizer, queries, word2index, index2word, beamsz, end_token):
 
     vecs = []
+    end_id = word2index.get(end_token)
+    sentinels = [Offsets.PAD, Offsets.EOS]
+    if end_id and end_id not in sentinels:
+        sentinels.append(end_id)
+    sentinels = set(sentinels)
     lengths = []
     for query in queries:
         vec, length = vectorizer.run(query, word2index)
@@ -32,7 +37,13 @@ def decode_sentences(model, vectorizer, queries, word2index, index2word, beamsz)
     sentences = []
     for candidate in response:
         best_sentence_idx = candidate[0]
-        best_sentence = ' '.join([index2word[x] for x in best_sentence_idx if x not in [Offsets.EOS, Offsets.PAD]])
+        best_sentence_toks = []
+        for x in best_sentence_idx:
+            best_sentence_toks.append(index2word[x])
+            if x in sentinels:
+                break
+
+        best_sentence = ' '.join(best_sentence_toks)
         sentences.append(best_sentence.replace('@@ ', ''))
     return sentences
 
@@ -87,7 +98,7 @@ def run():
     parser.add_argument("--activation", type=str, default='relu')
     parser.add_argument('--rpr_k', help='Relative attention positional sizes pass 0 if you dont want relative attention',
                         type=int, default=[8]*8, nargs='+')
-    #parser.add_argument("--go_token", default="<GO>")
+    parser.add_argument("--subword_type", type=str, choices=["bpe", "wordpiece"], default="bpe")
     parser.add_argument("--end_token", default="<EOS>")
     parser.add_argument("--output_file", type=str)
     parser.add_argument("--show_query", type=str2bool, default=False, help="Show the original query as well")
@@ -107,8 +118,10 @@ def run():
     else:
         checkpoint = args.checkpoint
 
-    vectorizer = BPEVectorizer1D(model_file=args.subword_model_file, vocab_file=args.subword_vocab_file,
-                                 mxlen=args.nctx, emit_end_tok=args.end_token, extra_tokens=args.extra_tokens)
+    Vec1D = BPEVectorizer1D if args.subword_type == 'bpe' else WordpieceVectorizer1D
+    vectorizer = Vec1D(model_file=args.subword_model_file, vocab_file=args.subword_vocab_file,
+                       mxlen=args.nctx, emit_end_tok=args.end_token, extra_tokens=args.extra_tokens)
+
     vocab = vectorizer.vocab
     # If we are not using chars, then use 'x' for both input and output
     preproc_data = baseline.embeddings.load_embeddings('x', dsz=args.d_model, counts=False, known_vocab=vocab, embed_type=args.embed_type)
@@ -145,7 +158,7 @@ def run():
 
     for queries in batches:
 
-        outputs = decode_sentences(model, vectorizer, queries, vocab, index2word, args.beamsz)
+        outputs = decode_sentences(model, vectorizer, queries, vocab, index2word, args.beamsz, args.end_token)
 
         if args.show_query:
             for query, output in zip(queries, outputs):
