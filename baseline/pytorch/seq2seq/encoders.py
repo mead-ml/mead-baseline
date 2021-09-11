@@ -95,3 +95,37 @@ class ZeroOffsetPoolEncoderWrapper(torch.nn.Module):
         output = output[:, 0].unsqueeze(1)
         src_mask = torch.ones([B, 1], dtype=src_mask.dtype, device=src_mask.device)
         return TransformerEncoderOutput(output=output, src_mask=src_mask)
+
+
+@register_encoder(name='transformer-zero-last-offset')
+class ZeroLastOffsetPoolEncoderWrapper(torch.nn.Module):
+
+    def __init__(self, dsz, hsz=None, num_heads=4, layers=1, dropout=0.5, **kwargs):
+        super().__init__()
+        if hsz is None:
+            hsz = dsz
+        self.proj = pytorch_linear(dsz, hsz) if hsz != dsz else self._identity
+        d_ff = int(kwargs.get('d_ff', 4 * hsz))
+        rpr_k = kwargs.get('rpr_k')
+        d_k = kwargs.get('d_k')
+        layer_drop = float(kwargs.get('layer_drop', 0.0))
+        activation = kwargs.get('activation', 'relu')
+        scale = bool(kwargs.get('scale', True))
+        self.transformer = TransformerEncoderStack(num_heads, d_model=hsz, d_ff=d_ff,
+                                                   pdrop=dropout, scale=scale, layers=layers,
+                                                   rpr_k=rpr_k, d_k=d_k, activation=activation, layer_drop=layer_drop)
+
+    def _identity(self, x):
+        return x
+
+    def forward(self, bth, lengths):
+        B = bth.shape[0]
+        T = bth.shape[1]
+        src_mask = sequence_mask(lengths, T).type_as(lengths.data).to(bth.device)
+        bth = self.proj(bth)
+        output = self.transformer((bth, src_mask.unsqueeze(1).unsqueeze(1)))
+        zero = output[:, 0].unsqueeze(1)
+        last = [torch.arange(B), lengths - 1].unsqueeze(1)
+        output = torch.cat([zero, last], 1)
+        src_mask = torch.ones([B, 2], dtype=src_mask.dtype, device=src_mask.device)
+        return TransformerEncoderOutput(output=output, src_mask=src_mask)

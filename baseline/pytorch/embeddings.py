@@ -258,6 +258,10 @@ class TransformerLMPooledEmbeddingsModel(TransformerLMEmbeddingsModel):
             self.pooling_op = _mean_pool
         elif self.pooling == 'sqrt_length':
             self.pooling_op = self._sqrt_length_pool
+        elif self.pooling == 'start':
+            self.pooling_op = self._zero_pool
+        elif self.pooling == 'start_end':
+            self.pooling_op = self._zero_last_pool
         elif self.pooling == '2HA':
             self.reduction_layer = TwoHeadConcat(self.d_model, dropout, scale=False, d_k=reduction_d_k)
             self.pooling_op = self._att_reduction
@@ -274,7 +278,7 @@ class TransformerLMPooledEmbeddingsModel(TransformerLMEmbeddingsModel):
         return reduced
 
     def get_dsz(self):
-        if self.pooling == '2HA':
+        if self.pooling == '2HA' or self.pooling == 'start_end':
             return 2*self.d_model
         return self.d_model
 
@@ -294,6 +298,21 @@ class TransformerLMPooledEmbeddingsModel(TransformerLMEmbeddingsModel):
         mask = (inputs == self.cls_index).unsqueeze(-1).expand_as(tensor)
         pooled = tensor.masked_select(mask).view(B, -1)
         return pooled
+
+    def _zero_pool(self, _, tensor):
+        return tensor[:, 0]
+
+    def _zero_last_pool(self, inputs, tensor):
+        B = inputs.shape[0]
+        zero = tensor[:, 0]
+        mask = (inputs != Offsets.PAD)
+        lengths = mask.sum(1)
+        last = tensor[torch.arange(B), lengths - 1]
+        pooled = torch.cat([zero, last], -1)
+        return pooled
+
+
+
 
     def get_output(self, inputs, z):
         z = self.pooling_op(inputs, z)
