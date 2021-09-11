@@ -218,7 +218,7 @@ class TwoHeadConcatPoolEncoderWrapper(tf.keras.layers.Layer):
 class TwoHeadConcatPoolFFNEncoderWrapper(TwoHeadConcatPoolEncoderWrapper):
     def __init__(self, dsz, hsz=None, num_heads=4, layers=1, dropout=0.5, name='encoder', scope='TransformerEncoder', **kwargs):
         super().__init__(dsz, hsz, num_heads, layers, dropout, name, scope, **kwargs)
-        self.ff1 = tf.keras.layers.Dense(hsz, activation=kwargs.get('activation', 'relu'))
+        self.ff1 = tf.keras.layers.Dense(hsz*2, activation=kwargs.get('activation', 'relu'))
 
     def _stacking(self, x):
         return self.ff1(x)
