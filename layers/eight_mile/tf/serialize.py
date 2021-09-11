@@ -433,6 +433,11 @@ def save_transformer_seq2seq_npz(tf_seq2seq: tf.keras.layers.Layer, npz: str, sr
     for embeddings_key in enc_keys_to_write:
         enc.update(to_embed_array(tf_seq2seq.src_embeddings[embeddings_key], name=f"{name}/SrcEmbeddings/{embeddings_key}"))
 
+    # If the encoder is pooled
+    if hasattr(tf_seq2seq.encoder.reduction_layer):
+        enc.update(to_attn_pool_array(tf_seq2seq.encoder.reduction_layer, f"{name}/ReductionLayer"))
+    # TODO: should we also write optional ff layers?
+
     dec = {}
     transformer_decoder = tf_seq2seq.decoder.transformer_decoder
 

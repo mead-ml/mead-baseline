@@ -191,6 +191,9 @@ class TwoHeadConcatPoolEncoderWrapper(tf.keras.layers.Layer):
     def _identity(self, x):
         return x
 
+    def _stacking(self, x):
+        return x
+
     def call(self, inputs):
         bth, lengths = inputs
         T = get_shape_as_list(bth)[1]
@@ -203,7 +206,19 @@ class TwoHeadConcatPoolEncoderWrapper(tf.keras.layers.Layer):
         bth = self.proj(bth)
 
         output = self.transformer((bth, src_mask))
-        output = tf.expand_dims(self.reduction_layer((output, output, output, src_mask)), 1)
+        output = self.reduction_layer((output, output, output, src_mask))
+        output = self._stacking(output)
+        output = tf.expand_dims(output, 1)
 
         src_mask = tf.ones([B, 1, 1, 1])
         return TransformerEncoderOutput(output=output, src_mask=src_mask)
+
+
+@register_encoder(name='transformer-2ha-pool-ffn')
+class TwoHeadConcatPoolFFNEncoderWrapper(TwoHeadConcatPoolEncoderWrapper):
+    def __init__(self, dsz, hsz=None, num_heads=4, layers=1, dropout=0.5, name='encoder', scope='TransformerEncoder', **kwargs):
+        super().__init__(dsz, hsz, num_heads, layers, dropout, name, scope, **kwargs)
+        self.ff1 = tf.keras.layers.Dense(hsz, activation=kwargs.get('activation', 'relu'))
+
+    def _stacking(self, x):
+        return self.ff1(x)
