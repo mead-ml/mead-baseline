@@ -68,12 +68,6 @@ implementations exactly.
 
 While we provide native support for Transformer models, if you prefer or need to use the HuggingFace libraries to fine-tune models in MEAD, its fairly easy to do [in an addon](https://github.com/mead-ml/hub/blob/master/v1/addons/embed_bert_pytorch.py).
 
-#### Fine-Tuning BERT Official
-
-We provide an [addon on mead-hub](https://github.com/mead-ml/hub/blob/master/v1/addons/embed_bert_tf.py) to use either the BERT official code (a copy) or the TF Hub module to fine-tune.
-Since this is based on the official code, no conversion or non-standard checkpoints are required.
-
-
 ## Pre-Training your own Transformers with MEAD
 
 ### Using the API Examples
