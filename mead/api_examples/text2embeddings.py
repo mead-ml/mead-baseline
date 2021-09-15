@@ -67,6 +67,8 @@ def main():
     embeddings_index = read_config_stream(args.embeddings)
     embeddings_set = index_by_label(embeddings_index)
     embeddings_params = embeddings_set[args.embed_id]
+    # If they dont want CUDA try and get the embedding loader to use CPU
+    embeddings_params['cpu_placement'] = not args.cuda
     embeddings = load_embeddings_overlay(embeddings_set, embeddings_params, vectorizer.vocab)
 
     vocabs = {'x': embeddings['vocab']}
