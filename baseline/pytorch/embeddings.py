@@ -217,7 +217,9 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
                 logger.warning("Restoring only key [%s]", ' '.join(filtered_keys))
             load_tlm_npz(c, embeddings, filtered_keys)
         else:
-            tlm_load_state_dict(c, embeddings)
+            map_location = 'cpu' if kwargs.get('cpu_placement') else None
+            tlm_load_state_dict(c, embeddings,
+                                map_location=map_location)
         return c
 
 
@@ -317,7 +319,7 @@ class TransformerLMPooledEmbeddingsWithOutputModel(TransformerLMPooledEmbeddings
 
     @classmethod
     def load(cls, embeddings, **kwargs):
-        c = cls("tlm-words-embed", **kwargs)
+        c = cls("tlm-words-embed-pooled-output", **kwargs)
 
         if embeddings.endswith('.bin'):
             # HuggingFace checkpoint, convert on the fly
@@ -334,8 +336,10 @@ class TransformerLMPooledEmbeddingsWithOutputModel(TransformerLMPooledEmbeddings
                 logger.warning("Restoring only key [%s]", ' '.join(filtered_keys))
             load_tlm_output_npz(c, embeddings, filtered_keys)
         else:
+            map_location = 'cpu' if kwargs.get('cpu_placement') else None
             tlm_load_state_dict(c, embeddings,
-                                str_map={'model.embeddings.embeddings.0.':'', 'model.output_layer': 'output_layer'})
+                                str_map={'model.embeddings.embeddings.0.':'', 'model.output_layer': 'output_layer'},
+                                map_location=map_location)
         return c
 
 @register_embeddings(name='tlm-words-embed-pooled2d')
