@@ -1626,7 +1626,7 @@ class Reduction(nn.Module):
 
 
 class ConcatReduction(Reduction):
-    def __init__(self, output_dims: List[int], axis=-1):
+    def __init__(self, output_dims: List[int], axis=-1, **kwargs):
         super().__init__()
         self.axis = axis
         self.output_dim = sum(output_dims)
@@ -1641,7 +1641,7 @@ class ConcatSubtractReduction(Reduction):
     It is useful for training sentence encoders and is used, for example, in SentenceBERT
     For this to work we assume that the inputs are paired, and subtract them
     """
-    def __init__(self, output_dims: List[int], axis=-1):
+    def __init__(self, output_dims: List[int], axis=-1, **kwargs):
         super().__init__()
         self.axis = axis
         self.output_dim = 3 * output_dims[0]
@@ -1652,7 +1652,7 @@ class ConcatSubtractReduction(Reduction):
 
 
 class SumReduction(Reduction):
-    def __init__(self, output_dims: List[int]):
+    def __init__(self, output_dims: List[int], **kwargs):
         super().__init__()
         # We could actually project if we needed, or at least should validate
         self.output_dim = output_dims[0]
@@ -1663,7 +1663,7 @@ class SumReduction(Reduction):
 
 class SumLayerNormReduction(Reduction):
 
-    def __init__(self, output_dims: List[int], layer_norm_eps: float = 1.0e-12):
+    def __init__(self, output_dims: List[int], layer_norm_eps: float = 1.0e-12, **kwargs):
         super().__init__()
         self.output_dim = output_dims[0]
         self.ln = nn.LayerNorm(self.output_dim, eps=layer_norm_eps)

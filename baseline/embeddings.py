@@ -14,7 +14,6 @@ logger = logging.getLogger("mead.layers")
 MEAD_LAYERS_EMBEDDINGS = {}
 MEAD_LAYERS_EMBEDDINGS_LOADERS = {}
 
-
 @export
 @optional_params
 def register_embeddings(cls, name=None):
@@ -42,6 +41,41 @@ def create_embeddings(**kwargs):
     Constructor = MEAD_LAYERS_EMBEDDINGS.get(embed_type)
     return Constructor(**kwargs)
 
+
+
+MEAD_LAYERS_EMBEDDINGS_REDUCTION = {}
+MEAD_LAYERS_EMBEDDINGS_REDUCTION_LOADERS = {}
+
+
+@export
+@optional_params
+def register_embeddings_reduction(cls, name=None):
+    """Register a function as a plug-in"""
+    if name is None:
+        name = cls.__name__
+
+    if name in MEAD_LAYERS_EMBEDDINGS:
+        raise Exception(
+            "Error: attempt to re-define previously registered handler {} (old: {}, new: {}) in registry".format(
+                name, MEAD_LAYERS_EMBEDDINGS[name], cls
+            )
+        )
+
+    MEAD_LAYERS_EMBEDDINGS[name] = cls
+
+    if hasattr(cls, "load"):
+        MEAD_LAYERS_EMBEDDINGS_LOADERS[name] = cls.load
+    return cls
+
+
+@export
+def create_embeddings_reduction(**kwargs):
+    embed_type = kwargs.get("embed_reduction_type", "concat")
+
+    Constructor = MEAD_LAYERS_EMBEDDINGS.get(embed_type)
+    if Constructor:
+        return Constructor(**kwargs)
+    return embed_type
 
 def load_embeddings_overlay(global_embeddings_settings, embeddings_section, vocab, data_download_cache=DEFAULT_DATA_CACHE, name=None):
     """Creates a set of arbitrary sub-graph, DL-framework-specific embeddings by delegating to wired sub-module.

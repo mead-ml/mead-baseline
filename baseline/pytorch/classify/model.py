@@ -1,4 +1,5 @@
 import logging
+from baseline.embeddings import create_embeddings_reduction
 from baseline.model import ClassifierModel, register_model
 from baseline.pytorch.torchy import *
 from baseline.utils import listify, write_json
@@ -184,7 +185,8 @@ class EmbedPoolStackClassifier(ClassifierModelBase):
         :return: The output of the embedding stack followed by its reduction.  This will typically be an output
           with an additional dimension which is the hidden representation of the input
         """
-        reduction = kwargs.get('embeddings_reduction', 'concat')
+        reduction = kwargs.get('embeddings_reduction', kwargs.get('embed_reduction_type', 'concat'))
+        reduction = create_embeddings_reduction(embed_reduction_type=reduction, **kwargs)
         embeddings_dropout = float(kwargs.get('embeddings_dropout', 0.0))
         return EmbeddingsStack(embeddings, embeddings_dropout, reduction=reduction)
 

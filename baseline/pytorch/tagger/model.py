@@ -1,4 +1,5 @@
 import logging
+from baseline.embeddings import create_embeddings_reduction
 from baseline.pytorch.torchy import *
 from baseline.utils import Offsets, write_json
 from baseline.model import TaggerModel
@@ -226,11 +227,15 @@ class AbstractEncoderTaggerModel(TaggerModelBase):
 
         :Keyword Arguments: See below
         * *embeddings_reduction* (defaults to `concat`) An operator to perform on a stack of embeddings
+        * *embeddings_dropout = float(kwargs.get('embeddings_dropout', 0.0))
 
         :return: The output of the embedding stack followed by its reduction.  This will typically be an output
           with an additional dimension which is the hidden representation of the input
         """
-        return EmbeddingsStack(embeddings, self.pdrop, reduction=kwargs.get('embeddings_reduction', 'concat'))
+        reduction = kwargs.get('embeddings_reduction', kwargs.get('embed_reduction_type', 'concat'))
+        reduction = create_embeddings_reduction(embed_reduction_type=reduction, **kwargs)
+        embeddings_dropout = float(kwargs.get('embeddings_dropout', self.pdrop))
+        return EmbeddingsStack(embeddings, embeddings_dropout, reduction=reduction)
 
     def init_encode(self, input_dim, **kwargs) -> BaseLayer:
         """Provide a layer object that represents the `encode` phase of the model
