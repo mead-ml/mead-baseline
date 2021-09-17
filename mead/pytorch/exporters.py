@@ -71,16 +71,9 @@ def create_data_dict_nbest(vocabs, vectorizers):
 
     length_tensor = None
     for k, v in vectorizers.items():
-        lengths = []
-        vectors = []
-        for sentence in S2D:
-            vec, feature_length = vectorizers[k].run(sentence.split(), vocabs[k])
-            vectors.append(torch.LongTensor(vec))
-            lengths.append(torch.LongTensor([feature_length]))
-        data[k] = torch.stack(vectors).unsqueeze(0)
-
-        if not length_tensor:
-            length_tensor = torch.stack(lengths).reshape(1, -1)
+        vec, lengths = v.run(S2D, vocabs[k])
+        data[k] = torch.LongTensor(vec).unsqueeze(0)
+        length_tensor = torch.LongTensor(lengths).unsqueeze(0)
 
     data['lengths'] = length_tensor
     return data
@@ -151,6 +144,11 @@ class PytorchONNXExporter(Exporter):
         logger.info("Saving serialized model to %s", server_output)
 
         model, vectorizers, vocabs, model_name = self.load_model(basename)
+
+        # hacky fix for checkpoints trained before update of extra_tokens
+        for vec in vectorizers.values():
+            if not hasattr(vec, '_extra_tokens'):
+                vec._extra_tokens = ['[CLS]', '[MASK]']
         # Triton server wants to see a specific name
 
         model = self.apply_model_patches(model)
