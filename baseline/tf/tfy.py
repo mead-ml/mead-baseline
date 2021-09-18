@@ -3,7 +3,7 @@ import tensorflow as tf
 from baseline.utils import listify, read_json, is_sequence, import_user_module
 from eight_mile.tf.layers import *
 from functools import wraps
-
+from eight_mile.tf.optz import EagerOptimizer
 BaseLayer = tf.keras.layers.Layer
 TensorDef = tf.Tensor
 
@@ -96,3 +96,28 @@ def dense_layer(output_layer_depth):
     output_layer = tf.layers.Dense(output_layer_depth, use_bias=False, dtype=tf.float32, name="dense")
     return output_layer
 
+def setup_tf2_checkpoints(optimizer: EagerOptimizer, model: tf.keras.layers.Layer, checkpoint_dir: str, max_to_keep: Optional[int] = 5) -> Tuple[tf.train.Checkpoint, tf.train.CheckpointManager]:
+    """This sets up eager checkpointing, and restores existing checkpoints if they exist
+
+    :param optimizer: The optimizer to connect
+    :param model: The model to connect
+    :param checkpoint_dir: The checkpoint directory, which may already exist or not
+    :param max_to_keep: How many checkpoints to keep
+    :return: The tf.train.Checkpoint, and the tf.train.CheckpointManager
+    """
+    _checkpoint = tf.train.Checkpoint(optimizer=optimizer.optimizer, model=model)
+
+    checkpoint_manager = tf.train.CheckpointManager(_checkpoint,
+                                                    directory=checkpoint_dir,
+                                                    max_to_keep=max_to_keep)
+
+    base = os.path.basename(checkpoint_dir)
+    restore_file = None
+    if base.startswith('ckpt-'):
+        restore_file = base
+    elif os.path.isdir(checkpoint_dir):
+        restore_file = checkpoint_manager.latest_checkpoint
+    if restore_file:
+        print(f'Restarting from: {restore_file}')
+        _checkpoint.restore(restore_file)
+    return _checkpoint, checkpoint_manager

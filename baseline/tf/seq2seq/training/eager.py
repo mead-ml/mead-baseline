@@ -10,6 +10,7 @@ from baseline.utils import get_model_file, get_metric_cmp, convert_seq2seq_golds
 from eight_mile.bleu import bleu
 from baseline.model import create_model_for
 from baseline.train import register_training_func, Trainer
+from baseline.tf.tfy import setup_tf2_checkpoints
 from baseline.tf.seq2seq.training.utils import to_tensors, SHUF_BUF_SZ, NUM_PREFETCH
 
 
@@ -71,13 +72,14 @@ class Seq2SeqTrainerEagerTf(Trainer):
         self.loss = Seq2SeqLoss(**kwargs)
         self.optimizer = EagerOptimizer(self.loss, **kwargs)
         self.nsteps = kwargs.get('nsteps', 500)
-        self._checkpoint = tf.train.Checkpoint(optimizer=self.optimizer.optimizer, model=self.model)
-        checkpoint_dir = '{}-{}'.format("./tf-seq2seq", os.getpid())
+
+        checkpoint_dir = kwargs.get('checkpoint')
+        if checkpoint_dir is None:
+            checkpoint_dir = f'./tf-seq2seq-{os.getpid()}'
+        self._checkpoint, self.checkpoint_manager = setup_tf2_checkpoints(self.optimizer, self.model, checkpoint_dir)
+
         self.bleu_n_grams = int(kwargs.get("bleu_n_grams", 4))
 
-        self.checkpoint_manager = tf.train.CheckpointManager(self._checkpoint,
-                                                             directory=checkpoint_dir,
-                                                             max_to_keep=5)
 
     def checkpoint(self):
         """This method saves a checkpoint

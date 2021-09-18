@@ -9,6 +9,7 @@ from eight_mile.utils import listify, get_version, Offsets
 from eight_mile.metrics import LCM, UCM, LAS, UAS
 from eight_mile.tf.layers import SET_TRAIN_FLAG, get_shape_as_list, autograph_options, masked_fill
 from eight_mile.tf.optz import *
+from baseline.tf.tfy import setup_tf2_checkpoints
 from baseline.utils import get_model_file, get_metric_cmp
 from baseline.train import EpochReportingTrainer, register_trainer, register_training_func
 from baseline.model import create_model_for
@@ -104,12 +105,11 @@ class DependencyParserTrainerEagerTf(EpochReportingTrainer):
         self.optimizer = EagerOptimizer(arc_label_loss, **kwargs)
         self.nsteps = kwargs.get('nsteps', six.MAXSIZE)
         self.punct_eval = kwargs.get('punct_eval', False)
-        self._checkpoint = tf.train.Checkpoint(optimizer=self.optimizer.optimizer, model=self.model)
-        checkpoint_dir = '{}-{}'.format("./tf-deps", os.getpid())
+        checkpoint_dir = kwargs.get('checkpoint')
+        if checkpoint_dir is None:
+            checkpoint_dir = f'./tf-deps-{os.getpid()}'
 
-        self.checkpoint_manager = tf.train.CheckpointManager(self._checkpoint,
-                                                             directory=checkpoint_dir,
-                                                             max_to_keep=5)
+        self._checkpoint, self.checkpoint_manager = setup_tf2_checkpoints(self.optimizer, self.model, checkpoint_dir)
 
     def _train(self, loader, steps=0, **kwargs):
         """Train an epoch of data using either the input loader or using `tf.dataset`

@@ -10,7 +10,7 @@ from eight_mile.utils import listify, get_version
 from eight_mile.tf.layers import get_shape_as_list
 from eight_mile.tf.optz import *
 from baseline.utils import get_model_file, get_metric_cmp
-from baseline.tf.tfy import SET_TRAIN_FLAG
+from baseline.tf.tfy import SET_TRAIN_FLAG, setup_tf2_checkpoints
 from baseline.tf.classify.training.utils import to_tensors
 from baseline.train import EpochReportingTrainer, register_trainer, register_training_func
 from baseline.utils import verbose_output
@@ -66,12 +66,11 @@ class ClassifyTrainerEagerTf(EpochReportingTrainer):
 
         self.optimizer = EagerOptimizer(loss, **kwargs)
         self.nsteps = kwargs.get('nsteps', six.MAXSIZE)
-        self._checkpoint = tf.train.Checkpoint(optimizer=self.optimizer.optimizer, model=self.model)
-        checkpoint_dir = '{}-{}'.format("./tf-classify", os.getpid())
+        checkpoint_dir = kwargs.get('checkpoint')
+        if checkpoint_dir is None:
+            checkpoint_dir = f'./tf-classify-{os.getpid()}'
+        self._checkpoint, self.checkpoint_manager = setup_tf2_checkpoints(self.optimizer, self.model, checkpoint_dir)
 
-        self.checkpoint_manager = tf.train.CheckpointManager(self._checkpoint,
-                                                             directory=checkpoint_dir,
-                                                             max_to_keep=5)
 
     def _train(self, loader, steps=0, **kwargs):
         """Train an epoch of data using either the input loader or using `tf.dataset`

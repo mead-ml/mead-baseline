@@ -8,6 +8,7 @@ from eight_mile.tf.optz import EagerOptimizer
 from baseline.utils import get_model_file, get_metric_cmp
 from baseline.model import create_model_for
 from baseline.train import register_training_func, Trainer
+from baseline.tf.tfy import setup_tf2_checkpoints
 from baseline.tf.lm.training.utils import to_tensors, SHUF_BUF_SZ, NUM_PREFETCH
 
 
@@ -49,12 +50,11 @@ class LanguageModelTrainerEagerTf(Trainer):
         loss_fn = loss_with_state if self.model.requires_state else loss_without_state
         self.optimizer = EagerOptimizer(loss_fn, **kwargs)
         self.nsteps = kwargs.get('nsteps', 500)
-        self._checkpoint = tf.train.Checkpoint(optimizer=self.optimizer.optimizer, model=self.model)
-        checkpoint_dir = '{}-{}'.format("./tf-lm", os.getpid())
+        checkpoint_dir = kwargs.get('checkpoint')
+        if checkpoint_dir is None:
+            checkpoint_dir = f'./tf-lm-{os.getpid()}'
+        self._checkpoint, self.checkpoint_manager = setup_tf2_checkpoints(self.optimizer, self.model, checkpoint_dir)
 
-        self.checkpoint_manager = tf.train.CheckpointManager(self._checkpoint,
-                                                             directory=checkpoint_dir,
-                                                             max_to_keep=5)
 
     def checkpoint(self):
         """This method saves a checkpoint
