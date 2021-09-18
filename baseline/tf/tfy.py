@@ -114,7 +114,7 @@ def setup_tf2_checkpoints(optimizer: EagerOptimizer, model: tf.keras.layers.Laye
     base = os.path.basename(checkpoint_dir)
     restore_file = None
     if base.startswith('ckpt-'):
-        restore_file = base
+        restore_file = checkpoint_dir
     elif os.path.isdir(checkpoint_dir):
         restore_file = checkpoint_manager.latest_checkpoint
     if restore_file:
