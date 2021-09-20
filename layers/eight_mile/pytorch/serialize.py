@@ -185,7 +185,6 @@ def tlm_load_state_dict(module: nn.Module, checkpoint_file: str, map_location=No
             str_map = {'generator': 'transformer'}
     if hasattr(module, 'reduction_layer'):
         str_map.update({'reduction_layer_1': 'reduction_layer'})
-        str_map.update({'squeeze': 'reduction_layer'})
     ckpt_dict = torch.load(checkpoint_file, map_location=map_location)
     renamed = {}
     for k, v in ckpt_dict.items():
