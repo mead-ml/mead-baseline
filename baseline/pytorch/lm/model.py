@@ -255,6 +255,38 @@ class TransformerMaskedLanguageModel(TransformerLanguageModel):
         return self._pad_mask(inputs)
 
 
+@register_model(task='lm', name='squeeze-mlm')
+class SqueezeMaskedLanguageModel(TransformerLanguageModel):
+
+    def init_output(self, embeddings, **kwargs):
+        self.vsz = embeddings[self.tgt_key].get_vsz()
+        hsz = kwargs.get('hsz', kwargs.get('d_model'))
+
+        unif = float(kwargs.get('unif', 0.0))
+        output = pytorch_linear(hsz*2, self.vsz, unif)
+        return output
+
+    def create_layers(self, embeddings, **kwargs):
+        super().create_layers(embeddings, **kwargs)
+        self.squeeze = TwoHeadConcat(kwargs.get('hsz'), dropout=kwargs.get('dropout', 0.1))
+
+    def create_mask(self, bth, inputs):
+        if not self.mask_pad:
+            return None
+
+        return self._pad_mask(inputs)
+
+    def generate(self, bth, _, inputs):
+        mask = self.create_mask(bth, inputs)
+        transduce = self.generator((bth, mask))
+        if mask is None:
+            mask = self._pad_mask(inputs)
+        pooled = self.squeeze((transduce, transduce, transduce, mask))
+        return pooled, None
+
+    def create_loss(self):
+        return PooledSequenceCriterion()#LossFn=nn.CrossEntropyLoss)
+
 @register_model(task='lm', name='gmlp-mlm')
 class GatedMLPLanguageModel(AbstractGeneratorLanguageModel):
 
