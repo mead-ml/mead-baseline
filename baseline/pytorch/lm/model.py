@@ -9,6 +9,7 @@ import os
 class LanguageModelBase(nn.Module, LanguageModel):
     def __init__(self):
         super().__init__()
+        self.freeze_encoder = False
 
     def save(self, outname):
         torch.save(self, outname)
@@ -63,7 +64,6 @@ class LanguageModelBase(nn.Module, LanguageModel):
         lm.tgt_key = kwargs.get('tgt_key')
         if lm.tgt_key is None:
             raise Exception('Need a `tgt_key` to know which source vocabulary should be used for destination ')
-
         lm.src_keys = kwargs.get('src_keys', embeddings.keys())
         lm.create_layers(embeddings, **kwargs)
         checkpoint_name = kwargs.get('checkpoint')
@@ -190,7 +190,6 @@ class TransformerLanguageModel(AbstractGeneratorLanguageModel):
         x = inputs[self.src_keys[0]]
         return torch.zeros(x.shape, device=x.device, dtype=torch.long).masked_fill(x != Offsets.PAD, 1).unsqueeze(1).unsqueeze(1)
 
-
     @property
     def requires_state(self):
         False
@@ -268,6 +267,7 @@ class SqueezeMaskedLanguageModel(TransformerLanguageModel):
 
     def create_layers(self, embeddings, **kwargs):
         super().create_layers(embeddings, **kwargs)
+        self.freeze_encoder = kwargs.get('freeze_encoder', True)
         self.squeeze = TwoHeadConcat(kwargs.get('hsz'), dropout=kwargs.get('dropout', 0.1))
 
     def create_mask(self, bth, inputs):
@@ -277,8 +277,9 @@ class SqueezeMaskedLanguageModel(TransformerLanguageModel):
         return self._pad_mask(inputs)
 
     def generate(self, bth, _, inputs):
-        mask = self.create_mask(bth, inputs)
-        transduce = self.generator((bth, mask))
+        with torch.no_grad() if self.freeze_encoder else contextlib.ExitStack():
+            mask = self.create_mask(bth, inputs)
+            transduce = self.generator((bth, mask))
         if mask is None:
             mask = self._pad_mask(inputs)
         pooled = self.squeeze((transduce, transduce, transduce, mask))
@@ -286,6 +287,12 @@ class SqueezeMaskedLanguageModel(TransformerLanguageModel):
 
     def create_loss(self):
         return PooledSequenceCriterion()#LossFn=nn.CrossEntropyLoss)
+
+    def forward(self, input: Dict[str, TensorDef], hidden: TensorDef) -> Tuple[TensorDef, TensorDef]:
+        with torch.no_grad() if self.freeze_encoder else contextlib.ExitStack():
+            emb = self.embed(input)
+        output, hidden = self.generate(emb, hidden, input)
+        return self.output_layer(output), hidden
 
 @register_model(task='lm', name='gmlp-mlm')
 class GatedMLPLanguageModel(AbstractGeneratorLanguageModel):

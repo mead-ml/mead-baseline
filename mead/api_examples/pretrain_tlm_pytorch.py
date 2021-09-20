@@ -46,7 +46,7 @@ def run(basedir=None, train_file=None, valid_file=None, dataset_key='tlm', embed
         dropout=0.1, ffn_pdrop=0.0, layer_drop=0.0, lr_scheduler='cosine', lr_decay_steps=None, lr_decay_rate=None,
         lr_alpha=0.0, optim='adamw', lr=4.0e-4, clip=1.0, weight_decay=1.0e-2, epochs=32, restart_from=None,
         restart_tt=None, warmup_steps=10000, saves_per_epoch=10, mlm=True, preprocessed=True, rpr_k=[8],
-        rpr_value_on=True, windowed_ra=False, device="cuda", distributed=False, local_rank=-1,
+        rpr_value_on=False, windowed_ra=False, device="cuda", distributed=False, local_rank=-1,
         extra_tokens=["[CLS]", "[MASK]"], do_early_stopping=False, model_type='transformer-mlm', **kwargs):
     if basedir is None:
         basedir = 'lm-{}-bpe-{}'.format(dataset_key, os.getpid())
@@ -337,7 +337,7 @@ def parse_args(argv):
     parser.add_argument('--rpr_k',
                         help='Relative attention positional sizes pass 0 if you dont want relative attention',
                         type=int, default=[8], nargs='+')
-    parser.add_argument('--rpr_value_on', type=str2bool, default=True,
+    parser.add_argument('--rpr_value_on', type=str2bool, default=False,
                         help="In relative attention, whether add positional correction to values in addition to the "
                              "correction to attention matrix")
     parser.add_argument("--windowed_ra", type=str2bool, default=False, help="whether prevent attention beyond rpr_k")
