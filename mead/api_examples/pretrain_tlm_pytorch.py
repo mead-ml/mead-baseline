@@ -183,7 +183,7 @@ def run(basedir=None, train_file=None, valid_file=None, dataset_key='tlm', embed
         # the selection of gpus based on rank, it would need to select multiple ids
         # based on rank, here we select only a single gpu and use it for input and
         # output.
-        model = DistributedDataParallel(model, device_ids=[device], output_device=device)
+        model = DistributedDataParallel(model, device_ids=[device], output_device=device, find_unused_parameters=True)
         logger.info("Model located on %s", device)
 
     model_base = os.path.join(basedir, 'checkpoint')
