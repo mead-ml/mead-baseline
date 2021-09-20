@@ -4018,12 +4018,12 @@ class PooledSequenceCriterion(nn.Module):
 
         :returns: torch.FloatTensor, The loss.
         """
-        inputs = inputs.transpose(0, 1)
+        #inputs = inputs.transpose(0, 1)
         C = inputs.shape[-1]
         flat_targets = torch.nn.functional.one_hot(targets, C)
 
         # Get the offsets of the non-zero targets, the values of these are all on
-        flat_targets = (torch.sum(flat_targets, 0) != 0).float()
+        flat_targets = (torch.sum(flat_targets, axis=1) != 0).float()
         flat_targets[:, Offsets.PAD] = 0
         flat_targets[:, Offsets.EOS] = 0
         flat_targets[:, Offsets.GO] = 0

@@ -12,12 +12,11 @@ from eight_mile.optz import *
 from eight_mile.pytorch.layers import save_checkpoint, init_distributed
 from eight_mile.pytorch.optz import *
 from mead.api_examples.transformer_utils import MultiFileDatasetReader, on_demand_mlm_masking, get_lr_decay
-from baseline.pytorch.lm import TransformerLanguageModel, TransformerMaskedLanguageModel, GatedMLPLanguageModel
-
+from baseline.model import create_lang_model
+from baseline.pytorch.lm.model import *
 from eight_mile.pytorch.serialize import load_tlm_npz
 
 logger = logging.getLogger(__file__)
-
 
 """Pre-train a Transformer model in PyTorch
 
@@ -48,7 +47,7 @@ def run(basedir=None, train_file=None, valid_file=None, dataset_key='tlm', embed
         lr_alpha=0.0, optim='adamw', lr=4.0e-4, clip=1.0, weight_decay=1.0e-2, epochs=32, restart_from=None,
         restart_tt=None, warmup_steps=10000, saves_per_epoch=10, mlm=True, preprocessed=True, rpr_k=[8],
         rpr_value_on=True, windowed_ra=False, device="cuda", distributed=False, local_rank=-1,
-        extra_tokens=["[CLS]", "[MASK]"], do_early_stopping=False, mlp=False, **kwargs):
+        extra_tokens=["[CLS]", "[MASK]"], do_early_stopping=False, model_type='transformer-mlm', **kwargs):
     if basedir is None:
         basedir = 'lm-{}-bpe-{}'.format(dataset_key, os.getpid())
     logging.basicConfig(level=logging.INFO if local_rank in [-1, 0] else logging.WARN)
@@ -98,7 +97,7 @@ def run(basedir=None, train_file=None, valid_file=None, dataset_key='tlm', embed
     logger.info("Loaded datasets")
     logger.info("Using embedding type [%s]", embed_type)
 
-    if mlm:
+    if 'mlm' in model_type:
         mask_from = vocabs
         vocab_size = len(mask_from)
         mask_value = mask_from.get("[MASK]")
@@ -106,42 +105,29 @@ def run(basedir=None, train_file=None, valid_file=None, dataset_key='tlm', embed
             logger.error("We could not find a suitable masking token in the vocab")
             return
 
-    if mlp and not mlm:
-        raise Exception("causal gMLP not implemented yet!")
-    elif mlp:
-        model = GatedMLPLanguageModel.create(embeddings,
-                                             nctx=nctx,
-                                             hsz=d_model,
-                                             d_ff=d_ff,
-                                             tie_weights=True,
-                                             dropout=dropout,
-                                             gpu=False,
-                                             layers=num_layers,
-                                             layer_drop=layer_drop,
-                                             ffn_drop=ffn_pdrop,
-                                             src_keys=['x'], tgt_key='x')
-    else:
-        if len(rpr_k) == 0 or rpr_k[0] < 1:
-            rpr_k = None
-        elif len(rpr_k) == 1:
-            rpr_k = rpr_k[0]
+    if len(rpr_k) == 0 or rpr_k[0] < 1:
+        rpr_k = None
+    elif len(rpr_k) == 1:
+        rpr_k = rpr_k[0]
 
-        TLM = TransformerMaskedLanguageModel if mlm else TransformerLanguageModel
-        model = TLM.create(embeddings,
-                           hsz=d_model,
-                           d_ff=d_ff,
-                           tie_weights=True,
-                           dropout=dropout,
-                           gpu=False,
-                           num_heads=num_heads,
-                           layers=num_layers,
-                           rpr_k=rpr_k,
-                           d_k=d_k,
-                           ffn_pdrop=ffn_pdrop,
-                           windowed_ra=windowed_ra,
-                           rpr_value_on=rpr_value_on,
-                           layer_drop=layer_drop,
-                           src_keys=['x'], tgt_key='x')
+    model = create_lang_model(
+        embeddings,
+        hsz=d_model,
+        nctx=nctx,  # Only for gMLP
+        d_ff=d_ff,
+        tie_weights=True,
+        dropout=dropout,
+        gpu=False,
+        num_heads=num_heads,
+        layers=num_layers,
+        rpr_k=rpr_k,
+        d_k=d_k,
+        ffn_pdrop=ffn_pdrop,
+        windowed_ra=windowed_ra,
+        rpr_value_on=rpr_value_on,
+        layer_drop=layer_drop,
+        model_type=model_type,
+        src_keys=['x'], tgt_key='x')
     model.to(device)
 
     loss_function = model.create_loss()
@@ -184,9 +170,10 @@ def run(basedir=None, train_file=None, valid_file=None, dataset_key='tlm', embed
             logger.warning(f"The previous tick was {step_num} but command-line specifies to ignore, setting to 0")
 
         logger.info("Restarting from a previous checkpoint %s.\n\tStarting at global_step=%d, epoch=%d",
-                    restart_from, global_step, start_epoch+1)
+                    restart_from, global_step, start_epoch + 1)
 
-    optimizer = OptimizerManager(model, global_step, optim=optim, lr=lr, lr_function=lr_sched, weight_decay=weight_decay)
+    optimizer = OptimizerManager(model, global_step, optim=optim, lr=lr, lr_function=lr_sched,
+                                 weight_decay=weight_decay)
     logger.info("Model has {:,} parameters".format(sum(p.numel() for p in model.parameters() if p.requires_grad)))
 
     # Prepare model for distributed training if needed
@@ -221,13 +208,13 @@ def run(basedir=None, train_file=None, valid_file=None, dataset_key='tlm', embed
                 inputs, labels, _ = on_demand_mlm_masking(inputs, labels, mask_value, vocab_size)
             inputs = {'x': inputs}
 
-            labels = labels.transpose(0, 1).contiguous()
-            logits = model(inputs, None)[0].transpose(0, 1).contiguous()
+            labels = labels.contiguous()
+            logits = model(inputs, None)[0].contiguous()
             if mlm:
                 loss = loss_function(logits, labels)
             else:
-                shift_logits = logits[:-1]
-                shift_labels = labels[1:]
+                shift_logits = logits[:, -1]
+                shift_labels = labels[:, 1:]
                 loss = loss_function(shift_logits, shift_labels)
             loss.backward()
             avg_loss.update(loss.item())
@@ -241,8 +228,8 @@ def run(basedir=None, train_file=None, valid_file=None, dataset_key='tlm', embed
             if (i + 1) % update_on == 0 and local_rank < 1:
                 elapsed = timer.elapsed(True)
                 logging.info('elapsed time this epoch %d min', elapsed)
-                logging.info('elapsed step time %f steps/min', i/elapsed)
-                logging.info('LR: %f',  optimizer.current_lr)
+                logging.info('elapsed step time %f steps/min', i / elapsed)
+                logging.info('LR: %f', optimizer.current_lr)
 
                 if not do_early_stopping:
                     save_checkpoint(model, model_base, steps, tick_type='step')
@@ -345,8 +332,7 @@ def parse_args(argv):
                         choices=['step', 'epoch', 'ignore'])
     parser.add_argument("--warmup_steps", type=int, default=10000, help="Num warmup steps")
     parser.add_argument("--saves_per_epoch", type=int, default=10, help="The number of checkpoints to save per epoch")
-    parser.add_argument("--mlm", type=str2bool, default=True, help="Use Masked Language Model (MLM) objective")
-    parser.add_argument("--mlp", type=str2bool, default=False, help="Use Gated MLP model")
+    parser.add_argument("--model_type", type=str, default="transformer-mlm")
     parser.add_argument("--preprocessed", type=str2bool, default=True, help="Has the data already been preprocessed?")
     parser.add_argument('--rpr_k',
                         help='Relative attention positional sizes pass 0 if you dont want relative attention',
@@ -366,7 +352,8 @@ def parse_args(argv):
                         type=int,
                         default=-1,
                         help="Local rank for distributed training (-1 means use the environment variables to find)")
-    parser.add_argument("--extra_tokens", help="What extra tokens should we use", nargs="+", default=["[CLS]", "[MASK]"])
+    parser.add_argument("--extra_tokens", help="What extra tokens should we use", nargs="+",
+                        default=["[CLS]", "[MASK]"])
     parser.add_argument("--do_early_stopping", type=str2bool, default=False,
                         help="if True, only save checkpoint when valid loss improves")
     args = parser.parse_args(argv)
