@@ -268,7 +268,7 @@ class SqueezeMaskedLanguageModel(TransformerLanguageModel):
     def create_layers(self, embeddings, **kwargs):
         super().create_layers(embeddings, **kwargs)
         self.freeze_encoder = kwargs.get('freeze_encoder', True)
-        self.squeeze = TwoHeadConcat(kwargs.get('hsz'), dropout=kwargs.get('dropout', 0.1))
+        self.squeeze = TwoHeadConcat(kwargs.get('hsz'), dropout=kwargs.get('dropout', 0.1), pooling="mean")
 
     def create_mask(self, bth, inputs):
         if not self.mask_pad:
