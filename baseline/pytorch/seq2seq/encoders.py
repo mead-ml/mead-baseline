@@ -50,9 +50,12 @@ class TransformerEncoderWrapper(torch.nn.Module):
         layer_drop = float(kwargs.get('layer_drop', 0.0))
         activation = kwargs.get('activation', 'relu')
         scale = bool(kwargs.get('scale', True))
+        windowed_ra = bool(kwargs.get('windowed_ra', False))
         self.transformer = TransformerEncoderStack(num_heads, d_model=hsz, d_ff=d_ff,
                                                    pdrop=dropout, scale=scale, layers=layers,
-                                                   rpr_k=rpr_k, d_k=d_k, activation=activation, layer_drop=layer_drop)
+                                                   rpr_k=rpr_k, d_k=d_k, activation=activation,
+                                                   windowed_ra=windowed_ra,
+                                                   layer_drop=layer_drop)
 
     def _identity(self, x):
         return x

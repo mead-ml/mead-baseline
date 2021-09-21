@@ -46,6 +46,7 @@ def create_model(embeddings, d_model, d_ff, dropout, num_heads, num_layers, mode
                "encoder_type": "transformer",
                "decoder_type": "transformer",
                "src_lengths_key": "x_lengths",
+               "windowed_ra": windowed_ra,
                "d_k": d_k,
                "layer_drop": layer_drop,
                "rpr_k": rpr_k}

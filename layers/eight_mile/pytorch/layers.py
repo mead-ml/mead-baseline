@@ -3293,18 +3293,21 @@ class TransformerDecoder(nn.Module):
         rpr_k: Optional[int] = None,
         ffn_pdrop: Optional[float] = 0.0,
         layer_norms_after: bool = False,
-        layer_norm_eps: float = 1.0e-6
+        layer_norm_eps: float = 1.0e-6,
+        rpr_value_on: Optional[bool] = False,
+        windowed_ra: Optional[bool] = False
     ):
         super().__init__()
         self.d_model = d_model
         self.layer_norms_after = layer_norms_after
         self.d_ff = d_ff if d_ff is not None else 4 * d_model
         if rpr_k is not None:
-            self.self_attn = MultiHeadedRelativeAttention(num_heads, d_model, rpr_k, pdrop, scale, d_k=d_k)
-            self.src_attn = MultiHeadedRelativeAttention(num_heads, d_model, rpr_k, pdrop, scale, d_k=d_k)
-
+            self.self_attn = MultiHeadedRelativeAttention(num_heads, d_model, rpr_k, pdrop, scale, d_k=d_k,
+                                                          windowed_ra=windowed_ra, rpr_value_on=rpr_value_on)
+            self.src_attn = MultiHeadedRelativeAttention(num_heads, d_model, rpr_k, pdrop, scale, d_k=d_k,
+                                                         windowed_ra=windowed_ra, rpr_value_on=rpr_value_on)
         else:
-            self.self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale, d_k=d_k)
+            self.self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale=scale, d_k=d_k)
             self.src_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale, d_k=d_k)
 
         self.ffn = nn.Sequential(
@@ -3504,6 +3507,8 @@ class TransformerDecoderStack(nn.Module):
         ffn_pdrop: Optional[float] = 0.0,
         layer_norms_after: bool = False,
         layer_norm_eps: float = 1.0e-6,
+        windowed_ra: Optional[bool] = False,
+        rpr_value_on: Optional[bool] = True,
         layer_drop: float = 0.0,
         **kwargs,
 
@@ -3520,7 +3525,8 @@ class TransformerDecoderStack(nn.Module):
             self.decoders.append(
                 TransformerDecoder(num_heads, d_model, pdrop, scale, activation_type, d_ff,
                                    d_k=d_k, rpr_k=rpr_k[i], ffn_pdrop=ffn_pdrop,
-                                   layer_norms_after=layer_norms_after, layer_norm_eps=layer_norm_eps)
+                                   layer_norms_after=layer_norms_after, layer_norm_eps=layer_norm_eps,
+                                   rpr_value_on=rpr_value_on, windowed_ra=windowed_ra)
             )
 
     def forward(self, inputs):
