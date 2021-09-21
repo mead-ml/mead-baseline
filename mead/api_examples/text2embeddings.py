@@ -15,6 +15,27 @@ DEFAULT_SETTINGS_LOC = 'config/mead-settings.json'
 DEFAULT_DATASETS_LOC = 'config/datasets.json'
 DEFAULT_EMBEDDINGS_LOC = 'config/embeddings.json'
 DEFAULT_VECTORIZERS_LOC = 'config/vecs.json'
+NLIST = 100
+NPROBE = 10
+
+
+def create_faiss_index(faiss_index_type, dsz):
+    import faiss
+
+    if "l2" in faiss_index_type:
+        logging.info("Creating L2 index")
+        index = faiss.IndexFlatL2(dsz)
+    elif "ip" in faiss_index_type:
+        logging.info("Creating inner-product index")
+        index = faiss.IndexFlatIP(dsz)
+    if faiss_index_type.startswith("ivf-flat"):
+        quantizer = index
+        logging.info("Creating IVFFlat index of type %s", faiss_index_type)
+        index = faiss.IndexIVFFlat(quantizer, dsz, NLIST)
+        index.nprobe = NPROBE
+    if not index:
+        raise Exception(f"Unknown indexing scheme {faiss_index_type}")
+    return index
 
 def main():
     parser = argparse.ArgumentParser(description='Encode a sentence as an embedding')
@@ -33,6 +54,7 @@ def main():
     parser.add_argument('--has_header', action="store_true")
     parser.add_argument("--tokenizer_type", type=str, help="Optional tokenizer, default is to use string split")
     parser.add_argument('--faiss_index', help="If provided, we will build a FAISS index and store it here")
+    parser.add_argument('--faiss_index_type', choices=["ip", "l2", "ivf-flat-ip", "ivf-flat-l2"], default="ip", help="This is only used if faiss_index is given")
     parser.add_argument('--quoting', default=3, help='0=QUOTE_MINIMAL 1=QUOTE_ALL 2=QUOTE_NONNUMERIC 3=QUOTE_NONE', type=int)
     parser.add_argument('--sep', default='\t')
 
@@ -113,7 +135,6 @@ def main():
     as_list = col.tolist()
     num_batches = math.ceil(len(as_list) / args.batchsz)
     pg = baseline.create_progress_bar(num_batches, name='tqdm')
-    embed_dsz = 0
     for i, batch in enumerate(chunks(as_list, args.batchsz)):
         pg.update()
         with torch.no_grad():
@@ -132,9 +153,10 @@ def main():
     np.savez(args.output, embeddings=batches, text=as_list)
     if args.faiss_index:
         import faiss
-        index = faiss.IndexFlatIP(batches[0].shape[-1])
+        index = create_faiss_index(args.faiss_index_type, batches[0].shape[-1])
         batches = np.stack(batches)
         faiss.normalize_L2(batches)
+        index.train(batches)
         index.add(batches)
         faiss.write_index(index, args.faiss_index)
 
