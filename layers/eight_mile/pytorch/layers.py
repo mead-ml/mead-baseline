@@ -3959,10 +3959,11 @@ class TransformerDiscriminator(nn.Module):
             rpr_k: Optional[Union[int, List[int]]] = None,
             layer_norms_after: bool = False,
             layer_norm_eps: float = 1.0e-6,
+            embeddings_reduction: str = 'sum',
             **kwargs,
     ):
         super().__init__()
-        self.embeddings = EmbeddingsStack(embeddings, dropout)
+        self.embeddings = EmbeddingsStack(embeddings, dropout, reduction=embeddings_reduction)
         self.weight_std = kwargs.get('weight_std', 0.02)
         assert self.embeddings.dsz == d_model
         self.transformer = TransformerEncoderStack(
@@ -3989,7 +3990,7 @@ class TransformerDiscriminator(nn.Module):
         return torch.sigmoid(binary)
 
     def create_loss(self):
-        return nn.BCELoss()
+        return nn.BCELoss(reduction="none")
 
 
 
