@@ -11,6 +11,7 @@ import baseline.embeddings
 from eight_mile.optz import *
 from eight_mile.pytorch.layers import save_checkpoint, init_distributed
 from eight_mile.pytorch.optz import *
+from baseline.utils import import_user_module
 from mead.api_examples.transformer_utils import MultiFileDatasetReader, on_demand_mlm_masking, get_lr_decay
 from baseline.model import create_lang_model
 from baseline.pytorch.lm.model import *
@@ -47,11 +48,13 @@ def run(basedir=None, train_file=None, valid_file=None, dataset_key='tlm', embed
         lr_alpha=0.0, optim='adamw', lr=4.0e-4, clip=1.0, weight_decay=1.0e-2, epochs=32, restart_from=None,
         restart_tt=None, warmup_steps=10000, saves_per_epoch=10, mlm=True, preprocessed=True, rpr_k=[8],
         rpr_value_on=False, windowed_ra=False, device="cuda", distributed=False, local_rank=-1,
-        extra_tokens=["[CLS]", "[MASK]"], do_early_stopping=False, model_type='transformer-mlm', **kwargs):
+        extra_tokens=["[CLS]", "[MASK]"], do_early_stopping=False, model_type='transformer-mlm', modules=[], **kwargs):
     if basedir is None:
         basedir = 'lm-{}-bpe-{}'.format(dataset_key, os.getpid())
     logging.basicConfig(level=logging.INFO if local_rank in [-1, 0] else logging.WARN)
 
+    for module in modules:
+        import_user_module(module)
     num_gpus = get_num_gpus_multiworker()
     distributed = distributed or num_gpus > 1
     logger.info(f"Using {num_gpus} GPUs in this job.")
@@ -304,6 +307,7 @@ def parse_args(argv):
     parser.add_argument("--embed_type", type=str, default='default',
                         choices=["default", "positional", "learned-positional"],
                         help="register label of the embeddings")
+    parser.add_argument('--modules', nargs="+", default=[])
     parser.add_argument("--d_model", type=int, default=512, help="Model dimension (and embedding dsz)")
     parser.add_argument("--d_ff", type=int, default=2048, help="FFN dimension")
     parser.add_argument("--d_k", type=int, default=None, help="Dimension per head.  Use if num_heads=1 to reduce dims")
