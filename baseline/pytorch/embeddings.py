@@ -115,6 +115,8 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
         self.init_embed(**kwargs)
         self.proj_to_dsz = pytorch_linear(self.dsz, self.d_model) if self.dsz != self.d_model else _identity
         self.init_transformer(**kwargs)
+        self.return_mask = kwargs.get('return_mask', False)
+
 
     @property
     def dsz(self):
@@ -183,11 +185,11 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
             embedding = self.embed(x, token_type)
             embedding = self.proj_to_dsz(embedding)
             transformer_out = self.transformer((embedding, input_mask))
-            z = self.get_output(x, transformer_out)
+            z = self.get_output(x, transformer_out, input_mask)
             return z
 
-    def get_output(self, inputs, z):
-        return z
+    def get_output(self, inputs, z, mask):
+        return z if not self.return_mask else (z, mask,)
 
     def get_vocab(self):
         return self.vocab
@@ -316,7 +318,7 @@ class TransformerLMPooledEmbeddingsModel(TransformerLMEmbeddingsModel):
         pooled = tensor.masked_select(mask).view(B, -1)
         return pooled
 
-    def get_output(self, inputs, z):
+    def get_output(self, inputs, z, mask):
         z = self.pooling_op(inputs, z)
         return z
 
@@ -337,7 +339,7 @@ class TransformerLMPooledEmbeddingsWithOutputModel(TransformerLMPooledEmbeddings
     def get_dsz(self):
         return self._output_dim
 
-    def get_output(self, inputs, z):
+    def get_output(self, inputs, z, mask):
         z = self.pooling_op(inputs, z)
         return self.output_activation_fn(self.output_layer(z))
 
