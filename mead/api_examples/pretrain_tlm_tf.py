@@ -147,6 +147,7 @@ def main():
     parser.add_argument("--weight_decay", type=float, default=1.0e-2, help="Weight decay")
     parser.add_argument("--epochs", type=int, default=32, help="Num training epochs")
     parser.add_argument("--restart", type=str2bool, help="Option allows you to restart from a previous checkpoint")
+    parser.add_argument("--reload_npz", type=str2bool, help="Option allows you to restart from an NPZ.  Any optim or state info is lost")
     parser.add_argument("--warmup_steps", type=int, default=10000, help="Num warmup steps")
     parser.add_argument("--causal", type=str2bool, default=False, help="Use CLM (causal) instead of MLM")
     parser.add_argument("--mlp", type=str2bool, default=False, help="Use Gated MLP")
@@ -290,6 +291,9 @@ def main():
         checkpoint.restore(checkpoint_manager.latest_checkpoint)
         current_step = optimizer.global_step
         start_epoch = current_step // steps_per_epoch
+    if args.reload_npz is not None:
+        from eight_mile.tf.serialize import load_tlm_npz
+        load_tlm_npz(model, args.reload_npz)
 
     def _replicated_train_step(inputs):
         """This runs on a single replica"""
