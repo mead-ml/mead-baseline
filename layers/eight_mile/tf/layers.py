@@ -1690,7 +1690,7 @@ class SequenceSequenceAttention(tf.keras.layers.Layer):
 
 class SeqScaledDotProductAttention(SequenceSequenceAttention):
     def __init__(self, pdrop: float = 0.1, name: str = "scaled_dot_product_attention", **kwargs):
-        super().__init__(pdrop, name=name, **kwargs)
+        super().__init__(pdrop=pdrop, name=name, **kwargs)
 
     def _attention(self, query, key, mask=None):
         """Scaled dot product attention, as defined in https://arxiv.org/abs/1706.03762
@@ -1897,7 +1897,7 @@ class SeqScaledWindowedRelativeAttention(SequenceSequenceRelativeAttention):
 
 class SeqDotProductAttention(SequenceSequenceAttention):
     def __init__(self, pdrop: float = 0.1, name: str = "dot_product_attention", **kwargs):
-        super().__init__(pdrop, name=name, **kwargs)
+        super().__init__(pdrop=pdrop, name=name, **kwargs)
 
     def _attention(self, query, key, mask=None):
         scores = tf.matmul(query, key, transpose_b=True)
