@@ -365,10 +365,7 @@ class MultiTFRecordLoader(MultiFileLoader):
                     # not sure about the optimal choice of shuffle_queue_size here:
                     itr = self.tfrecord.iterator_utils.shuffle_iterator(itr, queue_size=128)
                 for d in itr:
-                    y = np.array(d[self.y], dtype=int)
-                    if y.sum() == 0:
-                        continue
-                    yield np.array(d[self.x], dtype=int), y
+                    yield np.array(d[self.x], dtype=int), np.array(d[self.y], dtype=int) 
 
 
 class MultiFileDatasetReader:

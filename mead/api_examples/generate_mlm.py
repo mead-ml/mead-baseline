@@ -52,7 +52,7 @@ def decode_sentence(model, vectorizer, query, word2index, index2word, device, sa
         return words
 
 
-def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, d_k, checkpoint_name, activation):
+def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, rpr_value_on, d_k, checkpoint_name, activation):
     rpr_k = listify(rpr_k)
 
     if len(rpr_k) == 0 or rpr_k[0] < 1:
@@ -70,6 +70,7 @@ def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, d_k, c
                                                   num_heads=num_heads,
                                                   layers=num_layers,
                                                   rpr_k=rpr_k,
+                                                  rpr_value_on=rpr_value_on,
                                                   d_k=d_k,
                                                   activation=activation,
                                                   src_keys=['x'], tgt_key='x')
@@ -103,11 +104,14 @@ def main():
     parser.add_argument("--subword_model_file", type=str, required=True)
     parser.add_argument("--subword_vocab_file", type=str, required=True)
     parser.add_argument("--use_cls", type=str2bool, default=False)
+    parser.add_argument("--rpr_value_on", type=str2bool, default=False)
     parser.add_argument('--end_token', default='<EOU>')
     parser.add_argument("--activation", type=str, default='gelu')
     parser.add_argument('--rpr_k', help='Relative attention positional sizes pass 0 if you dont want relative attention',
                         type=int, default=[8], nargs='+')
     parser.add_argument("--y_only", type=str2bool, default=False)
+    parser.add_argument("--extra_tokens", help="What extra tokens should we use", nargs="+", default=["[CLS]", "[MASK]"])
+
     parser.add_argument("--device", type=str,
                         default="cuda" if torch.cuda.is_available() else "cpu",
                         help="Device (cuda or cpu)")
@@ -126,14 +130,14 @@ def main():
 
     cls = None if not args.use_cls else '[CLS]'
     end = args.end_token
-    vectorizer = BPEVectorizer1D(model_file=args.subword_model_file, vocab_file=args.subword_vocab_file, mxlen=args.nctx, emit_begin_tok=cls, emit_end_tok=end)
+    vectorizer = BPEVectorizer1D(model_file=args.subword_model_file, vocab_file=args.subword_vocab_file, mxlen=args.nctx, emit_begin_tok=cls, emit_end_tok=end, extra_tokens=args.extra_tokens)
     vocab = vectorizer.vocab.copy()
     # If we are not using chars, then use 'x' for both input and output
     preproc_data = baseline.embeddings.load_embeddings('x', dsz=args.d_model, counts=False, known_vocab=vocab, embed_type=args.embed_type, preserve_vocab_indices=True)
     embeddings = preproc_data['embeddings']
     vocab = preproc_data['vocab']
     model = create_model(embeddings, d_model=args.d_model, d_ff=args.d_ff, num_heads=args.num_heads, num_layers=args.num_layers,
-                         rpr_k=args.rpr_k, d_k=args.d_k, checkpoint_name=checkpoint, activation=args.activation)
+                         rpr_k=args.rpr_k, rpr_value_on=args.rpr_value_on, d_k=args.d_k, checkpoint_name=checkpoint, activation=args.activation)
     model.to(args.device)
 
     index2word = revlut(vocab)
