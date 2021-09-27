@@ -9,6 +9,7 @@ import os
 class LanguageModelBase(nn.Module, LanguageModel):
     def __init__(self):
         super().__init__()
+        self.freeze_encoder = False
 
     def save(self, outname):
         torch.save(self, outname)
@@ -63,7 +64,6 @@ class LanguageModelBase(nn.Module, LanguageModel):
         lm.tgt_key = kwargs.get('tgt_key')
         if lm.tgt_key is None:
             raise Exception('Need a `tgt_key` to know which source vocabulary should be used for destination ')
-
         lm.src_keys = kwargs.get('src_keys', embeddings.keys())
         lm.create_layers(embeddings, **kwargs)
         checkpoint_name = kwargs.get('checkpoint')
@@ -189,7 +189,6 @@ class TransformerLanguageModel(AbstractGeneratorLanguageModel):
     def _pad_mask(self, inputs):
         x = inputs[self.src_keys[0]]
         return torch.zeros(x.shape, device=x.device, dtype=torch.long).masked_fill(x != Offsets.PAD, 1).unsqueeze(1).unsqueeze(1)
-
 
     @property
     def requires_state(self):

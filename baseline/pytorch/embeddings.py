@@ -251,7 +251,8 @@ class TransformerLMPooledEmbeddingsModel(TransformerLMEmbeddingsModel):
 
     def __init__(self, name, **kwargs):
         super().__init__(name=name, **kwargs)
-        self.pooling = kwargs.get('pooling', 'cls')
+        self.pooling = kwargs.get('pooling', 'cls').lower()
+        reduction_pooling = kwargs.get('reduction_pooling', 'sqrt_length')
         reduction_d_k = kwargs.get('reduction_d_k', self.d_model)
         dropout = kwargs.get('dropout', 0.1)  # use the same dropout as the transformer encoder for reduction layer
         if self.pooling == 'max':
@@ -260,11 +261,29 @@ class TransformerLMPooledEmbeddingsModel(TransformerLMEmbeddingsModel):
             self.pooling_op = _mean_pool
         elif self.pooling == 'sqrt_length':
             self.pooling_op = self._sqrt_length_pool
-        elif self.pooling == '2HA':
+
+        elif self.pooling == "2ha":
             self.reduction_layer = TwoHeadConcat(self.d_model, dropout, scale=False, d_k=reduction_d_k)
             self.pooling_op = self._att_reduction
-        elif self.pooling == 'SHA':
+
+        elif self.pooling == "2ha_mean":
+            self.reduction_layer = TwoHeadConcat(self.d_model, dropout, scale=False, d_k=reduction_d_k, pooling="mean")
+            self.pooling_op = self._att_reduction
+
+        elif self.pooling == "2ha_max":
+            self.reduction_layer = TwoHeadConcat(self.d_model, dropout, scale=False, d_k=reduction_d_k, pooling="max")
+            self.pooling_op = self._att_reduction
+
+        elif self.pooling == "sha":
             self.reduction_layer = SingleHeadReduction(self.d_model, dropout, scale=False, d_k=reduction_d_k)
+            self.pooling_op = self._att_reduction
+
+        elif self.pooling == "sha_mean":
+            self.reduction_layer = SingleHeadReduction(self.d_model, dropout, scale=False, d_k=reduction_d_k, pooling="mean")
+            self.pooling_op = self._att_reduction
+
+        elif self.pooling == "sha_max":
+            self.reduction_layer = SingleHeadReduction(self.d_model, dropout, scale=False, d_k=reduction_d_k, pooling="max")
             self.pooling_op = self._att_reduction
         else:
             self.pooling_op = self._cls_pool
@@ -276,7 +295,7 @@ class TransformerLMPooledEmbeddingsModel(TransformerLMEmbeddingsModel):
         return reduced
 
     def get_dsz(self):
-        if self.pooling == '2HA':
+        if self.pooling.startswith('2ha'):
             return 2*self.d_model
         return self.d_model
 

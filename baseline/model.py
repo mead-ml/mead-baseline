@@ -118,12 +118,12 @@ def create_seq2seq_arc_policy(**kwargs):
 
 @export
 def create_seq2seq_model(embeddings, labels, **kwargs):
-    return create_model_for('seq2seq', embeddings, labels, **kwargs)
+    return create_model_for('seq2seq', features=embeddings, labels=labels, **kwargs)
 
 
 @export
 def create_lang_model(embeddings, **kwargs):
-    return create_model_for('lm', embeddings, None, **kwargs)
+    return create_model_for('lm', features=embeddings, labels=None, **kwargs)
 
 
 @export

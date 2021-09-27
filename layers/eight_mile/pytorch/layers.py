@@ -3994,6 +3994,48 @@ class TransformerDiscriminator(nn.Module):
 
 
 
+class PooledSequenceCriterion(nn.Module):
+
+    def __init__(self, LossFn=nn.BCEWithLogitsLoss, avg='token'):
+        super().__init__()
+        if avg == 'token':
+            self.crit = LossFn()
+            self._norm = self._no_norm
+        else:
+            self.crit = LossFn()
+            self._norm = self._batch_norm
+
+    def _batch_norm(self, loss, inputs):
+        return loss / inputs.size()[0]
+
+    def _no_norm(self, loss, inputs):
+        return loss
+
+    def forward(self, inputs, targets):
+        """Evaluate some loss over a sequence.
+
+        :param inputs: torch.FloatTensor, [B, C] The scores from the model. Batch First
+        :param targets: torch.LongTensor, The labels.
+
+        :returns: torch.FloatTensor, The loss.
+        """
+        #inputs = inputs.transpose(0, 1)
+        C = inputs.shape[-1]
+        flat_targets = torch.nn.functional.one_hot(targets, C)
+
+        # Get the offsets of the non-zero targets, the values of these are all on
+        flat_targets = (torch.sum(flat_targets, axis=1) != 0).float()
+        flat_targets[:, Offsets.PAD] = 0
+        flat_targets[:, Offsets.EOS] = 0
+        flat_targets[:, Offsets.GO] = 0
+
+        if len(inputs.shape) > 2:
+            max_per_vocab = inputs.max(0)[0]
+            loss = self.crit(max_per_vocab, flat_targets)
+        else:
+            loss = self.crit(inputs, flat_targets)
+        return self._norm(loss, inputs)
+
 class SequenceCriterion(nn.Module):
 
     def __init__(self, LossFn=nn.NLLLoss, avg='token'):
