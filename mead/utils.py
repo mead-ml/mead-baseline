@@ -178,10 +178,16 @@ def parse_overrides(overrides, pre):
     """
     pre = f'--{pre}:'
     parser = argparse.ArgumentParser()
-    for key in set(filter(lambda x: pre in x, overrides)):
-        # Append action collect each value into a list allowing us to override a
-        # yaml list by repeating the key.
-        parser.add_argument(key, action='append', type=_infer_numeric_or_str)
+
+    known_args = set(filter(lambda x: pre in x, overrides))
+
+    for key in overrides:
+        if key in known_args:
+            # Append action collect each value into a list allowing us to override a
+            # yaml list by repeating the key.
+            parser.add_argument(key, action='append', type=_infer_numeric_or_str)
+        elif key.startswith("--"):
+            logger.warning("Unexpected argument: %s.  Ignoring", key)
     args = parser.parse_known_args(overrides)[0]
     return {k.split(":")[1]: v[0] if len(v) == 1 else v for k, v in vars(args).items()}
 
