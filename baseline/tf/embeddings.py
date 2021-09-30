@@ -182,7 +182,7 @@ class TransformerLMEmbeddings(TensorFlowEmbeddings):
         # reference here
         vocab_file = kwargs.get('vocab_file')
         if vocab_file and vocab_file.endswith('.json'):
-            self.vocab = read_json(kwargs.get('vocab_file'))
+            self.vocab = read_json(vocab_file)
         else:
             self.vocab = load_bert_vocab(kwargs.get('vocab_file'))
 

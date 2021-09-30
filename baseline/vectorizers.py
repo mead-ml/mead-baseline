@@ -649,7 +649,8 @@ class BPEVectorizer1D(AbstractVectorizer, HasSubwordTokens):
         return counter
 
     def iterable(self, tokens):
-        outside_vocab = set(Offsets.VALUES + self._extra_tokens)
+        extra = self._extra_tokens if hasattr(self, '_extra_tokens') else ['[CLS]', '[MASK]']
+        outside_vocab = set(Offsets.VALUES + extra)
         for t in self.emit_begin_tok:
             yield t
 
