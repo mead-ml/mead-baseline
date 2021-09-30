@@ -18,7 +18,7 @@ def main():
                         default='client')
     parser.add_argument('--batchsz', help='batch size when --text is a file', default=100, type=int)
     parser.add_argument('--model_type', type=str, default='default')
-    parser.add_argument('--modules', default=[])
+    parser.add_argument('--modules', default=[], nargs="+")
     parser.add_argument('--prefer_eager', help="If running in TensorFlow, should we prefer eager model", type=str2bool, default=False)
     parser.add_argument('--scores', '-s', action="store_true")
     args = parser.parse_args()
