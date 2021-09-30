@@ -347,7 +347,7 @@ def parse_args(argv):
     parser.add_argument('--rpr_value_on', type=str2bool, default=False,
                         help="In relative attention, whether add positional correction to values in addition to the "
                              "correction to attention matrix")
-    parser.add_argument("--alibi", action="store_true")
+    parser.add_argument("--alibi", type=str2bool, default=False, help='whether use AliBi to represent positions')
     parser.add_argument("--windowed_ra", type=str2bool, default=False, help="whether prevent attention beyond rpr_k")
     parser.add_argument("--device", type=str,
                         default="cuda" if torch.cuda.is_available() else "cpu",

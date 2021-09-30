@@ -2746,15 +2746,15 @@ class SeqScaledDotProductAttentionALiBi(SequenceSequenceAttention):
         # (., H, T_q, T_k) = (., H, T_q, D) x (., H, D, T_k)
         d_k = query.size(-1)
         scores = torch.matmul(query, key.transpose(-2, -1)) / math.sqrt(d_k)
-        B = scores.shape[0]
-        T = scores.shape[-1]
-        alibi = self.slopes.unsqueeze(1).unsqueeze(1) * torch.arange(T, device=self.slopes.device).unsqueeze(0).unsqueeze(0).expand(self.num_heads, -1, -1)
-        alibi = alibi.view(1, self.num_heads, 1, -1)
-        scores += alibi.repeat(B, 1, 1, 1)
+        T_k = scores.shape[-1]
+        T_q = scores.shape[-2]
+        offsets = - torch.abs(torch.arange(T_q).view(-1, 1) - torch.arange(T_k).view(1, -1)).to(self.slopes.device)  # [T_q, T_k]
+        alibi = self.slopes.unsqueeze(-1).unsqueeze(-1) * offsets.unsqueeze(0)  # [H, T_q, T_k]
+        alibi = alibi.unsqueeze(0)  # [1, H, T_q, T_k]
+        scores += alibi
 
         if mask is not None:
             scores = scores.masked_fill(mask == MASK_FALSE, -1e9)  # [B, 1, 1, T_k] broadcast to [B, 1, T_q, T_k]
-
 
         return F.softmax(scores, dim=-1)
 
@@ -2779,11 +2779,12 @@ class SeqDotProductAttentionALiBi(SequenceSequenceAttention):
 
     def _attention(self, query: torch.Tensor, key: torch.Tensor, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         scores = torch.matmul(query, key.transpose(-2, -1))
-        B = scores.shape[0]
-        T = scores.shape[-1]
-        alibi = self.slopes.unsqueeze(1).unsqueeze(1) * torch.arange(T, device=self.slopes.device).unsqueeze(0).unsqueeze(0).expand(self.num_heads, -1, -1)
-        alibi = alibi.view(1, self.num_heads, 1, -1)
-        scores += alibi.repeat(B, 1, 1, 1)
+        T_k = scores.shape[-1]
+        T_q = scores.shape[-2]
+        offsets = - torch.abs(torch.arange(T_q).view(1, -1) - torch.arange(T_k).view(-1, 1)).to(self.slopes.device)  # [T_q, T_k]
+        alibi = self.slopes.unsqueeze(-1).unsqueeze(-1) * offsets.unsqueeze(0)  # [H, T_q, T_k]
+        alibi = alibi.unsqueeze(0)  # [1, H, T_q, T_k]
+        scores += alibi
         if mask is not None:
             scores = scores.masked_fill(mask == MASK_FALSE, -1e9)
 

@@ -151,9 +151,9 @@ def parse_args(argv):
     parser.add_argument("--src_end_tok", type=str, nargs='+', default=['<EOS>'])
     parser.add_argument("--tgt_begin_tok", type=str, nargs='+', default=['<GO>'])
     parser.add_argument("--tgt_end_tok", type=str, nargs='+', default=['<EOS>'])
-    parser.add_argument('--lower', type=baseline.str2bool, default=False)
-    parser.add_argument('--rpr_value_on', type=baseline.str2bool, default=True)
-    parser.add_argument('--alibi', action="store_true")
+    parser.add_argument('--lower', type=str2bool, default=False)
+    parser.add_argument('--rpr_value_on', type=str2bool, default=True)
+    parser.add_argument('--alibi', type=str2bool, default=False)
     parser.add_argument("--loss", type=str, default='symmetric',
                         choices=['triplet', 'all', 'all_mean', 'contrastive', 'symmetric'])
     parser.add_argument("--learn_temp", type=str2bool, default=True,
