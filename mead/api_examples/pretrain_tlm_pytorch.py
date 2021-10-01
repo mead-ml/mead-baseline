@@ -277,14 +277,15 @@ def validate(model, loss_function, valid_loader, avg_train_loss, train_timer, me
             if do_on_demand_masking:
                 inputs, labels, _ = on_demand_mlm_masking(inputs, labels, mask_value, vocab_size)
             inputs = {'x': inputs}
-            labels = labels.transpose(0, 1).contiguous()
-            logits = model(inputs, None)[0].transpose(0, 1).contiguous()
+            labels = labels.contiguous()
+            logits = model(inputs, None)[0].contiguous()
             if mlm:
                 loss = loss_function(logits, labels)
             else:
-                shift_logits = logits[:-1]
-                shift_labels = labels[1:]
+                shift_logits = logits[:, -1]
+                shift_labels = labels[:, 1:]
                 loss = loss_function(shift_logits, shift_labels)
+                
             avg_valid_loss.update(loss.item())
 
     valid_token_loss = avg_valid_loss.avg
