@@ -157,6 +157,7 @@ def main():
     parser.add_argument('--rpr_value_on', type=str2bool, default=True,
                         help="In relative attention, whether add positional correction to values in addition to the "
                              "correction to attention matrix")
+    parser.add_argument('--alibi', type=str2bool, default=False, help="whether use ALiBi relative attention")
     parser.add_argument('--windowed_ra', type=str2bool, default=False, help="whether prevent attention beyond rpr_k")
     parser.add_argument("--strategy", help="Training strategy, defaults to `mirror`", choices=["mirror"])
     parser.add_argument("--npz", help="Should we write out NPZ files?", type=str2bool, default=False)
@@ -432,6 +433,7 @@ def create_model(args, embeddings):
                            windowed_ra=args.windowed_ra,
                            rpr_value_on=args.rpr_value_on,
                            layer_drop=args.layer_drop,
+                           alibi=args.alibi,
                            src_keys=['x'], tgt_key='x')
     return model
 

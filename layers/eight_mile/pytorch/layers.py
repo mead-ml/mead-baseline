@@ -2732,11 +2732,7 @@ class SeqScaledDotProductAttentionALiBi(SequenceSequenceAttention):
         self.register_buffer("slopes", slopes)
 
     def _attention(self, query: torch.Tensor, key: torch.Tensor, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
-        """Scaled dot product attention, as defined in https://arxiv.org/abs/1706.03762
-
-        We apply the query to the keys to receive our weights via softmax in a series of efficient
-        matrix operations. In the case of self-attention the key and query are all low order
-        projections of the same input.
+        """Attention with Linear Biases, defined in https://arxiv.org/pdf/2108.12409.pdf
 
         :param query: a query for alignment. Can come from self in case of self-attn or decoder in case of E/D
         :param key: a set of keys from encoder or self
