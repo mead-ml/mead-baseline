@@ -141,6 +141,64 @@ York E-LOC
 . O
 
 ```
+## Exporting for Triton Server
+
+To export to the Triton server, we will tell `mead-export` to split the exported components into 2 sub-directories, one for the server and one for the client.  During generation, we will also want to generate a sub-directory with the version information underneath the 2 areas:
+
+```
+mead-export --config config/conll.json --backend pytorch \
+    --model tagger-14444.zip \
+    --name conll-remote \
+    --use_version true
+```
+
+```
+(base) dpressel@dpressel:~/dev/work/baseline/mead/models$ ls -R
+.:
+client  server
+
+./client:
+conll-remote
+
+./client/conll-remote:
+1
+
+./client/conll-remote/1:
+model.assets               vectorizers-14444.pkl    vocabs-word-14444.json
+tagger-model-14444.labels  vocabs-char-14444.json
+vectorizers-14444.json     vocabs-senna-14444.json
+
+./server:
+conll-remote
+
+./server/conll-remote:
+1
+
+./server/conll-remote/1:
+model.onnx
+```
+
+### Launching Triton
+
+We can launch the Triton server using Docker to test things out.
+
+```
+export VERSION=21.04
+docker run --rm --network host -p8000:8000 -p8001:8001 -p8002:8002 -v/path/to/mead-baseline/mead/models/server:/models nvcr.io/nvidia/tritonserver:$VERSION-py3 tritonserver --model-repository=/models --strict-model-config=false
+```
+
+Triton will look for the `model.onnx` file under the server side sub-directory and load it up.
+
+Once the server is up and running, we can test it using the API examples as before, but this time we will give it a URL to hit:
+
+```
+python tag_text.py \
+    --model /path/to/mead-baseline/mead/models/client/conll-remote/1 \
+    --text "Baldwin ( 10-4 ) struck out four and did not walk a batter for Chicago , which won for only the fourth time in 15 games ." \
+    --backend onnx \
+    --remote 0.0.0.0:8001 \
+    --name conll-remote
+```
 
 ### MEAD Baseline PyTorch model ONNX Capabilities
 
