@@ -3320,7 +3320,8 @@ class PairedModel(DualEncoderModel):
                  rpr_value_on=False,
                  reduction_type="2ha",
                  freeze_encoders=False,
-                 name=None):
+                 name=None,
+                 **kwargs):
         super().__init__(2*d_model if reduction_type.startswith("2") else d_model, stacking_layers, d_out, ffn_pdrop, name=name)
 
         reduction_type = reduction_type.lower()
@@ -3340,10 +3341,11 @@ class PairedModel(DualEncoderModel):
             raise Exception("Unknown exception type")
 
         self.embeddings = EmbeddingsStack({'x': embeddings})
+        alibi = kwargs.get('alibi', False)
         self.transformer = TransformerEncoderStack(num_heads=num_heads, d_model=d_model,
                                                    pdrop=dropout, layers=num_layers, activation='gelu', d_ff=d_ff,
-                                                   ffn_pdrop=ffn_pdrop,
-                                                   d_k=d_k, rpr_k=rpr_k, windowed_ra=windowed_ra, rpr_value_on=rpr_value_on)
+                                                   ffn_pdrop=ffn_pdrop, d_k=d_k, rpr_k=rpr_k, windowed_ra=windowed_ra,
+                                                   rpr_value_on=rpr_value_on, alibi=alibi)
 
         self.freeze = freeze_encoders
 

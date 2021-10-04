@@ -4494,7 +4494,8 @@ class PairedModel(DualEncoderModel):
                  layer_norm_eps=1e-6,
                  output_layer=False,
                  output_activation='tanh',
-                 output_shared=False):
+                 output_shared=False,
+                 **kwargs):
         super().__init__(2*d_model if reduction_type.startswith("2") else d_model, stacking_layers,
                          d_out if d_out is not None else d_model, ffn_pdrop, None, output_layer,
                          output_activation, output_shared)
@@ -4524,11 +4525,13 @@ class PairedModel(DualEncoderModel):
         else:
             raise Exception("Unknown exception type")
         self.weight_std = weight_std
+        alibi = kwargs.get('alibi', False)
         self.transformer = TransformerEncoderStack(num_heads=num_heads, d_model=d_model,
                                                    pdrop=dropout, layers=num_layers, activation='gelu', d_ff=d_ff,
                                                    ffn_pdrop=ffn_pdrop,
                                                    d_k=d_k, rpr_k=rpr_k, windowed_ra=windowed_ra, rpr_value_on=rpr_value_on,
-                                                   layer_norms_after=layer_norms_after, layer_norm_eps=layer_norm_eps)
+                                                   layer_norms_after=layer_norms_after, layer_norm_eps=layer_norm_eps,
+                                                   alibi=alibi)
 
         self.embeddings = EmbeddingsStack({'x': embeddings}, 0.0, False, embeddings_reduction)
         self.freeze = freeze_encoders
@@ -4600,7 +4603,8 @@ class TransformerBoWPairedModel(DualEncoderModel):
                  rpr_value_on=False,
                  reduction_type_1="2ha",
                  freeze_encoders=False,
-                 layer_norms_after=False):
+                 layer_norms_after=False,
+                 **kwargs):
         super().__init__(d_model, stacking_layers, d_out, ffn_pdrop)
 
         reduction_type_1 = reduction_type_1.lower()
@@ -4623,11 +4627,12 @@ class TransformerBoWPairedModel(DualEncoderModel):
         else:
             raise Exception("Unknown exception type")
         self.weight_std = weight_std
+        alibi = kwargs.get('alibi', False)
         self.transformer = TransformerEncoderStack(num_heads=num_heads, d_model=d_model,
                                                    pdrop=dropout, layers=num_layers, activation='gelu', d_ff=d_ff,
                                                    ffn_pdrop=ffn_pdrop,
                                                    d_k=d_k, rpr_k=rpr_k, windowed_ra=windowed_ra, rpr_value_on=rpr_value_on,
-                                                   layer_norms_after=layer_norms_after)
+                                                   layer_norms_after=layer_norms_after, alibi=alibi)
 
         self.embeddings = EmbeddingsStack({'x': embeddings})
         self.freeze = freeze_encoders

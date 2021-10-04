@@ -57,11 +57,13 @@ def create_model(embeddings, d_model, d_ff, dropout, num_heads, num_layers, mode
         model = TransformerBoWPairedModel(embeddings, d_model, d_ff, dropout, num_heads, num_layers, rpr_k=rpr_k, d_k=d_k,
                                           reduction_d_k=reduction_d_k, stacking_layers=stacking_layers,
                                           ffn_pdrop=ff_pdrop, windowed_ra=windowed_ra,
-                                          reduction_type_1=reduction_type, freeze_encoders=True, layer_norms_after=layer_norms_after)
+                                          reduction_type_1=reduction_type, freeze_encoders=True,
+                                          layer_norms_after=layer_norms_after, alibi=alibi)
     else:
         model = PairedModel(embeddings, d_model, d_ff, dropout, num_heads, num_layers, rpr_k=rpr_k, d_k=d_k,
                             reduction_d_k=reduction_d_k, stacking_layers=stacking_layers, ffn_pdrop=ff_pdrop,
-                            windowed_ra=windowed_ra, reduction_type=reduction_type, freeze_encoders=True, layer_norms_after=layer_norms_after)
+                            windowed_ra=windowed_ra, reduction_type=reduction_type, freeze_encoders=True,
+                            layer_norms_after=layer_norms_after, alibi=alibi)
 
     logger.info(model)
     return model
@@ -153,7 +155,7 @@ def parse_args(argv):
     parser.add_argument("--tgt_end_tok", type=str, nargs='+', default=['<EOS>'])
     parser.add_argument('--lower', type=str2bool, default=False)
     parser.add_argument('--rpr_value_on', type=str2bool, default=True)
-    parser.add_argument('--alibi', type=str2bool, default=False)
+    parser.add_argument('--alibi', type=str2bool, default=False, help='whether use ALiBi relative attention')
     parser.add_argument("--loss", type=str, default='symmetric',
                         choices=['triplet', 'all', 'all_mean', 'contrastive', 'symmetric'])
     parser.add_argument("--learn_temp", type=str2bool, default=True,

@@ -114,6 +114,7 @@ def main():
     parser.add_argument('--rpr_k',
                         help='Relative attention positional sizes pass 0 if you dont want relative attention',
                         type=int, default=[8], nargs='+')
+    parser.add_argument('--alibi', type=str2bool, default=False, help='whether use ALiBi relative attention')
     parser.add_argument("--reduction_d_k", type=int, default=64, help="Dimensions of Key and Query in the single headed"
                                                                       "reduction layers")
     parser.add_argument("--reduction_type", type=str, default="2ha",
@@ -158,6 +159,7 @@ def main():
                        vocab_file=args.subword_vocab_file,
                        mxlen=args.nctx,
                        extra_tokens=args.extra_tokens)
+    vocab = {'x': vectorizer.vocab}
     preproc_data = baseline.embeddings.load_embeddings('x', dsz=args.d_model, known_vocab=vocab['x'],
                                                        preserve_vocab_indices=True,
                                                        embed_type=args.embed_type)
@@ -231,8 +233,8 @@ def main():
     logger.info("Creating dual encoder")
     model = PairedModel(embeddings, args.d_model, args.d_ff, args.dropout, args.num_heads, args.num_layers, rpr_k=rpr_k,
                         d_k=args.d_k, reduction_d_k=args.reduction_d_k, stacking_layers=args.stacking_layers,
-                        ffn_pdrop=args.ff_pdrop,
-                        reduction_type=args.reduction_type, freeze_encoders=False)
+                        ffn_pdrop=args.ff_pdrop, reduction_type=args.reduction_type, freeze_encoders=False,
+                        alibi=args.alibi)
 
     loss_function = model.create_loss(loss_type=args.loss, init_temp=args.init_temp, learn_temp=args.learn_temp)
     logger.info("Loaded model and loss")
