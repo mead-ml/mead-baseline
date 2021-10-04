@@ -776,6 +776,7 @@ class LineSeqLabelReader(SeqLabelReader):
                     continue
                 if label not in self.label2index:
                     continue
+
                 y = self.label2index[label]
                 example_dict = dict()
                 for k, vectorizer in self.vectorizers.items():
@@ -805,7 +806,10 @@ class LineSeqLabelReader(SeqLabelReader):
                 label, text = self.label_and_sentence(line, self.clean_fn, header)
                 if len(text) == 0:
                     continue
-                y = self.label2index[label]
+                y = self.label2index.get(label)
+                if y is None:
+                    logger.warning("Skipping unattested label [%s]", label)
+                    continue
                 example_dict = dict()
                 for k, vectorizer in self.vectorizers.items():
                     example_dict[k], lengths = vectorizer.run(text, vocabs[k])
