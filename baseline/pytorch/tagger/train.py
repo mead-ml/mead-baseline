@@ -89,6 +89,8 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
     def _test(self, ts, **kwargs):
 
         self.model.eval()
+        if not isinstance(ts, DataLoader):
+            ts = DataLoader(ts, batch_size=None, pin_memory=kwargs.get('pin_memory', True))
         total_sum = 0
         total_correct = 0
 

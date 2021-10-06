@@ -69,6 +69,8 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
 
     def _test(self, loader, **kwargs):
         self.model.eval()
+        if not isinstance(loader, DataLoader):
+            loader = DataLoader(loader, batch_size=None, pin_memory=kwargs.get('pin_memory', True))
         total_loss = 0
         total_norm = 0
         steps = len(loader)

@@ -57,7 +57,7 @@ def merge_reporting_with_settings(reporting, settings):
 
 class Backend:
     """Simple object to represent a deep-learning framework backend"""
-    def __init__(self, name=None, params=None, exporter=None):
+    def __init__(self, name=None, params={}, exporter=None):
         """Initialize the backend, optional with constructor args
 
         :param name: (``str``) Name of the framework: currently one of (`tensorflow`, `pytorch`)
