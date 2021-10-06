@@ -3,6 +3,7 @@ import logging
 import torch
 import torch.autograd
 import os
+import json
 
 from eight_mile.confusion import ConfusionMatrix
 from eight_mile.utils import listify
@@ -92,7 +93,9 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
                 loss = self.crit(pred, ys)
                 if handle is not None:
                     for p, y in zip(pred, ys):
-                        handle.write('{}\t{}\t{}\n'.format(" ".join(txts[line_number]), self.model.labels[p], self.model.labels[y]))
+                        p = p.numpy()
+                        obj = {l: float(p[i]) for i, l in enumerate(self.model.labels)}
+                        handle.write('{}\t{}\t{}\n'.format(" ".join(txts[line_number]), json.dumps(obj), self.model.labels[int(y)]))
                         line_number += 1
                 batchsz = self._get_batchsz(batch_dict)
                 total_loss += loss.item() * batchsz
