@@ -1,0 +1,32 @@
+FROM meadml/cuda11.0-cudnn8-devel-ubuntu18.04-python3.8
+
+COPY . /usr/mead/mead-baseline
+
+WORKDIR /usr/mead
+
+RUN cd mead-baseline/layers && pip install -e .
+RUN cd mead-baseline && pip install -e .[test,yaml]
+
+# Set env variables
+# Set baseline logging vars
+ENV TIMING_LOG_LEVEL=DEBUG
+# Set terminal encodings
+ENV LC_ALL=C.UTF-8
+ENV LANG=C.UTF-8
+# Set ENV to tensorflow can find cuda
+ENV PATH=/usr/local/cuda/bin:$PATH
+ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+
+# Install pytorch
+
+
+RUN python3.8 -m pip --no-cache-dir install torch==1.7.1+cu110 -f https://download.pytorch.org/whl/torch_stable.html && \
+    python3.8 -m pip install torchelastic && \
+    python3.8 -m pip install Cython && \
+    python3.8 -m pip install fastBPE && \
+    python3.8 -m pip install tfrecord && \
+    python3.8 -m pip install tensorboard && \
+    python3.8 -m pip install mead-xpctl-client
+
+ENTRYPOINT ["mead-train", "--config", "config/conll.json"]
+
