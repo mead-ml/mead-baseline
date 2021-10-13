@@ -157,6 +157,7 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
         activation = kwargs.get('activation', 'gelu')
         windowed_ra = kwargs.get('windowed_ra', False)
         rpr_value_on = kwargs.get('rpr_value_on', True)
+        alibi = kwargs.get('alibi', False)
         is_mlp = kwargs.get("mlp", False)
         if is_mlp:
             self.transformer = GatedMLPEncoderStack(self.d_model, pdrop=pdrop, layers=num_layers,
@@ -169,7 +170,7 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
                                                        layers=num_layers, d_ff=d_ff, rpr_k=rpr_k, d_k=d_k,
                                                        activation=activation, ffn_pdrop=ff_pdrop,
                                                        layer_norms_after=layer_norms_after, layer_norm_eps=layer_norm_eps,
-                                                       windowed_ra=windowed_ra, rpr_value_on=rpr_value_on)
+                                                       windowed_ra=windowed_ra, rpr_value_on=rpr_value_on, alibi=alibi)
         self.mlm = kwargs.get('mlm', True)
         self.finetune = kwargs.get('finetune', True)
 
