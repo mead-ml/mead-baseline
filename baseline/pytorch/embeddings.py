@@ -243,7 +243,7 @@ def _mean_pool(inputs, embeddings):
 
 def _max_pool(inputs, embeddings):
     mask = (inputs != Offsets.PAD)
-    embeddings = embeddings.masked_fill(mask.unsqueeze(-1) == False, 0.)
+    embeddings = embeddings.masked_fill(mask.unsqueeze(-1) == False, -1.0e8)
     return torch.max(embeddings, 1, False)[0]
 
 

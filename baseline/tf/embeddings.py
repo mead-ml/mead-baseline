@@ -374,5 +374,5 @@ def _mean_pool(inputs, embeddings):
 
 def _max_pool(inputs, embeddings):
     mask = tf.not_equal(inputs, 0)
-    embeddings = tf.where(tf.expand_dims(mask, -1), embeddings, 0.)
+    embeddings = tf.where(tf.expand_dims(mask, -1), embeddings, -1.0e8)
     return tf.reduce_max(embeddings, 1, False)
