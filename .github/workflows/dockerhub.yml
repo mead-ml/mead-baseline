@@ -23,7 +23,7 @@ jobs:
           with:
               file: docker/Dockerfile.pytorch-cuda10 
               push: true
-              tags: meadml/mead2-pytorch-gpus:latest
+              tags: meadml/mead2-pytorch-gpu:latest
         - name: Build & Push PyTorch CUDA 11 image
           uses: docker/build-push-action@v2
           with:
