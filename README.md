@@ -78,3 +78,8 @@ If you use the library, please cite the following paper:
 ```
 
 MEAD was selected for a Spotlight Poster at the NeurIPS MLOSS workshop in 2018.  [OpenReview link](https://openreview.net/forum?id=r1xEb7J15Q)
+
+### Acknowledgements
+
+- Research supported with Cloud TPUs from Google's TPU Research Cloud (TRC)
+
