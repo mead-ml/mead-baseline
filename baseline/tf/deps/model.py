@@ -7,13 +7,14 @@ import tensorflow as tf
 from baseline.tf.embeddings import *
 from eight_mile.tf.layers import *
 from baseline.version import __version__
-
-from baseline.utils import (
+from eight_mile.utils import (
     fill_y,
     listify,
     ls_props,
     read_json,
     write_json,
+)
+from baseline.utils import (
     MAGIC_VARS,
     MEAD_HUB_MODULES
 )
@@ -276,10 +277,9 @@ class BiAffineDependencyParser(DependencyParserModelBase):
         output_dim_rels = kwargs.get('hsz_rels', 100)
         self.rel_h = self.init_proj(output_dim_rels, **kwargs)
         self.rel_d = self.init_proj(output_dim_rels, **kwargs)
-        self.arc_attn = self.init_biaffine(self.arc_h.output_dim, 1, True, False)
-        self.rel_attn = self.init_biaffine(self.rel_h.output_dim, len(self.labels), True, True)
+        self.arc_attn = self.init_attn(self.arc_h.output_dim, 1, True, False)
+        self.rel_attn = self.init_attn(self.rel_h.output_dim, len(self.labels), True, True)
         self.primary_key = self.lengths_key.split('_')[0]
-
 
     def init_proj(self, output_dim: int, **kwargs) -> BaseLayer:
         """Produce a stacking operation that will be used in the model
@@ -290,7 +290,7 @@ class BiAffineDependencyParser(DependencyParserModelBase):
         """
         return WithDropout(tf.keras.layers.Dense(output_dim, activation=get_activation(kwargs.get('activation', 'leaky_relu'))), pdrop=self.pdrop_value)
 
-    def init_biaffine(self, input_dim: int, output_dim: int, bias_x: bool, bias_y: bool):
+    def init_attn(self, input_dim: int, output_dim: int, bias_x: bool, bias_y: bool):
         return BilinearAttention(input_dim, output_dim, bias_x, bias_y)
 
     def init_embed(self, embeddings: Dict[str, TensorDef], **kwargs) -> BaseLayer:
