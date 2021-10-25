@@ -99,23 +99,6 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
         self.save_md(basename)
         self.save_values(basename)
 
-    def create_test_loss(self):
-        with tf.name_scope("test_loss"):
-            loss = tf.nn.softmax_cross_entropy_with_logits(logits=self.logits, labels=tf.cast(self.y, "float"))
-            all_loss = tf.reduce_mean(loss)
-        return all_loss
-
-    def create_loss(self):
-        """The loss function is currently provided here, although this is not a great place for it
-        as it provides a coupling between the model and its loss function.  Just here for convenience at the moment.
-
-        :return:
-        """
-        with tf.name_scope("loss"):
-            loss = tf.nn.softmax_cross_entropy_with_logits(logits=self.logits, labels=tf.cast(self.y, "float"))
-            all_loss = tf.reduce_mean(loss)
-        return all_loss
-
     def predict_batch(self, batch_dict):
 
         """This method provides a basic routine to run "inference" or predict outputs based on data.
@@ -255,17 +238,6 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
         """
         model = cls(name=kwargs.get('name'))
         model.lengths_key = kwargs.get('lengths_key')
-
-        if not tf.executing_eagerly():
-
-            inputs = {}
-            if model.lengths_key is not None:
-                model._unserializable.append(model.lengths_key)
-                model.lengths = kwargs.get('lengths', tf.compat.v1.placeholder(tf.int32, [None], name="lengths"))
-                inputs['lengths'] = model.lengths
-            else:
-                model.lengths = None
-
         model._record_state(embeddings, **kwargs)
         model.pdrop_value = kwargs.get('dropout', 0.5)
         model.labels = labels
@@ -594,13 +566,9 @@ class FineTunePairedClassifierModel(FineTuneModelClassifier):
 
         toks = batch_dict[key]
         token_type_key = f"{key}_tt"
-        #eager = tf.executing_eagerly()
-        target_key = key  # if eager else f"{key}:0"
+        target_key = key
         tt = batch_dict.get(token_type_key)
         if tt is not None:
-            #if not eager:
-            #    raise Exception("We arent currently supporting non-eager mode with token_types")
-            #else:
             example_dict[target_key] = (toks, tt)
         else:
             example_dict[target_key] = toks

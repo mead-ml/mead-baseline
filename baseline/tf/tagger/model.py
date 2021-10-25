@@ -47,15 +47,7 @@ class TaggerModelBase(tf.keras.Model, TaggerModel):
         self._lengths_key = value
 
     def save_values(self, basename):
-        """Save tensor files out
-
-        :param basename: Base name of model
-        :return:
-        """
-        if not tf.executing_eagerly():
-            self.saver.save(self.sess, basename, write_meta_graph=False)
-        else:
-            self.save_weights(f"{basename}.wgt")
+        self.save_weights(f"{basename}.wgt")
 
     def save_md(self, basename):
         """
@@ -273,12 +265,6 @@ class TaggerModelBase(tf.keras.Model, TaggerModel):
         model.create_layers(embeddings, **kwargs)
         return model
 
-    def create_loss(self):
-        """Create the loss function and return it
-
-        :return: The loss function
-        """
-
 
 class AbstractEncoderTaggerModel(TaggerModelBase):
     """Class defining a typical flow for taggers.  Most taggers should extend this class
@@ -317,13 +303,6 @@ class AbstractEncoderTaggerModel(TaggerModelBase):
         """
         self.probs = self.transduce(inputs)
         return self.decode(self.probs, inputs.get("lengths"))
-
-    def create_loss(self):
-        """Create the loss function and return it
-
-        :return: The loss function
-        """
-        return self.decoder.neg_log_loss(self.probs, self.y, self.lengths)
 
     def init_embed(self, embeddings: Dict[str, TensorDef], **kwargs) -> BaseLayer:
         """This method creates the "embedding" layer of the inputs, with an optional reduction

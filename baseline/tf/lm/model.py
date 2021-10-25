@@ -34,10 +34,7 @@ class LanguageModelBase(tf.keras.Model, LanguageModel):
         :param basename: Base name of model
         :return:
         """
-        if not tf.executing_eagerly():
-            self.saver.save(self.sess, basename, write_meta_graph=False)
-        else:
-            self.save_weights(f"{basename}.wgt")
+        self.save_weights(f"{basename}.wgt")
 
     def save_md(self, basename):
         """This method saves out a `.state` file containing meta-data from these classes and any info
@@ -88,29 +85,6 @@ class LanguageModelBase(tf.keras.Model, LanguageModel):
         """
         self.save_md(basename)
         self.save_values(basename)
-
-    def _create_loss(self, scope):
-        with tf.compat.v1.variable_scope(scope):
-            targets = tf.reshape(self.y, [-1])
-            bt_x_v = tf.nn.log_softmax(tf.reshape(self.logits, [-1, self.vsz]), axis=-1)
-            one_hots = tf.one_hot(targets, self.vsz)
-            example_loss = -tf.reduce_sum(one_hots * bt_x_v, axis=-1)
-            loss = tf.reduce_mean(example_loss)
-            return loss
-
-    def create_loss(self):
-        """Create training loss operator
-
-        :return: loss
-        """
-        return self._create_loss(scope='loss')
-
-    def create_test_loss(self):
-        """Create test loss operator
-
-        :return: loss
-        """
-        return self._create_loss(scope='test_loss')
 
     def make_input(self, batch_dict, train=False):
         """When we are running with `DataFeed`s, need to transform to `feed_dict`s
@@ -168,8 +142,6 @@ class LanguageModelBase(tf.keras.Model, LanguageModel):
 
         lm._unserializable.append(lm.tgt_key)
         lm._record_state(embeddings, **kwargs)
-        inputs = {}
-
         lm.create_layers(embeddings, **kwargs)
         return lm
 

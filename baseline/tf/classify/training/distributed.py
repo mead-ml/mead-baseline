@@ -24,6 +24,7 @@ SHUF_BUF_SZ = 5000
 
 log = logging.getLogger('baseline.timing')
 
+
 def loss(model, x, y):
     y_ = model(x)
     return tf.compat.v1.losses.sparse_softmax_cross_entropy(labels=y, logits=y_)
