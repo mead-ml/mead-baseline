@@ -6,9 +6,6 @@ import tensorflow as tf
 
 from eight_mile.confusion import ConfusionMatrix
 from eight_mile.utils import listify
-from eight_mile.tf.layers import reload_checkpoint
-from eight_mile.tf.optz import optimizer
-
 from eight_mile.progress import create_progress_bar
 from baseline.utils import get_model_file, get_metric_cmp
 from baseline.tf.tfy import _add_ema, TRAIN_FLAG, SET_TRAIN_FLAG
