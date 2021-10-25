@@ -2,8 +2,11 @@ import json
 from urllib.parse import urlparse
 from http.client import HTTPConnection
 import numpy as np
+from eight_mile.utils import (
+    listify
+)
 from baseline.utils import (
-    import_user_module, exporter, optional_params, register, listify
+    import_user_module, exporter, optional_params
 )
 
 

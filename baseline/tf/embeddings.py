@@ -22,9 +22,6 @@ class TensorFlowEmbeddingsMixin(tf.keras.layers.Layer):
         self._record_state(**kwargs)
 
     def call(self, *x):
-
-        if x[0] is None:
-            x[0] = self.create_placeholder(self.name)
         self.x = x[0]
 
         return super().encode(*x)
@@ -42,7 +39,7 @@ class TensorFlowEmbeddingsMixin(tf.keras.layers.Layer):
         return cls(name=name, vsz=model.vsz, dsz=model.dsz, weights=model.weights, **kwargs)
 
     def _record_state(self, **kwargs):
-        w = kwargs.pop('weights', None)
+        _ = kwargs.pop('weights', None)
         self._state = copy.deepcopy(kwargs)
 
     def save_md(self, target):
@@ -54,7 +51,6 @@ class TensorFlowEmbeddingsMixin(tf.keras.layers.Layer):
         write_json(self.get_config(), target)
 
     def get_config(self):
-        #config = super(TensorFlowEmbeddings, self).get_config()
         config = {}
         config['dsz'] = int(self.get_dsz())
         config['vsz'] = int(self.get_vsz())
@@ -297,8 +293,10 @@ class TransformerLMPooledEmbeddingsModel(TensorFlowEmbeddingsMixin, TransformerL
 class TransformerLMPooled2DEmbeddingsModel(TensorFlowEmbeddingsMixin, TransformerLMPooled2DEmbeddings):
     pass
 
+
 def _identity(x):
     return x
+
 
 def _mean_pool(inputs, embeddings):
     mask = tf.not_equal(inputs, 0)

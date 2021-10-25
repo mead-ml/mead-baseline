@@ -3,16 +3,6 @@ import os
 import time
 import logging
 import tensorflow as tf
-
-from eight_mile.confusion import ConfusionMatrix
-from eight_mile.utils import listify
-from eight_mile.progress import create_progress_bar
-from baseline.utils import get_model_file, get_metric_cmp
-from baseline.tf.tfy import _add_ema, TRAIN_FLAG, SET_TRAIN_FLAG
-from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
-from baseline.utils import verbose_output
-from baseline.model import create_model_for
-
 import numpy as np
 
 # Number of batches to prefetch if using tf.datasets

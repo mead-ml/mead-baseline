@@ -221,6 +221,8 @@ class Dict1DVectorizer(Token1DVectorizer):
             yield t
         for t in self.emit_end_tok:
             yield t
+
+
 @export
 @register_vectorizer(name='single-item-dict1d')
 class SingleItemDict1DVectorizer(Token1DVectorizer):
@@ -269,12 +271,8 @@ class IntIdentityDict1DVectorizer(Token1DVectorizer):
             yield int(value)
 
 
-
 @export
 class AbstractCharVectorizer(AbstractVectorizer):
-
-    #def __init__(self, transform_fn=None, emit_begin_tok=[], emit_end_tok=[]):
-    #    super().__init__(transform_fn, emit_begin_tok, emit_end_tok)
 
     def _next_element(self, tokens, vocab):
         OOV = vocab['<UNK>']
@@ -376,6 +374,7 @@ class Dict2DVectorizer(Char2DVectorizer):
             yield t
         for t in self.emit_end_tok:
             yield t
+
 
 @export
 @register_vectorizer(name='char1d')
@@ -591,7 +590,6 @@ class BPEVectorizer1D(AbstractVectorizer, HasSubwordTokens):
         self.max_seen = 128
         self.model_file = kwargs.get('model_file')
         self.vocab_file = kwargs.get('vocab_file')
-        use_fast_bpe = kwargs.get('use_fast_bpe', True)
         self._special_tokens = {"[CLS]", "<unk>", "<EOS>", "<UNK>", "<s>", "</s>"}
         self._extra_tokens = kwargs.get('extra_tokens', ['[CLS]', '[MASK]'])
         self.tokenizer = SavableFastBPE(self.model_file, self.vocab_file)
@@ -740,7 +738,6 @@ class BPESecondaryFeatureDict1DVectorizer(BPEVectorizer1D):
         return super().run(tokens, vocab)
 
 
-
 @export
 @register_vectorizer(name='bpe-label-dict1d')
 class BPELabelDict1DVectorizer(BPEVectorizer1D):
@@ -749,8 +746,6 @@ class BPELabelDict1DVectorizer(BPEVectorizer1D):
         super().__init__(**kwargs)
         self.field = kwargs.get('fields', kwargs.get('field', 'text'))
         self.label = kwargs.get('label', 'label')
-        #self.emit_begin_tok = kwargs.get('emit_begin_tok')
-        #self.emit_end_tok = kwargs.get('emit_end_tok')
 
     def iterable(self, tokens):
         for t in self.emit_begin_tok:
@@ -1110,7 +1105,6 @@ def _is_punctuation(char):
     return False
 
 
-# TODO: Most of our classes have the `Vectorizer` part of the name at the end
 @register_vectorizer(name='wordpiece1d')
 class WordpieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
 
@@ -1187,7 +1181,6 @@ class WordpieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
 
     def get_dims(self):
         return self.mxlen,
-
 
 
 @export
@@ -1272,7 +1265,6 @@ class WordpieceLabelDict1DVectorizer(WordpieceVectorizer1D):
         return super().run(tokens, vocab)
 
 
-
 @export
 @register_vectorizer(name='wordpiece-int-identity-dict1d')
 class WordpieceIntIdentityDict1DVectorizer(WordpieceSecondaryFeatureDict1DVectorizer):
@@ -1297,7 +1289,6 @@ class WordpieceIntIdentityDict1DVectorizer(WordpieceSecondaryFeatureDict1DVector
             yield int(atom)
 
 
-
 @register_vectorizer(name='wordpiece-dict1d')
 class WordpieceDict1DVectorizer(WordpieceVectorizer1D):
 
@@ -1320,7 +1311,6 @@ class WordpieceDict1DVectorizer(WordpieceVectorizer1D):
                     yield subtok
         for t in self.emit_end_tok:
             yield t
-
 
 
 @register_vectorizer(name="pass-through")
@@ -1367,6 +1357,7 @@ class PassThroughDict1DVectorizer(PassThroughVectorizer):
 
 # The code below is modified from:
 # https://raw.githubusercontent.com/openai/gpt-2/master/src/encoder.py"""
+
 
 @lru_cache()
 def bytes_to_unicode():
@@ -1718,6 +1709,7 @@ class XLMRSentencePieceDict1DVectorizer(XLMRSentencePieceVectorizer1D):
 
         return super().iterable(tok)
 
+
 @export
 @register_vectorizer(name='xlmr-spm-label-dict1d')
 class XLMRSentencePieceLabelDict1DVectorizer(XLMRSentencePieceVectorizer1D):
@@ -1935,6 +1927,7 @@ class BPENBestVectorizer2D(BPENBestVectorizer1D):
 
     def get_dims(self):
         return self.nbest, self.mxlen
+
 
 @export
 def create_vectorizer(**kwargs):
