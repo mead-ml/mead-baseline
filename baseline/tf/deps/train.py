@@ -263,7 +263,7 @@ def fit_eager(model_params, ts, vs, es=None, **kwargs):
     do_early_stopping = bool(kwargs.get('do_early_stopping', True))
     verbose = kwargs.get('verbose', {'console': kwargs.get('verbose_console', False), 'file': kwargs.get('verbose_file', None)})
     epochs = int(kwargs.get('epochs', 20))
-    model_file = get_model_file('classify', 'tf', kwargs.get('basedir'))
+    model_file = get_model_file('deps', 'tf', kwargs.get('basedir'))
 
     batchsz = kwargs['batchsz']
     lengths_key = model_params.get('lengths_key')

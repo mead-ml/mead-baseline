@@ -44,6 +44,7 @@ class DependencyParserModelBase(tf.keras.Model, DependencyParserModel):
         """
         super().__init__(name=name)
         self._unserializable = []
+        self.dropin_values = {}
 
     def set_saver(self, saver):
         self.saver = saver
@@ -99,12 +100,18 @@ class DependencyParserModelBase(tf.keras.Model, DependencyParserModel):
         self.save_md(basename)
         self.save_values(basename)
 
-    def predict_batch(self, batch_dict):
+    def predict_batch(self, batch_dict: Dict[str, TensorDef], decode=True, **kwargs) -> TensorDef:
 
-        batch_dict = self.make_input(batch_dict)
-        arcs, rels = self(batch_dict)
-        arcs = tf.nn.softmax(arcs).numpy()
-        rels = tf.nn.softmax(rels).numpy()
+        examples = self.make_input(batch_dict)
+
+        if decode:
+            arcs, rels = self.decode(examples)
+
+        else:
+            arcs, rels = self(examples)
+            arcs = tf.nn.softmax(arcs).numpy()
+            rels = tf.nn.softmax(rels).numpy()
+
         return arcs, rels
 
     def predict(self, batch_dict):
@@ -122,7 +129,7 @@ class DependencyParserModelBase(tf.keras.Model, DependencyParserModel):
         :param do_dropout: A `bool` specifying if dropout is turned on
         :return: The dropped out tensor
         """
-        v = self.dropin_value.get(key, 0)
+        v = self.dropin_values.get(key, 0)
         if do_dropout and v > 0.0:
             drop_indices = np.where((np.random.random(x.shape) < v) & (x != Offsets.PAD))
             x[drop_indices[0], drop_indices[1]] = Offsets.UNK
@@ -182,8 +189,7 @@ class DependencyParserModelBase(tf.keras.Model, DependencyParserModel):
         for k in embeddings_info:
             if k in kwargs:
                 _state[k] = kwargs[k]
-            # TODO: convert labels into just another vocab and pass number of labels to models.
-        labels = read_json("{}.labels".format(basename))
+        labels = {"labels": read_json("{}.labels".format(basename))}
         model = cls.create(embeddings, labels, **_state)
         model._state = _state
         model.load_weights(f"{basename}.wgt")
