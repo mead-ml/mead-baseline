@@ -21,35 +21,10 @@ class TensorFlowEmbeddingsMixin(tf.keras.layers.Layer):
         super().__init__(trainable=trainable, name=name, dtype=dtype, **kwargs)
         self._record_state(**kwargs)
 
-    def detached_ref(self):
-        """This will detach any attached input and reference the same sub-graph otherwise
-
-        TODO: this should not longer be required and can be removed
-
-        :return:
-        """
-        if getattr(self, '_weights', None) is not None:
-            return type(self)(name=self.name, weights=self._weights, **self._state)
-        if hasattr(self, 'embed') and getattr(self.init_embed, '_weights') is not None:
-            return type(self)(name=self.name, weights=self.init_embed._weights, **self._state)
-        raise Exception('You must initialize `weights` in order to use this method')
-
     def call(self, *x):
-
-        if x[0] is None:
-            x[0] = self.create_placeholder(self.name)
         self.x = x[0]
 
         return super().encode(*x)
-
-    @classmethod
-    def create_placeholder(cls, name):
-        """Create a placeholder with name `name`
-
-        :param name: (``str``) The name of the placeholder
-        :return: The placeholder
-        """
-        pass
 
     @classmethod
     def create(cls, model, name, **kwargs):
@@ -64,7 +39,7 @@ class TensorFlowEmbeddingsMixin(tf.keras.layers.Layer):
         return cls(name=name, vsz=model.vsz, dsz=model.dsz, weights=model.weights, **kwargs)
 
     def _record_state(self, **kwargs):
-        w = kwargs.pop('weights', None)
+        _ = kwargs.pop('weights', None)
         self._state = copy.deepcopy(kwargs)
 
     def save_md(self, target):
@@ -76,7 +51,6 @@ class TensorFlowEmbeddingsMixin(tf.keras.layers.Layer):
         write_json(self.get_config(), target)
 
     def get_config(self):
-        #config = super(TensorFlowEmbeddings, self).get_config()
         config = {}
         config['dsz'] = int(self.get_dsz())
         config['vsz'] = int(self.get_vsz())
@@ -89,18 +63,12 @@ class TensorFlowEmbeddingsMixin(tf.keras.layers.Layer):
 
 @register_embeddings(name='default')
 class LookupTableEmbeddingsModel(TensorFlowEmbeddingsMixin, LookupTableEmbeddings):
-
-    @classmethod
-    def create_placeholder(cls, name):
-        return tf.compat.v1.placeholder(tf.int32, [None, None], name=name)
+    pass
 
 
 @register_embeddings(name='char-conv')
 class CharConvEmbeddingsModel(TensorFlowEmbeddingsMixin, CharConvEmbeddings):
-
-    @classmethod
-    def create_placeholder(cls, name):
-        return tf.compat.v1.placeholder(tf.int32, [None, None, None], name=name)
+    pass
 
 
 @register_embeddings(name='char-transformer')
@@ -110,66 +78,42 @@ class CharTransformerModel(TensorFlowEmbeddingsMixin, CharTransformerEmbeddings)
 
 @register_embeddings(name='char-lstm')
 class CharLSTMEmbeddingsModel(TensorFlowEmbeddingsMixin, CharLSTMEmbeddings):
-
-    @classmethod
-    def create_placeholder(cls, name):
-        return tf.compat.v1.placeholder(tf.int32, [None, None, None], name=name)
+    pass
 
 
 @register_embeddings(name='positional')
 class PositionalLookupTableEmbeddingsModel(TensorFlowEmbeddingsMixin, PositionalLookupTableEmbeddings):
-
-    @classmethod
-    def create_placeholder(cls, name):
-        return tf.compat.v1.placeholder(tf.int32, [None, None], name=name)
+    pass
 
 
 @register_embeddings(name='learned-positional')
 class LearnedPositionalLookupTableEmbeddingsModel(TensorFlowEmbeddingsMixin, LearnedPositionalLookupTableEmbeddings):
-
-    @classmethod
-    def create_placeholder(cls, name):
-        return tf.compat.v1.placeholder(tf.int32, [None, None], name=name)
+    pass
 
 
 @register_embeddings(name='learned-positional-w-bias')
 class LearnedPositionalLookupTableEmbeddingsWithBiasModel(TensorFlowEmbeddingsMixin, LearnedPositionalLookupTableEmbeddingsWithBias):
-
-    @classmethod
-    def create_placeholder(cls, name):
-        return tf.compat.v1.placeholder(tf.int32, [None, None], name=name)
+    pass
 
 
 @register_embeddings(name='positional-char-conv')
 class PositionalCharConvEmbeddingsModel(TensorFlowEmbeddingsMixin, PositionalCharConvEmbeddings):
-
-    @classmethod
-    def create_placeholder(cls, name):
-        return tf.compat.v1.placeholder(tf.int32, [None, None, None], name=name)
+    pass
 
 
 @register_embeddings(name='learned-positional-char-conv')
 class PositionalCharConvEmbeddingsModel(TensorFlowEmbeddingsMixin, LearnedPositionalCharConvEmbeddings):
-
-    @classmethod
-    def create_placeholder(cls, name):
-        return tf.compat.v1.placeholder(tf.int32, [None, None, None], name=name)
+    pass
 
 
 @register_embeddings(name='positional-char-lstm')
 class PositionalCharLSTMEmbeddingsModel(TensorFlowEmbeddingsMixin, PositionalCharLSTMEmbeddings):
-
-    @classmethod
-    def create_placeholder(cls, name):
-        return tf.compat.v1.placeholder(tf.int32, [None, None, None], name=name)
+    pass
 
 
 @register_embeddings(name='learned-positional-char-lstm')
 class LearnedPositionalCharLSTMEmbeddingsModel(TensorFlowEmbeddingsMixin, LearnedPositionalCharLSTMEmbeddings):
-
-    @classmethod
-    def create_placeholder(cls, name):
-        return tf.compat.v1.placeholder(tf.int32, [None, None, None], name=name)
+    pass
 
 
 class TransformerLMEmbeddings(TensorFlowEmbeddings):
@@ -280,7 +224,6 @@ class TransformerLMEmbeddings(TensorFlowEmbeddings):
         if token_type_vsz:
             _ = c(data_sample, data_sample)
         else:
-        #data_sample_tt = tf.zeros([B, T], dtype=tf.int32)
             _ = c(data_sample)
 
         keys_to_restore = set(list(c.embeddings.keys()))
@@ -291,9 +234,6 @@ class TransformerLMEmbeddings(TensorFlowEmbeddings):
             logger.warning("Restoring only key [%s]", ' '.join(filtered_keys))
         load_tlm_npz(c, embeddings, filtered_keys)
         return c
-
-    #def detached_ref(self):
-    #    return self
 
 
 class TransformerLMPooledEmbeddings(TransformerLMEmbeddings):
@@ -315,7 +255,6 @@ class TransformerLMPooledEmbeddings(TransformerLMEmbeddings):
 
     def get_output(self, inputs, z):
         return self.pooling_op(inputs, z)
-
 
 
 class TransformerLMPooled2DEmbeddings(TransformerLMPooledEmbeddings):
@@ -342,10 +281,7 @@ class TransformerLMPooled2DEmbeddings(TransformerLMPooledEmbeddings):
 
 @register_embeddings(name='tlm-words-embed')
 class TransformerLMEmbeddingsModel(TensorFlowEmbeddingsMixin, TransformerLMEmbeddings):
-
-    @classmethod
-    def create_placeholder(cls, name):
-        return tf.compat.v1.placeholder(tf.int32, [None, None], name=name)
+    pass
 
 
 @register_embeddings(name='tlm-words-embed-pooled')
@@ -355,14 +291,12 @@ class TransformerLMPooledEmbeddingsModel(TensorFlowEmbeddingsMixin, TransformerL
 
 @register_embeddings(name='tlm-words-embed-pooled2d')
 class TransformerLMPooled2DEmbeddingsModel(TensorFlowEmbeddingsMixin, TransformerLMPooled2DEmbeddings):
-
-    @classmethod
-    def create_placeholder(cls, name):
-        return tf.compat.v1.placeholder(tf.int32, [None, None, None], name=name)
+    pass
 
 
 def _identity(x):
     return x
+
 
 def _mean_pool(inputs, embeddings):
     mask = tf.not_equal(inputs, 0)

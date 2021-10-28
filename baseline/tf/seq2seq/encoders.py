@@ -70,3 +70,5 @@ class TransformerEncoderWrapper(tf.keras.layers.Layer):
         bth = self.proj(bth)
         output = self.transformer((bth, src_mask))
         return TransformerEncoderOutput(output=output, src_mask=src_mask)
+
+

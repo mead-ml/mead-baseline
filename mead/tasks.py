@@ -69,9 +69,7 @@ class Backend:
 
     def load(self, task_name=None):
         if self.name == 'tf':
-            prefer_eager = self.params.get('prefer_eager', False)
-            from eight_mile.tf.layers import set_tf_eager_mode, set_tf_log_level, set_tf_eager_debug
-            set_tf_eager_mode(prefer_eager)
+            from eight_mile.tf.layers import set_tf_log_level, set_tf_eager_debug
             set_tf_log_level(os.getenv("MEAD_TF_LOG_LEVEL", "ERROR"))
             set_tf_eager_debug(str2bool(os.getenv("MEAD_TF_EAGER_DEBUG", "FALSE")))
 
@@ -399,16 +397,13 @@ class Task:
             embeddings_section['cpu_placement'] = bool(embeddings_section.get('cpu_placement', False))
             if self.backend.params is not None:
                 # If we are in eager mode
-                if bool(self.backend.params.get('prefer_eager', False)):
-                    train_block = self.config_params['train']
-                    optimizer_type = train_block.get('optim', 'sgd')
-                    # If the optimizer cannot handle embeddings on GPU
-                    if optimizer_type not in ['sgd', 'adam', 'adamw']:
-                        logger.warning("Running in eager mode with [%s] optimizer, forcing CPU placement", optimizer_type)
-                        embeddings_section['cpu_placement'] = True
-                    elif optimizer_type == 'sgd' and float(train_block.get('mom', 0.0)) > 0:
-                        logger.warning("Running in eager mode with momentum on, forcing CPU placement")
-                        embeddings_section['cpu_placement'] = True
+                train_block = self.config_params['train']
+                optimizer_type = train_block.get('optim', 'sgd')
+                # If the optimizer cannot handle embeddings on GPU
+                if optimizer_type not in ['sgd', 'adam', 'adamw']:
+                    embeddings_section['cpu_placement'] = True
+                elif optimizer_type == 'sgd' and float(train_block.get('mom', 0.0)) > 0:
+                    embeddings_section['cpu_placement'] = True
                 for k, v in self.backend.params.items():
                     embeddings_section[k] = v
             if embed_label is not None:

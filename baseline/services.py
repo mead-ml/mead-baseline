@@ -352,6 +352,7 @@ class ONNXClassifierService(ClassifierService):
         model = ort.InferenceSession(model_name)
         return cls(vocabs, vectorizers, model, labels)
 
+
 @export
 class ONNXEmbeddingService(Service):
 

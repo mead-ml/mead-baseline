@@ -21,20 +21,10 @@ def main():
                                                              'request, eg: token:word ner:ner. This should match with the '
                                                              '`exporter_field` definition in the mead config',
                         default=[], nargs='+')
-    parser.add_argument('--prefer_eager', help="If running in TensorFlow, should we prefer eager model", type=str2bool)
     parser.add_argument('--modules', default=[], nargs="+")
     parser.add_argument('--batchsz', default=64, help="How many examples to run through the model at once", type=int)
 
     args = parser.parse_args()
-
-
-    if args.backend == 'tf':
-        from eight_mile.tf.layers import set_tf_eager_mode
-        set_tf_eager_mode(args.prefer_eager)
-
-    for mod_name in args.modules:
-        bl.import_user_module(mod_name)
-
 
     def create_export_mapping(feature_map_strings):
         feature_map_strings = [x.strip() for x in feature_map_strings if x.strip()]

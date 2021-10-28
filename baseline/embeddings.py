@@ -1,7 +1,8 @@
 import eight_mile.embeddings
 from eight_mile.embeddings import *
 from eight_mile.utils import exporter, optional_params, listify, idempotent_append, is_sequence
-from baseline.utils import import_user_module, AddonDownloader, EmbeddingDownloader, DEFAULT_DATA_CACHE
+from baseline.utils import import_user_module, DEFAULT_DATA_CACHE
+from eight_mile.downloads import AddonDownloader, EmbeddingDownloader
 import logging
 
 __all__ = []
@@ -137,6 +138,7 @@ def load_embeddings_overlay(global_embeddings_settings, embeddings_section, voca
                                            **embeddings_section)
 
     return embedding_bundle
+
 
 @export
 def load_embeddings(name, **kwargs):

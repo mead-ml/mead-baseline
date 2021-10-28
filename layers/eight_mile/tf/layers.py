@@ -8,7 +8,7 @@ from typing import Optional, Union, List, Dict, Any, Tuple
 import contextlib
 import math
 import json
-
+from tensorflow_addons.text.crf import crf_decode, crf_sequence_score, crf_log_norm
 BASELINE_TF_TRAIN_FLAG = None
 LOGGER = logging.getLogger('mead.layers')
 
@@ -23,20 +23,9 @@ def autograph_options(options):
         tf.config.optimizer.set_experimental_options(old_opts)
 
 
-def set_tf_eager_mode(prefer_eager: bool = False):
-    tf_version = get_version(tf)
-    if prefer_eager and tf_version < 2:
-        LOGGER.info('user requesting eager on 1.x')
-        tf.compat.v1.enable_eager_execution()
-    elif not prefer_eager and tf_version >= 2:
-        LOGGER.info('User requesting eager disabled on 2.x')
-        tf.compat.v1.disable_eager_execution()
-
-
 def set_tf_eager_debug(debug: bool = False):
-    if tf.executing_eagerly():
-        if debug:
-            tf.config.experimental_run_functions_eagerly(debug)
+    if debug:
+        tf.config.experimental_run_functions_eagerly(debug)
 
 
 def patch_dist_strategy(strategy):
@@ -77,12 +66,7 @@ def set_tf_log_level(ll):
     # 2     | WARNING          | Filter out INFO & WARNING messages
     # 3     | ERROR            | Filter out all messages
     import os
-
-    TF_VERSION = get_version(tf)
-    if TF_VERSION < 2:
-        import tensorflow.compat.v1.logging as tf_logging
-    else:
-        from absl import logging as tf_logging
+    from absl import logging as tf_logging
     tf_ll = tf_logging.WARN
     tf_cpp_ll = 1
     ll = ll.lower()
@@ -110,7 +94,7 @@ def TRAIN_FLAG():
     if BASELINE_TF_TRAIN_FLAG is not None:
         return BASELINE_TF_TRAIN_FLAG
 
-    BASELINE_TF_TRAIN_FLAG = tf.compat.v1.placeholder_with_default(False, shape=(), name="TRAIN_FLAG")
+    BASELINE_TF_TRAIN_FLAG = True
     return BASELINE_TF_TRAIN_FLAG
 
 
@@ -169,15 +153,6 @@ def tensor_and_lengths(inputs):
         lengths = None  ##tf.reduce_sum(tf.cast(tf.not_equal(inputs, 0), tf.int32), axis=1)
 
     return in_tensor, lengths
-
-
-# Get rid of this?
-def new_placeholder_dict(train):
-    global BASELINE_TF_TRAIN_FLAG
-
-    if train:
-        return {BASELINE_TF_TRAIN_FLAG: 1}
-    return {}
 
 
 def gelu(x):
@@ -255,7 +230,6 @@ def get_activation(name: str = "relu"):
         return gelu
     if name == "swish":
         return swish
-        return tf.identity
     if name == "leaky_relu":
         return tf.nn.leaky_relu
     return tf.nn.relu
@@ -397,50 +371,7 @@ def gumbel_softmax(logits, tau=1, hard=False, eps=1e-10):
     return y
 
 
-def lstm_cell(hsz: int, forget_bias: float = 1.0, **kwargs):
-    """Produce a single cell with no dropout
-    :param hsz: (``int``) The number of hidden units per LSTM
-    :param forget_bias: (``int``) Defaults to 1
-    :return: a cell
-    """
-    num_proj = kwargs.get("projsz")
-    if num_proj and num_proj == hsz:
-        num_proj = None
-    cell = tf.contrib.rnn.LSTMCell(hsz, forget_bias=forget_bias, state_is_tuple=True, num_proj=num_proj)
-    skip_conn = bool(kwargs.get("skip_conn", False))
-    return tf.nn.rnn_cell.ResidualWrapper(cell) if skip_conn else cell
-
-
-def lstm_cell_w_dropout(
-    hsz: int, pdrop: float, forget_bias: float = 1.0, variational: bool = False, training: bool = False, **kwargs
-):
-    """Produce a single cell with dropout
-    :param hsz: (``int``) The number of hidden units per LSTM
-    :param pdrop: (``int``) The probability of keeping a unit value during dropout
-    :param forget_bias: (``int``) Defaults to 1
-    :param variational (``bool``) variational recurrence is on
-    :param training (``bool``) are we training? (defaults to ``False``)
-    :return: a cell
-    """
-    output_keep_prob = tf.contrib.framework.smart_cond(training, lambda: 1.0 - pdrop, lambda: 1.0)
-    state_keep_prob = tf.contrib.framework.smart_cond(
-        training, lambda: 1.0 - pdrop if variational else 1.0, lambda: 1.0
-    )
-    num_proj = kwargs.get("projsz")
-    cell = tf.contrib.rnn.LSTMCell(hsz, forget_bias=forget_bias, state_is_tuple=True, num_proj=num_proj)
-    skip_conn = bool(kwargs.get("skip_conn", False))
-    cell = tf.nn.rnn_cell.ResidualWrapper(cell) if skip_conn else cell
-    output = tf.contrib.rnn.DropoutWrapper(
-        cell,
-        output_keep_prob=output_keep_prob,
-        state_keep_prob=state_keep_prob,
-        variational_recurrent=variational,
-        dtype=tf.float32,
-    )
-    return output
-
-
-class LSTMEncoder2(tf.keras.layers.Layer):
+class LSTMEncoder(tf.keras.layers.Layer):
     """The LSTM encoder is a base for a set of encoders producing various outputs.
 
     All LSTM encoders inheriting this class will trim the input to the max length given in the batch.  For example,
@@ -522,7 +453,7 @@ class LSTMEncoder2(tf.keras.layers.Layer):
         return self._requires_length
 
 
-class LSTMEncoderWithState2(tf.keras.layers.Layer):
+class LSTMEncoderWithState(tf.keras.layers.Layer):
 
     """LSTM encoder producing the hidden state and the output, where the input doesnt require any padding
     """
@@ -608,7 +539,7 @@ class LSTMEncoderWithState2(tf.keras.layers.Layer):
         return zstate
 
 
-class LSTMEncoderSequence2(LSTMEncoder2):
+class LSTMEncoderSequence(LSTMEncoder):
 
     """LSTM encoder to produce the transduced output sequence.
 
@@ -628,7 +559,7 @@ class LSTMEncoderSequence2(LSTMEncoder2):
         return output
 
 
-class LSTMEncoderHidden2(LSTMEncoder2):
+class LSTMEncoderHidden(LSTMEncoder):
 
     """LSTM encoder that returns the top hidden state
 
@@ -646,7 +577,7 @@ class LSTMEncoderHidden2(LSTMEncoder2):
         return state[0]
 
 
-class LSTMEncoderHiddenContext2(LSTMEncoder2):
+class LSTMEncoderHiddenContext(LSTMEncoder):
 
     def output_fn(self, output, state):
         """Return last hidden state `(h, c)`
@@ -863,223 +794,7 @@ class GRUEncoderHidden(GRUEncoder):
         return state
 
 
-class LSTMEncoder1(tf.keras.layers.Layer):
-    """The LSTM encoder is a base for a set of encoders producing various outputs.
-
-    All LSTM encoders inheriting this class will trim the input to the max length given in the batch.  For example,
-    if the input sequence is `[B, T, C]` and the `S = max(lengths)` then the resulting sequence, if produced, will
-    be length `S` (or more precisely, `[B, S, H]`)
-    """
-    def __init__(
-        self,
-        insz: Optional[int],
-        hsz: int,
-        nlayers: int = 1,
-        pdrop: float = 0.0,
-        variational: bool = False,
-        requires_length: bool = True,
-        name: Optional[str] = None,
-        dropout_in_single_layer: bool = False,
-        skip_conn: bool = False,
-        projsz: Optional[int] = None,
-        **kwargs,
-    ):
-        """Produce a stack of LSTMs with dropout performed on all but the last layer.
-
-        :param insz: The size of the input or `None`
-        :param hsz: The number of hidden units per LSTM
-        :param nlayers: The number of layers of LSTMs to stack
-        :param pdrop: The probability of dropping a unit value during dropout, defaults to 0
-        :param requires_length: Does this encoder require an input length in its inputs (defaults to `True`)
-        :param name: TF only! Provide a graph layer name
-        :param dropout_in_single_layer: TF only! If we have a single layer, should we dropout (defaults to `False`)
-        :param skip_conn: TF only! Should there be residual connections between RNNs
-        :param projsz: TF only! Should we do `LSTMP` operation to a different output size
-        """
-        super().__init__(name=name)
-        self._requires_length = requires_length
-        self.output_dim = hsz
-
-        if variational or dropout_in_single_layer:
-            self.rnn = tf.contrib.rnn.MultiRNNCell(
-                [
-                    lstm_cell_w_dropout(
-                        hsz, pdrop, variational=variational, training=TRAIN_FLAG(), skip_conn=skip_conn, projsz=projsz
-                    )
-                    for _ in range(nlayers)
-                ],
-                state_is_tuple=True,
-            )
-        else:
-            self.rnn = tf.contrib.rnn.MultiRNNCell(
-                [
-                    lstm_cell_w_dropout(hsz, pdrop, training=TRAIN_FLAG(), skip_conn=skip_conn, projsz=projsz)
-                    if i < nlayers - 1
-                    else lstm_cell(hsz, skip_conn=skip_conn, projsz=projsz)
-                    for i in range(nlayers)
-                ],
-                state_is_tuple=True,
-            )
-
-    def call(self, inputs):
-        """RNNs over input sequence of `[B, T, C]` and lengths `[B]`, output `[B, S, H]` where `S = max(lengths)`
-
-        :param inputs: A tuple of `(sequence, lengths)`, `sequence` shape `[B, T, C]`, lengths shape = `[B]`
-        :return: Output depends on the subclass handling
-        """
-        inputs, lengths = tensor_and_lengths(inputs)
-        max_length = tf.reduce_max(lengths)
-        inputs = inputs[:, :max_length, :]
-        ns = tf.contrib.framework.get_name_scope()
-        with tf.name_scope(ns), tf.variable_scope(ns):
-            rnnout, hidden = tf.nn.dynamic_rnn(self.rnn, inputs, sequence_length=lengths, dtype=tf.float32)
-        state = (hidden[-1].h, hidden[-1].c)
-        return self.output_fn(rnnout, state)
-
-    def output_fn(self, output, state):
-        return output, state
-
-    @property
-    def requires_length(self):
-        return self._requires_length
-
-
-class LSTMEncoderSequence1(LSTMEncoder1):
-
-    """LSTM encoder to produce the transduced output sequence.
-
-    Takes a tuple of tensor, shape `[B, T, C]` and a lengths of shape `[B]` and produce an output sequence of
-    shape `[B, S, H]` where `S = max(lengths)`.  The lengths of the output sequence may differ from the input
-    sequence if the `max(lengths)` given is shorter than `T` during execution.
-    """
-
-    def output_fn(self, output, state):
-        """Return sequence `[B, S, H]` where `S = max(lengths)`
-
-        :param output: The sequence
-        :param state: The hidden state
-        :return: The sequence `[B, S, H]`
-        """
-        return output
-
-
-class LSTMEncoderAllLegacy(LSTMEncoder1):
-    """LSTM encoder that passes along the full output and hidden states for each layer
-
-    *TF Note*: This module does not change the underlying TF output, we only support this to make it easier to use
-    with existing TF primitives, especially in seq2seq
-    """
-    def call(self, inputs):
-        """
-        :param inputs: A tuple containing the input tensor `[B, T, C]` and a length `[B]`
-        :return: An output tensor `[B, S, H]` , and tuple of hidden `[L, B, H]` and context `[L, B, H]`
-        """
-        inputs, lengths = tensor_and_lengths(inputs)
-        max_length = tf.reduce_max(lengths)
-        inputs = inputs[:, :max_length, :]
-        ns = tf.contrib.framework.get_name_scope()
-        with tf.name_scope(ns), tf.variable_scope(ns):
-            rnnout, encoder_state = tf.nn.dynamic_rnn(self.rnn, inputs, sequence_length=lengths, dtype=tf.float32)
-
-        return self.output_fn(rnnout, encoder_state)
-
-    def output_fn(self, output, hidden):
-        return output, hidden
-
-
-class LSTMEncoderAll1(LSTMEncoderAllLegacy):
-    """LSTM encoder that passes along the full output and hidden states for each layer
-
-    Takes a tuple containing a tensor input of shape `[B, T, C]` and lengths of shape `[B]`
-
-    This returns a 2-tuple of outputs `[B, S, H]` where `S = max(lengths)`, for the output vector sequence,
-    and a tuple of hidden vector `[L, B, H]` and context vector `[L, B, H]`, respectively
-
-    *TF Note*: This module reorganizes the underlying TF output, which means you must be careful if using
-    this with another tf 1 `RNNCell` implementation
-    """
-
-    def output_fn(self, output, hidden):
-
-        h = []
-        c = []
-        for i in range(len(hidden)):
-            h.append(hidden[i].h)
-            c.append(hidden[i].c)
-
-        encoder_state = tf.stack(h), tf.stack(c)
-        return output, encoder_state
-
-
-class LSTMEncoderHidden1(LSTMEncoder1):
-
-    """LSTM encoder that returns the top hidden state
-
-    Takes a tuple containing a tensor input of shape `[B, T, C]` and lengths of shape `[B]` and
-    returns a hidden unit tensor of shape `[B, H]`
-    """
-
-    def output_fn(self, output, state):
-        """Get the last hidden layer
-
-        :param output:
-        :param state:
-        :return: hidden unit tensor of shape `[B, H]`
-        """
-        return state[0]
-
-
-# TODO: make this available from PyTorch or get rid of it
-class LSTMEncoderHiddenContext1(LSTMEncoder1):
-
-    def output_fn(self, output, state):
-        return state
-
-
-class LSTMEncoderWithState1(LSTMEncoder1):
-
-    """LSTM encoder producing the hidden state and the output, where the input doesnt require any padding
-    """
-    def __init__(
-        self,
-        insz: Optional[int],
-        hsz: int,
-        nlayers: int = 1,
-        pdrop: float = 0.0,
-        variational: bool = False,
-        name: Optional[str] = None,
-        dropout_in_single_layer: bool = True,
-        **kwargs,
-    ):
-        super().__init__(
-            insz=insz,
-            hsz=hsz,
-            nlayers=nlayers,
-            pdrop=pdrop,
-            variational=variational,
-            requires_length=False,
-            name=name,
-            dropout_in_single_layer=dropout_in_single_layer,
-            **kwargs,
-        )
-        self.requires_state = True
-
-    def zero_state(self, batchsz: int):
-        """Zero state for LSTM with batch size given
-
-        :param batchsz: The batch size
-        """
-        return self.rnn.zero_state(batchsz, tf.float32)
-
-    def call(self, inputs):
-        inputs, hidden = inputs
-        ns = tf.contrib.framework.get_name_scope()
-        with tf.name_scope(ns), tf.variable_scope(ns):
-            rnnout, hidden = tf.nn.dynamic_rnn(self.rnn, inputs, initial_state=hidden, dtype=tf.float32)
-        return rnnout, hidden  # (hidden[-1].h, hidden[-1].c)
-
-
-class LSTMEncoderAll2(tf.keras.layers.Layer):
+class LSTMEncoderAll(tf.keras.layers.Layer):
     """LSTM encoder that passes along the full output and hidden states for each layer
 
     Takes a tuple containing a tensor input of shape `[B, T, C]` and lengths of shape `[B]`
@@ -1173,7 +888,7 @@ class LSTMEncoderAll2(tf.keras.layers.Layer):
         return self._requires_length
 
 
-class BiLSTMEncoderAll2(tf.keras.layers.Layer):
+class BiLSTMEncoderAll(tf.keras.layers.Layer):
     def __init__(
         self,
         insz: Optional[int],
@@ -1260,7 +975,7 @@ class BiLSTMEncoderAll2(tf.keras.layers.Layer):
         return self._requires_length
 
 
-class BiLSTMEncoder2(tf.keras.layers.Layer):
+class BiLSTMEncoder(tf.keras.layers.Layer):
     """BiLSTM encoder base for a set of encoders producing various outputs.
 
     All BiLSTM encoders inheriting this class will trim the input to the max length given in the batch.  For example,
@@ -1341,7 +1056,7 @@ class BiLSTMEncoder2(tf.keras.layers.Layer):
         return self._requires_length
 
 
-class BiLSTMEncoderSequence2(BiLSTMEncoder2):
+class BiLSTMEncoderSequence(BiLSTMEncoder):
 
     """BiLSTM encoder to produce the transduced output sequence.
 
@@ -1354,7 +1069,7 @@ class BiLSTMEncoderSequence2(BiLSTMEncoder2):
         return rnnout
 
 
-class BiLSTMEncoderHidden2(BiLSTMEncoder2):
+class BiLSTMEncoderHidden(BiLSTMEncoder):
     """BiLSTM encoder that returns the top hidden state
 
 
@@ -1366,7 +1081,7 @@ class BiLSTMEncoderHidden2(BiLSTMEncoder2):
         return tf.concat([state[0][0], state[1][0]], axis=-1)
 
 
-class BiLSTMEncoderHiddenContext2(BiLSTMEncoder2):
+class BiLSTMEncoderHiddenContext(BiLSTMEncoder):
 
     def output_fn(self, rnnout, state):
         return tuple(tf.concat([state[0][i], state[1][i]], axis=-1) for i in range(2))
@@ -1561,252 +1276,7 @@ class BiGRUEncoderAll(tf.keras.layers.Layer):
         return self._requires_length
 
 
-class BiLSTMEncoder1(tf.keras.layers.Layer):
-    """BiLSTM encoder base for a set of encoders producing various outputs.
 
-    All BiLSTM encoders inheriting this class will trim the input to the max length given in the batch.  For example,
-    if the input sequence is `[B, T, C]` and the `S = max(lengths)` then the resulting sequence, if produced, will
-    be length `S` (or more precisely, `[B, S, H]`).  Because its bidirectional, half of the hidden units given in the
-    constructor will be applied to the forward direction and half to the backward direction, and these will get
-    concatenated.
-    """
-
-    def __init__(
-        self,
-        insz: Optional[int],
-        hsz: int,
-        nlayers: int,
-        pdrop: float = 0.0,
-        variational: bool = False,
-        requires_length: bool = True,
-        name: Optional[str] = None,
-        skip_conn: bool = False,
-        projsz: Optional[int] = None,
-        **kwargs,
-    ):
-        """Produce a stack of LSTMs with dropout performed on all but the last layer.
-
-        :param insz: The size of the input (or `None`)
-        :param hsz: The number of hidden units per BiLSTM (`hsz//2` used for each direction and concatenated)
-        :param nlayers: The number of layers of BiLSTMs to stack
-        :param pdrop: The probability of dropping a unit value during dropout, defaults to 0
-        :param variational: TF only! apply variational dropout
-        :param requires_length: Does this encoder require an input length in its inputs (defaults to `True`)
-        :param name: TF only! A name to give the layer in the graph
-        :param dropout_in_single_layer: TF only! If its a single layer cell, should we do dropout?  Default to `False`
-        :param skip_conn: TF 1 only!  Do residual connections between RNN layers
-        :param projsz: TF 1 only! Do LSTMP operation to this output size
-        """
-        super().__init__(name=name)
-        self._requires_length = requires_length
-        self.layers = nlayers
-        self.output_dim = hsz
-
-        hsz = hsz // 2
-        if variational:
-            self.fwd_rnn = tf.contrib.rnn.MultiRNNCell(
-                [
-                    lstm_cell_w_dropout(
-                        hsz, pdrop, variational=variational, training=TRAIN_FLAG(), skip_conn=skip_conn, projsz=projsz
-                    )
-                    for _ in range(nlayers)
-                ],
-                state_is_tuple=True,
-            )
-            self.bwd_rnn = tf.contrib.rnn.MultiRNNCell(
-                [
-                    lstm_cell_w_dropout(
-                        hsz, pdrop, variational=variational, training=TRAIN_FLAG(), skip_conn=skip_conn, projsz=projsz
-                    )
-                    for _ in range(nlayers)
-                ],
-                state_is_tuple=True,
-            )
-        else:
-            self.fwd_rnn = tf.contrib.rnn.MultiRNNCell(
-                [
-                    lstm_cell_w_dropout(hsz, pdrop, training=TRAIN_FLAG(), skip_conn=skip_conn, projsz=projsz)
-                    if i < nlayers - 1
-                    else lstm_cell(hsz, skip_conn=skip_conn, projsz=projsz)
-                    for i in range(nlayers)
-                ],
-                state_is_tuple=True,
-            )
-            self.bwd_rnn = tf.contrib.rnn.MultiRNNCell(
-                [
-                    lstm_cell_w_dropout(hsz, pdrop, training=TRAIN_FLAG(), skip_conn=skip_conn, projsz=projsz)
-                    if i < nlayers - 1
-                    else lstm_cell(hsz)
-                    for i in range(nlayers)
-                ],
-                state_is_tuple=True,
-            )
-
-    def output_fn(self, rnnout, state):
-        return rnnout, state
-
-    def call(self, inputs):
-        inputs, lengths = tensor_and_lengths(inputs)
-        max_length = tf.reduce_max(lengths)
-        inputs = inputs[:, :max_length, :]
-        ns = tf.contrib.framework.get_name_scope()
-        with tf.name_scope(ns), tf.variable_scope(ns):
-            rnnout, (fwd_state, backward_state) = tf.nn.bidirectional_dynamic_rnn(
-                self.fwd_rnn, self.bwd_rnn, inputs, sequence_length=lengths, dtype=tf.float32
-            )
-        rnnout = tf.concat(axis=2, values=rnnout)
-        return self.output_fn(
-            rnnout, ((fwd_state[-1].h, fwd_state[-1].c), (backward_state[-1].h, backward_state[-1].c))
-        )
-
-    @property
-    def requires_length(self) -> bool:
-        return self._requires_length
-
-
-class BiLSTMEncoderAllLegacy(BiLSTMEncoder1):
-    """BiLSTM encoder that passes along the full output and hidden states for each layer
-
-    *TF Note*: This module reorganizes the underlying TF output, which means you must be careful if using
-    this with another tf 1 `RNNCell` implementation
-    """
-
-    def call(self, inputs):
-        """
-        :param inputs: A 1tuple containing the input tensor `[B, T, C]` and a length `[B]`
-        :return: An output tensor `[B, S, H], and tuple of hidden `[L, B, H]` and context `[L, B, H]`
-        """
-        inputs, lengths = tensor_and_lengths(inputs)
-        max_length = tf.reduce_max(lengths)
-        inputs = inputs[:, :max_length, :]
-        ns = tf.contrib.framework.get_name_scope()
-        with tf.name_scope(ns), tf.variable_scope(ns):
-            rnnout, encoder_state = tf.nn.bidirectional_dynamic_rnn(
-                self.fwd_rnn, self.bwd_rnn, inputs, sequence_length=lengths, dtype=tf.float32
-            )
-        rnnout = tf.concat(axis=2, values=rnnout)
-
-        return self.output_fn(rnnout, encoder_state)
-
-    def output_fn(self, rnnout, encoder_state):
-        fwd_state, bwd_state = encoder_state
-        encoder_state = []
-        for i in range(self.layers):
-            h = tf.concat([fwd_state[i].h, bwd_state[i].h], -1)
-            c = tf.concat([fwd_state[i].c, bwd_state[i].c], -1)
-            encoder_state.append(tf.contrib.rnn.LSTMStateTuple(h=h, c=c))
-        encoder_state = tuple(encoder_state)
-        return rnnout, encoder_state
-
-
-class BiLSTMEncoderAll1(BiLSTMEncoderAllLegacy):
-    """BiLSTM encoder that passes along the full output and hidden states for each layer
-
-    Takes a tuple containing a tensor input of shape `[B, T, C]` and lengths of shape `[B]`
-
-    This returns a 2-tuple of outputs `[B, S, H]` where `S = max(lengths)`, for the output vector sequence,
-    and a tuple of hidden vector `[L, B, H]` and context vector `[L, B, H]`, respectively
-
-    *TF Note*: This module reorganizes the underlying TF output, which means you must be careful if using
-    this with another tf 1 `RNNCell` implementation
-    """
-
-    def output_fn(self, out, encoder_state):
-        fwd_state, bwd_state = encoder_state
-        hs = []
-        cs = []
-        for i in range(self.layers):
-            h = tf.concat([fwd_state[i].h, bwd_state[i].h], -1)
-            c = tf.concat([fwd_state[i].c, bwd_state[i].c], -1)
-            hs.append(h)
-            cs.append(c)
-        encoder_state = (tf.stack(hs), tf.stack(cs))
-        return out, encoder_state
-
-
-class BiLSTMEncoderSequence1(BiLSTMEncoder1):
-
-    """BiLSTM encoder to produce the transduced output sequence.
-
-    Takes a tuple of tensor, shape `[B, T, C]` and a lengths of shape `[B]` and produce an output sequence of
-    shape `[B, S, H]` where `S = max(lengths)`.  The lengths of the output sequence may differ from the input
-    sequence if the `max(lengths)` given is shorter than `T` during execution.
-    """
-    def output_fn(self, rnnout, state):
-        return rnnout
-
-
-class BiLSTMEncoderHidden1(BiLSTMEncoder1):
-
-    """BiLSTM encoder that returns the top hidden state
-
-
-    Takes a tuple containing a tensor input of shape `[B, T, C]` and lengths of shape `[B]` and
-    returns a hidden unit tensor of shape `[B, H]`
-    """
-    def output_fn(self, rnnout, state):
-        return tf.concat([state[0][0], state[1][0]], axis=-1)
-
-
-class BiLSTMEncoderHiddenContext1(BiLSTMEncoder1):
-
-    def output_fn(self, rnnout, state):
-        return state
-
-
-if get_version(tf) < 2:
-    LSTMEncoder = LSTMEncoder1
-    LSTMEncoderSequence = LSTMEncoderSequence1
-    LSTMEncoderWithState = LSTMEncoderWithState1
-    LSTMEncoderHidden = LSTMEncoderHidden1
-    LSTMEncoderHiddenContext = LSTMEncoderHiddenContext1
-    LSTMEncoderAll = LSTMEncoderAll1
-    BiLSTMEncoder = BiLSTMEncoder1
-    BiLSTMEncoderSequence = BiLSTMEncoderSequence1
-    BiLSTMEncoderHidden = BiLSTMEncoderHidden1
-    BiLSTMEncoderHiddenContext = BiLSTMEncoderHiddenContext1
-    BiLSTMEncoderAll = BiLSTMEncoderAll1
-    from tensorflow.contrib.crf import crf_decode, crf_log_norm, crf_unary_score, crf_binary_score
-
-    def crf_sequence_score(inputs, tag_indices, sequence_lengths, transition_params):
-        """Computes the unnormalized score for a tag sequence.
-
-        This is a patched version of the contrib
-        where we dont do any length 1 sequence optimizations.  This was causing a very odd error
-        where the true branch of smart_cond was being executed despite the predicate evaluating to 0.
-        This probably makes it even slower than usual :(
-
-        Args:
-          inputs: A [batch_size, max_seq_len, num_tags] tensor of unary potentials
-              to use as input to the CRF layer.
-          tag_indices: A [batch_size, max_seq_len] matrix of tag indices for which we
-              compute the unnormalized score.
-          sequence_lengths: A [batch_size] vector of true sequence lengths.
-          transition_params: A [num_tags, num_tags] transition matrix.
-        Returns:
-          sequence_scores: A [batch_size] vector of unnormalized sequence scores.
-        """
-
-        # Compute the scores of the given tag sequence.
-        unary_scores = crf_unary_score(tag_indices, sequence_lengths, inputs)
-        binary_scores = crf_binary_score(tag_indices, sequence_lengths, transition_params)
-        sequence_scores = unary_scores + binary_scores
-        return sequence_scores
-
-
-else:
-    LSTMEncoder = LSTMEncoder2
-    LSTMEncoderSequence = LSTMEncoderSequence2
-    LSTMEncoderWithState = LSTMEncoderWithState2
-    LSTMEncoderHidden = LSTMEncoderHidden2
-    LSTMEncoderHiddenContext = LSTMEncoderHiddenContext2
-    LSTMEncoderAll = LSTMEncoderAll2
-    BiLSTMEncoder = BiLSTMEncoder2
-    BiLSTMEncoderSequence = BiLSTMEncoderSequence2
-    BiLSTMEncoderHidden = BiLSTMEncoderHidden2
-    BiLSTMEncoderHiddenContext = BiLSTMEncoderHiddenContext2
-    BiLSTMEncoderAll = BiLSTMEncoderAll2
-    from tensorflow_addons.text.crf import crf_decode, crf_sequence_score, crf_log_norm
 
 
 
@@ -2085,6 +1555,7 @@ class WithDropout(tf.keras.layers.Layer):
         except:
             return self.layer.units
 
+
 class WithDropoutOnFirst(tf.keras.layers.Layer):
     """Wrapper for any layer that surrounds it with dropout
 
@@ -2219,13 +1690,13 @@ class SequenceSequenceAttention(tf.keras.layers.Layer):
 
 class SeqScaledDotProductAttention(SequenceSequenceAttention):
     def __init__(self, pdrop: float = 0.1, name: str = "scaled_dot_product_attention", **kwargs):
-        super().__init__(pdrop, name=name, **kwargs)
+        super().__init__(pdrop=pdrop, name=name, **kwargs)
 
     def _attention(self, query, key, mask=None):
         """Scaled dot product attention, as defined in https://arxiv.org/abs/1706.03762
 
         We apply the query to the keys to receive our weights via softmax in a series of efficient
-        matrix operations. In the case of self-attntion the key and query are all low order
+        matrix operations. In the case of self-attention the key and query are all low order
         projections of the same input.
 
         :param query: a query for alignment. Can come from self in case of self-attn or decoder in case of E/D
@@ -2426,7 +1897,7 @@ class SeqScaledWindowedRelativeAttention(SequenceSequenceRelativeAttention):
 
 class SeqDotProductAttention(SequenceSequenceAttention):
     def __init__(self, pdrop: float = 0.1, name: str = "dot_product_attention", **kwargs):
-        super().__init__(pdrop, name=name, **kwargs)
+        super().__init__(pdrop=pdrop, name=name, **kwargs)
 
     def _attention(self, query, key, mask=None):
         scores = tf.matmul(query, key, transpose_b=True)
@@ -3064,6 +2535,7 @@ class SingleHeadReduction(AttentionReduction):
         pooled = self.pool(x, seq_lengths)
         return pooled
 
+
 class TwoHeadConcat(AttentionReduction):
     """Use two parallel SingleHeadReduction, and concatenate the outputs. It is used in the conveRT
     paper (https://arxiv.org/pdf/1911.03688.pdf)"""
@@ -3162,7 +2634,6 @@ class SymmetricContrastiveLoss(tf.keras.layers.Layer):
 
         loss = (loss_1 + loss_2) * 0.5
         return loss
-
 
 
 class DualEncoderModel(tf.keras.layers.Layer):
@@ -3296,7 +2767,6 @@ class PairedModel(DualEncoderModel):
             encoded_response = tf.stop_gradient(encoded_response)
         encoded_response = self.reduction_layer((encoded_response, encoded_response, encoded_response, att_mask))
         return encoded_response
-
 
 
 class TransformerDiscriminator(tf.keras.Model):
@@ -3765,28 +3235,6 @@ class FineTuneModel(tf.keras.Model):
         return self.output_layer(stacked)
 
 
-class CompositeModel(tf.keras.Model):
-    def __init__(self, models):
-        super().__init__()
-        self.models = models
-        self._requires_length = any(getattr(m, "requires_length", False) for m in self.models)
-        # self.output_dim = sum(m.output_dim for m in self.models)
-
-    def call(self, inputs, training=None, mask=None):
-        inputs, lengths = tensor_and_lengths(inputs)
-        pooled = []
-        for m in self.models:
-            if getattr(m, "requires_length", False):
-                pooled.append(m((inputs, lengths)))
-            else:
-                pooled.append(m(inputs))
-        return tf.concat(pooled, -1)
-
-    @property
-    def requires_length(self):
-        return self._requires_length
-
-
 def highway_conns(inputs, wsz_all, n):
     """Produce one or more highway connection layers
 
@@ -3836,48 +3284,6 @@ def char_word_conv_embeddings(
     return joined, wsz_all
 
 
-def create_session():
-    """This function protects against TF allocating all the memory
-
-    Some combination of cuDNN 7.6 with CUDA 10 on TF 1.13 with RTX cards
-    allocate additional memory which isnt available since TF by default
-    hogs it all.
-
-
-    This also provides an abstraction that can be extended later to offer
-    more config params that raw `tf.compat.v1.Session()` calls dont
-
-    :return: A `tf.compat.v1.Session`
-    """
-    config = tf.compat.v1.ConfigProto()
-    config.gpu_options.allow_growth = True
-    return tf.compat.v1.Session(config=config)
-
-
-def reload_checkpoint(sess: tf.compat.v1.Session, checkpoint: str, blocks_to_skip: List[str] = None):
-    """
-    Get the intersection of all non-output layers and declared vars in this graph and restore them
-    :param sess: A tensorflow session to restore from
-    :param checkpoint: checkpoint to read from
-    :param blocks_to_skip: which variables of the graph to skip on reload
-    :return: None
-    """
-    if not blocks_to_skip:
-        blocks_to_skip = ['OptimizeLoss', 'output/']
-    latest = tf.train.latest_checkpoint(checkpoint)
-    if not latest:
-        latest = checkpoint
-    LOGGER.info("Reloading %s", latest)
-    model_vars = set([t[0] for t in tf.train.list_variables(latest)])
-    g = tf.compat.v1.get_collection_ref(tf.compat.v1.GraphKeys.GLOBAL_VARIABLES)
-    for block in blocks_to_skip:
-        g = [v for v in g if not v.op.name.startswith(block)]
-    g = [v for v in g if v.op.name in model_vars]
-    LOGGER.info("Restoring %s", g)
-    saver = tf.compat.v1.train.Saver(g)
-    saver.restore(sess, latest)
-
-
 def transition_mask(vocab, span_type, s_idx, e_idx, pad_idx=None):
     """Create a CRF Mask.
     Returns a mask with invalid moves as 0 and valid moves as 1.
@@ -3900,65 +3306,6 @@ def tie_weight(weight, tie_shape):
             return tf.transpose(weight)
         return getter("{}".format(name), *args, **kwargs)
     return tie_getter
-
-
-def rnn_cell_w_dropout(hsz, pdrop, rnntype, st=None, variational=False, training=False):
-
-    """Produce a single RNN cell with dropout
-    :param hsz: (``int``) The number of hidden units per LSTM
-    :param rnntype: (``str``): `lstm` or `gru`
-    :param pdrop: (``int``) The probability of dropping a unit value during dropout
-    :param st: (``bool``) state is tuple? defaults to `None`
-    :param variational: (``bool``) Variational recurrence is on
-    :param training: (``bool``) Are we training?  Defaults to ``False``
-    :return: a cell
-    """
-    output_keep_prob = tf.contrib.framework.smart_cond(training, lambda: 1.0 - pdrop, lambda: 1.0)
-    state_keep_prob = tf.contrib.framework.smart_cond(training, lambda: 1.0 - pdrop if variational else 1.0, lambda: 1.0)
-    cell = rnn_cell(hsz, rnntype, st)
-    output = tf.contrib.rnn.DropoutWrapper(cell,
-                                           output_keep_prob=output_keep_prob,
-                                           state_keep_prob=state_keep_prob,
-                                           variational_recurrent=variational,
-                                           dtype=tf.float32)
-    return output
-
-
-def multi_rnn_cell_w_dropout(hsz, pdrop, rnntype, num_layers, variational=False, training=False):
-    """Produce a stack of RNNs with dropout performed on all but the last layer.
-
-    :param hsz: (``int``) The number of hidden units per RNN
-    :param pdrop: (``int``) The probability of dropping a unit value during dropout
-    :param rnntype: (``str``) The type of RNN to use - `lstm` or `gru`
-    :param num_layers: (``int``) The number of layers of RNNs to stack
-    :param training: (``bool``) Are we training? Defaults to ``False``
-    :return: a stacked cell
-    """
-    if variational:
-        return tf.contrib.rnn.MultiRNNCell(
-            [rnn_cell_w_dropout(hsz, pdrop, rnntype, variational=variational, training=training) for _ in range(num_layers)],
-            state_is_tuple=True
-        )
-    return tf.contrib.rnn.MultiRNNCell(
-        [rnn_cell_w_dropout(hsz, pdrop, rnntype, training=training) if i < num_layers - 1 else rnn_cell_w_dropout(hsz, 1.0, rnntype) for i in range(num_layers)],
-        state_is_tuple=True
-    )
-
-
-def tf_device_wrapper(func):
-    @wraps(func)
-    def with_device(*args, **kwargs):
-        device = kwargs.get("device", "default")
-        if device == "cpu" and "sess" not in kwargs:
-            g = tf.compat.v1.Graph()
-            sess = tf.compat.v1.Session(
-                graph=g, config=tf.compat.v1.ConfigProto(allow_soft_placement=True, device_count={"CPU": 1, "GPU": 0})
-            )
-            kwargs["sess"] = sess
-            return func(*args, **kwargs)
-        return func(*args, **kwargs)
-
-    return with_device
 
 
 class VectorSequenceAttention(tf.keras.layers.Layer):
@@ -4115,6 +3462,7 @@ class BilinearAttention(tf.keras.layers.Layer):
             s = tf.squeeze(s, 1)
         s = masked_fill(s, tf.expand_dims(tf.equal(mask, False), 1), -1e9)
         return s
+
 
 def subsequent_mask(size: int):
     b = tf.compat.v1.matrix_band_part(tf.ones([size, size]), -1, 0)
@@ -4421,33 +3769,10 @@ class StackedGRUCell(tf.keras.layers.AbstractRNNCell):
         return self.rnn_size
 
 
-if get_version(tf) < 2:
+def rnn_cell(insz: int, hsz: int, rnntype: str, nlayers: int = 1, dropout: float = 0.5):
 
-    def rnn_cell(hsz: int, rnntype: str, st: bool = None):
-        """Produce a single RNN cell
-
-        :param hsz: The number of hidden units per LSTM
-        :param rnntype: `lstm` or `gru`
-        :param st: state is tuple? defaults to `None`
-        :return: a cell
-        """
-        if st is not None:
-            cell = (
-                tf.contrib.rnn.LSTMCell(hsz, state_is_tuple=st)
-                if rnntype.endswith("lstm")
-                else tf.contrib.rnn.GRUCell(hsz)
-            )
-        else:
-            cell = tf.contrib.rnn.LSTMCell(hsz) if rnntype.endswith("lstm") else tf.contrib.rnn.GRUCell(hsz)
-        return cell
-
-
-else:
-
-    def rnn_cell(insz: int, hsz: int, rnntype: str, nlayers: int = 1, dropout: float = 0.5):
-
-        if rnntype == "gru":
-            rnn = StackedGRUCell(nlayers, insz, hsz, dropout)
-        else:
-            rnn = StackedLSTMCell(nlayers, insz, hsz, dropout)
-        return rnn
+    if rnntype == "gru":
+        rnn = StackedGRUCell(nlayers, insz, hsz, dropout)
+    else:
+        rnn = StackedLSTMCell(nlayers, insz, hsz, dropout)
+    return rnn

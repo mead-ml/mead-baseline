@@ -7,13 +7,14 @@ import tensorflow as tf
 from baseline.tf.embeddings import *
 from eight_mile.tf.layers import *
 from baseline.version import __version__
-
-from baseline.utils import (
+from eight_mile.utils import (
     fill_y,
     listify,
     ls_props,
     read_json,
     write_json,
+)
+from baseline.utils import (
     MAGIC_VARS,
     MEAD_HUB_MODULES
 )
@@ -21,9 +22,6 @@ from baseline.model import DependencyParserModel, register_model
 from baseline.tf.tfy import (
     TRAIN_FLAG,
     reload_embeddings,
-    new_placeholder_dict,
-    tf_device_wrapper,
-    create_session,
     BaseLayer,
     TensorDef
 )
@@ -46,6 +44,7 @@ class DependencyParserModelBase(tf.keras.Model, DependencyParserModel):
         """
         super().__init__(name=name)
         self._unserializable = []
+        self.dropin_values = {}
 
     def set_saver(self, saver):
         self.saver = saver
@@ -101,12 +100,18 @@ class DependencyParserModelBase(tf.keras.Model, DependencyParserModel):
         self.save_md(basename)
         self.save_values(basename)
 
-    def predict_batch(self, batch_dict):
+    def predict_batch(self, batch_dict: Dict[str, TensorDef], decode=True, **kwargs) -> TensorDef:
 
-        batch_dict = self.make_input(batch_dict)
-        arcs, rels = self(batch_dict)
-        arcs = tf.nn.softmax(arcs).numpy()
-        rels = tf.nn.softmax(rels).numpy()
+        examples = self.make_input(batch_dict)
+
+        if decode:
+            arcs, rels = self.decode(examples)
+
+        else:
+            arcs, rels = self(examples)
+            arcs = tf.nn.softmax(arcs).numpy()
+            rels = tf.nn.softmax(rels).numpy()
+
         return arcs, rels
 
     def predict(self, batch_dict):
@@ -124,7 +129,7 @@ class DependencyParserModelBase(tf.keras.Model, DependencyParserModel):
         :param do_dropout: A `bool` specifying if dropout is turned on
         :return: The dropped out tensor
         """
-        v = self.dropin_value.get(key, 0)
+        v = self.dropin_values.get(key, 0)
         if do_dropout and v > 0.0:
             drop_indices = np.where((np.random.random(x.shape) < v) & (x != Offsets.PAD))
             x[drop_indices[0], drop_indices[1]] = Offsets.UNK
@@ -155,7 +160,6 @@ class DependencyParserModelBase(tf.keras.Model, DependencyParserModel):
         return self.labels
 
     @classmethod
-    @tf_device_wrapper
     def load(cls, basename: str, **kwargs) -> 'DependencyParserModelBase':
         """Reload the model from a graph file and a checkpoint
 
@@ -185,8 +189,7 @@ class DependencyParserModelBase(tf.keras.Model, DependencyParserModel):
         for k in embeddings_info:
             if k in kwargs:
                 _state[k] = kwargs[k]
-            # TODO: convert labels into just another vocab and pass number of labels to models.
-        labels = read_json("{}.labels".format(basename))
+        labels = {"labels": read_json("{}.labels".format(basename))}
         model = cls.create(embeddings, labels, **_state)
         model._state = _state
         model.load_weights(f"{basename}.wgt")
@@ -280,10 +283,9 @@ class BiAffineDependencyParser(DependencyParserModelBase):
         output_dim_rels = kwargs.get('hsz_rels', 100)
         self.rel_h = self.init_proj(output_dim_rels, **kwargs)
         self.rel_d = self.init_proj(output_dim_rels, **kwargs)
-        self.arc_attn = self.init_biaffine(self.arc_h.output_dim, 1, True, False)
-        self.rel_attn = self.init_biaffine(self.rel_h.output_dim, len(self.labels), True, True)
+        self.arc_attn = self.init_attn(self.arc_h.output_dim, 1, True, False)
+        self.rel_attn = self.init_attn(self.rel_h.output_dim, len(self.labels), True, True)
         self.primary_key = self.lengths_key.split('_')[0]
-
 
     def init_proj(self, output_dim: int, **kwargs) -> BaseLayer:
         """Produce a stacking operation that will be used in the model
@@ -294,7 +296,7 @@ class BiAffineDependencyParser(DependencyParserModelBase):
         """
         return WithDropout(tf.keras.layers.Dense(output_dim, activation=get_activation(kwargs.get('activation', 'leaky_relu'))), pdrop=self.pdrop_value)
 
-    def init_biaffine(self, input_dim: int, output_dim: int, bias_x: bool, bias_y: bool):
+    def init_attn(self, input_dim: int, output_dim: int, bias_x: bool, bias_y: bool):
         return BilinearAttention(input_dim, output_dim, bias_x, bias_y)
 
     def init_embed(self, embeddings: Dict[str, TensorDef], **kwargs) -> BaseLayer:

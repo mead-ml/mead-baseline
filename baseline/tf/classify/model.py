@@ -5,15 +5,16 @@ from itertools import chain
 import tensorflow as tf
 
 from baseline.tf.embeddings import *
-from eight_mile.tf.layers import *
-from baseline.version import __version__
-
-from baseline.utils import (
+from eight_mile.utils import (
     fill_y,
     listify,
     ls_props,
     read_json,
     write_json,
+)
+from eight_mile.tf.layers import *
+from baseline.version import __version__
+from baseline.utils import (
     MAGIC_VARS,
     MEAD_HUB_MODULES
 )
@@ -21,9 +22,6 @@ from baseline.model import ClassifierModel, register_model
 from baseline.tf.tfy import (
     TRAIN_FLAG,
     reload_embeddings,
-    new_placeholder_dict,
-    tf_device_wrapper,
-    create_session,
     BaseLayer,
     TensorDef
 )
@@ -56,10 +54,7 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
         :param basename: Base name of model
         :return:
         """
-        if not tf.executing_eagerly():
-            self.saver.save(self.sess, basename, write_meta_graph=False)
-        else:
-            self.save_weights(f"{basename}.wgt")
+        self.save_weights(f"{basename}.wgt")
 
     def save_md(self, basename):
         """This method saves out a `.state` file containing meta-data from these classes and any info
@@ -104,23 +99,6 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
         self.save_md(basename)
         self.save_values(basename)
 
-    def create_test_loss(self):
-        with tf.name_scope("test_loss"):
-            loss = tf.nn.softmax_cross_entropy_with_logits(logits=self.logits, labels=tf.cast(self.y, "float"))
-            all_loss = tf.reduce_mean(loss)
-        return all_loss
-
-    def create_loss(self):
-        """The loss function is currently provided here, although this is not a great place for it
-        as it provides a coupling between the model and its loss function.  Just here for convenience at the moment.
-
-        :return:
-        """
-        with tf.name_scope("loss"):
-            loss = tf.nn.softmax_cross_entropy_with_logits(logits=self.logits, labels=tf.cast(self.y, "float"))
-            all_loss = tf.reduce_mean(loss)
-        return all_loss
-
     def predict_batch(self, batch_dict):
 
         """This method provides a basic routine to run "inference" or predict outputs based on data.
@@ -133,10 +111,7 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
         """
 
         batch_dict = self.make_input(batch_dict)
-        if not tf.executing_eagerly():
-            probs = self.sess.run(self.probs, batch_dict)
-        else:
-            probs = tf.nn.softmax(self(batch_dict)).numpy()
+        probs = tf.nn.softmax(self(batch_dict)).numpy()
         return probs
 
     def predict(self, batch_dict, raw=False, dense=False):
@@ -170,30 +145,14 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
         :param train: (``bool``) Are we training.  Defaults to False
         :return:
         """
-        y = batch_dict.get('y', None)
-        if not tf.executing_eagerly():
-            batch_for_model = new_placeholder_dict(train)
+        SET_TRAIN_FLAG(train)
+        batch_for_model = {}
+        for k in self.embeddings.keys():
+            batch_for_model[k] = batch_dict[k]
 
-            for k in self.embeddings.keys():
-                batch_for_model["{}:0".format(k)] = batch_dict[k]
-
-            # Allow us to track a length, which is needed for BLSTMs
-            if self.lengths_key is not None:
-                batch_for_model[self.lengths] = batch_dict[self.lengths_key]
-
-            if y is not None:
-                batch_for_model[self.y] = fill_y(len(self.labels), y)
-
-        else:
-            SET_TRAIN_FLAG(train)
-            batch_for_model = {}
-            for k in self.embeddings.keys():
-                batch_for_model[k] = batch_dict[k]
-
-            # Allow us to track a length, which is needed for BLSTMs
-            if self.lengths_key is not None:
-                batch_for_model["lengths"] = batch_dict[self.lengths_key]
-
+        # Allow us to track a length, which is needed for BLSTMs
+        if self.lengths_key is not None:
+            batch_for_model["lengths"] = batch_dict[self.lengths_key]
         return batch_for_model
 
     def get_labels(self) -> List[str]:
@@ -204,7 +163,6 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
         return self.labels
 
     @classmethod
-    @tf_device_wrapper
     def load(cls, basename: str, **kwargs) -> 'ClassifierModelBase':
         """Reload the model from a graph file and a checkpoint
 
@@ -224,40 +182,20 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
         if __version__ != _state['version']:
             logger.warning("Loaded model is from baseline version %s, running version is %s", _state['version'], __version__)
 
-        if not tf.executing_eagerly():
-            _state['sess'] = kwargs.pop('sess', create_session())
-            with _state['sess'].graph.as_default():
-                embeddings_info = _state.pop('embeddings')
-                embeddings = reload_embeddings(embeddings_info, basename)
-                # If there is a kwarg that is the same name as an embedding object that
-                # is taken to be the input of that layer. This allows for passing in
-                # subgraphs like from a tf.split (for data parallel) or preprocessing
-                # graphs that convert text to indices
-                for k in embeddings_info:
-                    if k in kwargs:
-                        _state[k] = kwargs[k]
-                labels = read_json("{}.labels".format(basename))
-                model = cls.create(embeddings, labels, **_state)
-                model._state = _state
-                if kwargs.get('init', True):
-                    model.sess.run(tf.compat.v1.global_variables_initializer())
-                model.saver = tf.compat.v1.train.Saver()
-                model.saver.restore(model.sess, basename)
-        else:
-            embeddings_info = _state.pop('embeddings')
-            embeddings = reload_embeddings(embeddings_info, basename)
-            # If there is a kwarg that is the same name as an embedding object that
-            # is taken to be the input of that layer. This allows for passing in
-            # subgraphs like from a tf.split (for data parallel) or preprocessing
-            # graphs that convert text to indices
-            for k in embeddings_info:
-                if k in kwargs:
-                    _state[k] = kwargs[k]
-                # TODO: convert labels into just another vocab and pass number of labels to models.
-            labels = read_json("{}.labels".format(basename))
-            model = cls.create(embeddings, labels, **_state)
-            model._state = _state
-            model.load_weights(f"{basename}.wgt")
+        embeddings_info = _state.pop('embeddings')
+        embeddings = reload_embeddings(embeddings_info, basename)
+        # If there is a kwarg that is the same name as an embedding object that
+        # is taken to be the input of that layer. This allows for passing in
+        # subgraphs like from a tf.split (for data parallel) or preprocessing
+        # graphs that convert text to indices
+        for k in embeddings_info:
+            if k in kwargs:
+                _state[k] = kwargs[k]
+            # TODO: convert labels into just another vocab and pass number of labels to models.
+        labels = read_json("{}.labels".format(basename))
+        model = cls.create(embeddings, labels, **_state)
+        model._state = _state
+        model.load_weights(f"{basename}.wgt")
         return model
 
     @property
@@ -299,41 +237,11 @@ class ClassifierModelBase(tf.keras.Model, ClassifierModel):
         :return: A fully-initialized tensorflow classifier
         """
         model = cls(name=kwargs.get('name'))
-        #embeddings_ = {}
-        #for k, embedding in embeddings.items():
-        #    embeddings_[k] = embedding #.detached_ref()
-
         model.lengths_key = kwargs.get('lengths_key')
-
-        if not tf.executing_eagerly():
-
-            inputs = {}
-            if model.lengths_key is not None:
-                model._unserializable.append(model.lengths_key)
-                model.lengths = kwargs.get('lengths', tf.compat.v1.placeholder(tf.int32, [None], name="lengths"))
-                inputs['lengths'] = model.lengths
-            else:
-                model.lengths = None
-
         model._record_state(embeddings, **kwargs)
-
-        nc = len(labels)
-        if not tf.executing_eagerly():
-            model.y = kwargs.get('y', tf.compat.v1.placeholder(tf.int32, [None, nc], name="y"))
-            for k, embedding in embeddings.items():
-                x = kwargs.get(k, embedding.create_placeholder(name=k))
-                inputs[k] = x
-
-            model.sess = kwargs.get('sess', create_session())
-
         model.pdrop_value = kwargs.get('dropout', 0.5)
         model.labels = labels
         model.create_layers(embeddings, **kwargs)
-
-        if not tf.executing_eagerly():
-            model.logits = tf.identity(model(inputs), name="logits")
-            model.best = tf.argmax(model.logits, 1, name="best")
-            model.probs = tf.nn.softmax(model.logits, name="probs")
         return model
 
     def create_layers(self, embeddings: Dict[str, TensorDef], **kwargs):
@@ -658,13 +566,9 @@ class FineTunePairedClassifierModel(FineTuneModelClassifier):
 
         toks = batch_dict[key]
         token_type_key = f"{key}_tt"
-        #eager = tf.executing_eagerly()
-        target_key = key  # if eager else f"{key}:0"
+        target_key = key
         tt = batch_dict.get(token_type_key)
         if tt is not None:
-            #if not eager:
-            #    raise Exception("We arent currently supporting non-eager mode with token_types")
-            #else:
             example_dict[target_key] = (toks, tt)
         else:
             example_dict[target_key] = toks
@@ -706,23 +610,3 @@ class FineTuneDualModelClassifier(FineTuneModelClassifier):
         embeddings_dual = {key1: embeddings[key_name], key2: embeddings[key_name]}
         return EmbeddingsStack(embeddings_dual, embeddings_dropout, reduction=reduction, name=name)
 
-
-@register_model(task='classify', name='composite')
-class CompositePoolingModel(EmbedPoolStackClassifier):
-    """Fulfills pooling contract by aggregating pooling from a set of sub-models and concatenates each
-    """
-
-    def pool(self, dsz, **kwargs):
-        """Cycle each sub-model and call its pool method, then concatenate along final dimension
-
-        :param word_embeddings: The input graph
-        :param dsz: The number of input units
-        :param init: The initializer operation
-        :param kwargs:
-        :return: A pooled composite output
-        """
-        SubModels = [eval(model) for model in kwargs.get('sub')]
-        models = []
-        for SubClass in SubModels:
-            models.append(SubClass.pool(self, dsz, **kwargs))
-        return CompositeModel(models)

@@ -1,6 +1,3 @@
-import os
-import math
-import json
 import pytest
 import numpy as np
 from eight_mile.utils import get_version
@@ -14,7 +11,7 @@ from eight_mile.utils import Offsets
 
 def test_rnn_decode_shapes():
     from baseline.tf.embeddings import LookupTableEmbeddingsModel
-    from baseline.tf.seq2seq.decoders.v2 import RNNDecoder
+    from baseline.tf.seq2seq.decoders import RNNDecoder
     # Always pick the right path
     encoder = namedtuple("EncoderOutput", "output src_mask")
     batchsz = 2
@@ -44,7 +41,7 @@ def test_rnn_decode_shapes():
 
 def test_rnn_attn_decode_shapes():
     from baseline.tf.embeddings import LookupTableEmbeddingsModel
-    from baseline.tf.seq2seq.decoders.v2 import RNNDecoderWithAttn
+    from baseline.tf.seq2seq.decoders import RNNDecoderWithAttn
     # Always pick the right path
     encoder = namedtuple("EncoderOutput", "output src_mask")
     batchsz = 2

@@ -1,7 +1,10 @@
 import logging
 import numpy as np
+from eight_mile.utils import (
+    listify, register, read_json
+)
 from baseline.utils import (
-    exporter, optional_params, listify, register, import_user_module, read_json
+    exporter, optional_params, import_user_module
 )
 
 __all__ = []
@@ -67,8 +70,8 @@ def create_tagger_model(embeddings, labels, **kwargs):
     return create_model_for('tagger', features=embeddings, labels=labels, **kwargs)
 
 
-
 BASELINE_SEQ2SEQ_ENCODERS = {}
+
 
 @export
 @optional_params
@@ -79,6 +82,7 @@ def register_encoder(cls, name=None):
 
 BASELINE_SEQ2SEQ_DECODERS = {}
 
+
 @export
 @optional_params
 def register_decoder(cls, name=None):
@@ -87,6 +91,7 @@ def register_decoder(cls, name=None):
 
 
 BASELINE_SEQ2SEQ_ARC_POLICY = {}
+
 
 @export
 @optional_params
