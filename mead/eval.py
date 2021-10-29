@@ -105,7 +105,7 @@ def main():
     parser.add_argument('--reporting', nargs="+")
     parser.add_argument('--logging', default=DEFAULT_LOGGING_LOC, type=convert_path)
     parser.add_argument('--task', default='classify', choices={'classify', 'tagger', 'seq2seq', 'lm'})
-    parser.add_argument('--backend', default='tf')
+    parser.add_argument('--backend', default='pytorch')
     parser.add_argument('--reader', default='default')
     parser.add_argument('--trim', default=True, type=str2bool)
     parser.add_argument('--batchsz', default=50)

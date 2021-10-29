@@ -29,7 +29,7 @@ def main():
     parser.add_argument('--conll', help='is file type conll?', type=str2bool, default=False)
     parser.add_argument('--features', help='(optional) features in the format feature_name:index (column # in conll) or '
                                            'just feature names (assumed sequential)', default=[], nargs='+')
-    parser.add_argument('--backend', help='backend', default='tf')
+    parser.add_argument('--backend', help='backend', default='pytorch')
     parser.add_argument('--device', help='device')
     parser.add_argument('--remote', help='(optional) remote endpoint', type=str) # localhost:8500
     parser.add_argument('--name', help='(optional) signature name', type=str)

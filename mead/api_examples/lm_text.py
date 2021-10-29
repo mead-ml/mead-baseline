@@ -8,7 +8,7 @@ def main():
     parser.add_argument('--model', help='A classifier model', required=True, type=str)
     parser.add_argument('--text', help='raw value', type=str)
     parser.add_argument('--device', help='device')
-    parser.add_argument('--backend', help='backend', choices={'tf', 'pytorch'}, default='tf')
+    parser.add_argument('--backend', help='backend', choices={'tf', 'pytorch'}, default='pytorch')
 
 
     args = parser.parse_known_args()[0]

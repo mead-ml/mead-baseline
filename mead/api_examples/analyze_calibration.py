@@ -20,7 +20,7 @@ from eight_mile.calibration import (
 
 parser = argparse.ArgumentParser(description="Analyze the calibration of a classifier")
 parser.add_argument('--model', help='The path to either the .zip file created by training or to the client bundle created by exporting', required=True, type=str)
-parser.add_argument('--backend', help='The deep learning backend your model was trained with', choices={'tf', 'pytorch'}, default='tf')
+parser.add_argument('--backend', help='The deep learning backend your model was trained with', choices={'tf', 'pytorch'}, default='pytorch')
 parser.add_argument('--device', help='The device to run your model on')
 parser.add_argument('--batchsz', help='The number of examples to run at once', default=100, type=int)
 parser.add_argument('--data', help="The data to test calibration on in the label first format", required=True)
