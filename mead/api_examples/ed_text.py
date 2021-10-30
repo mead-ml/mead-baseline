@@ -7,7 +7,7 @@ def main():
     parser = argparse.ArgumentParser(description='Encoder-Decoder execution')
     parser.add_argument('--model', help='An encoder-decoder model', required=True, type=str)
     parser.add_argument('--text', help='raw value or a file', type=str)
-    parser.add_argument('--backend', help='backend', default='tf')
+    parser.add_argument('--backend', help='backend', default='pytorch')
     parser.add_argument('--remote', help='(optional) remote endpoint', type=str) # localhost:8500
     parser.add_argument('--name', help='(optional) signature name', type=str)
     parser.add_argument('--target', help='A file to write decoded output (or print to screen)')

@@ -10,7 +10,7 @@ def main():
                                         'created by exporting', required=True, type=str)
     parser.add_argument('--text', help='The text to classify as a string, or a path to a file with each line as an example',
                         type=str)
-    parser.add_argument('--backend', help='backend', choices={'tf', 'pytorch', 'onnx'}, default='tf')
+    parser.add_argument('--backend', help='backend', choices={'tf', 'pytorch', 'onnx'}, default='pytorch')
     parser.add_argument('--remote', help='(optional) remote endpoint, normally localhost:8500', type=str) # localhost:8500
     parser.add_argument('--name', help='(optional) service name as the server may serves multiple models', type=str)
     parser.add_argument('--device', help='device')
