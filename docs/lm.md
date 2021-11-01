@@ -21,19 +21,6 @@ To run the Zaremba model with their "medium regularized LSTM" configuration, ear
 mead-train --config config/ptb-med.json
 ```
 
-## Status
-
-TODO: out-of-date! re-benchmark and update this!
-
-The "medium regularized LSTM" above (_Word Med_ below) has a lower perplexity than the original paper (even the large model).
-As noted above, the run above differs in that it uses pre-trained word vectors.
-
-|        Model       | Framework  | Dev    |  Test   |
-| ------------------ | ---------- | ------ | ------- |
-| Word Med (Zaremba) | TensorFlow | 80.168 | 77.2213 |
-
-_TODO: Add LSTM Char Small Configuration results_
-
 #### Losses and Reporting
 
 The loss that is optimized is the total loss divided by the total number of tokens in the mini-batch (token level loss). This is different than how the loss is calculated in Tensorflow Tutorial but it is how the loss is calculated in awd-lm ([Merity et. al, 2017](https://arxiv.org/abs/1708.02182)), Elmo ([Peters et. al., 2018](https://arxiv.org/abs/1802.05365)), OpenAI GPT ([Radford et. al., 2018](https://s3-us-west-2.amazonaws.com/openai-assets/research-covers/language-unsupervised/language_understanding_paper.pdf)), and BERT ([Devlin et. al., 2018](https://arxiv.org/pdf/1810.04805.pdf))
