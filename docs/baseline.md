@@ -54,8 +54,6 @@ mead-train --config config/conll.json
 
 See more running options in [trainer.py](../mead/trainer.py).
 
-It is possible to use the Baseline models without mead as in this [example using tf estimators](../api-examples/tf-estimator.py).
-
 ## Baseline as an API
 
 The code provides a high-level Python API to access common deep-learning NLP approaches.
