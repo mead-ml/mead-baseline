@@ -22,6 +22,7 @@ def main():
                                                              '`exporter_field` definition in the mead config',
                         default=[], nargs='+')
     parser.add_argument('--modules', default=[], nargs="+")
+    parser.add_argument('--out_fmt', nargs="+")
     parser.add_argument('--batchsz', default=64, help="How many examples to run through the model at once", type=int)
 
     args = parser.parse_args()
@@ -65,10 +66,16 @@ def main():
 
     batched = [texts[i:i+args.batchsz] for i in range(0, len(texts), args.batchsz)]
 
+    if args.out_fmt:
+        out_fmt = lambda w: ' '.join(w[f] for f in args.out_fmt)
+    else:
+        out_fmt = lambda w: f"{w['text']} {w['label']}"
     for texts in batched:
         for sen in m.predict(texts, export_mapping=create_export_mapping(args.export_mapping)):
+
             for word_tag in sen:
-                print("{} {}".format(word_tag['text'], word_tag['label']))
+
+                print(out_fmt(word_tag))
             print()
 
 
