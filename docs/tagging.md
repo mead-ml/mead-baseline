@@ -142,11 +142,19 @@ All of the MEAD-Baseline tagger models reuse steps 1. and 3. and define their ow
 Most taggers can be composed together by providing the encoder layer and wiring in a set of Embeddings (usually consisting of a combo of word features and word character-compositional features concatenated together), a decoder (typically a `GreedyTaggerDecoder` or a `CRF`).  For example, a CNN-BiLSTM-CRF can be composed by providing:
 
 1. embeddings via concatenation of `LookupTableEmbeddingsModel` and `CharConvEmbeddingsModel`
-2. encoder via `RNNTaggerModel`
+2. encoder e.g. `RNNTaggerModel`.  For fine-tuned models this is typically a pass-through 
 3. default linear projection
 4. decoder via `CRF`
 
-For fine-tuning a language model like BERT, the typical approach is to remove the head from the model (AKA the final linear projection out to the vocab and the normalizing softmax), and to put a final linear projection to the output number of classes in its place.  In MEAD-Baseline, the headless LM would be lodaded as an embedding object and passed into an `EmbeddingsStack` so the encoder itself should be pass through.
+
+### Fine-tuning a Transformer
+
+For fine-tuning a language model like BERT, the typical approach is to remove the head from the model (AKA the final linear projection out to the vocab and the normalizing softmax), and to put a final linear projection to the output number of classes in its place.  In MEAD-Baseline, the headless LM is lodaded as an embedding object and passed into an `EmbeddingsStack` so the encoder itself should be pass through.  Here is an example of fine-tuning BERT:
+
+
+```
+mead-train --config config/conll-bert.json
+```
 
 
 ### Writing your own tagger
