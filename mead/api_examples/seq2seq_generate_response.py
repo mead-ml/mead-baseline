@@ -39,10 +39,10 @@ def decode_sentences(model, vectorizer, queries, word2index, index2word, beamsz,
         best_sentence_idx = candidate[0]
         best_sentence_toks = []
         for x in best_sentence_idx:
-            best_sentence_toks.append(index2word[x])
+
             if x in sentinels:
                 break
-
+            best_sentence_toks.append(index2word[x])
         best_sentence = ' '.join(best_sentence_toks)
         sentences.append(best_sentence.replace('@@ ', ''))
     return sentences
