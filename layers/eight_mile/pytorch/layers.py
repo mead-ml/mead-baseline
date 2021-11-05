@@ -2673,6 +2673,28 @@ def pytorch_embedding(weights: torch.Tensor, finetune: bool = True) -> nn.Embedd
     return lut
 
 
+def tril_onnx(inputs: torch.FloatTensor,
+              diagonal: Optional[int] = 0) -> torch.FloatTensor:
+    """Caveat to export an tril-based operator with ONNX.
+
+    Taken from https://github.com/pytorch/pytorch/issues/34129
+    Args:
+        inputs: Input tensor.
+        diagonal: Value of diagonal.
+
+    Returns:
+        (torch.FloatTensor): Output tensor.
+
+    """
+
+    arange = torch.arange(inputs.size(0), device=inputs.device)
+    arange2 = torch.arange(inputs.size(1), device=inputs.device)
+
+    mask = arange.unsqueeze(-1).expand(-1, inputs.size(1)) >= (arange2 - diagonal)
+
+    return inputs.masked_fill(mask == 0, 0)
+
+
 def subsequent_mask(size: int):
     """
     Creates a lower triangular mask to mask future
@@ -2681,8 +2703,8 @@ def subsequent_mask(size: int):
     :return: A tensor of type `uint8` that is 1s along diagonals and below, zero  o.w
     """
     attn_shape = (1, 1, size, size)
-    sub_mask = np.tril(np.ones(attn_shape)).astype("uint8")
-    return torch.from_numpy(sub_mask)
+    sub_mask = tril_onnx(torch.ones(attn_shape)).to(torch.uint8)
+    return sub_mask
 
 
 class SequenceSequenceAttention(nn.Module):

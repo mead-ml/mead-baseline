@@ -517,9 +517,9 @@ def get_output_paths(
     server_path = os.path.join(*server_path)
     client_path = os.path.join(*client_path)
     if remote:
-        os.makedirs(client_path)
+        os.makedirs(client_path, exist_ok=True)
     if make_server:
-        os.makedirs(server_path)
+        os.makedirs(server_path, exist_ok=True)
     return client_path, server_path
 
 
