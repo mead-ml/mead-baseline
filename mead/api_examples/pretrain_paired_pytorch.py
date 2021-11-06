@@ -41,7 +41,7 @@ def create_model(embeddings, d_model, d_ff, dropout, num_heads, num_layers, mode
         model = PairedModel(embeddings, d_model, d_ff, dropout, num_heads, num_layers, rpr_k=rpr_k, d_k=d_k,
                             reduction_d_k=reduction_d_k, stacking_layers=stacking_layers, ffn_pdrop=ff_pdrop,
                             windowed_ra=windowed_ra, reduction_type=reduction_type, freeze_encoders=True,
-                            output_shared=shared_output, output_layed=shared_output,
+                            output_shared=shared_output, output_layer=shared_output,
                             layer_norms_after=layer_norms_after)
 
     logger.info(model)
