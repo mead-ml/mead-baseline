@@ -4261,6 +4261,18 @@ class AllLoss(nn.Module):
         return -loss
 
 
+class CosineSimilarityLoss(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, embeddings_reduction, labels):
+        hsz = int(embeddings_reduction.shape[-1]//2)
+        output = torch.cosine_similarity(embeddings_reduction[:,:hsz], embeddings_reduction[:,hsz:])
+        loss = F.mse_loss(output, labels.float().view(-1), reduction='mean')
+        return loss
+
+
 class TwoHeadConcat(AttentionReduction):
     """Use two parallel SingleHeadReduction, and concatenate the outputs. It is used in the conveRT
     paper (https://arxiv.org/pdf/1911.03688.pdf)"""
