@@ -461,6 +461,13 @@ class FineTuneDualCosineSimModelClassifier(FineTuneModelClassifier):
         return CosineSimilarityLoss()
 
 
+@register_model(task='classify', name='fine-tune-dual-ocl')
+class FineTuneDualOCLModelClassifier(FineTuneDualCosineSimModelClassifier):
+
+    def create_loss(self):
+        return OnlineContrastiveLoss()
+
+
 @register_model(task='classify', name='fine-tune-paired')
 class FineTunePairedClassifierModel(FineTuneModelClassifier):
 

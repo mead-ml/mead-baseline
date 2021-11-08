@@ -203,12 +203,13 @@ def fit(model_params, ts, vs, es, **kwargs):
     reporting_fns = listify(kwargs.get('reporting', []))
     logger.info('reporting %s', reporting_fns)
     trainer = create_trainer(model_params, **kwargs)
+    no_cm = bool(kwargs.get('no_cm', False))
 
     last_improved = 0
 
     for epoch in range(epochs):
-        trainer.train(ts, reporting_fns)
-        test_metrics = trainer.test(vs, reporting_fns)
+        trainer.train(ts, reporting_fns, no_cm=no_cm)
+        test_metrics = trainer.test(vs, reporting_fns, no_cm=no_cm)
 
         if do_early_stopping is False:
             trainer.save(model_file)
