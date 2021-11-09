@@ -120,7 +120,7 @@ class Task:
 
         :return:
         """
-        backend = Backend(self.config_params.get('backend', 'tf'), kwargs)
+        backend = Backend(self.config_params.get('backend', 'pytorch'), kwargs)
         backend.load(self.task_name())
         return backend
 

@@ -4263,13 +4263,18 @@ class AllLoss(nn.Module):
 
 class CosineSimilarityLoss(nn.Module):
 
-    def __init__(self):
+    def __init__(self, neg_value=0.3, pos_value=0.8):
         super().__init__()
+        self.pos_value = pos_value
+        self.neg_value = neg_value
 
     def forward(self, embeddings_reduction, labels):
         hsz = int(embeddings_reduction.shape[-1]//2)
+        label_values = torch.zeros_like(labels, dtype=torch.float)
+        label_values[labels == 0] = self.neg_value
+        label_values[labels == 1] = self.pos_value
         output = torch.cosine_similarity(embeddings_reduction[:,:hsz], embeddings_reduction[:,hsz:])
-        loss = F.mse_loss(output, labels.float().view(-1), reduction='mean')
+        loss = F.mse_loss(output, label_values.view(-1), reduction='mean')
         return loss
 
 
