@@ -780,7 +780,10 @@ def load_tlm_output_npz(pytorch_tlm: nn.Module, npz: str, embeddings_keys: List[
     d = np.load(npz)
     from_tlm_array(pytorch_tlm, d, embeddings_keys, name)
     if hasattr(pytorch_tlm, 'output_layer'):
-        from_weight_array(pytorch_tlm.output_layer, d, f"{name}/output")
+        try:
+            from_weight_array(pytorch_tlm.output_layer, d, f"{name}/output")
+        except:
+            print('Warning: no output layer found, it will be randomly inited')
     else:
         from_weight_array(pytorch_tlm.output, d, f"{name}/output")
 

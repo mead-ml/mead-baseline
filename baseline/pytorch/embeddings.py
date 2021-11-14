@@ -328,13 +328,18 @@ class TransformerLMPooledEmbeddingsWithOutputModel(TransformerLMPooledEmbeddings
         super().__init__(name, **kwargs)
         self._output_dim = kwargs.get('output_dim', self.d_model)
         self.output_layer = pytorch_linear(self.d_model, self.output_dim)
+        output_activation = kwargs.get('output_activation', 'identity')
+        self.output_activation = get_activation(output_activation)
+
+    def output_activation_fn(self, x):
+        return x if not hasattr(self, 'output_activation') else self.output_activation(x)
 
     def get_dsz(self):
         return self._output_dim
 
     def get_output(self, inputs, z):
         z = self.pooling_op(inputs, z)
-        return self.output_layer(z)
+        return self.output_activation_fn(self.output_layer(z))
 
     @classmethod
     def load(cls, embeddings, **kwargs):

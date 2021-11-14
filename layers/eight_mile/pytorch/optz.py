@@ -140,9 +140,18 @@ class AdamW(torch.optim.Optimizer):
 
 
 class OptimizerManager:
-    def __init__(self, model_or_params, global_step=0, **kwargs):
+    def __init__(self, model_or_params, global_step=0, weight_decay=0.0, **kwargs):
+        DONT_DECAY = ['ln.weight', 'bias']
         if isinstance(model_or_params, torch.nn.Module):
-            parameters = model_or_params.parameters()
+            if weight_decay == 0.0:
+                parameters = model_or_params.parameters()
+            else:
+                params_w_wd = [p for n, p in model_or_params.named_parameters() if not any(nd in n for nd in DONT_DECAY)]
+                params_wo_wd = [p for n, p in model_or_params.named_parameters() if any(nd in n for nd in DONT_DECAY)]
+                parameters = [
+                    {'params': params_w_wd, 'weight_decay': weight_decay},
+                    {'params': params_wo_wd, 'weight_decay': 0.0}
+                ]
         else:
             parameters = model_or_params
         self.global_step = global_step
@@ -167,6 +176,7 @@ class OptimizerManager:
         wd = float(kwargs.get("weight_decay", 0))
         optim = kwargs.get("optim", "sgd")
         self.current_lr = kwargs.get("eta", kwargs.get("lr", 0.01))
+
         if optim == "adadelta":
             logger.info("adadelta(eta=%f, wd=%f)", self.current_lr, wd)
             self.optimizer = torch.optim.Adadelta(parameters, lr=self.current_lr, weight_decay=wd)
