@@ -7,7 +7,7 @@ from baseline.pytorch.embeddings import *
 from baseline.embeddings import *
 from baseline.vectorizers import *
 from mead.api_examples.preproc_utils import create_tokenizer
-from mead.utils import convert_path, parse_extra_args, configure_logger, parse_and_merge_overrides, read_config_file_or_json, index_by_label
+from mead.utils import convert_path, index_by_label
 import pandas as pd
 logging.basicConfig(format='%(asctime)s : %(message)s', level=logging.DEBUG)
 
@@ -35,13 +35,17 @@ def main():
     parser.add_argument('--faiss_index', help="If provided, we will build a FAISS index and store it here")
     parser.add_argument('--quoting', default=3, help='0=QUOTE_MINIMAL 1=QUOTE_ALL 2=QUOTE_NONNUMERIC 3=QUOTE_NONE', type=int)
     parser.add_argument('--sep', default='\t')
+    parser.add_argument('--add_columns', nargs='+', default=[])
 
     args = parser.parse_args()
 
     if not args.has_header:
         if not args.column:
             args.column = 0
+        if args.add_columns:
+            args.add_columns = [int(c) for c in args.add_columns]
         column = int(args.column)
+
     else:
         column = args.column
 
@@ -111,9 +115,15 @@ def main():
     col = df[column]
     batches = []
     as_list = col.tolist()
+    extra_col_map = {}
+    for extra_col in args.add_columns:
+        if isinstance(extra_col, int):
+            key = f'column_{extra_col}'
+        else:
+            key = extra_col
+        extra_col_map[key] = df[extra_col].tolist()
     num_batches = math.ceil(len(as_list) / args.batchsz)
     pg = baseline.create_progress_bar(num_batches, name='tqdm')
-    embed_dsz = 0
     for i, batch in enumerate(chunks(as_list, args.batchsz)):
         pg.update()
         with torch.no_grad():
@@ -129,7 +139,7 @@ def main():
             pooled_batch = pool(vecs, embedding).cpu().numpy()
             batches += [x for x in pooled_batch]
 
-    np.savez(args.output, embeddings=batches, text=as_list)
+    np.savez(args.output, embeddings=batches, text=as_list, **extra_col_map)
     if args.faiss_index:
         import faiss
         index = faiss.IndexFlatIP(batches[0].shape[-1])
