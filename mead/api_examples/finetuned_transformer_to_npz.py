@@ -51,7 +51,8 @@ def main():
         save_tlm_npz(tpt_embed, args.npz, verbose=True)
     else:
         # Monkey patch the embedding to contain an output_layer
-        tpt_embed.output_layer = bl_model.output_layer
+        if hasattr(bl_model, "output_layer") and not isinstance(bl_model.output_layer, torch.nn.Identity):
+            tpt_embed.output_layer = bl_model.output_layer
         save_tlm_output_npz(tpt_embed, args.npz, verbose=True)
 
 

@@ -4261,6 +4261,48 @@ class AllLoss(nn.Module):
         return -loss
 
 
+class CosineSimilarityLoss(nn.Module):
+
+    def __init__(self, neg_value=0.3, pos_value=0.8):
+        super().__init__()
+        self.pos_value = pos_value
+        self.neg_value = neg_value
+
+    def forward(self, embeddings_reduction, labels):
+        hsz = int(embeddings_reduction.shape[-1]//2)
+        label_values = torch.zeros_like(labels, dtype=torch.float)
+        label_values[labels == 0] = self.neg_value
+        label_values[labels == 1] = self.pos_value
+        output = torch.cosine_similarity(embeddings_reduction[:,:hsz], embeddings_reduction[:,hsz:])
+        loss = F.mse_loss(output, label_values.view(-1), reduction='mean')
+        return loss
+
+
+class OnlineContrastiveLoss(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, embeddings_reduction, labels):
+
+        hsz = int(embeddings_reduction.shape[-1]//2)
+        x = embeddings_reduction[:,:hsz]
+        y = embeddings_reduction[:,hsz:]
+
+        distance_matrix = 1-F.cosine_similarity(x, y)
+
+        negs = distance_matrix[labels == 0]
+        poss = distance_matrix[labels == 1]
+
+        # select hard positive and hard negative pairs
+        negative_pairs = negs[negs < (poss.max() if len(poss) > 1 else negs.mean())]
+        positive_pairs = poss[poss > (negs.min() if len(negs) > 1 else poss.mean())]
+
+        positive_loss = positive_pairs.pow(2).sum()
+        negative_loss = F.relu(0.5 - negative_pairs).pow(2).sum()
+        loss = positive_loss + negative_loss
+        return loss
+
+
 class TwoHeadConcat(AttentionReduction):
     """Use two parallel SingleHeadReduction, and concatenate the outputs. It is used in the conveRT
     paper (https://arxiv.org/pdf/1911.03688.pdf)"""

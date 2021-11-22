@@ -17,6 +17,8 @@ logger = logging.getLogger('baseline')
 
 
 def _add_to_cm(cm, y, pred):
+    if cm is None:
+        return
     _, best = pred.max(1)
     yt = y.cpu().int()
     yp = best.cpu().int()
@@ -73,7 +75,8 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
         total_norm = 0
         steps = len(loader)
         pg = create_progress_bar(steps)
-        cm = ConfusionMatrix(self.labels)
+        no_cm = bool(kwargs.get('no_cm', False))
+        cm = None if no_cm else ConfusionMatrix(self.labels)
         verbose = kwargs.get("verbose", None)
         output = kwargs.get('output')
         txts = kwargs.get('txts')
@@ -97,7 +100,7 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
                 total_norm += batchsz
                 _add_to_cm(cm, ys, pred)
 
-        metrics = cm.get_all_metrics()
+        metrics = cm.get_all_metrics() if cm is not None else {}
         metrics['avg_loss'] = total_loss / float(total_norm)
         verbose_output(verbose, cm)
         if handle is not None:
@@ -110,7 +113,8 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
         reporting_fns = kwargs.get('reporting_fns', [])
         steps = len(loader)
         pg = create_progress_bar(steps)
-        cm = ConfusionMatrix(self.labels)
+        no_cm = bool(kwargs.get('no_cm', False))
+        cm = None if no_cm else ConfusionMatrix(self.labels)
         epoch_loss = 0
         epoch_div = 0
         for batch_dict in pg(loader):
@@ -139,7 +143,7 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
                 )
                 self.reset_nstep()
 
-        metrics = cm.get_all_metrics()
+        metrics = cm.get_all_metrics() if cm is not None else {}
         metrics['lr'] = self.optimizer.current_lr
 
         metrics['avg_loss'] = epoch_loss / float(epoch_div)
@@ -199,12 +203,13 @@ def fit(model_params, ts, vs, es, **kwargs):
     reporting_fns = listify(kwargs.get('reporting', []))
     logger.info('reporting %s', reporting_fns)
     trainer = create_trainer(model_params, **kwargs)
+    no_cm = bool(kwargs.get('no_cm', False))
 
     last_improved = 0
 
     for epoch in range(epochs):
-        trainer.train(ts, reporting_fns)
-        test_metrics = trainer.test(vs, reporting_fns)
+        trainer.train(ts, reporting_fns, no_cm=no_cm)
+        test_metrics = trainer.test(vs, reporting_fns, no_cm=no_cm)
 
         if do_early_stopping is False:
             trainer.save(model_file)
