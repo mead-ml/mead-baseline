@@ -20,16 +20,23 @@ def main():
     parser.add_argument('--model_type', type=str, default='default')
     parser.add_argument('--modules', default=[], nargs="+")
     parser.add_argument('--scores', '-s', action="store_true")
+    parser.add_argument('--label_first', action="store_true", help="Use the second column")
+    parser.add_argument("--output_delim", default="\t")
+    parser.add_argument("--no_text_output", action="store_true", help="Dont write the text")
     args = parser.parse_args()
 
     for mod_name in args.modules:
         bl.import_user_module(mod_name)
 
+    labels = []
     if os.path.exists(args.text) and os.path.isfile(args.text):
         texts = []
         with open(args.text, 'r') as f:
             for line in f:
                 text = line.strip().split()
+                if args.label_first:
+                    labels.append(text[0])
+                    text = text[1:]
                 texts += [text]
 
     else:
@@ -39,13 +46,25 @@ def main():
     m = bl.ClassifierService.load(args.model, backend=args.backend, remote=args.remote,
                                   name=args.name, preproc=args.preproc,
                                   device=args.device, model_type=args.model_type)
+
+    if args.label_first:
+        label_iter = iter(labels)
     for texts in batched:
         for text, output in zip(texts, m.predict(texts)):
-            if args.scores:
-                print("{}, {}".format(" ".join(text), output))
-            else:
-                print("{}, {}".format(" ".join(text), output[0][0]))
 
+            if args.no_text_output:
+                text_output = ''
+            else:
+                text_output = ' '.join(text) + {args.output_delim}
+            if args.scores:
+                guess_output = output
+            else:
+                guess_output = output[0][0]
+
+            s = f"{text_output}{guess_output}"
+            if args.label_first:
+                s = f"{next(label_iter)}{args.output_delim}{s}"
+            print(s)
 
 if __name__ == '__main__':
     main()
