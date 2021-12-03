@@ -118,6 +118,6 @@ class RemoteONNXClassifier(RemoteONNXPredictModel):
 class RemoteONNXTagger(RemoteONNXPredictModel):
     def deserialize_response(self, examples, predict_response):
         """Convert the response into a standard format."""
-        label_values = np.frombuffer(predict_response.raw_output_contents[0], dtype=np.int32)
+        label_values = np.frombuffer(predict_response.raw_output_contents[0], dtype=np.int64)
 
         return [label_values]
