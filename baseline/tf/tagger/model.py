@@ -320,7 +320,7 @@ class AbstractEncoderTaggerModel(TaggerModelBase):
         name = kwargs.get('embeddings_name')
         reduction = kwargs.get('embeddings_reduction', kwargs.get('embed_reduction_type', 'concat'))
         reduction = create_embeddings_reduction(embed_reduction_type=reduction, **kwargs)
-        embeddings_dropout = float(kwargs.get('embeddings_dropout', self.pdrop))
+        embeddings_dropout = float(kwargs.get('embeddings_dropout', self.pdrop_value))
         return EmbeddingsStack(embeddings, embeddings_dropout, reduction=reduction, name=name)
 
     def init_encode(self, **kwargs) -> BaseLayer:
