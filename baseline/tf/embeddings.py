@@ -140,6 +140,7 @@ class TransformerLMEmbeddings(TensorFlowEmbeddings):
         self.init_embed(**kwargs)
         self.proj_to_dsz = tf.keras.layers.Dense(self.dsz, self.d_model) if self.dsz != self.d_model else _identity
         self.init_transformer(**kwargs)
+        self.return_mask = kwargs.get('return_mask', False)
 
     @property
     def dsz(self):
@@ -197,11 +198,15 @@ class TransformerLMEmbeddings(TensorFlowEmbeddings):
         embedding = self.embed(x, token_type)
         embedding = self.proj_to_dsz(embedding)
         transformer_out = self.transformer((embedding, input_mask))
-        z = self.get_output(x, transformer_out)
+        z = self.get_output(x, transformer_out, input_mask)
         return z
 
-    def get_output(self, inputs, z):
-        return tf.stop_gradient(z) if self.finetune is False else z
+    def get_output(self, inputs, z, input_mask):
+        if not self.finetune:
+            z = tf.stop_gradient(z)
+        if hasattr(self, 'return_mask') and self.return_mask:
+            return (z, mask,)
+        return z
 
     def get_vocab(self):
         return self.vocab
@@ -253,7 +258,7 @@ class TransformerLMPooledEmbeddings(TransformerLMEmbeddings):
         pooled = tensor[tf.equal(inputs, self.cls_index)]
         return pooled
 
-    def get_output(self, inputs, z):
+    def get_output(self, inputs, z, mask):
         return self.pooling_op(inputs, z)
 
 

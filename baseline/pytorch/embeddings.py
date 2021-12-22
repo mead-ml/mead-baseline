@@ -189,7 +189,9 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
             return z
 
     def get_output(self, inputs, z, mask):
-        return z if not self.return_mask else (z, mask,)
+        if hasattr(self, 'return_mask') and self.return_mask:
+            return (z, mask,)
+        return z
 
     def get_vocab(self):
         return self.vocab
