@@ -1624,11 +1624,16 @@ class Reduction(nn.Module):
     def forward(self, inputs: List[torch.Tensor]) -> torch.Tensor:
         pass
 
+    def set_output_dim(self, output_dims: List[int]):
+        pass
 
 class ConcatReduction(Reduction):
-    def __init__(self, output_dims: List[int], axis=-1):
+    def __init__(self, output_dims: List[int], axis=-1, **kwargs):
         super().__init__()
         self.axis = axis
+        self.set_output_dim(output_dims)
+
+    def set_output_dim(self, output_dims: List[int]):
         self.output_dim = sum(output_dims)
 
     def forward(self, inputs: List[torch.Tensor]) -> torch.Tensor:
@@ -1641,9 +1646,12 @@ class ConcatSubtractReduction(Reduction):
     It is useful for training sentence encoders and is used, for example, in SentenceBERT
     For this to work we assume that the inputs are paired, and subtract them
     """
-    def __init__(self, output_dims: List[int], axis=-1):
+    def __init__(self, output_dims: List[int], axis=-1, **kwargs):
         super().__init__()
         self.axis = axis
+        self.set_output_dim(output_dims)
+
+    def set_output_dim(self, output_dims: List[int]):
         self.output_dim = 3 * output_dims[0]
 
     def forward(self, inputs: List[torch.Tensor]) -> torch.Tensor:
@@ -1652,8 +1660,11 @@ class ConcatSubtractReduction(Reduction):
 
 
 class SumReduction(Reduction):
-    def __init__(self, output_dims: List[int]):
+    def __init__(self, output_dims: List[int], **kwargs):
         super().__init__()
+        self.set_output_dim(output_dims)
+
+    def set_output_dim(self, output_dims: List[int]):
         # We could actually project if we needed, or at least should validate
         self.output_dim = output_dims[0]
 
@@ -1663,10 +1674,13 @@ class SumReduction(Reduction):
 
 class SumLayerNormReduction(Reduction):
 
-    def __init__(self, output_dims: List[int], layer_norm_eps: float = 1.0e-12):
+    def __init__(self, output_dims: List[int], layer_norm_eps: float = 1.0e-12, **kwargs):
         super().__init__()
-        self.output_dim = output_dims[0]
+        self.set_output_dim(output_dims)
         self.ln = nn.LayerNorm(self.output_dim, eps=layer_norm_eps)
+
+    def set_output_dim(self, output_dims: List[int]):
+        self.output_dim = output_dims[0]
 
     def forward(self, inputs: List[torch.Tensor]) -> torch.Tensor:
         output = sum(inputs)
@@ -1711,6 +1725,7 @@ class EmbeddingsStack(nn.Module):
                 self.reduction = ConcatReduction(output_dims)
         else:
             self.reduction = reduction
+            self.reduction.set_output_dim(output_dims)
         self.dsz = self.reduction.output_dim
         self.dropout = nn.Dropout(dropout_rate)
         self.requires_length = requires_length

@@ -3,7 +3,7 @@ import copy
 import logging
 from itertools import chain
 import tensorflow as tf
-
+from baseline.embeddings import create_embeddings_reduction
 from baseline.tf.embeddings import *
 from eight_mile.utils import (
     fill_y,
@@ -287,9 +287,11 @@ class EmbedPoolStackClassifier(ClassifierModelBase):
         :return: The output of the embedding stack followed by its reduction.  This will typically be an output
           with an additional dimension which is the hidden representation of the input
         """
-        reduction = kwargs.get('embeddings_reduction', 'concat')
         name = kwargs.get('embeddings_name')
-        return EmbeddingsStack(embeddings, self.pdrop_value, reduction=reduction, name=name)
+        reduction = kwargs.get('embeddings_reduction', kwargs.get('embed_reduction_type', 'concat'))
+        reduction = create_embeddings_reduction(embed_reduction_type=reduction, **kwargs)
+        embeddings_dropout = float(kwargs.get('embeddings_dropout', 0.0))
+        return EmbeddingsStack(embeddings, embeddings_dropout, reduction=reduction, name=name)
 
     def init_pool(self, input_dim: int, **kwargs) -> BaseLayer:
         """Produce a pooling operation that will be used in the model
@@ -493,9 +495,11 @@ class FineTuneModelClassifier(ClassifierModelBase):
         :return: The output of the embedding stack followed by its reduction.  This will typically be an output
           with an additional dimension which is the hidden representation of the input
         """
-        reduction = kwargs.get('embeddings_reduction', 'concat')
-        embeddings_dropout = float(kwargs.get('embeddings_dropout', 0.0))
+
         name = kwargs.get('embeddings_name')
+        reduction = kwargs.get('embeddings_reduction', kwargs.get('embed_reduction_type', 'concat'))
+        reduction = create_embeddings_reduction(embed_reduction_type=reduction, **kwargs)
+        embeddings_dropout = float(kwargs.get('embeddings_dropout', 0.0))
         return EmbeddingsStack(embeddings, embeddings_dropout, reduction=reduction, name=name)
 
     def init_stacked(self, input_dim: int, **kwargs) -> BaseLayer:

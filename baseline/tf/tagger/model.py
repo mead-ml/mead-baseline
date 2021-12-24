@@ -6,6 +6,7 @@ from baseline.tf.tfy import *
 from eight_mile.tf.layers import *
 from eight_mile.utils import ls_props, read_json, write_json, listify, Offsets
 from baseline.utils import MAGIC_VARS
+from baseline.embeddings import create_embeddings_reduction
 from baseline.tf.embeddings import *
 from baseline.version import __version__
 from baseline.model import register_model
@@ -316,9 +317,11 @@ class AbstractEncoderTaggerModel(TaggerModelBase):
         :return: The output of the embedding stack followed by its reduction.  This will typically be an output
           with an additional dimension which is the hidden representation of the input
         """
-        reduction = kwargs.get('embeddings_reduction', 'concat')
         name = kwargs.get('embeddings_name')
-        return EmbeddingsStack(embeddings, self.pdrop_value, reduction=reduction, name=name)
+        reduction = kwargs.get('embeddings_reduction', kwargs.get('embed_reduction_type', 'concat'))
+        reduction = create_embeddings_reduction(embed_reduction_type=reduction, **kwargs)
+        embeddings_dropout = float(kwargs.get('embeddings_dropout', self.pdrop_value))
+        return EmbeddingsStack(embeddings, embeddings_dropout, reduction=reduction, name=name)
 
     def init_encode(self, **kwargs) -> BaseLayer:
         """Provide a layer object that represents the `encode` phase of the model
