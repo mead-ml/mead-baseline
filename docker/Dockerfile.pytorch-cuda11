@@ -1,10 +1,10 @@
 FROM meadml/cuda11.0-cudnn8-devel-ubuntu18.04-python3.8
 
-RUN cd layers && pip install -e .
-RUN pip install -e .[test,yaml]
-
 COPY . /usr/mead/mead-baseline
 WORKDIR /usr/mead
+
+RUN cd mead-baseline/layers && pip install -e .
+RUN cd mead-baseline && pip install -e .[test,yaml]
 
 # Set env variables
 # Set baseline logging vars
@@ -15,6 +15,8 @@ ENV LANG=C.UTF-8
 # Set ENV to tensorflow can find cuda
 ENV PATH=/usr/local/cuda/bin:$PATH
 ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+
+COPY . /usr/mead
 
 # Install pytorch
 
