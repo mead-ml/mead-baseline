@@ -1,11 +1,10 @@
 FROM meadml/cuda11.0-cudnn8-devel-ubuntu18.04-python3.8
 
-COPY . /usr/mead/mead-baseline
-
-WORKDIR /usr/mead
-
 RUN cd mead-baseline/layers && pip install -e .
 RUN cd mead-baseline && pip install -e .[test,yaml]
+
+COPY . /usr/mead/mead-baseline
+WORKDIR /usr/mead
 
 # Set env variables
 # Set baseline logging vars
