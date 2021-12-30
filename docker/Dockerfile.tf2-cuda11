@@ -5,8 +5,8 @@ COPY . /usr/mead/mead-baseline
 
 WORKDIR /usr/mead
 
-RUN cd mead-baseline/layers && pip install -e .
-RUN cd mead-baseline && pip install -e .[tf2,test,yaml]
+RUN cd mead-baseline/layers && pip install .
+RUN cd mead-baseline && pip install .[tf2,test,yaml]
 
 # Set env variables
 # Set baseline logging vars
