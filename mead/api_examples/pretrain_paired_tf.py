@@ -158,7 +158,7 @@ def main():
                        vocab_file=args.subword_vocab_file,
                        mxlen=args.nctx,
                        extra_tokens=args.extra_tokens)
-    preproc_data = baseline.embeddings.load_embeddings('x', dsz=args.d_model, known_vocab=vocab['x'],
+    preproc_data = baseline.embeddings.load_embeddings('x', dsz=args.d_model, known_vocab=vectorizer.vocab,
                                                        preserve_vocab_indices=True,
                                                        embed_type=args.embed_type)
     vocabs = preproc_data['vocab']

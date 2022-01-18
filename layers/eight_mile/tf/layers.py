@@ -2509,7 +2509,7 @@ class SingleHeadReduction(AttentionReduction):
         return x
 
     def _mean_pool(self, x, seq_lengths):
-        return tf.reduce_sum(x, 1) / tf.expand_dims(seq_lengths, -1)
+        return tf.reduce_sum(x, 1) / tf.cast(tf.expand_dims(seq_lengths, -1), tf.float32)
 
     def _max_pool(self, x, _):
         x = tf.reduce_max(x, 1)
