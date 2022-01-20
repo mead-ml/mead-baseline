@@ -723,12 +723,13 @@ class BPESecondaryFeatureDict1DVectorizer(BPEVectorizer1D):
             elif t == '<eos>':
                 yield t_feature
             else:
-                subwords = self.tokenizer.apply([t_word])[0].split()
+                subwords = self.tokenizer.apply([self.transform_fn(t_word)])[0].split()
                 if self.apply_all_subwords:
                     subwords = [t_feature] * len(subwords)
                 else:
                     subwords = [Offsets.VALUES[Offsets.PAD]] * len(subwords)
                     subwords[0] = t_feature
+
                 for x in subwords:
                     yield x
         for t in self.emit_end_tok:
