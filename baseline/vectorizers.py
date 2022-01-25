@@ -1169,7 +1169,7 @@ class WordpieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
             if i == self.mxlen:
                 i -= len(self.emit_end_tok)
                 for j, x in enumerate(self.emit_end_tok):
-                    vec1d[i + j] = vocab.get(x, vocab['[UNK]'])
+                    vec1d[i + j] = vocab.get(x)
                 i = self.mxlen - 1
                 break
             vec1d[i] = atom
@@ -1220,7 +1220,7 @@ class WordpieceSecondaryFeatureDict1DVectorizer(WordpieceVectorizer1D):
             elif t == '<eos>':
                 yield t_feature
             else:
-                subwords = self.tokenizer.tokenize(t_word)
+                subwords = self.tokenizer.tokenize(self.transform_fn(t_word))
                 if self.apply_all_subwords:
                     subwords = [t_feature] * len(subwords)
                 else:
@@ -1251,7 +1251,7 @@ class WordpieceLabelDict1DVectorizer(WordpieceVectorizer1D):
         for t in tokens:
             t_word = t[self.field]
             t_label = t[self.label]
-            subwords = [x for x in self.tokenizer.tokenize(t_word)]
+            subwords = [x for x in self.tokenizer.tokenize(self.transform_fn(t_word))]
             subwords = [Offsets.VALUES[Offsets.PAD]] * len(subwords)
             # TODO: The tokenizer sometimes cuts up the token and leaves nothing
             # how to handle this since we cannot get anything for it
