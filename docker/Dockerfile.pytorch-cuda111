@@ -23,6 +23,7 @@ COPY . /usr/mead
 RUN python3.8 -m pip --no-cache-dir install torch==1.8.2+cu111 -f https://download.pytorch.org/whl/lts/1.8/torch_lts.html && \
     python3.8 -m pip install Cython && \
     python3.8 -m pip install fastBPE && \
+    python3.8 -m pip install regex && \
     python3.8 -m pip install tfrecord && \
     python3.8 -m pip install tensorboard && \
     python3.8 -m pip install mead-xpctl-client
