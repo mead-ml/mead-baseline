@@ -22,6 +22,7 @@ RUN python3.6 -m pip install torch==1.7.0+cu101 -f https://download.pytorch.org/
     python3.6 -m pip install torchelastic && \
     python3.6 -m pip install Cython && \
     python3.6 -m pip install fastBPE && \
+    python3.6 -m pip install regex && \
     python3.6 -m pip install tfrecord && \
     python3.6 -m pip install tensorboard && \
     python3.6 -m pip install mead-xpctl-client
