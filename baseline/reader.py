@@ -397,9 +397,14 @@ class SeqPredictReader:
                 if lengths is not None:
                     example['{}_lengths'.format(k)] = lengths
 
+
             example['y'], lengths = self.label_vectorizer.run(example_tokens, self.label2index)
             example['y_lengths'] = lengths
             example['ids'] = i
+
+            # Uncomment for sanity check that you wont receive truncated sequences
+            #if len(example[k]) != len(example['y']):
+            #    raise Exception(f"{len(example[k])} != {len(example['y'])}")
             ts.append(example)
         examples = baseline.data.DictExamples(ts, do_shuffle=shuffle, sort_key=sort_key)
         return baseline.data.ExampleDataFeed(examples, batchsz=batchsz, shuffle=shuffle, trim=self.trim, truncate=self.truncate), texts
