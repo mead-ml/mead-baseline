@@ -385,11 +385,16 @@ class SeqPredictReader:
         pass
 
     def load(self, filename, vocabs, batchsz, shuffle=False, sort_key=None):
-        ts = []
         texts = self.read_examples(filename)
         if sort_key is not None and not sort_key.endswith('_lengths'):
             sort_key += '_lengths'
 
+        examples = self.convert_to_tensors(texts, vocabs)
+        examples = baseline.data.DictExamples(examples, do_shuffle=shuffle, sort_key=sort_key)
+        return baseline.data.ExampleDataFeed(examples, batchsz=batchsz, shuffle=shuffle, trim=self.trim, truncate=self.truncate), texts
+
+    def convert_to_tensors(self, texts, vocabs):
+        ts = []
         for i, example_tokens in enumerate(texts):
             example = {}
             for k, vectorizer in self.vectorizers.items():
@@ -406,9 +411,8 @@ class SeqPredictReader:
             #if len(example[k]) != len(example['y']):
             #    raise Exception(f"{len(example[k])} != {len(example['y'])}")
             ts.append(example)
-        examples = baseline.data.DictExamples(ts, do_shuffle=shuffle, sort_key=sort_key)
-        return baseline.data.ExampleDataFeed(examples, batchsz=batchsz, shuffle=shuffle, trim=self.trim, truncate=self.truncate), texts
 
+        return ts
 
 @export
 class MultiLabelSeqPredictReader:
