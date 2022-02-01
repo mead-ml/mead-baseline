@@ -587,7 +587,7 @@ class BPEVectorizer1D(AbstractVectorizer, HasSubwordTokens):
     def __init__(self, **kwargs):
         """Loads a BPE tokenizer"""
         super().__init__(kwargs.get('transform_fn'), kwargs.get('emit_begin_tok', []), kwargs.get('emit_end_tok', []))
-        self.max_seen = 4096
+        self.max_seen = kwargs.get('max_seen', 4096)
         self.model_file = kwargs.get('model_file')
         self.vocab_file = kwargs.get('vocab_file')
         self._special_tokens = {"[CLS]", "<unk>", "<EOS>", "<UNK>", "<s>", "</s>"}
@@ -1111,7 +1111,7 @@ class WordpieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
 
     def __init__(self, **kwargs):
         super().__init__(kwargs.get('transform_fn'), kwargs.get('emit_begin_tok', ['[CLS]']), kwargs.get('emit_end_tok', ['[SEP]']))
-        self.max_seen = 512
+        self.max_seen = kwargs.get('max_seen', 512)
         self.tokenizer = WordpieceTokenizer(self.read_vocab(kwargs.get('vocab_file')))
         self.mxlen = kwargs.get('mxlen', -1)
         self.dtype = kwargs.get('dtype', 'int')
@@ -1476,7 +1476,7 @@ class GPT2Vectorizer1D(AbstractVectorizer, HasSubwordTokens):
     def __init__(self, **kwargs):
         """Loads a BPE tokenizer"""
         super().__init__(kwargs.get('transform_fn'), kwargs.get('emit_begin_tok', []), kwargs.get('emit_end_tok', []))
-        self.max_seen = 514
+        self.max_seen = kwargs.get('max_seen', 514)
         self.model_file = kwargs.get('model_file')
         self.vocab_file = kwargs.get('vocab_file')
         self._special_tokens = {"<unk>", "<pad>", "<s>", "</s>"}
@@ -1656,7 +1656,7 @@ class XLMRSentencePieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
         super().__init__(kwargs.get('transform_fn'),
                          kwargs.get('emit_begin_tok', []),
                          kwargs.get('emit_end_tok', []))
-        self.max_seen = 512
+        self.max_seen = kwargs.get('max_seen', 512)
         self.model_file = kwargs.get('model_file')
         self.tokenizer = spm.SentencePieceProcessor(self.model_file)
 
@@ -1822,7 +1822,7 @@ class CamembertSentencePieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
         super().__init__(kwargs.get('transform_fn'),
                          kwargs.get('emit_begin_tok', []),
                          kwargs.get('emit_end_tok', []))
-        self.max_seen = 512
+        self.max_seen = kwargs.get('max_seen', 512)
         self.model_file = kwargs.get('model_file')
         self.tokenizer = spm.SentencePieceProcessor(self.model_file)
 
@@ -1994,7 +1994,7 @@ class BigBirdSentencePieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
         super().__init__(kwargs.get('transform_fn'),
                          kwargs.get('emit_begin_tok', []),
                          kwargs.get('emit_end_tok', []))
-        self.max_seen = 512
+        self.max_seen = kwargs.get('max_seen', 4096)
         self.model_file = kwargs.get('model_file')
         self.tokenizer = spm.SentencePieceProcessor(self.model_file)
 

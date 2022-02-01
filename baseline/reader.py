@@ -294,6 +294,7 @@ def _try_read_labels(**kwargs):
         label2index = {l: i for i, l in enumerate(label_list)}
     return label2index
 
+
 @export
 class SeqPredictReader:
 
