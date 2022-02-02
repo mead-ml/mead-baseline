@@ -587,7 +587,7 @@ class BPEVectorizer1D(AbstractVectorizer, HasSubwordTokens):
     def __init__(self, **kwargs):
         """Loads a BPE tokenizer"""
         super().__init__(kwargs.get('transform_fn'), kwargs.get('emit_begin_tok', []), kwargs.get('emit_end_tok', []))
-        self.max_seen = 128
+        self.max_seen = kwargs.get('max_seen', 4096)
         self.model_file = kwargs.get('model_file')
         self.vocab_file = kwargs.get('vocab_file')
         self._special_tokens = {"[CLS]", "<unk>", "<EOS>", "<UNK>", "<s>", "</s>"}
@@ -1111,7 +1111,7 @@ class WordpieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
 
     def __init__(self, **kwargs):
         super().__init__(kwargs.get('transform_fn'), kwargs.get('emit_begin_tok', ['[CLS]']), kwargs.get('emit_end_tok', ['[SEP]']))
-        self.max_seen = 128
+        self.max_seen = kwargs.get('max_seen', 512)
         self.tokenizer = WordpieceTokenizer(self.read_vocab(kwargs.get('vocab_file')))
         self.mxlen = kwargs.get('mxlen', -1)
         self.dtype = kwargs.get('dtype', 'int')
@@ -1476,7 +1476,7 @@ class GPT2Vectorizer1D(AbstractVectorizer, HasSubwordTokens):
     def __init__(self, **kwargs):
         """Loads a BPE tokenizer"""
         super().__init__(kwargs.get('transform_fn'), kwargs.get('emit_begin_tok', []), kwargs.get('emit_end_tok', []))
-        self.max_seen = 128
+        self.max_seen = kwargs.get('max_seen', 514)
         self.model_file = kwargs.get('model_file')
         self.vocab_file = kwargs.get('vocab_file')
         self._special_tokens = {"<unk>", "<pad>", "<s>", "</s>"}
@@ -1498,10 +1498,6 @@ class GPT2Vectorizer1D(AbstractVectorizer, HasSubwordTokens):
         Offsets.INDICES['GO'] = self.vocab['<s>']
         Offsets.INDICES['EOS'] = self.vocab['</s>']
         Offsets.INDICES['UNK'] = self.vocab['<unk>']
-        #Offsets.VALUES['PAD'] = '<pad>'
-        #Offsets.VALUES['GO'] = '<s>'
-        #Offsets.VALUES['EOS'] = '</s>'
-        #Offsets.VALUES['UNK'] = ['<unk>']
 
     @property
     def vocab(self):
@@ -1559,7 +1555,7 @@ class GPT2Vectorizer1D(AbstractVectorizer, HasSubwordTokens):
 
     def _next_element(self, tokens, vocab):
         for atom in self.iterable(tokens):
-            value = vocab.get(atom, vocab.get(Offsets.VALUES[Offsets.UNK]))
+            value = vocab.get(atom, vocab.get("<unk>"))
             yield value
 
     def run(self, tokens, vocab):
@@ -1582,6 +1578,64 @@ class GPT2Vectorizer1D(AbstractVectorizer, HasSubwordTokens):
         return self.mxlen,
 
 
+@register_vectorizer(name='gpt2-dict1d')
+class GPT2Dict1DVectorizer(GPT2Vectorizer1D):
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.field = kwargs.get('fields', kwargs.get('field', 'text'))
+        self.delim = kwargs.get('token_delim', '~~')
+
+    def iterable(self, tokens):
+        for t in self.emit_begin_tok:
+            yield t
+        for t in tokens:
+            tok = t[self.field] if isinstance(t, dict) else t
+            if tok == '<unk>':
+                yield '<unk>'
+            elif tok == '<PAD>':
+                yield '<pad>'
+            elif tok == '<GO>':
+                yield '<s>'
+            elif tok == '<EOS>':
+                yield '</s>'
+            else:
+                for subtok in self.tokenizer.encode_subword(tok):
+                    yield subtok
+        for t in self.emit_end_tok:
+            yield t
+
+
+@register_vectorizer(name='gpt2-label-dict1d')
+class GPT2LabelDict1DVectorizer(GPT2Vectorizer1D):
+
+    def __init__(self, **kwargs):
+        kwargs['emit_begin_tok'] = kwargs.get('emit_begin_tok', ["<pad>"])
+        kwargs['emit_end_tok'] = kwargs.get('emit_end_tok', ["<pad>"])
+        super().__init__(**kwargs)
+        self.field = kwargs.get('fields', kwargs.get('field', 'text'))
+        self.label = kwargs.get('label', 'label')
+
+    def iterable(self, tokens):
+        for t in self.emit_begin_tok:
+            yield t
+        for t in tokens:
+            t_word = t[self.field]
+            t_label = t[self.label]
+            subwords = [x for x in self.tokenizer.encode_subword(t_word)]
+            subwords = ["<pad>"] * len(subwords)
+            # TODO: The tokenizer sometimes cuts up the token and leaves nothing
+            # how to handle this since we cannot get anything for it
+            if len(subwords):
+                subwords[0] = t_label
+            for x in subwords:
+                yield x
+        for t in self.emit_end_tok:
+            yield t
+
+    def run(self, tokens, vocab):
+        return super().run(tokens, vocab)
+
 @register_vectorizer(name='xlmr-spm1d')
 class XLMRSentencePieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
     SPECIAL_TOKENS = {"<unk>", "<pad>", "<s>", "</s>"}
@@ -1602,7 +1656,7 @@ class XLMRSentencePieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
         super().__init__(kwargs.get('transform_fn'),
                          kwargs.get('emit_begin_tok', []),
                          kwargs.get('emit_end_tok', []))
-        self.max_seen = 512
+        self.max_seen = kwargs.get('max_seen', 512)
         self.model_file = kwargs.get('model_file')
         self.tokenizer = spm.SentencePieceProcessor(self.model_file)
 
@@ -1768,7 +1822,7 @@ class CamembertSentencePieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
         super().__init__(kwargs.get('transform_fn'),
                          kwargs.get('emit_begin_tok', []),
                          kwargs.get('emit_end_tok', []))
-        self.max_seen = 512
+        self.max_seen = kwargs.get('max_seen', 512)
         self.model_file = kwargs.get('model_file')
         self.tokenizer = spm.SentencePieceProcessor(self.model_file)
 
@@ -1929,6 +1983,156 @@ class BPENBestVectorizer2D(BPENBestVectorizer1D):
     def get_dims(self):
         return self.nbest, self.mxlen
 
+
+@register_vectorizer(name='bb-spm1d')
+class BigBirdSentencePieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
+    SPECIAL_TOKENS = {"[CLS]", "[UNK]", "<s>", "</s>", "[MASK]"}
+
+    def __init__(self,
+                 **kwargs):
+        """Loads a BPE tokenizer"""
+        super().__init__(kwargs.get('transform_fn'),
+                         kwargs.get('emit_begin_tok', []),
+                         kwargs.get('emit_end_tok', []))
+        self.max_seen = kwargs.get('max_seen', 4096)
+        self.model_file = kwargs.get('model_file')
+        self.tokenizer = spm.SentencePieceProcessor(self.model_file)
+
+        self._special_tokens = BigBirdSentencePieceVectorizer1D.SPECIAL_TOKENS
+        self.mxlen = kwargs.get('mxlen', -1)
+        self._vocab = {}
+        #self._REWIRE_GLOBAL_OFFSETS()
+        for i in range(len(self.tokenizer)):
+            v = self.tokenizer.IdToPiece(i)
+            self._vocab[v] = i
+
+
+    def __setstate__(self, d):
+        self.__dict__ = d
+        #self._REWIRE_GLOBAL_OFFSETS()
+
+    @property
+    def vocab(self):
+        return self._vocab
+
+    @property
+    def special_tokens(self) -> Set[str]:
+        return self._special_tokens
+
+    @property
+    def subword_sentinel(self):
+        return getattr(self.tokenizer, "subword_sentinel", "@@")
+
+    def valid_label_indices(self, tokens: Iterable) -> List[int]:
+        indices = []
+        in_subword = False
+        for i, token in enumerate(tokens):
+            if token in self.special_tokens:
+                in_subword = False
+                continue
+            if not in_subword:
+                indices.append(i)
+                if token.endswith(self.subword_sentinel):
+                    in_subword = True
+            else:
+                if not token.endswith(self.subword_sentinel):
+                    in_subword = False
+        return indices
+
+    def count(self, tokens):
+        seen = 0
+        counter = collections.Counter()
+        for tok in self.iterable(tokens):
+            counter[tok] += 1
+            seen += 1
+        self.max_seen = max(self.max_seen, seen)
+        return counter
+
+    def iterable(self, tokens):
+        for t in self.emit_begin_tok:
+            yield t
+
+        if not isinstance(tokens, str):
+            tokens = ' '.join(tokens)
+
+        spm_tokens = self.tokenizer.EncodeAsPieces(tokens)
+        for t in spm_tokens:
+            yield t
+        for t in self.emit_end_tok:
+            yield t
+
+    def _next_element(self, tokens, vocab):
+        for atom in self.iterable(tokens):
+            value = vocab.get(atom, Offsets.UNK)
+            yield value
+
+    def run(self, tokens, vocab):
+
+        if self.mxlen < 0:
+            self.mxlen = self.max_seen
+        vec1d = pads(self.mxlen, dtype=np.long)
+        for i, atom in enumerate(self._next_element(tokens, vocab)):
+            if i == self.mxlen:
+                i -= len(self.emit_end_tok)
+                for j, x in enumerate(self.emit_end_tok):
+                    vec1d[i + j] = vocab.get(x)
+                i = self.mxlen - 1
+                break
+            vec1d[i] = atom
+        valid_length = i + 1
+        return vec1d, valid_length
+
+    def get_dims(self):
+        return self.mxlen,
+
+
+@export
+@register_vectorizer(name='bb-spm-dict1d')
+class BigBirdSentencePieceDict1DVectorizer(BigBirdSentencePieceVectorizer1D):
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.field = kwargs.get('fields', kwargs.get('field', 'text'))
+        self.delim = kwargs.get('token_delim', '~~')
+
+    def iterable(self, tokens):
+        tok = [t[self.field] if isinstance(t, dict) else t for t in tokens]
+
+        return super().iterable(tok)
+
+
+@export
+@register_vectorizer(name='bb-spm-label-dict1d')
+class BigBirdSentencePieceLabelDict1DVectorizer(BigBirdSentencePieceVectorizer1D):
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.field = kwargs.get('fields', kwargs.get('field', 'text'))
+        self.label = kwargs.get('label', 'label')
+
+    def iterable(self, tokens):
+        for t in self.emit_begin_tok:
+            yield t
+        for t in tokens:
+            t_word = t[self.field]
+            t_label = t[self.label]
+            if t_word in Offsets.VALUES:
+                yield t_label
+            elif t == '<unk>':
+                yield t_label
+            elif t == '<eos>':
+                yield t_label
+            else:
+                subwords = self.tokenizer.EncodeAsPieces(t_word)
+                subwords = [Offsets.VALUES[Offsets.PAD]] * len(subwords)
+                subwords[0] = t_label
+                for x in subwords:
+                    yield x
+        for t in self.emit_end_tok:
+            yield t
+
+    def run(self, tokens, vocab):
+        return super().run(tokens, vocab)
 
 @export
 def create_vectorizer(**kwargs):
