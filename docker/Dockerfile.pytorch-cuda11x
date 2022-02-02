@@ -28,7 +28,7 @@ RUN python3.8 -m pip --no-cache-dir install torch==1.7.1+cu110 -f https://downlo
     python3.8 -m pip install regex && \
     python3.8 -m pip install tfrecord && \
     python3.8 -m pip install tensorboard && \
-    python3.8 -m pip install mead-xpctl-client \
+    python3.8 -m pip install mead-xpctl-client && \
     python3.8 -m pip install transformers &&
     python3.8 -m pip install pandas && \
     python3.8 -m pip install sentencepiece
