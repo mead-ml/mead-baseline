@@ -36,6 +36,18 @@ jobs:
               file: docker/Dockerfile.pytorch-cuda111
               push: true
               tags: meadml/mead2-pytorch-cuda111:latest
+        - name: Build & Push PyTorch CUDA 11 ext image
+          uses: docker/build-push-action@v2
+          with:
+              file: docker/Dockerfile.pytorch-cuda11x
+              push: true
+              tags: meadml/mead2-pytorch-cuda11x:latest
+        - name: Build & Push PyTorch CUDA 11.1 ext image
+          uses: docker/build-push-action@v2
+          with:
+              file: docker/Dockerfile.pytorch-cuda111x
+              push: true
+              tags: meadml/mead2-pytorch-cuda111x:latest
         - name: Build & Push TF2 CUDA 10 image
           uses: docker/build-push-action@v2
           with:
