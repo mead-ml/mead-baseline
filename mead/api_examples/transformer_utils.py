@@ -408,7 +408,7 @@ class MultiFileDatasetReader:
                 emit_end_tok=emit_end_tok,
                 transform_fn=transform_fn)
         else:
-            import SentencePieceVectorizer1D
+            from baseline.vectorizers import SentencePieceVectorizer1D
             return SentencePieceVectorizer1D(
                 model_file=model_file,
                 mxlen=mxlen,

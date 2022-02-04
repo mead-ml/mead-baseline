@@ -20,7 +20,7 @@ def get_subword_vec1d(type):
     elif type == 'wordpiece':
         return WordpieceVectorizer1D
     else:
-        import SentencePieceVectorizer1D
+        from baseline.vectorizers import SentencePieceVectorizer1D
         return SentencePieceVectorizer1D
 
 
@@ -175,6 +175,7 @@ def parse_args(argv):
     parser.add_argument('--codes', help='BPE codes')
     parser.add_argument('--vocab', help='BPE vocab')
     parser.add_argument("--nctx", type=int, default=256, help="Max input length")
+    parser.add_argument("--subword_type", type=str, choices=["bpe", "wordpiece", "sentencepiece"], default="bpe")
     parser.add_argument("--fmt", type=str, default='json', choices=['json', 'tsv', 'tfrecord'])
     parser.add_argument("--fields", type=str, nargs="+", default=["x_str", "y_str"])
     parser.add_argument("--output", type=str, help="Output base name, e.g. /path/to/output/record")

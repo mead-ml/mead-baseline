@@ -118,7 +118,7 @@ def get_subword_vec1d(type):
     elif type == 'wordpiece':
         return WordpieceVectorizer1D
     else:
-        import SentencePieceVectorizer1D
+        from baseline.vectorizers import SentencePieceVectorizer1D
         return SentencePieceVectorizer1D
 
 def main():
