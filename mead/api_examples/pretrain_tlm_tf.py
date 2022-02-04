@@ -112,6 +112,15 @@ def get_num_samples(sample_md):
 
 
 
+def get_subword_vec1d(type):
+    if type == 'bpe':
+        return BPEVectorizer1D
+    elif type == 'wordpiece':
+        return WordpieceVectorizer1D
+    else:
+        import SentencePieceVectorizer1D
+        return SentencePieceVectorizer1D
+
 def main():
     parser = ArgumentParser()
     parser.add_argument("--basedir", type=str)
@@ -137,7 +146,7 @@ def main():
     parser.add_argument("--batch_size", type=int, default=256, help="Batch Size")
     parser.add_argument("--subword_model_file", type=str, help="The BPE model file", required=False)
     parser.add_argument("--subword_vocab_file", type=str, help="The BPE subword vocab", required=True)
-    parser.add_argument("--subword_type", type=str, choices=["bpe", "wordpiece"], default="bpe")
+    parser.add_argument("--subword_type", type=str, choices=["bpe", "wordpiece", "sentencepiece"], default="bpe")
     parser.add_argument("--dropout", type=float, default=0.1, help="Dropout")
     parser.add_argument("--ffn_pdrop", type=float, default=0.0, help="Dropout in the dense stack")
     parser.add_argument("--layer_drop", type=float, default=0.0, help="LayerDrop to apply")
@@ -183,7 +192,7 @@ def main():
     strategy = create_distribute_strategy(args.distribute, args.tpu_ep)
     num_replicas = strategy.num_replicas_in_sync
     logger.info(f"Using {num_replicas} replicas in this job.")
-    Vec1D = BPEVectorizer1D if args.subword_type == 'bpe' else WordpieceVectorizer1D
+    Vec1D = get_subword_vec1d(args.subword_type)
     vectorizer = Vec1D(model_file=args.subword_model_file,
                        vocab_file=args.subword_vocab_file,
                        mxlen=args.nctx,

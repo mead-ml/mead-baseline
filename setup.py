@@ -91,7 +91,8 @@ def main():
             'tf2': ['tensorflow_addons'],
             'grpc': ['grpc'],
             'onnx': ['onnxruntime'],
-            'tfrecord': ['tfrecord']
+            'tfrecord': ['tfrecord'],
+            'spm': ['sentencepiece']
         },
         entry_points={
             'console_scripts': [

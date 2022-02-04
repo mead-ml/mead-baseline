@@ -320,6 +320,7 @@ def parse_args(argv):
     parser.add_argument("--batch_size", type=int, default=256, help="Batch Size")
     parser.add_argument("--subword_model_file", type=str, help="The BPE model file", required=True)
     parser.add_argument("--subword_vocab_file", type=str, help="The BPE subword vocab", required=True)
+    parser.add_argument("--subword_type", type=str, choices=["bpe", "wordpiece", "sentencepiece"], default="bpe")
     parser.add_argument("--dropout", type=float, default=0.1, help="Dropout")
     parser.add_argument("--ffn_pdrop", type=float, default=0.0, help="Dropout in the dense stack")
     parser.add_argument("--layer_drop", type=float, default=0.0, help="LayerDrop to apply")
