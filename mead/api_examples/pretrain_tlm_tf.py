@@ -141,7 +141,7 @@ def main():
     parser.add_argument("--num_train_workers", type=int, default=4, help="Number train workers")
     parser.add_argument("--distribute", type=str, default="mirror", choices=["mirror", "tpu", "nccl"])
     parser.add_argument("--tpu_ep", type=str, help="The TPU endpoint if using `distribute=tpu`")
-    parser.add_argument("--nctx", type=int, default=256, help="Max input length")
+    parser.add_argument("--nctx", type=int, default=512, help="Max input length")
     parser.add_argument("--file_type", default='tfrecord', choices=['json', 'tfrecord'], help="Glob pattern for data")
     parser.add_argument("--batch_size", type=int, default=256, help="Batch Size")
     parser.add_argument("--subword_model_file", type=str, help="The BPE model file", required=False)
@@ -172,6 +172,8 @@ def main():
     parser.add_argument("--tb", help="Turn on tensorboard?", type=str2bool, default=False)
     parser.add_argument("--convert_only", help="Should we just convert this file to NPZ and exit?", type=str2bool, default=False)
     parser.add_argument("--extra_tokens", help="What extra tokens should we use", nargs="+", default=["[CLS]", "[MASK]"])
+    parser.add_argument("--eps", help="Epsilon", default=1e-6, type=float)
+    parser.add_argument("--beta2", help="Epsilon", default=0.98, type=float)
     args = parser.parse_args()
     SET_TRAIN_FLAG(True)
 
@@ -286,7 +288,8 @@ def main():
     lr_decay = CosineDecaySchedulerTensorFlow(steps_per_epoch * args.epochs, lr=args.lr)
     linear_warmup = WarmupLinearSchedulerTensorFlow(args.warmup_steps, lr=args.lr)
     lr_sched = CompositeLRSchedulerTensorFlow(linear_warmup, lr_decay)
-    optimizer = EagerOptimizer(loss_function, optim=args.optim, lr_function=lr_sched, weight_decay=args.weight_decay, clip=args.clip, lr=args.lr)
+    optimizer = EagerOptimizer(loss_function, optim=args.optim, lr_function=lr_sched, weight_decay=args.weight_decay, clip=args.clip,
+                               lr=args.lr, epsilon=args.eps, beta2=args.beta2)
     checkpoint = tf.train.Checkpoint(optimizer=optimizer.optimizer, model=model)
     checkpoint_manager = tf.train.CheckpointManager(checkpoint,
                                                     directory=args.basedir,
