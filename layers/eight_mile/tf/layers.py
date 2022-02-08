@@ -1756,9 +1756,11 @@ class SeqScaledDotProductAttentionT5(SequenceSequenceAttention):
         self.bidirectional = bidirectional
         self.num_buckets = num_buckets
         self.max_distance = max_distance
-        self.rel_embeddings = self.add_weight("rel_embeddings_t5", shape=[self.num_heads, self.num_buckets],
-                                              initializer=tf.keras.initializers.VarianceScaling(1.0, 'fan_in', 'normal'),
-                                              trainable=True)
+
+    def build(self, input_shape):
+        self.rel_embedding = self.add_weight("rel_embeddings_t5", shape=[self.num_heads, self.num_buckets],
+                                             initializer=tf.keras.initializers.VarianceScaling(1.0, 'fan_in', 'normal'),
+                                             trainable=True)
 
     def _relative_position_bucket(self, relative_position,
                                   bidirectional=True,
@@ -2040,9 +2042,10 @@ class SeqDotProductAttentionT5(SequenceSequenceAttention):
         self.bidirectional = bidirectional
         self.num_buckets = num_buckets
         self.max_distance = max_distance
-        self.rel_embeddings = self.add_weight("rel_embeddings_t5", shape=[self.num_heads, self.num_buckets],
-                                              initializer=tf.keras.initializers.VarianceScaling(1.0, 'fan_in', 'normal'),
-                                              trainable=True)
+    def build(self, input_shape):
+        self.rel_embedding = self.add_weight("rel_embeddings_t5", shape=[self.num_heads, self.num_buckets],
+                                             initializer=tf.keras.initializers.VarianceScaling(1.0, 'fan_in', 'normal'),
+                                             trainable=True)
 
     def _relative_position_bucket(self, relative_position,
                                   bidirectional=True,

@@ -10,7 +10,7 @@ import baseline.tf.embeddings
 import baseline.embeddings
 from baseline.vectorizers import BPEVectorizer1D, WordpieceVectorizer1D
 from eight_mile.utils import Average, Timer, get_num_gpus_multiworker
-from eight_mile.tf.layers import create_distribute_strategy, read_yaml_tf, SET_TRAIN_FLAG
+from eight_mile.tf.layers import create_distribute_strategy, read_yaml_tf, SET_TRAIN_FLAG, set_tf_eager_debug
 from eight_mile.optz import *
 from eight_mile.tf.optz import *
 from baseline.tf.lm import TransformerLanguageModel, TransformerMaskedLanguageModel, GatedMLPLanguageModel
@@ -19,7 +19,8 @@ from collections.abc import Mapping
 import tensorflow as tf
 import json
 logger = logging.getLogger(__file__)
-
+# If True, this will turn of autograph compilation.  Change this flag if you want to debug
+set_tf_eager_debug(False)
 
 """Pre-train a Transformer model in TensorFlow
 
@@ -424,12 +425,17 @@ def create_model(args, embeddings):
                                              src_keys=['x'], tgt_key='x')
     else:
 
+
         if len(args.rpr_k) == 0 or args.rpr_k[0] < 1:
             rpr_k = None
         elif len(args.rpr_k) == 1:
             rpr_k = args.rpr_k[0]
         else:
             rpr_k = args.rpr_k
+
+        if args.ra_type != None and args.ra_type != 'shaw' and args.rpr_k is not None:
+            print(f"Relative attention mismatch. You requested {args.ra_type} with rpr set.  Setting it to 0")
+            rpr_k = None
         TLM = TransformerLanguageModel if args.causal else TransformerMaskedLanguageModel
         model = TLM.create(embeddings,
                            hsz=args.d_model,
