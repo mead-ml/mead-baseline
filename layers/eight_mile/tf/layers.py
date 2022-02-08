@@ -3,7 +3,7 @@ import tensorflow as tf
 from tensorflow.python.lib.io.file_io import FileIO
 import numpy as np
 import os
-from eight_mile.utils import listify, Offsets, wraps, get_version, is_sequence, transition_mask as transition_mask_np, get_num_gpus_multiworker
+from eight_mile.utils import listify, Offsets, wraps, get_version, is_sequence, transition_mask as transition_mask_np, get_num_gpus_multiworker, get_alibi_slopes
 from typing import Optional, Union, List, Dict, Any, Tuple
 import contextlib
 import math
@@ -1715,6 +1715,38 @@ class SeqScaledDotProductAttention(SequenceSequenceAttention):
         return tf.nn.softmax(scores, name="attention_weights")
 
 
+class SeqScaledDotProductAttentionALiBi(SequenceSequenceAttention):
+    def __init__(self, pdrop: float = 0.1, num_heads=None, name: str = "scaled_dot_product_attention_alibi", **kwargs):
+        super().__init__(pdrop, name=name, **kwargs)
+        self.num_heads = num_heads
+        self.slopes = tf.constant(get_alibi_slopes(self.num_heads), name='slopes')
+
+    def _attention(self, query, key, mask=None):
+        """Attention with Linear Biases, defined in https://arxiv.org/pdf/2108.12409.pdf
+
+        :param query: a query for alignment. Can come from self in case of self-attn or decoder in case of E/D
+        :param key: a set of keys from encoder or self
+        :param mask: masking (for destination) to prevent seeing what we shouldnt
+        :return: A tensor that is (BxHxTxT)
+        """
+        # Check why this was set to 2 before
+        d_k = tf.shape(query)[-1]
+        scores = tf.matmul(query, key, transpose_b=True)
+        scores *= tf.math.rsqrt(tf.cast(d_k, tf.float32))
+        scores_shape = get_shape_as_list(scores)
+        T_k = scores_shape[-1]
+        T_q = scores_shape[-2]
+        offsets = - tf.abs(tf.reshape(tf.range(T_q), [-1, 1]) - tf.reshape(tf.range(T_k), [1, -1]))  # [T_q, T_k]
+        alibi = tf.reshape(self.slopes, [-1, 1, 1]) * tf.cast(tf.expand_dims(offsets, 0), self.slopes.dtype)  # [H, T_q, T_k]
+        alibi = tf.expand_dims(alibi, 0)
+        scores += alibi
+
+        if mask is not None:
+            scores = masked_fill(scores, tf.equal(mask, 0), -1e9)
+
+        return tf.nn.softmax(scores, name="attention_weights")
+
+
 class SequenceSequenceRelativeAttention(tf.keras.layers.Layer):
     """This form of attention is specified in Shaw et al 2018: https://www.aclweb.org/anthology/N18-2074.pdf
     """
@@ -1908,6 +1940,35 @@ class SeqDotProductAttention(SequenceSequenceAttention):
         return tf.nn.softmax(scores, name="attention_weights")
 
 
+class SeqDotProductAttentionALiBi(SequenceSequenceAttention):
+    def __init__(self, pdrop: float = 0.1, num_heads=None, name: str = "dot_product_attention_alibi", **kwargs):
+        super().__init__(pdrop, name=name, **kwargs)
+        self.num_heads = num_heads
+        self.slopes = tf.constant(get_alibi_slopes(self.num_heads), name='slopes')
+
+    def _attention(self, query, key, mask=None):
+        """Attention with Linear Biases, defined in https://arxiv.org/pdf/2108.12409.pdf
+
+        :param query: a query for alignment. Can come from self in case of self-attn or decoder in case of E/D
+        :param key: a set of keys from encoder or self
+        :param mask: masking (for destination) to prevent seeing what we shouldnt
+        :return: A tensor that is (BxHxTxT)
+        """
+        scores = tf.matmul(query, key, transpose_b=True)
+        scores_shape = tf.shape(scores)
+        T_k = scores_shape[-1]
+        T_q = scores_shape[-2]
+        offsets = - tf.abs(tf.reshape(tf.range(T_q), [-1, 1]) - tf.reshape(tf.range(T_k), [1, -1]))  # [T_q, T_k]
+        alibi = tf.reshape(self.slopes, [-1, 1, 1]) * tf.cast(tf.expand_dims(offsets, 0), self.slopes.dtype)  # [H, T_q, T_k]
+        alibi = tf.expand_dims(alibi, 0)
+        scores += alibi
+
+        if mask is not None:
+            scores = masked_fill(scores, tf.equal(mask, 0), -1e9)
+
+        return tf.nn.softmax(scores, name="attention_weights")
+
+
 class MultiHeadedAttention(tf.keras.layers.Layer):
     """
     Multi-headed attention from https://arxiv.org/abs/1706.03762 via http://nlp.seas.harvard.edu/2018/04/03/attention.html
@@ -1937,6 +1998,7 @@ class MultiHeadedAttention(tf.keras.layers.Layer):
         dropout: float = 0.1,
         scale: bool = False,
         d_k: Optional[int] = None,
+        alibi: bool = False,
         name: str = None,
     ):
         """Constructor for multi-headed attention
@@ -1966,9 +2028,15 @@ class MultiHeadedAttention(tf.keras.layers.Layer):
         if self.h > 1:  # w_O is not needed for sinlge headed attention
             self.w_O = tf.keras.layers.Dense(units=self.d_k * self.h, name="output_projection")
         if scale:
-            self.attn_fn = SeqScaledDotProductAttention(dropout)
+            if alibi:
+                self.attn_fn = SeqScaledDotProductAttentionALiBi(dropout, num_heads=num_heads)
+            else:
+                self.attn_fn = SeqScaledDotProductAttention(dropout)
         else:
-            self.attn_fn = SeqDotProductAttention(dropout)
+            if alibi:
+                self.attn_fn = SeqDotProductAttentionALiBi(dropout, num_heads=num_heads)
+            else:
+                self.attn_fn = SeqDotProductAttention(dropout)
         self.attn = None
 
     def call(self, qkvm):
@@ -2128,6 +2196,7 @@ class TransformerEncoder(tf.keras.layers.Layer):
         layer_norm_eps: float = 1.0e-6,
         windowed_ra: bool = False,
         rpr_value_on: bool = True,
+        alibi: bool = False,
         layer_drop: float = 0.0,
         name: Optional[str] = None
     ):
@@ -2140,7 +2209,7 @@ class TransformerEncoder(tf.keras.layers.Layer):
             self.self_attn = MultiHeadedRelativeAttention(num_heads, d_model, rpr_k, pdrop, scale, d_k=d_k,
                                                           windowed_ra=windowed_ra, rpr_value_on=rpr_value_on)
         else:
-            self.self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale=scale, d_k=d_k)
+            self.self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale=scale, d_k=d_k, alibi=alibi)
 
         self.ffn = FFN(d_model, activation_type, d_ff, ffn_pdrop, name="ffn")
         self.ln1 = tf.keras.layers.LayerNormalization(epsilon=layer_norm_eps)
@@ -2257,6 +2326,8 @@ class TransformerDecoder(tf.keras.layers.Layer):
         layer_norms_after: bool = False,
         layer_norm_eps: float = 1.0e-6,
         layer_drop: float = 0.0,
+        rpr_value_on: bool = True,
+        alibi: bool = False,
         name: str = None
     ):
         super().__init__(name=name)
@@ -2264,12 +2335,12 @@ class TransformerDecoder(tf.keras.layers.Layer):
         self.layer_norms_after = layer_norms_after
         self.d_ff = d_ff if d_ff is not None else 4 * d_model
         if rpr_k is not None:
-            self.self_attn = MultiHeadedRelativeAttention(num_heads, d_model, rpr_k, pdrop, scale, d_k=d_k, name="self_attention")
-            self.src_attn = MultiHeadedRelativeAttention(num_heads, d_model, rpr_k, pdrop, scale, d_k=d_k, name="src_attention")
+            self.self_attn = MultiHeadedRelativeAttention(num_heads, d_model, rpr_k, pdrop, scale, d_k=d_k, rpr_value_on=rpr_value_on, name="self_attention")
+            self.src_attn = MultiHeadedRelativeAttention(num_heads, d_model, rpr_k, pdrop, scale, d_k=d_k, rpr_value_on=rpr_value_on, name="src_attention")
 
         else:
-            self.self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale, d_k=d_k, name="self_attention")
-            self.src_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale, d_k=d_k, name="src_attention")
+            self.self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale, d_k=d_k, alibi=alibi, name="self_attention")
+            self.src_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale, d_k=d_k, alibi=alibi, name="src_attention")
 
         self.ffn = FFN(d_model, activation_type, d_ff, pdrop=ffn_pdrop, name="ffn")
         self.ln1 = tf.keras.layers.LayerNormalization(epsilon=layer_norm_eps)
@@ -2350,6 +2421,7 @@ class TransformerEncoderStack(tf.keras.layers.Layer):
         windowed_ra: bool = False,
         rpr_value_on: bool = True,
         layer_drop: float = 0.0,
+        alibi: bool = False,
         name: Optional[str] = None,
         **kwargs,
     ):
@@ -2367,7 +2439,7 @@ class TransformerEncoderStack(tf.keras.layers.Layer):
                     num_heads, d_model, pdrop, scale, activation, d_ff, d_k,
                     rpr_k=rpr_k[i], ffn_pdrop=ffn_pdrop,
                     layer_norms_after=layer_norms_after, layer_norm_eps=layer_norm_eps, windowed_ra=windowed_ra,
-                    rpr_value_on=rpr_value_on, name=name,
+                    rpr_value_on=rpr_value_on, alibi=alibi, name=name,
                 )
             )
 
@@ -2719,7 +2791,8 @@ class PairedModel(DualEncoderModel):
                  rpr_value_on=False,
                  reduction_type="2ha",
                  freeze_encoders=False,
-                 name=None):
+                 name=None,
+                 **kwargs):
         super().__init__(2*d_model if reduction_type.startswith("2") else d_model, stacking_layers, d_out, ffn_pdrop, name=name)
 
         reduction_type = reduction_type.lower()
@@ -2739,10 +2812,11 @@ class PairedModel(DualEncoderModel):
             raise Exception("Unknown exception type")
 
         self.embeddings = EmbeddingsStack({'x': embeddings})
+        alibi = kwargs.get('alibi', False)
         self.transformer = TransformerEncoderStack(num_heads=num_heads, d_model=d_model,
                                                    pdrop=dropout, layers=num_layers, activation='gelu', d_ff=d_ff,
-                                                   ffn_pdrop=ffn_pdrop,
-                                                   d_k=d_k, rpr_k=rpr_k, windowed_ra=windowed_ra, rpr_value_on=rpr_value_on)
+                                                   ffn_pdrop=ffn_pdrop, d_k=d_k, rpr_k=rpr_k, windowed_ra=windowed_ra,
+                                                   rpr_value_on=rpr_value_on, alibi=alibi)
 
         self.freeze = freeze_encoders
 
@@ -2840,6 +2914,8 @@ class TransformerDecoderStack(tf.keras.layers.Layer):
         layer_norms_after: bool = False,
         layer_norm_eps: float = 1.0e-6,
         layer_drop: float = 0.0,
+        rpr_value_on: bool = True,
+        alibi: bool = False,
         name: Optional[str] = None,
         **kwargs,
     ):
@@ -2854,7 +2930,8 @@ class TransformerDecoderStack(tf.keras.layers.Layer):
             self.decoders.append(
                 TransformerDecoder(num_heads, d_model, pdrop, scale, activation_type, d_ff,
                                    d_k=d_k, rpr_k=rpr_k[i], ffn_pdrop=ffn_pdrop,
-                                   layer_norms_after=layer_norms_after, layer_norm_eps=layer_norm_eps)
+                                   layer_norms_after=layer_norms_after, layer_norm_eps=layer_norm_eps,
+                                   rpr_value_on=rpr_value_on, alibi=alibi)
             )
 
     def call(self, inputs):
