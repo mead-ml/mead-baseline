@@ -39,20 +39,26 @@ TransformerEncoderOutput = namedtuple("TransformerEncoderOutput", ("output", "sr
 @register_encoder(name='transformer')
 class TransformerEncoderWrapper(torch.nn.Module):
 
-    def __init__(self, dsz, hsz=None, num_heads=4, layers=1, dropout=0.5, **kwargs):
+    def __init__(self, dsz, hsz=None, num_heads=4, layers=1, dropout=0.5,
+                 activation='relu',
+                 rpr_k=None,
+                 layer_norm_eps=1e-6,
+                 layer_drop=0.0, scale=True, rpr_value_on=True, alibi=False,
+                 d_k=None,
+                 d_ff=None,
+                 **kwargs):
         super().__init__()
         if hsz is None:
             hsz = dsz
         self.proj = pytorch_linear(dsz, hsz) if hsz != dsz else self._identity
-        d_ff = int(kwargs.get('d_ff', 4 * hsz))
-        rpr_k = kwargs.get('rpr_k')
-        d_k = kwargs.get('d_k')
-        layer_drop = float(kwargs.get('layer_drop', 0.0))
-        activation = kwargs.get('activation', 'relu')
-        scale = bool(kwargs.get('scale', True))
+        if d_ff is None:
+            d_ff = 4 * hsz
+
         self.transformer = TransformerEncoderStack(num_heads, d_model=hsz, d_ff=d_ff,
                                                    pdrop=dropout, scale=scale, layers=layers,
-                                                   rpr_k=rpr_k, d_k=d_k, activation=activation, layer_drop=layer_drop)
+                                                   rpr_k=rpr_k, d_k=d_k, activation=activation, layer_drop=layer_drop,
+                                                   layer_norm_eps=layer_norm_eps,
+                                                   rpr_value_on=rpr_value_on, alibi=alibi)
 
     def _identity(self, x):
         return x
