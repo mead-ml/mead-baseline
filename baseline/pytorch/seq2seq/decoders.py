@@ -330,7 +330,7 @@ class TransformerDecoderWrapper(torch.nn.Module):
                  activation='relu',
                  rpr_k=None,
                  layer_norm_eps=1e-6,
-                 layer_drop=0.0, scale=True, rpr_value_on=True, alibi=False,
+                 layer_drop=0.0, scale=True, rpr_value_on=True, ra_type=None,
                  d_k=None,
                  d_ff=None,
                  **kwargs):
@@ -347,7 +347,7 @@ class TransformerDecoderWrapper(torch.nn.Module):
                                                            pdrop=dropout, scale=scale, layers=layers,
                                                            rpr_k=rpr_k, d_k=d_k, activation_type=activation,
                                                            layer_drop=layer_drop, layer_norm_eps=layer_norm_eps,
-                                                           rpr_value_on=rpr_value_on, alibi=alibi)
+                                                           rpr_value_on=rpr_value_on, ra_type=ra_type)
 
         self.proj_to_hsz = self._identity
         self.proj_to_dsz = self._identity

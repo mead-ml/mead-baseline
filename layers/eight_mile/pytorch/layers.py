@@ -3023,7 +3023,7 @@ class MultiHeadedAttention(nn.Module):
     """
 
     def __init__(
-        self, num_heads: int, d_model: int, dropout: float = 0.1, scale: bool = False, d_k: Optional[int] = None, alibi: bool = False,
+        self, num_heads: int, d_model: int, dropout: float = 0.1, scale: bool = False, d_k: Optional[int] = None, ra_type: Optiona[str] = None,
     ):
         """Constructor for multi-headed attention
 
@@ -3032,6 +3032,7 @@ class MultiHeadedAttention(nn.Module):
         :param dropout (``float``): The amount of dropout to use
         :param scale: Should we scale the dot product attention
         :param d_k: The low-order project per head.  This is normally `d_model // num_heads` unless set explicitly
+        :param ra_type: If there is an attention bias term, that will be encapsulated in the attention computation
         """
         super().__init__()
         if d_k is None:
@@ -3053,12 +3054,12 @@ class MultiHeadedAttention(nn.Module):
         if self.h > 1:  # w_O is not needed for single headed attention
             self.w_O = Dense(self.d_k * self.h, d_model)
         if scale:
-            if alibi:
+            if ra_type == 'alibi':
                 self.attn_fn = SeqScaledDotProductAttentionALiBi(dropout, num_heads=num_heads)
             else:
                 self.attn_fn = SeqScaledDotProductAttention(dropout)
         else:
-            if alibi:
+            if ra_type == 'alibi':
                 self.attn_fn = SeqDotProductAttentionALiBi(dropout, num_heads=num_heads)
             else:
                 self.attn_fn = SeqDotProductAttention(dropout)
@@ -3229,18 +3230,18 @@ class TransformerEncoder(nn.Module):
         layer_norm_eps: float = 1.0e-6,
         windowed_ra: Optional[bool] = False,
         rpr_value_on: bool = True,
-        alibi: bool = False,
+        ra_type: Optional[str] =  None,
     ):
         super().__init__()
         # to properly execute BERT models, we have to follow T2T and do layer norms after
         self.layer_norms_after = layer_norms_after
         self.d_model = d_model
         self.d_ff = d_ff if d_ff is not None else 4 * d_model
-        if rpr_k is not None:
+        if rpr_k is not None:                
             self.self_attn = MultiHeadedRelativeAttention(num_heads, d_model, rpr_k, pdrop, scale, d_k=d_k,
                                                           windowed_ra=windowed_ra, rpr_value_on=rpr_value_on)
         else:
-            self.self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale=scale, d_k=d_k, alibi=alibi)
+            self.self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale=scale, d_k=d_k, ra_type=ra_type)
         self.ffn = nn.Sequential(
             Dense(self.d_model, self.d_ff),
             get_activation(activation_type),
@@ -3369,7 +3370,7 @@ class TransformerDecoder(nn.Module):
         layer_norms_after: bool = False,
         layer_norm_eps: float = 1.0e-6,
         rpr_value_on: bool = True,
-        alibi: bool = False,
+        ra_type: Optional[str] = None,
 
     ):
         super().__init__()
@@ -3381,8 +3382,8 @@ class TransformerDecoder(nn.Module):
             self.src_attn = MultiHeadedRelativeAttention(num_heads, d_model, rpr_k, pdrop, scale, d_k=d_k, rpr_value_on=rpr_value_on)
 
         else:
-            self.self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale, d_k=d_k, alibi=alibi)
-            self.src_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale, d_k=d_k, alibi=alibi)
+            self.self_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale, d_k=d_k, ra_type=ra_type)
+            self.src_attn = MultiHeadedAttention(num_heads, d_model, pdrop, scale, d_k=d_k, ra_type=ra_type)
 
         self.ffn = nn.Sequential(
             Dense(self.d_model, self.d_ff),
@@ -3431,7 +3432,7 @@ class TransformerEncoderStack(nn.Module):
         windowed_ra: Optional[bool] = False,
         rpr_value_on: bool = True,
         layer_drop: float = 0.0,
-        alibi: bool = False,
+        ra_type: Optional[str] = None,
         **kwargs,
     ):
         super().__init__()
@@ -3448,7 +3449,7 @@ class TransformerEncoderStack(nn.Module):
                 TransformerEncoder(
                     num_heads, d_model, pdrop, scale, activation, d_ff, d_k,
                     rpr_k=rpr_k[i], ffn_pdrop=ffn_pdrop, layer_norms_after=layer_norms_after,
-                    layer_norm_eps=layer_norm_eps, windowed_ra=windowed_ra, rpr_value_on=rpr_value_on, alibi=alibi
+                    layer_norm_eps=layer_norm_eps, windowed_ra=windowed_ra, rpr_value_on=rpr_value_on, ra_type=ra_type
                 )
             )
 
@@ -3584,7 +3585,7 @@ class TransformerDecoderStack(nn.Module):
         layer_norm_eps: float = 1.0e-6,
         layer_drop: float = 0.0,
         rpr_value_on: bool = True,
-        alibi: bool = False,
+        ra_type: Optiona[str] = None,
         **kwargs,
 
     ):
@@ -3601,7 +3602,7 @@ class TransformerDecoderStack(nn.Module):
                 TransformerDecoder(num_heads, d_model, pdrop, scale, activation_type, d_ff,
                                    d_k=d_k, rpr_k=rpr_k[i], ffn_pdrop=ffn_pdrop,
                                    layer_norms_after=layer_norms_after, layer_norm_eps=layer_norm_eps,
-                                   rpr_value_on=rpr_value_on, alibi=alibi)
+                                   rpr_value_on=rpr_value_on, ra_type=ra_type)
             )
 
     def forward(self, inputs):
@@ -4582,13 +4583,13 @@ class PairedModel(DualEncoderModel):
         else:
             raise Exception("Unknown exception type")
         self.weight_std = weight_std
-        alibi = kwargs.get('alibi', False)
+        ra_type = kwargs.get('ra_type')
         self.transformer = TransformerEncoderStack(num_heads=num_heads, d_model=d_model,
                                                    pdrop=dropout, layers=num_layers, activation='gelu', d_ff=d_ff,
                                                    ffn_pdrop=ffn_pdrop,
                                                    d_k=d_k, rpr_k=rpr_k, windowed_ra=windowed_ra, rpr_value_on=rpr_value_on,
                                                    layer_norms_after=layer_norms_after, layer_norm_eps=layer_norm_eps,
-                                                   alibi=alibi)
+                                                   ra_type=ra_type)
 
         self.embeddings = EmbeddingsStack({'x': embeddings}, 0.0, False, embeddings_reduction)
         self.freeze = freeze_encoders
@@ -4684,12 +4685,12 @@ class TransformerBoWPairedModel(DualEncoderModel):
         else:
             raise Exception("Unknown exception type")
         self.weight_std = weight_std
-        alibi = kwargs.get('alibi', False)
+        ra_type = kwargs.get('ra_type')
         self.transformer = TransformerEncoderStack(num_heads=num_heads, d_model=d_model,
                                                    pdrop=dropout, layers=num_layers, activation='gelu', d_ff=d_ff,
                                                    ffn_pdrop=ffn_pdrop,
                                                    d_k=d_k, rpr_k=rpr_k, windowed_ra=windowed_ra, rpr_value_on=rpr_value_on,
-                                                   layer_norms_after=layer_norms_after, alibi=alibi)
+                                                   layer_norms_after=layer_norms_after, ra_type=ra_type)
 
         self.embeddings = EmbeddingsStack({'x': embeddings})
         self.freeze = freeze_encoders

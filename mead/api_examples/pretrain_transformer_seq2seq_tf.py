@@ -150,7 +150,7 @@ def train():
                         type=int, default=[8], nargs='+')
     parser.add_argument('--rpr_value_on', type=str2bool, default=True,
                         help="Whether have value correction due to relative position")
-    parser.add_argument('--alibi', type=str2bool, default=False, help="Whether use ALiBi relative attention")
+    parser.add_argument('--ra_type', type=str, help="Specify a relative attention type")
     parser.add_argument("--npz", help="Should we write out NPZ files?", type=str2bool, default=False)
     parser.add_argument("--tb", help="Turn on tensorboard?", type=str2bool, default=False)
     parser.add_argument("--convert_only", help="Should we just convert this file to NPZ and exit?", type=str2bool, default=False)
@@ -270,7 +270,7 @@ def train():
            "d_k": args.d_k,
            "rpr_k": rpr_k,
            "rpr_value_on": args.rpr_value_on,
-           "alibi": args.alibi}
+           "ra_type": args.ra_type}
     model = TiedEmbeddingsSeq2SeqModel(embeddings, **hps)
 
     logger.info("Loaded model and loss")
