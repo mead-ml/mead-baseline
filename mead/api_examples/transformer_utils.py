@@ -396,6 +396,10 @@ class MultiFileDatasetReader:
         )
 
     def _create_subword_vectorizer(self, mxlen=None, model_file=None, vocab_file=None, emit_begin_tok=None, emit_end_tok=None, transform_fn=None, extra_tokens=None):
+        if self.subword_type == 'bpe':
+            return BPEVectorizer1D(model_file=model_file, vocab_file=vocab_file, mxlen=mxlen,
+                               emit_begin_tok=emit_begin_tok, emit_end_tok=emit_end_tok,
+                               transform_fn=transform_fn, extra_tokens=extra_tokens)
         if self.subword_type == 'wordpiece':
             return WordpieceVectorizer1D(
                 vocab_file=vocab_file,
@@ -403,9 +407,15 @@ class MultiFileDatasetReader:
                 emit_begin_tok=emit_begin_tok,
                 emit_end_tok=emit_end_tok,
                 transform_fn=transform_fn)
-        return BPEVectorizer1D(model_file=model_file, vocab_file=vocab_file, mxlen=mxlen,
-                               emit_begin_tok=emit_begin_tok, emit_end_tok=emit_end_tok,
-                               transform_fn=transform_fn, extra_tokens=extra_tokens)
+        else:
+            from baseline.vectorizers import SentencePieceVectorizer1D
+            return SentencePieceVectorizer1D(
+                model_file=model_file,
+                mxlen=mxlen,
+                emit_begin_tok=emit_begin_tok,
+                emit_end_tok=emit_end_tok,
+                transform_fn=transform_fn)
+
     def build_vocab(self, _=None):
         return {'x': self.src_vectorizer.vocab}
 

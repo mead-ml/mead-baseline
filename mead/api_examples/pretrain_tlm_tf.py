@@ -112,6 +112,15 @@ def get_num_samples(sample_md):
 
 
 
+def get_subword_vec1d(type):
+    if type == 'bpe':
+        return BPEVectorizer1D
+    elif type == 'wordpiece':
+        return WordpieceVectorizer1D
+    else:
+        from baseline.vectorizers import SentencePieceVectorizer1D
+        return SentencePieceVectorizer1D
+
 def main():
     parser = ArgumentParser()
     parser.add_argument("--basedir", type=str)
@@ -132,12 +141,12 @@ def main():
     parser.add_argument("--num_train_workers", type=int, default=4, help="Number train workers")
     parser.add_argument("--distribute", type=str, default="mirror", choices=["mirror", "tpu", "nccl"])
     parser.add_argument("--tpu_ep", type=str, help="The TPU endpoint if using `distribute=tpu`")
-    parser.add_argument("--nctx", type=int, default=256, help="Max input length")
+    parser.add_argument("--nctx", type=int, default=512, help="Max input length")
     parser.add_argument("--file_type", default='tfrecord', choices=['json', 'tfrecord'], help="Glob pattern for data")
     parser.add_argument("--batch_size", type=int, default=256, help="Batch Size")
     parser.add_argument("--subword_model_file", type=str, help="The BPE model file", required=False)
-    parser.add_argument("--subword_vocab_file", type=str, help="The BPE subword vocab", required=True)
-    parser.add_argument("--subword_type", type=str, choices=["bpe", "wordpiece"], default="bpe")
+    parser.add_argument("--subword_vocab_file", type=str, help="The BPE subword vocab", required=False)
+    parser.add_argument("--subword_type", type=str, choices=["bpe", "wordpiece", "sentencepiece"], default="bpe")
     parser.add_argument("--dropout", type=float, default=0.1, help="Dropout")
     parser.add_argument("--ffn_pdrop", type=float, default=0.0, help="Dropout in the dense stack")
     parser.add_argument("--layer_drop", type=float, default=0.0, help="LayerDrop to apply")
@@ -163,6 +172,8 @@ def main():
     parser.add_argument("--tb", help="Turn on tensorboard?", type=str2bool, default=False)
     parser.add_argument("--convert_only", help="Should we just convert this file to NPZ and exit?", type=str2bool, default=False)
     parser.add_argument("--extra_tokens", help="What extra tokens should we use", nargs="+", default=["[CLS]", "[MASK]"])
+    parser.add_argument("--eps", help="Epsilon", default=1e-6, type=float)
+    parser.add_argument("--beta2", help="Epsilon", default=0.98, type=float)
     args = parser.parse_args()
     SET_TRAIN_FLAG(True)
 
@@ -183,7 +194,7 @@ def main():
     strategy = create_distribute_strategy(args.distribute, args.tpu_ep)
     num_replicas = strategy.num_replicas_in_sync
     logger.info(f"Using {num_replicas} replicas in this job.")
-    Vec1D = BPEVectorizer1D if args.subword_type == 'bpe' else WordpieceVectorizer1D
+    Vec1D = get_subword_vec1d(args.subword_type)
     vectorizer = Vec1D(model_file=args.subword_model_file,
                        vocab_file=args.subword_vocab_file,
                        mxlen=args.nctx,
@@ -277,7 +288,8 @@ def main():
     lr_decay = CosineDecaySchedulerTensorFlow(steps_per_epoch * args.epochs, lr=args.lr)
     linear_warmup = WarmupLinearSchedulerTensorFlow(args.warmup_steps, lr=args.lr)
     lr_sched = CompositeLRSchedulerTensorFlow(linear_warmup, lr_decay)
-    optimizer = EagerOptimizer(loss_function, optim=args.optim, lr_function=lr_sched, weight_decay=args.weight_decay, clip=args.clip, lr=args.lr)
+    optimizer = EagerOptimizer(loss_function, optim=args.optim, lr_function=lr_sched, weight_decay=args.weight_decay, clip=args.clip,
+                               lr=args.lr, epsilon=args.eps, beta2=args.beta2)
     checkpoint = tf.train.Checkpoint(optimizer=optimizer.optimizer, model=model)
     checkpoint_manager = tf.train.CheckpointManager(checkpoint,
                                                     directory=args.basedir,

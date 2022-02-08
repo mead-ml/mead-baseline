@@ -83,7 +83,7 @@ def parse_args(argv):
     parser.add_argument("--file_type", default='json', help="Suffix for data")
     parser.add_argument("--record_keys", default=['x', 'y'], nargs='+')
     parser.add_argument("--batch_size", type=int, default=256, help="Batch Size")
-    parser.add_argument("--subword_type", type=str, choices=["bpe", "wordpiece"], default="bpe")
+    parser.add_argument("--subword_type", type=str, choices=["bpe", "wordpiece", "sentencepiece"], default="bpe")
     parser.add_argument("--subword_model_file", type=str, help="The BPE model file")
     parser.add_argument("--subword_vocab_file", type=str, help="The BPE subword vocab", required=True)
     parser.add_argument("--dropout", type=float, default=0.1, help="Dropout")

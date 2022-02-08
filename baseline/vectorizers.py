@@ -1985,7 +1985,7 @@ class BPENBestVectorizer2D(BPENBestVectorizer1D):
 
 
 @register_vectorizer(name='bb-spm1d')
-class BigBirdSentencePieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
+class SentencePieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
     SPECIAL_TOKENS = {"[CLS]", "[UNK]", "<s>", "</s>", "[MASK]"}
 
     def __init__(self,
@@ -1998,18 +1998,15 @@ class BigBirdSentencePieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
         self.model_file = kwargs.get('model_file')
         self.tokenizer = spm.SentencePieceProcessor(self.model_file)
 
-        self._special_tokens = BigBirdSentencePieceVectorizer1D.SPECIAL_TOKENS
+        self._special_tokens = SentencePieceVectorizer1D.SPECIAL_TOKENS
         self.mxlen = kwargs.get('mxlen', -1)
         self._vocab = {}
-        #self._REWIRE_GLOBAL_OFFSETS()
         for i in range(len(self.tokenizer)):
             v = self.tokenizer.IdToPiece(i)
             self._vocab[v] = i
 
-
     def __setstate__(self, d):
         self.__dict__ = d
-        #self._REWIRE_GLOBAL_OFFSETS()
 
     @property
     def vocab(self):
@@ -2088,7 +2085,7 @@ class BigBirdSentencePieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
 
 @export
 @register_vectorizer(name='bb-spm-dict1d')
-class BigBirdSentencePieceDict1DVectorizer(BigBirdSentencePieceVectorizer1D):
+class SentencePieceDict1DVectorizer(SentencePieceVectorizer1D):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -2103,7 +2100,7 @@ class BigBirdSentencePieceDict1DVectorizer(BigBirdSentencePieceVectorizer1D):
 
 @export
 @register_vectorizer(name='bb-spm-label-dict1d')
-class BigBirdSentencePieceLabelDict1DVectorizer(BigBirdSentencePieceVectorizer1D):
+class SentencePieceLabelDict1DVectorizer(SentencePieceVectorizer1D):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -2133,6 +2130,7 @@ class BigBirdSentencePieceLabelDict1DVectorizer(BigBirdSentencePieceVectorizer1D
 
     def run(self, tokens, vocab):
         return super().run(tokens, vocab)
+
 
 @export
 def create_vectorizer(**kwargs):

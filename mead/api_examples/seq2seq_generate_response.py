@@ -74,6 +74,16 @@ def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, d_k, a
     return model
 
 
+def get_subword_vec1d(type):
+    if type == 'bpe':
+        return BPEVectorizer1D
+    elif type == 'wordpiece':
+        return WordpieceVectorizer1D
+    else:
+        from baseline.vectorizers import SentencePieceVectorizer1D
+        return SentencePieceVectorizer1D
+
+
 def run():
     parser = ArgumentParser()
     parser.add_argument("--basedir", type=str)
@@ -97,7 +107,7 @@ def run():
     parser.add_argument("--activation", type=str, default='relu')
     parser.add_argument('--rpr_k', help='Relative attention positional sizes pass 0 if you dont want relative attention',
                         type=int, default=[8]*8, nargs='+')
-    parser.add_argument("--subword_type", type=str, choices=["bpe", "wordpiece"], default="bpe")
+    parser.add_argument("--subword_type", type=str, choices=["bpe", "wordpiece", "sentencepiece"], default="bpe")
     parser.add_argument("--end_token", default="<EOS>")
     parser.add_argument("--output_file", type=str)
     parser.add_argument("--show_query", type=str2bool, default=False, help="Show the original query as well")
@@ -117,7 +127,7 @@ def run():
     else:
         checkpoint = args.checkpoint
 
-    Vec1D = BPEVectorizer1D if args.subword_type == 'bpe' else WordpieceVectorizer1D
+    Vec1D = get_subword_vec1d(args.subword_type)
     vectorizer = Vec1D(model_file=args.subword_model_file, vocab_file=args.subword_vocab_file,
                        mxlen=args.nctx, emit_end_tok=args.end_token, extra_tokens=args.extra_tokens)
 

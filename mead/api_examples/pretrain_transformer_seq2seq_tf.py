@@ -99,6 +99,14 @@ def get_num_samples(sample_md):
     yml = read_yaml_tf(sample_md)
     return yml['num_samples']
 
+def get_subword_vec1d(type):
+    if type == 'bpe':
+        return BPEVectorizer1D
+    elif type == 'wordpiece':
+        return WordpieceVectorizer1D
+    else:
+        from baseline.vectorizers import SentencePieceVectorizer1D
+        return SentencePieceVectorizer1D
 
 def train():
     parser = ArgumentParser()
@@ -125,7 +133,7 @@ def train():
     parser.add_argument("--batch_size", type=int, default=256, help="Batch Size")
     parser.add_argument("--subword_model_file", type=str, help="The BPE model file", required=False)
     parser.add_argument("--subword_vocab_file", type=str, help="The BPE subword vocab", required=True)
-    parser.add_argument("--subword_type", type=str, choices=["bpe", "wordpiece"], default="bpe")
+    parser.add_argument("--subword_type", type=str, choices=["bpe", "wordpiece", "sentencepiece"], default="bpe")
     parser.add_argument("--dropout", type=float, default=0.1, help="Dropout")
     parser.add_argument("--layer_drop", type=float, default=0.0, help="LayerDrop to apply")
     parser.add_argument("--ff_pdrop", type=float, default=0.1, help="Dropout in the dense stack")
@@ -168,7 +176,7 @@ def train():
     strategy = create_distribute_strategy(args.distribute, args.tpu_ep, len(get_env_gpus(None)))
     num_replicas = strategy.num_replicas_in_sync
     logger.info(f"Using {num_replicas} replicas in this job.")
-    Vec1D = BPEVectorizer1D if args.subword_type == 'bpe' else WordpieceVectorizer1D
+    Vec1D = get_subword_vec1d(args.subword_type)
     vectorizer = Vec1D(model_file=args.subword_model_file,
                        vocab_file=args.subword_vocab_file,
                        mxlen=args.nctx,

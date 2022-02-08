@@ -3,7 +3,7 @@ import gzip
 import sys
 import argparse
 import baseline
-from baseline.vectorizers import BPEVectorizer1D
+from baseline.vectorizers import BPEVectorizer1D, WordpieceVectorizer1D
 from mead.api_examples.preproc_utils import *
 from eight_mile.utils import (
     write_yaml,
@@ -11,6 +11,17 @@ from eight_mile.utils import (
 from typing import Optional
 import numpy as np
 import os
+
+
+
+def get_subword_vec1d(type):
+    if type == 'bpe':
+        return BPEVectorizer1D
+    elif type == 'wordpiece':
+        return WordpieceVectorizer1D
+    else:
+        from baseline.vectorizers import SentencePieceVectorizer1D
+        return SentencePieceVectorizer1D
 
 
 def create_record(chunk: list, str_lookup: dict, prefix: Optional[str], suffix: Optional[str], masking: Optional[Masking]=None):
@@ -63,7 +74,7 @@ class TextFile:
 def run(input_files=[], input_pattern='*.txt', codes=None, vocab=None, nctx=256, fmt='json', fields=['x_str', 'y_str'],
         output=None, prefix=None, suffix=None, max_file_size=100, tok_on_eol="<EOS>", cased=True,
         mask_type="mlm", module=None, pad_y=True, extra_tokens=['[CLS]', '[MASK]'], world_size=1, world_offset=0,
-        input_field='text', tokenizer_type=None, **kwargs):
+        input_field='text', tokenizer_type=None, subword_type='bpe', **kwargs):
 
     def parse_json_line(x): return json.loads(x)[input_field]
 
@@ -90,7 +101,8 @@ def run(input_files=[], input_pattern='*.txt', codes=None, vocab=None, nctx=256,
 
     logger.info('Output [%s]', output)
     transform = baseline.lowercase if not cased else lambda x: x
-    vectorizer = BPEVectorizer1D(transform_fn=transform, model_file=codes, vocab_file=vocab, mxlen=1024, extra_tokens=extra_tokens)
+    Vec1D = get_subword_vec1d(subword_type)
+    vectorizer = Vec1D(transform_fn=transform, model_file=codes, vocab_file=vocab, mxlen=1024, extra_tokens=extra_tokens)
 
     lookup_indices = []
     indices2word = baseline.revlut(vectorizer.vocab)
@@ -163,6 +175,7 @@ def parse_args(argv):
     parser.add_argument('--codes', help='BPE codes')
     parser.add_argument('--vocab', help='BPE vocab')
     parser.add_argument("--nctx", type=int, default=256, help="Max input length")
+    parser.add_argument("--subword_type", type=str, choices=["bpe", "wordpiece", "sentencepiece"], default="bpe")
     parser.add_argument("--fmt", type=str, default='json', choices=['json', 'tsv', 'tfrecord'])
     parser.add_argument("--fields", type=str, nargs="+", default=["x_str", "y_str"])
     parser.add_argument("--output", type=str, help="Output base name, e.g. /path/to/output/record")

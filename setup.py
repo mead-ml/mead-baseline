@@ -87,11 +87,12 @@ def main():
             'yaml': ['pyyaml'],
             'bpe': ['fastBPE'],
             'regex': ['regex'],
-            'bpex': ['fastBPE', 'subword-nmt'],
+            'bpex': ['fastBPE', 'sentencepiece'],
             'tf2': ['tensorflow_addons'],
             'grpc': ['grpc'],
             'onnx': ['onnxruntime'],
-            'tfrecord': ['tfrecord']
+            'tfrecord': ['tfrecord'],
+            'spm': ['sentencepiece']
         },
         entry_points={
             'console_scripts': [
