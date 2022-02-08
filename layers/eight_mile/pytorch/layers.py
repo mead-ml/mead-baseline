@@ -2779,7 +2779,7 @@ class SeqScaledDotProductAttentionT5(SequenceSequenceAttention):
 
         rel_embedding = torch.nn.init.kaiming_normal_(torch.empty((self.num_heads, self.num_buckets),
                                                                   dtype=torch.float), nonlinearity='linear')
-        self.register_buffer("rel_embedding", rel_embedding)
+        self.rel_embedding = nn.Parameter(rel_embedding, requires_grad=True)
 
     def _relative_position_bucket(self, relative_position):
         """Taken from https://github.com/tensorflow/mesh/blob/bbb6ce7917e2a8ef1f3dc6990fcacd4f3b075acd/mesh_tensorflow/transformer/transformer_layers.py#L1014
@@ -2871,9 +2871,10 @@ class SeqDotProductAttentionT5(SequenceSequenceAttention):
         self.bidirectional = bidirectional
         self.num_buckets = num_buckets
         self.max_distance = max_distance
+
         rel_embedding = torch.nn.init.kaiming_normal_(torch.empty((self.num_heads, self.num_buckets),
                                                                   dtype=torch.float), nonlinearity='linear')
-        self.register_buffer("rel_embedding", rel_embedding)
+        self.rel_embedding = nn.Parameter(rel_embedding, requires_grad=True)
 
     def _relative_position_bucket(self, relative_position):
         """Taken from https://github.com/tensorflow/mesh/blob/bbb6ce7917e2a8ef1f3dc6990fcacd4f3b075acd/mesh_tensorflow/transformer/transformer_layers.py#L1014

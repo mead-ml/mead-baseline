@@ -82,6 +82,9 @@ def to_attn_array(tf_attn: tf.keras.layers.Layer, name: str) -> Dict:
     d.update(to_weight_array(tf_attn.w_K, f"{name}/w_K"))
     d.update(to_weight_array(tf_attn.w_V, f"{name}/w_V"))
 
+    if hasattr(tf_attn.attn_fn, 'rel_embedding'):
+        d.update({f"{name}/rel_embedding": tf_attn.attn_fn.get_weights()[0]})
+
     if hasattr(tf_attn, 'w_O'):
         d.update(to_weight_array(tf_attn.w_O, f"{name}/w_O"))
 
@@ -108,6 +111,9 @@ def from_attn_array(tf_attn: tf.keras.layers.Layer, d: Dict, name: str):
     from_weight_array(tf_attn.w_Q, d, f"{name}/w_Q")
     from_weight_array(tf_attn.w_K, d, f"{name}/w_K")
     from_weight_array(tf_attn.w_V, d, f"{name}/w_V")
+
+    if hasattr(tf_attn.attn_fn, 'rel_embedding'):
+        tf_attn.attn_fn.set_weights([d["f{name}/rel_embedding"]])
 
     if hasattr(tf_attn, 'w_O'):
         from_weight_array(tf_attn.w_O, d, f"{name}/w_O")

@@ -62,22 +62,22 @@ def generate_buckets_values():
 def test_rel_buckets_dp(generate_buckets_values):
     buckets, rel_emb = generate_buckets_values
     dp = SeqDotProductAttentionT5(0, NH)
-    dp.rel_embedding = torch.tensor(np.arange((NH*NB), dtype=np.float32).reshape(NH, NB))
+    dp.rel_embedding = torch.nn.Parameter(torch.tensor(np.arange((NH*NB), dtype=np.float32).reshape(NH, NB)))
     memory_position = torch.arange(NK).view(1, -1)
     query_position = torch.arange(NQ).view(-1, 1)
     relative_position = memory_position - query_position
     rp_bucket = dp._relative_position_bucket(relative_position)
     np.allclose(rp_bucket.numpy(), buckets.numpy())
-    np.allclose(rel_emb, dp.rel_embedding[:, rp_bucket])
+    np.allclose(rel_emb.numpy(), dp.rel_embedding[:, rp_bucket].detach().numpy())
 
 
 def test_rel_buckets_sdp(generate_buckets_values):
     buckets, rel_emb = generate_buckets_values
     sdp = SeqScaledDotProductAttentionT5(0, NH)
-    sdp.rel_embedding = torch.tensor(np.arange((NH*NB), dtype=np.float32).reshape(NH, NB))
+    sdp.rel_embedding = torch.nn.Parameter(torch.tensor(np.arange((NH*NB), dtype=np.float32).reshape(NH, NB)))
     memory_position = torch.arange(NK).view(1, -1)
     query_position = torch.arange(NQ).view(-1, 1)
     relative_position = memory_position - query_position
     rp_bucket = sdp._relative_position_bucket(relative_position)
     np.allclose(rp_bucket.numpy(), buckets.numpy())
-    np.allclose(rel_emb, sdp.rel_embedding[:, rp_bucket])
+    np.allclose(rel_emb.numpy(), sdp.rel_embedding[:, rp_bucket].detach().numpy())
