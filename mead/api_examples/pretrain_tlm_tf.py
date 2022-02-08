@@ -429,7 +429,7 @@ def create_model(args, embeddings):
         if len(args.rpr_k) == 0 or args.rpr_k[0] < 1:
             rpr_k = None
         elif len(args.rpr_k) == 1:
-            rpr_k = args.rpr_k[0]
+            rpr_k = None if args.rpr_k[0] == 0 else args.rpr_k[0]
         else:
             rpr_k = args.rpr_k
 

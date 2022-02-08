@@ -2776,7 +2776,9 @@ class SeqScaledDotProductAttentionT5(SequenceSequenceAttention):
         self.bidirectional = bidirectional
         self.num_buckets = num_buckets
         self.max_distance = max_distance
-        rel_embedding = torch.tensor((self.num_heads, self.num_buckets), dtype=torch.float)
+
+        rel_embedding = torch.nn.init.kaiming_normal_(torch.empty((self.num_heads, self.num_buckets),
+                                                                  dtype=torch.float), nonlinearity='linear')
         self.register_buffer("rel_embedding", rel_embedding)
 
     def _relative_position_bucket(self, relative_position):
@@ -2869,8 +2871,8 @@ class SeqDotProductAttentionT5(SequenceSequenceAttention):
         self.bidirectional = bidirectional
         self.num_buckets = num_buckets
         self.max_distance = max_distance
-
-        rel_embedding = torch.tensor((self.num_heads, self.num_buckets), dtype=torch.float)
+        rel_embedding = torch.nn.init.kaiming_normal_(torch.empty((self.num_heads, self.num_buckets),
+                                                                  dtype=torch.float), nonlinearity='linear')
         self.register_buffer("rel_embedding", rel_embedding)
 
     def _relative_position_bucket(self, relative_position):

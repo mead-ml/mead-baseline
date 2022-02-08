@@ -112,7 +112,11 @@ def run(basedir=None, train_file=None, valid_file=None, dataset_key='tlm', embed
     if len(rpr_k) == 0 or rpr_k[0] < 1:
         rpr_k = None
     elif len(rpr_k) == 1:
-        rpr_k = rpr_k[0]
+        rpr_k = None if rpr_k[0] == 0 else rpr_k[0]
+    if ra_type != None and ra_type != 'shaw' and rpr_k is not None:
+        print(f"Relative attention mismatch. You requested {ra_type} with rpr set.  Setting it to 0")
+        rpr_k = None
+
 
     model = create_lang_model(
         embeddings,
