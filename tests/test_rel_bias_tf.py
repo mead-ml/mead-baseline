@@ -63,6 +63,7 @@ def generate_buckets_values():
 def test_rel_buckets_dp(generate_buckets_values):
     buckets, rel_emb = generate_buckets_values
     dp = SeqDotProductAttentionT5(0, NH)
+    dp.build((None,))
     dp.set_weights([np.arange((NH * NB), dtype=np.float32).reshape(NH, NB)])
     query_position = tf.reshape(tf.range(NQ), [-1, 1])
     memory_position = tf.reshape(tf.range(NK), [1, -1])
@@ -77,6 +78,7 @@ def test_rel_buckets_dp(generate_buckets_values):
 def test_rel_buckets_sdp(generate_buckets_values):
     buckets, rel_emb = generate_buckets_values
     sdp = SeqScaledDotProductAttentionT5(0, NH)
+    sdp.build((None,))
     sdp.set_weights([np.arange((NH * NB), dtype=np.float32).reshape(NH, NB)])
     query_position = tf.reshape(tf.range(NQ), [-1, 1])
     memory_position = tf.reshape(tf.range(NK), [1, -1])

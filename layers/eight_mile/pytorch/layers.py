@@ -2789,14 +2789,14 @@ class SeqScaledDotProductAttentionT5(SequenceSequenceAttention):
         num_buckets = self.num_buckets
         if self.bidirectional:
             num_buckets //= 2
-            ret += torch.less(n, 0).to(dtype=torch.long) * num_buckets
+            ret += torch.lt(n, 0).to(dtype=torch.long) * num_buckets
             n = torch.abs(n).to(dtype=torch.long)
         else:
             n = torch.maximum(n, 0).to(dtype=torch.long)
 
         # now n is in the range [0, inf)
         max_exact = num_buckets // 2
-        is_small = torch.less(n, max_exact)
+        is_small = torch.lt(n, max_exact)
         val_if_large = max_exact + (
             torch.log(n.to(dtype=torch.float32) / max_exact)
             / math.log(self.max_distance / max_exact) * (num_buckets - max_exact)).to(dtype=torch.long)
@@ -2884,14 +2884,14 @@ class SeqDotProductAttentionT5(SequenceSequenceAttention):
         num_buckets = self.num_buckets
         if self.bidirectional:
             num_buckets //= 2
-            ret += torch.less(n, 0).to(dtype=torch.long) * num_buckets
+            ret += torch.lt(n, 0).to(dtype=torch.long) * num_buckets
             n = torch.abs(n).to(dtype=torch.long)
         else:
             n = torch.maximum(n, 0).to(dtype=torch.long)
 
         # now n is in the range [0, inf)
         max_exact = num_buckets // 2
-        is_small = torch.less(n, max_exact)
+        is_small = torch.lt(n, max_exact)
         val_if_large = max_exact + (
                 torch.log(n.to(dtype=torch.float32) / max_exact)
                 / math.log(self.max_distance / max_exact) * (num_buckets - max_exact)).to(dtype=torch.long)
