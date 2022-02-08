@@ -206,7 +206,7 @@ class TransformerLMEmbeddings(TensorFlowEmbeddings):
         if not self.finetune:
             z = tf.stop_gradient(z)
         if hasattr(self, 'return_mask') and self.return_mask:
-            return (z, mask,)
+            return (z, input_mask,)
         return z
 
     def get_vocab(self):

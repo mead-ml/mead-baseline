@@ -1747,6 +1747,69 @@ class SeqScaledDotProductAttentionALiBi(SequenceSequenceAttention):
         return tf.nn.softmax(scores, name="attention_weights")
 
 
+
+class SeqScaledDotProductAttentionT5(SequenceSequenceAttention):
+    def __init__(self, pdrop: float = 0.1, num_heads=None, bidirectional=True, num_buckets=32,
+                max_distance=128, name: str = "scaled_dot_product_attention_t5", **kwargs):
+        super().__init__(pdrop, name=name, **kwargs)
+        self.num_heads = num_heads
+        self.bidirectional = bidirectional
+        self.num_buckets = num_buckets
+        self.max_distance = max_distance
+        self.rel_embeddings = self.add_weight("rel_embeddings_t5", shape=[self.num_heads, self.num_buckets],
+                                              initializer=tf.keras.initializers.VarianceScaling(1.0, 'fan_in', 'normal'),
+                                              trainable=True)
+
+    def _relative_position_bucket(self, relative_position,
+                                  bidirectional=True,
+                                  num_buckets=32,
+                                  max_distance=128):
+        ret = 0
+        n = -relative_position
+        if bidirectional:
+            num_buckets //= 2
+            ret += tf.cast(tf.less(n, 0), tf.int32) * num_buckets
+            n = tf.abs(n)
+        else:
+            n = tf.maximum(n, 0)
+        # now n is in the range [0, inf)
+        max_exact = num_buckets // 2
+        is_small = tf.less(n, max_exact)
+        val_if_large = max_exact + tf.cast(
+            tf.math.log(tf.cast(n, tf.float32) / max_exact)
+            / math.log(max_distance / max_exact) * (num_buckets - max_exact), tf.int32)
+        val_if_large = tf.minimum(val_if_large, num_buckets - 1)
+        ret += tf.where(is_small, n, val_if_large)
+        return ret
+
+    def _attention(self, query, key, mask=None):
+        """Relative Attention described in https://arxiv.org/abs/1910.10683
+
+        :param query: a query for alignment. Can come from self in case of self-attn or decoder in case of E/D
+        :param key: a set of keys from encoder or self
+        :param mask: masking (for destination) to prevent seeing what we shouldnt
+        :return: A tensor that is (BxHxTxT)
+        """
+        # Check why this was set to 2 before
+        d_k = tf.shape(query)[-1]
+        scores = tf.matmul(query, key, transpose_b=True)
+        scores *= tf.math.rsqrt(tf.cast(d_k, tf.float32))
+        scores_shape = get_shape_as_list(scores)
+        T_k = scores_shape[-1]
+        T_q = scores_shape[-2]
+        memory_position = tf.reshape(tf.range(T_k), [1, -1])
+        query_position = tf.reshape(tf.range(T_q), [-1, 1])
+        relative_position = memory_position - query_position
+        rp_bucket = self._relative_position_bucket(relative_position)
+        bias = tf.expand_dims(tf.gather(self.rel_embedding, rp_bucket, axis=-1), 0)
+        scores += bias
+
+        if mask is not None:
+            scores = masked_fill(scores, tf.equal(mask, 0), -1e9)
+
+        return tf.nn.softmax(scores, name="attention_weights")
+
+
 class SequenceSequenceRelativeAttention(tf.keras.layers.Layer):
     """This form of attention is specified in Shaw et al 2018: https://www.aclweb.org/anthology/N18-2074.pdf
     """
@@ -1969,6 +2032,65 @@ class SeqDotProductAttentionALiBi(SequenceSequenceAttention):
         return tf.nn.softmax(scores, name="attention_weights")
 
 
+class SeqDotProductAttentionT5(SequenceSequenceAttention):
+    def __init__(self, pdrop: float = 0.1, num_heads=None, bidirectional=True, num_buckets=32,
+                 max_distance=128, name: str = "dot_product_attention_t5", **kwargs):
+        super().__init__(pdrop, name=name, **kwargs)
+        self.num_heads = num_heads
+        self.bidirectional = bidirectional
+        self.num_buckets = num_buckets
+        self.max_distance = max_distance
+        self.rel_embeddings = self.add_weight("rel_embeddings_t5", shape=[self.num_heads, self.num_buckets],
+                                              initializer=tf.keras.initializers.VarianceScaling(1.0, 'fan_in', 'normal'),
+                                              trainable=True)
+
+    def _relative_position_bucket(self, relative_position,
+                                  bidirectional=True,
+                                  num_buckets=32,
+                                  max_distance=128):
+
+        ret = 0
+        n = -relative_position
+        if bidirectional:
+            num_buckets //= 2
+            ret += tf.cast(tf.less(n, 0), tf.int32) * num_buckets
+            n = tf.abs(n)
+        else:
+            n = tf.maximum(n, 0)
+        # now n is in the range [0, inf)
+        max_exact = num_buckets // 2
+        is_small = tf.less(n, max_exact)
+        val_if_large = max_exact + tf.cast(
+            tf.math.log(tf.cast(n, tf.float32) / max_exact)
+            / math.log(max_distance / max_exact) * (num_buckets - max_exact), tf.int32)
+        val_if_large = tf.minimum(val_if_large, num_buckets - 1)
+        ret += tf.where(is_small, n, val_if_large)
+        return ret
+
+    def _attention(self, query, key, mask=None):
+        """Relative Attention described in https://arxiv.org/abs/1910.10683
+        :param query: a query for alignment. Can come from self in case of self-attn or decoder in case of E/D
+        :param key: a set of keys from encoder or self
+        :param mask: masking (for destination) to prevent seeing what we shouldnt
+        :return: A tensor that is (BxHxTxT)
+        """
+        scores = tf.matmul(query, key, transpose_b=True)
+        scores_shape = get_shape_as_list(scores)
+        T_k = scores_shape[-1]
+        T_q = scores_shape[-2]
+        memory_position = tf.reshape(tf.range(T_k), [1, -1])
+        query_position = tf.reshape(tf.range(T_q), [-1, 1])
+        relative_position = memory_position - query_position
+        rp_bucket = self._relative_position_bucket(relative_position)
+        bias = tf.expand_dims(tf.gather(self.rel_embedding, rp_bucket, axis=-1), 0)
+        scores += bias
+
+        if mask is not None:
+            scores = masked_fill(scores, tf.equal(mask, 0), -1e9)
+
+        return tf.nn.softmax(scores, name="attention_weights")
+
+
 class MultiHeadedAttention(tf.keras.layers.Layer):
     """
     Multi-headed attention from https://arxiv.org/abs/1706.03762 via http://nlp.seas.harvard.edu/2018/04/03/attention.html
@@ -2030,11 +2152,15 @@ class MultiHeadedAttention(tf.keras.layers.Layer):
         if scale:
             if ra_type == 'alibi':
                 self.attn_fn = SeqScaledDotProductAttentionALiBi(dropout, num_heads=num_heads)
+            elif ra_type == 't5':
+                self.attn_fn = SeqScaledDotProductAttentionT5(dropout, num_heads=num_heads)
             else:
                 self.attn_fn = SeqScaledDotProductAttention(dropout)
         else:
             if ra_type == 'alibi':
                 self.attn_fn = SeqDotProductAttentionALiBi(dropout, num_heads=num_heads)
+            elif ra_type == 't5':
+                self.attn_fn = SeqDotProductAttentionT5(dropout, num_heads=num_heads)
             else:
                 self.attn_fn = SeqDotProductAttention(dropout)
         self.attn = None

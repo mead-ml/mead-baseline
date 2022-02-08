@@ -2769,6 +2769,66 @@ class SeqScaledDotProductAttentionALiBi(SequenceSequenceAttention):
 
         return F.softmax(scores, dim=-1)
 
+class SeqScaledDotProductAttentionT5(SequenceSequenceAttention):
+    def __init__(self, pdrop: float = 0.1, num_heads=None, bidirectional=True, num_buckets=32, max_distance=128, **kwargs):
+        super().__init__(pdrop=pdrop, **kwargs)
+        self.num_heads = num_heads
+        self.bidirectional = bidirectional
+        self.num_buckets = num_buckets
+        self.max_distance = max_distance
+        rel_embedding = torch.tensor((self.num_heads, self.num_buckets), dtype=torch.float)
+        self.register_buffer("rel_embedding", rel_embedding)
+
+    def _relative_position_bucket(self, relative_position):
+        """Taken from https://github.com/tensorflow/mesh/blob/bbb6ce7917e2a8ef1f3dc6990fcacd4f3b075acd/mesh_tensorflow/transformer/transformer_layers.py#L1014
+        """
+        ret = 0
+        n = -relative_position
+        num_buckets = self.num_buckets
+        if self.bidirectional:
+            num_buckets //= 2
+            ret += torch.less(n, 0).to(dtype=torch.long) * num_buckets
+            n = torch.abs(n).to(dtype=torch.long)
+        else:
+            n = torch.maximum(n, 0).to(dtype=torch.long)
+
+        # now n is in the range [0, inf)
+        max_exact = num_buckets // 2
+        is_small = torch.less(n, max_exact)
+        val_if_large = max_exact + (
+            torch.log(n.to(dtype=torch.float32) / max_exact)
+            / math.log(self.max_distance / max_exact) * (num_buckets - max_exact)).to(dtype=torch.long)
+        val_if_large = torch.minimum(val_if_large, torch.tensor(num_buckets - 1))
+        ret += torch.where(is_small, n, val_if_large)
+        return ret
+
+    def _attention(self, query: torch.Tensor, key: torch.Tensor, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """Relative Attention described in https://arxiv.org/abs/1910.10683
+
+        :param query: a query for alignment.
+        :param key: a set of keys from encoder or self
+        :param mask: masking (for destination) to prevent seeing what we shouldnt
+        :return: A tensor that is (BxHxTxT)
+        """
+        # (., H, T_q, T_k) = (., H, T_q, D) x (., H, D, T_k)
+        d_k = query.size(-1)
+        scores = torch.matmul(query, key.transpose(-2, -1)) / math.sqrt(d_k)
+        T_k = scores.shape[-1]
+        T_q = scores.shape[-2]
+        memory_position = torch.arange(T_k).view(1, -1)
+        query_position = torch.arange(T_q).view(-1, 1)
+        relative_position = memory_position - query_position
+        rp_bucket = self._relative_position_bucket(relative_position)
+        relative_attention_bias = self.rel_embedding[:, rp_bucket]
+
+        scores += relative_attention_bias
+
+        if mask is not None:
+            scores = scores.masked_fill(mask == MASK_FALSE, -1e9)  # [B, 1, 1, T_k] broadcast to [B, 1, T_q, T_k]
+
+        return F.softmax(scores, dim=-1)
+
+    
 
 class SeqDotProductAttention(SequenceSequenceAttention):
     def __init__(self, pdrop: float = 0.1, **kwargs):
@@ -2798,6 +2858,67 @@ class SeqDotProductAttentionALiBi(SequenceSequenceAttention):
         scores += alibi
         if mask is not None:
             scores = scores.masked_fill(mask == MASK_FALSE, -1e9)
+
+        return F.softmax(scores, dim=-1)
+
+
+class SeqDotProductAttentionT5(SequenceSequenceAttention):
+    def __init__(self, pdrop: float = 0.1, num_heads=None, bidirectional=True, num_buckets=32, max_distance=128, **kwargs):
+        super().__init__(pdrop=pdrop, **kwargs)
+        self.num_heads = num_heads
+        self.bidirectional = bidirectional
+        self.num_buckets = num_buckets
+        self.max_distance = max_distance
+
+        rel_embedding = torch.tensor((self.num_heads, self.num_buckets), dtype=torch.float)
+        self.register_buffer("rel_embedding", rel_embedding)
+
+    def _relative_position_bucket(self, relative_position):
+        """Taken from https://github.com/tensorflow/mesh/blob/bbb6ce7917e2a8ef1f3dc6990fcacd4f3b075acd/mesh_tensorflow/transformer/transformer_layers.py#L1014
+        """
+        ret = 0
+        n = -relative_position
+        num_buckets = self.num_buckets
+        if self.bidirectional:
+            num_buckets //= 2
+            ret += torch.less(n, 0).to(dtype=torch.long) * num_buckets
+            n = torch.abs(n).to(dtype=torch.long)
+        else:
+            n = torch.maximum(n, 0).to(dtype=torch.long)
+
+        # now n is in the range [0, inf)
+        max_exact = num_buckets // 2
+        is_small = torch.less(n, max_exact)
+        val_if_large = max_exact + (
+                torch.log(n.to(dtype=torch.float32) / max_exact)
+                / math.log(self.max_distance / max_exact) * (num_buckets - max_exact)).to(dtype=torch.long)
+        val_if_large = torch.minimum(val_if_large, torch.tensor(num_buckets - 1))
+        ret += torch.where(is_small, n, val_if_large)
+        return ret
+
+    def _attention(self, query: torch.Tensor, key: torch.Tensor, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """Relative Attention described in https://arxiv.org/abs/1910.10683
+
+        :param query: a query for alignment.
+        :param key: a set of keys from encoder or self
+        :param mask: masking (for destination) to prevent seeing what we shouldnt
+        :return: A tensor that is (BxHxTxT)
+        """
+        # (., H, T_q, T_k) = (., H, T_q, D) x (., H, D, T_k)
+        scores = torch.matmul(query, key.transpose(-2, -1))
+        T_k = scores.shape[-1]
+        T_q = scores.shape[-2]
+        memory_position = torch.arange(T_k).view(1, -1)
+        query_position = torch.arange(T_q).view(-1, 1)
+        relative_position = memory_position - query_position
+        rp_bucket = self._relative_position_bucket(relative_position)
+
+        relative_attention_bias = self.rel_embedding[:, rp_bucket]
+
+        scores += relative_attention_bias
+
+        if mask is not None:
+            scores = scores.masked_fill(mask == MASK_FALSE, -1e9)  # [B, 1, 1, T_k] broadcast to [B, 1, T_q, T_k]
 
         return F.softmax(scores, dim=-1)
 
@@ -3023,7 +3144,7 @@ class MultiHeadedAttention(nn.Module):
     """
 
     def __init__(
-        self, num_heads: int, d_model: int, dropout: float = 0.1, scale: bool = False, d_k: Optional[int] = None, ra_type: Optiona[str] = None,
+        self, num_heads: int, d_model: int, dropout: float = 0.1, scale: bool = False, d_k: Optional[int] = None, ra_type: Optional[str] = None,
     ):
         """Constructor for multi-headed attention
 
@@ -3056,11 +3177,17 @@ class MultiHeadedAttention(nn.Module):
         if scale:
             if ra_type == 'alibi':
                 self.attn_fn = SeqScaledDotProductAttentionALiBi(dropout, num_heads=num_heads)
+            elif ra_type == 't5':
+                # TODO: pass through options
+                self.attn_fn = SeqScaledDotProductAttentionT5(dropout, num_heads=num_heads)
             else:
                 self.attn_fn = SeqScaledDotProductAttention(dropout)
         else:
             if ra_type == 'alibi':
                 self.attn_fn = SeqDotProductAttentionALiBi(dropout, num_heads=num_heads)
+            elif ra_type == 't5':
+                # TODO: pass through options
+                self.attn_fn = SeqDotProductAttentionT5(dropout, num_heads=num_heads)
             else:
                 self.attn_fn = SeqDotProductAttention(dropout)
         self.attn = None
@@ -3230,7 +3357,7 @@ class TransformerEncoder(nn.Module):
         layer_norm_eps: float = 1.0e-6,
         windowed_ra: Optional[bool] = False,
         rpr_value_on: bool = True,
-        ra_type: Optional[str] =  None,
+        ra_type: Optional[str] = None,
     ):
         super().__init__()
         # to properly execute BERT models, we have to follow T2T and do layer norms after
@@ -3585,7 +3712,7 @@ class TransformerDecoderStack(nn.Module):
         layer_norm_eps: float = 1.0e-6,
         layer_drop: float = 0.0,
         rpr_value_on: bool = True,
-        ra_type: Optiona[str] = None,
+        ra_type: Optional[str] = None,
         **kwargs,
 
     ):
