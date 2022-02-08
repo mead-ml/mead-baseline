@@ -20,7 +20,7 @@ import tensorflow as tf
 import json
 logger = logging.getLogger(__file__)
 # If True, this will turn of autograph compilation.  Change this flag if you want to debug
-set_tf_eager_debug(False)
+set_tf_eager_debug(str2bool(os.getenv("MEAD_TF_EAGER_DEBUG", "FALSE")))
 
 """Pre-train a Transformer model in TensorFlow
 
