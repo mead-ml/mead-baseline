@@ -1610,8 +1610,8 @@ class GPT2Dict1DVectorizer(GPT2Vectorizer1D):
 class GPT2LabelDict1DVectorizer(GPT2Vectorizer1D):
 
     def __init__(self, **kwargs):
-        kwargs['emit_begin_tok'] = kwargs.get('emit_begin_tok', ["<pad>"])
-        kwargs['emit_end_tok'] = kwargs.get('emit_end_tok', ["<pad>"])
+        kwargs['emit_begin_tok'] = kwargs.get('emit_begin_tok', [Offsets.VALUES[Offsets.PAD]])
+        kwargs['emit_end_tok'] = kwargs.get('emit_end_tok', [Offsets.VALUES[Offsets.PAD]])
         super().__init__(**kwargs)
         self.field = kwargs.get('fields', kwargs.get('field', 'text'))
         self.label = kwargs.get('label', 'label')
@@ -1623,7 +1623,7 @@ class GPT2LabelDict1DVectorizer(GPT2Vectorizer1D):
             t_word = t[self.field]
             t_label = t[self.label]
             subwords = [x for x in self.tokenizer.encode_subword(t_word)]
-            subwords = ["<pad>"] * len(subwords)
+            subwords = [Offsets.VALUES[Offsets.PAD]] * len(subwords)
             # TODO: The tokenizer sometimes cuts up the token and leaves nothing
             # how to handle this since we cannot get anything for it
             if len(subwords):
@@ -2094,7 +2094,6 @@ class SentencePieceDict1DVectorizer(SentencePieceVectorizer1D):
 
     def iterable(self, tokens):
         tok = [t[self.field] if isinstance(t, dict) else t for t in tokens]
-
         return super().iterable(tok)
 
 
@@ -2103,6 +2102,8 @@ class SentencePieceDict1DVectorizer(SentencePieceVectorizer1D):
 class SentencePieceLabelDict1DVectorizer(SentencePieceVectorizer1D):
 
     def __init__(self, **kwargs):
+        kwargs['emit_begin_tok'] = kwargs.get('emit_begin_tok', [Offsets.VALUES[Offsets.PAD]])
+        kwargs['emit_end_tok'] = kwargs.get('emit_end_tok', [Offsets.VALUES[Offsets.PAD]])
         super().__init__(**kwargs)
         self.field = kwargs.get('fields', kwargs.get('field', 'text'))
         self.label = kwargs.get('label', 'label')
