@@ -2032,7 +2032,7 @@ class SentencePieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
 
     @property
     def subword_sentinel(self):
-        return getattr(self.tokenizer, "subword_sentinel", "@@")
+        return "▁"
 
     def valid_label_indices(self, tokens: Iterable) -> List[int]:
         indices = []
@@ -2043,10 +2043,10 @@ class SentencePieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
                 continue
             if not in_subword:
                 indices.append(i)
-                if token.endswith(self.subword_sentinel):
+                if not token.startswith(self.subword_sentinel):
                     in_subword = True
             else:
-                if not token.endswith(self.subword_sentinel):
+                if token.startswith(self.subword_sentinel):
                     in_subword = False
         return indices
 
@@ -2125,23 +2125,25 @@ class SentencePieceLabelDict1DVectorizer(SentencePieceVectorizer1D):
     def iterable(self, tokens):
         for t in self.emit_begin_tok:
             yield t
-        for t in tokens:
-            t_word = t[self.field]
-            t_label = t[self.label]
-            if t_word in Offsets.VALUES:
-                yield t_label
-            elif t == '<unk>':
-                yield t_label
-            elif t == '<eos>':
-                yield t_label
-            else:
-                subwords = self.tokenizer.EncodeAsPieces(t_word)
-                subwords = [Offsets.VALUES[Offsets.PAD]] * len(subwords)
-                subwords[0] = t_label
-                for x in subwords:
-                    yield x
+
+        if isinstance(tokens[0], dict):
+            _tokens = ' '.join([t[self.field] for t in tokens])
+        else:
+            _tokens = ' '.join(tokens)
+
+        spm_tokens = self.tokenizer.EncodeAsPieces(_tokens)
+        j = 0
+        labels = [Offsets.VALUES[Offsets.PAD]] * len(spm_tokens)
+        for i in range(len(spm_tokens)):
+            if i == 0 or spm_tokens[i].startswith(self.subword_sentinel):
+                labels[i] = tokens[j][self.label]
+                j += 1
+        for label in labels:
+            yield label
+
         for t in self.emit_end_tok:
             yield t
+
 
     def run(self, tokens, vocab):
         return super().run(tokens, vocab)
