@@ -1589,19 +1589,28 @@ class GPT2Dict1DVectorizer(GPT2Vectorizer1D):
     def iterable(self, tokens):
         for t in self.emit_begin_tok:
             yield t
-        for t in tokens:
-            tok = t[self.field] if isinstance(t, dict) else t
-            if tok == '<unk>':
-                yield '<unk>'
-            elif tok == '<PAD>':
-                yield '<pad>'
-            elif tok == '<GO>':
-                yield '<s>'
-            elif tok == '<EOS>':
-                yield '</s>'
-            else:
-                for subtok in self.tokenizer.encode_subword(tok):
-                    yield subtok
+
+        if not isinstance(tokens, str):
+            tokens = ' '.join(tokens)
+
+        bpe_tokens = self.tokenizer.encode_subword(tokens)
+        for t in bpe_tokens:
+            yield t
+        for t in self.emit_end_tok:
+            yield t
+
+    def iterable(self, tokens):
+        for t in self.emit_begin_tok:
+            yield t
+
+        if isinstance(tokens[0], dict):
+            _tokens = ' '.join([t[self.field] for t in tokens])
+        else:
+            _tokens = ' '.join(tokens)
+
+        bpe_tokens = self.tokenizer.encode_subword(_tokens)
+        for t in bpe_tokens:
+            yield t
         for t in self.emit_end_tok:
             yield t
 
