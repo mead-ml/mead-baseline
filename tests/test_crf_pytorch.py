@@ -204,7 +204,7 @@ def test_score_sentence_batch_stable(generate_examples_and_batch):
     score2 = crf.score_sentence(i2, t2, l2)
     one_x_one = torch.cat([score1, score2], dim=0)
     batched = crf.score_sentence(i, t, l)
-    np.testing.assert_allclose(one_x_one.detach().numpy(), batched.detach().numpy())
+    np.testing.assert_allclose(one_x_one.detach().numpy(), batched.detach().numpy(), rtol=1e-6)
 
 
 def test_score_sentence_shape(generate_batch):
@@ -439,8 +439,8 @@ def test_viterbi_degenerates_to_argmax(generate_batch):
         s_gold[sl:, i] = 0
         p_gold[sl:, i] = 0
     s_gold = torch.sum(s_gold, 0)
-    np.testing.assert_allclose(p.detach().numpy(), p_gold.detach().numpy())
-    np.testing.assert_allclose(s.detach().numpy(), s_gold.detach().numpy())
+    np.testing.assert_allclose(p.detach().numpy(), p_gold.detach().numpy(), rtol=1e-6)
+    np.testing.assert_allclose(s.detach().numpy(), s_gold.detach().numpy(), rtol=1e-6)
 
 
 def test_decode_shape(generate_batch):
