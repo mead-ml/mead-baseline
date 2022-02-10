@@ -396,8 +396,6 @@ class SeqPredictReader:
 
     def convert_to_tensors(self, texts, vocabs):
         ts = []
-        i2l = revlut(self.label2index)
-        i2w = revlut(self.vectorizers['word'].vocab)
         for i, example_tokens in enumerate(texts):
             example = {}
             for k, vectorizer in self.vectorizers.items():
@@ -405,15 +403,12 @@ class SeqPredictReader:
                 if lengths is not None:
                     example['{}_lengths'.format(k)] = lengths
 
-
             example['y'], lengths = self.label_vectorizer.run(example_tokens, self.label2index)
-            #print(example['y'])
-            print([f"{i2w[w]}/{l}" for w, l in zip(example['word'][:lengths+2], example['y'][:lengths+2])])
             example['y_lengths'] = lengths
             example['ids'] = i
             # Uncomment for sanity check that you wont receive truncated sequences
-            if len(example[k]) != len(example['y']):
-                raise Exception(f"{len(example[k])} != {len(example['y'])}")
+            #if len(example[k]) != len(example['y']):
+            #    raise Exception(f"{len(example[k])} != {len(example['y'])}")
             ts.append(example)
 
         return ts
