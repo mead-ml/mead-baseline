@@ -348,16 +348,18 @@ def main():
         raise Exception("Variable tensor lengths not currently supported for gMLP")
     logger.info("Loaded model and loss")
 
+    eff_batch_size = args.batch_size * args.grad_accum
+    logger.info(f"eff batch size: {eff_batch_size}, {args.batch_size}(b) x {args.grad_accum}(ga)")
     if is_curriculum:
         steps_per_epoch = 0
         steps_per_valid_epoch = 0
         for k, v in num_train_samples.items():
-            steps_per_epoch += int(num_train_samples[k] // (args.batch_size * (args.nctx / k)))
+            steps_per_epoch += int(num_train_samples[k] // (eff_batch_size * (args.nctx / k)))
         for k, v in num_valid_samples.items():
             steps_per_valid_epoch += int(num_valid_samples[k] // (args.batch_size * (args.nctx / k)))
 
     else:
-        steps_per_epoch = num_train_samples // args.batch_size
+        steps_per_epoch = num_train_samples // eff_batch_size
         steps_per_valid_epoch = num_valid_samples // args.batch_size
     update_on = steps_per_epoch // args.saves_per_epoch
     report_on = max(10, update_on) // 10
@@ -436,7 +438,8 @@ def main():
             train_iter = iter(train_loader)
 
             step_loss = 0
-            for i in range(steps_per_epoch):
+            iterations = steps_per_epoch * args.batch_size
+            for i in range(iterations):
 
                 try:
 
@@ -450,6 +453,7 @@ def main():
                         grad_accum.reset()
                         # Now update the loss info
                         tf.summary.scalar("train_loss", data=step_loss, step=optimizer.global_step)
+                        avg_loss.update(step_loss.numpy().item())
                         # Now reset the loss
                         step_loss = 0
                         steps = optimizer.global_step.numpy()
@@ -467,7 +471,8 @@ def main():
 
 
                 except Exception as e:
-                    logger.error(f"Exception at training step {i+1}/{steps_per_epoch}. Skipping")
+                    logger.error(e)
+                    logger.error(f"Exception at training iter {i+1}/{iterations}. Skipping")
                     pass
                 if args.convert_only:
                     logger.warning("Convert only flag specified.  Stopping after one step")
