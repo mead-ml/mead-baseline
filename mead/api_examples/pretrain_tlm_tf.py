@@ -457,7 +457,6 @@ def main():
                         # Now reset the loss
                         step_loss = 0
                         steps = optimizer.global_step.numpy()
-                        print(steps, avg_loss)
                         if (steps + 1) % report_on == 0:
                             logger.info(avg_loss)
                         if (steps + 1) % update_on == 0:
