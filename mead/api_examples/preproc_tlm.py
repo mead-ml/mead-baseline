@@ -102,7 +102,7 @@ def run(input_files=[], input_pattern='*.txt', codes=None, vocab=None, nctx=256,
     logger.info('Output [%s]', output)
     transform = baseline.lowercase if not cased else lambda x: x
     Vec1D = get_subword_vec1d(subword_type)
-    vectorizer = Vec1D(transform_fn=transform, model_file=codes, vocab_file=vocab, mxlen=1024, extra_tokens=extra_tokens)
+    vectorizer = Vec1D(transform_fn=transform, model_file=codes, vocab_file=vocab, mxlen=4096, extra_tokens=extra_tokens)
 
     lookup_indices = []
     indices2word = baseline.revlut(vectorizer.vocab)
@@ -134,8 +134,10 @@ def run(input_files=[], input_pattern='*.txt', codes=None, vocab=None, nctx=256,
                 if not to_bpe:
                     continue
                 to_bpe += [tok_on_eol]
-
+                vectorizer.mxlen = max(len(to_bpe) * 2, 4096)
                 output, available = vectorizer.run(to_bpe, vectorizer.vocab)
+                if available > vectorizer.mxlen:
+                    print(f"Warning, truncation from {vectorizer.mxlen} to {available}")
                 while available > 0:
                     if len(lookup_indices) == nctx:
                         record = create_record(lookup_indices, indices2word, prefix, suffix, masking=masking)
