@@ -267,6 +267,10 @@ def to_attn_array(pytorch_attn: nn.Module, name: str) -> Dict:
     d.update(to_weight_array(pytorch_attn.w_K, f"{name}/w_K"))
     d.update(to_weight_array(pytorch_attn.w_V, f"{name}/w_V"))
 
+    # T5 relative embeddings
+    if hasattr(pytorch_attn.attn_fn, 'rel_embedding'):
+        d.update({f"{name}/rel_embedding": pytorch_attn.attn_fn.rel_embedding.cpu().detach().numpy()})
+
     if hasattr(pytorch_attn, 'w_O'):
         d.update(to_weight_array(pytorch_attn.w_O, f"{name}/w_O"))
 
@@ -294,6 +298,11 @@ def from_attn_array(pytorch_attn: nn.Module, d: Dict, name: str):
 
     if hasattr(pytorch_attn, 'w_O'):
         from_weight_array(pytorch_attn.w_O, d, f"{name}/w_O")
+
+    # T5 relative embeddings
+    if hasattr(pytorch_attn.attn_fn, 'rel_embedding'):
+        device = pytorch_attn.attn_fn.rel_embedding.device
+        pytorch_attn.attn_fn.rel_embedding = torch.nn.Parameter(torch.from_numpy(d[f"{name}/rel_embedding"]).to(device=device))
 
     if hasattr(pytorch_attn, 'rpr_key'):
         device = pytorch_attn.rpr_key.weight.device

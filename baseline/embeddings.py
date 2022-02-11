@@ -138,9 +138,6 @@ def load_embeddings_overlay(global_embeddings_settings, embeddings_section, voca
 
             embeddings_section = {**embed_model, **embeddings_section}
             try:
-                # We arent necessarily going to get an `embed_file`. For instance, using the HuggingFace
-                # models in the Hub addon, the `embed_file` should be downloaded using HuggingFace's library,
-                # not by us.  In this case we want it to be None and we dont want to download it
                 if embed_file:
                     embed_file = EmbeddingDownloader(embed_file, embed_dsz, embed_sha1, data_download_cache, unzip_file=unzip_file).download()
                     embed_files.append(embed_file)

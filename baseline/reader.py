@@ -403,7 +403,6 @@ class SeqPredictReader:
                 if lengths is not None:
                     example['{}_lengths'.format(k)] = lengths
 
-
             example['y'], lengths = self.label_vectorizer.run(example_tokens, self.label2index)
             example['y_lengths'] = lengths
             example['ids'] = i

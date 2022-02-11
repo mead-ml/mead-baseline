@@ -181,11 +181,12 @@ class TransformerLMEmbeddings(TensorFlowEmbeddings):
         activation = kwargs.get('activation', 'gelu')
         windowed_ra = kwargs.get('windowed_ra', False)
         rpr_value_on = kwargs.get('rpr_value_on', True)
+        ra_type = kwargs.get('ra_type')
         self.transformer = TransformerEncoderStack(num_heads, d_model=self.d_model, pdrop=pdrop, scale=True,
                                                    layers=num_layers, d_ff=d_ff, rpr_k=rpr_k, d_k=d_k,
                                                    activation=activation, layer_norms_after=layer_norms_after,
                                                    layer_norm_eps=layer_norm_eps, windowed_ra=windowed_ra,
-                                                   rpr_value_on=rpr_value_on)
+                                                   rpr_value_on=rpr_value_on, ra_type=ra_type)
         self.mlm = kwargs.get('mlm', True)
         self.finetune = kwargs.get('finetune', True)
 
@@ -205,7 +206,7 @@ class TransformerLMEmbeddings(TensorFlowEmbeddings):
         if not self.finetune:
             z = tf.stop_gradient(z)
         if hasattr(self, 'return_mask') and self.return_mask:
-            return (z, mask,)
+            return (z, input_mask,)
         return z
 
     def get_vocab(self):
@@ -312,5 +313,5 @@ def _mean_pool(inputs, embeddings):
 
 def _max_pool(inputs, embeddings):
     mask = tf.not_equal(inputs, 0)
-    embeddings = tf.where(tf.expand_dims(mask, -1), embeddings, 0.)
+    embeddings = tf.where(tf.expand_dims(mask, -1), embeddings, -1.0e8)
     return tf.reduce_max(embeddings, 1, False)

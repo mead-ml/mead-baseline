@@ -123,6 +123,7 @@ def main():
     parser.add_argument('--rpr_k',
                         help='Relative attention positional sizes pass 0 if you dont want relative attention',
                         type=int, default=[8], nargs='+')
+    parser.add_argument('--ra_type', type=str, help="Specify a relative attention type")
     parser.add_argument("--reduction_d_k", type=int, default=64, help="Dimensions of Key and Query in the single headed"
                                                                       "reduction layers")
     parser.add_argument("--reduction_type", type=str, default="2ha",
@@ -240,8 +241,8 @@ def main():
     logger.info("Creating dual encoder")
     model = PairedModel(embeddings, args.d_model, args.d_ff, args.dropout, args.num_heads, args.num_layers, rpr_k=rpr_k,
                         d_k=args.d_k, reduction_d_k=args.reduction_d_k, stacking_layers=args.stacking_layers,
-                        ffn_pdrop=args.ff_pdrop,
-                        reduction_type=args.reduction_type, freeze_encoders=False)
+                        ffn_pdrop=args.ff_pdrop, reduction_type=args.reduction_type, freeze_encoders=False,
+                        ra_type=args.ra_type)
 
     loss_function = model.create_loss(loss_type=args.loss, init_temp=args.init_temp, learn_temp=args.learn_temp)
     logger.info("Loaded model and loss")

@@ -10,7 +10,7 @@ import baseline.tf.embeddings
 import baseline.embeddings
 from baseline.vectorizers import BPEVectorizer1D, WordpieceVectorizer1D
 from eight_mile.utils import Average, Timer, get_num_gpus_multiworker
-from eight_mile.tf.layers import create_distribute_strategy, read_yaml_tf, SET_TRAIN_FLAG
+from eight_mile.tf.layers import create_distribute_strategy, read_yaml_tf, SET_TRAIN_FLAG, set_tf_eager_debug
 from eight_mile.optz import *
 from eight_mile.tf.optz import *
 from baseline.tf.lm import TransformerLanguageModel, TransformerMaskedLanguageModel, GatedMLPLanguageModel
@@ -19,7 +19,8 @@ from collections.abc import Mapping
 import tensorflow as tf
 import json
 logger = logging.getLogger(__file__)
-
+# If True, this will turn of autograph compilation.  Change this flag if you want to debug
+set_tf_eager_debug(str2bool(os.getenv("MEAD_TF_EAGER_DEBUG", "FALSE")))
 
 """Pre-train a Transformer model in TensorFlow
 
@@ -166,6 +167,7 @@ def main():
     parser.add_argument('--rpr_value_on', type=str2bool, default=True,
                         help="In relative attention, whether add positional correction to values in addition to the "
                              "correction to attention matrix")
+    parser.add_argument('--ra_type', type=str, help="Specify a relative attention type")
     parser.add_argument('--windowed_ra', type=str2bool, default=False, help="whether prevent attention beyond rpr_k")
     parser.add_argument("--strategy", help="Training strategy, defaults to `mirror`", choices=["mirror"])
     parser.add_argument("--npz", help="Should we write out NPZ files?", type=str2bool, default=False)
@@ -423,12 +425,17 @@ def create_model(args, embeddings):
                                              src_keys=['x'], tgt_key='x')
     else:
 
+
         if len(args.rpr_k) == 0 or args.rpr_k[0] < 1:
             rpr_k = None
         elif len(args.rpr_k) == 1:
-            rpr_k = args.rpr_k[0]
+            rpr_k = None if args.rpr_k[0] == 0 else args.rpr_k[0]
         else:
             rpr_k = args.rpr_k
+
+        if args.ra_type != None and args.ra_type != 'shaw' and args.rpr_k is not None:
+            print(f"Relative attention mismatch. You requested {args.ra_type} with rpr set.  Setting it to 0")
+            rpr_k = None
         TLM = TransformerLanguageModel if args.causal else TransformerMaskedLanguageModel
         model = TLM.create(embeddings,
                            hsz=args.d_model,
@@ -444,6 +451,7 @@ def create_model(args, embeddings):
                            windowed_ra=args.windowed_ra,
                            rpr_value_on=args.rpr_value_on,
                            layer_drop=args.layer_drop,
+                           ra_type=args.ra_type,
                            src_keys=['x'], tgt_key='x')
     return model
 

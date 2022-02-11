@@ -58,9 +58,7 @@ jobs:
       max-parallel: 4
       matrix:
         pyt-version:
-        - 1.4-cuda10.1-cudnn7-runtime
-        - 1.5-cuda10.1-cudnn7-runtime
-        - 1.6.0-cuda10.1-cudnn7-runtime
+        - 1.7.1-cuda11.0-cudnn8-runtime
     container: pytorch/pytorch:${{matrix.pyt-version}}
     steps:
     - uses: actions/checkout@v2

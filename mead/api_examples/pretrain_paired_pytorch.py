@@ -35,8 +35,10 @@ def create_model(embeddings, d_model, d_ff, dropout, num_heads, num_layers, mode
 
     if model_type == 'transformer-bow':
         model = TransformerBoWPairedModel(embeddings, d_model, d_ff, dropout, num_heads, num_layers, rpr_k=rpr_k, d_k=d_k,
-                                          reduction_d_k=reduction_d_k, stacking_layers=stacking_layers, ffn_pdrop=ff_pdrop, windowed_ra=windowed_ra,
-                                          reduction_type_1=reduction_type, freeze_encoders=True, layer_norms_after=layer_norms_after)
+                                          reduction_d_k=reduction_d_k, stacking_layers=stacking_layers,
+                                          ffn_pdrop=ff_pdrop, windowed_ra=windowed_ra,
+                                          reduction_type_1=reduction_type, freeze_encoders=True,
+                                          layer_norms_after=layer_norms_after, ra_type=ra_type)
     else:
         model = PairedModel(embeddings, d_model, d_ff, dropout, num_heads, num_layers, rpr_k=rpr_k, d_k=d_k,
                             reduction_d_k=reduction_d_k, stacking_layers=stacking_layers, ffn_pdrop=ff_pdrop,
@@ -119,7 +121,9 @@ def parse_args(argv):
     parser.add_argument("--src_end_tok", type=str, nargs='+', default=['<EOS>'])
     parser.add_argument("--tgt_begin_tok", type=str, nargs='+', default=['<GO>'])
     parser.add_argument("--tgt_end_tok", type=str, nargs='+', default=['<EOS>'])
-    parser.add_argument('--lower', type=baseline.str2bool, default=False)
+    parser.add_argument('--lower', type=str2bool, default=False)
+    parser.add_argument('--rpr_value_on', type=str2bool, default=True)
+    parser.add_argument('--ra_type', type=str, help="Specify a relative attention type")
     parser.add_argument("--loss", type=str, default='symmetric',
                         choices=['triplet', 'all', 'all_mean', 'contrastive', 'symmetric'])
     parser.add_argument("--learn_temp", type=str2bool, default=True,
@@ -203,6 +207,8 @@ def run(basedir=None, train_file=None, valid_file=None, dataset_key='paired', em
                          reduction_type=reduction_type,
                          shared_output=shared_output,
                          layer_norms_after=layer_norms_after,
+                         rpr_value_on=rpr_value_on,
+                         ra_type=ra_type,
                          logger=logger)
     model.to(device)
 
