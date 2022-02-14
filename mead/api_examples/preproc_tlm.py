@@ -12,7 +12,37 @@ from typing import Optional
 import numpy as np
 import os
 
+try:
+    import jsonlines
+    import zstandard
+    import io
 
+    class ZSTFile:
+        def __init__(self, filename, para_joiner=' '):
+            self.filename = filename
+            self.para_joiner = para_joiner
+
+        def __enter__(self):
+            with open(self.filename, 'rb+') as f:
+                cctx = zstandard.ZstdDecompressor()
+                reader_stream = io.BufferedReader(cctx.stream_reader(f))
+                reader = jsonlines.Reader(reader_stream)
+                for item in reader:
+                    result = dict()
+                    if isinstance(item['text'], str):
+                        result = item['text']
+                    else:
+                        text = item['text']
+                        if isinstance(text, list):
+                            text = self.para_joiner.join(text)
+                            result = text
+
+                    yield result
+
+        def __exit__(self, exc_type, exc_value, exc_traceback):
+            pass
+except:
+    pass
 
 def get_subword_vec1d(type):
     if type == 'bpe':
@@ -83,15 +113,23 @@ def run(input_files=[], input_pattern='*.txt', codes=None, vocab=None, nctx=256,
         baseline.import_user_module(module)
 
     get_line = lambda x: x.strip()
+
+    InputFile = TextFile
     if os.path.isdir(input_files):
-        if '.json' in input_pattern:
+        if '.zst' in input_pattern:
+            InputFile = ZSTFile
+        elif '.json' in input_pattern:
             get_line = parse_json_line
+
         input_files = list(glob.glob(os.path.join(input_files, input_pattern)))
         if not output:
             output = os.path.join(input_files, 'records')
     else:
-        if '.json' in input_files:
+        if '.zst' in input_files:
+            InputFile = ZSTFile
+        elif '.json' in input_files:
             get_line = parse_json_line
+
         input_files = [input_files]
         if not output:
             output = f'{input_files}.records'
@@ -127,7 +165,7 @@ def run(input_files=[], input_pattern='*.txt', codes=None, vocab=None, nctx=256,
         if i % world_size != world_offset:
             continue
 
-        with TextFile(text) as rf:
+        with InputFile(text) as rf:
             print(f"Reading from {text}...")
             for line in rf:
                 to_bpe = tokenizer(get_line(line))
