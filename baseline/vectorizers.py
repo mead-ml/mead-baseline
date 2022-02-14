@@ -1996,6 +1996,15 @@ class BPENBestVectorizer2D(BPENBestVectorizer1D):
     def get_dims(self):
         return self.nbest, self.mxlen
 
+class GPT2Tok:
+    def __init__(self, transform_fn):
+        import regex
+        self.splitter = regex.compile(r"""'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+""")
+        self.transform_fn = transform_fn
+
+    def __call__(self, text):
+        return ' '.join([self.transform_fn(w.strip()) for w in regex.findall(self.splitter, text)])
+
 
 @register_vectorizer(name='bb-spm1d')
 class SentencePieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
@@ -2007,6 +2016,9 @@ class SentencePieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
         super().__init__(kwargs.get('transform_fn'),
                          kwargs.get('emit_begin_tok', []),
                          kwargs.get('emit_end_tok', []))
+        do_pre_tok = kwargs.get('tokenize', True)
+
+        self.tok_fn = GPT2Tok(self.transform_fn) if do_pre_tok else identity_trans_fn
         self.max_seen = kwargs.get('max_seen', 4096)
         self.model_file = kwargs.get('model_file')
         self.tokenizer = spm.SentencePieceProcessor(self.model_file)
@@ -2078,6 +2090,7 @@ class SentencePieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
                 yield t_word
 
             else:
+                t_word = self.tok_fn(t_word)
                 subwords = self.tokenizer.EncodeAsPieces(t_word)
                 for x in subwords:
                     yield x
@@ -2153,6 +2166,7 @@ class SentencePieceLabelDict1DVectorizer(SentencePieceVectorizer1D):
             if t_word.startswith('[') and t_word.endswith(']'):
                 return Offsets.VALUES[Offsets.PAD]
 
+            t_word = self.tok_fn(t_word)
             subwords = self.tokenizer.EncodeAsPieces(t_word)
             subword_labels = [Offsets.VALUES[Offsets.PAD]] * len(subwords)
             subword_labels[0] = t_label
