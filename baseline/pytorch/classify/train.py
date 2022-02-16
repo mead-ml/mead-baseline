@@ -20,7 +20,12 @@ def _add_to_cm(cm, y, pred):
     if cm is None:
         return
     _, best = pred.max(1)
-    yt = y.cpu().int()
+
+    # If the truth is actually a prob dist, do an argmax RQ
+    if y.dtype == pred.dtype and len(y.shape) == len(pred.shape):
+        yt = torch.argmax(y, -1).cpu().int()
+    else:
+        yt = y.cpu().int()
     yp = best.cpu().int()
     cm.add_batch(yt.data.numpy(), yp.data.numpy())
 
@@ -46,14 +51,14 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
         self.optimizer = OptimizerManager(model, **kwargs)
         self.model = model
         if self.gpus > 0 and self.model.gpu:
-            self.crit = model.create_loss().cuda()
+            self.crit = model.create_loss(**kwargs).cuda()
             if self.gpus > 1:
                 self.model = torch.nn.DataParallel(model).cuda()
             else:
                 self.model.cuda()
         else:
             logger.warning("Requested training on CPU.  This will be slow.")
-            self.crit = model.create_loss()
+            self.crit = model.create_loss(**kwargs)
         self.nsteps = kwargs.get('nsteps', six.MAXSIZE)
 
     def _get_pytorch_model(self):
@@ -67,7 +72,7 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
 
     @staticmethod
     def _get_batchsz(batch_dict):
-        return len(batch_dict['y'])
+        return batch_dict['y'].shape[0]
 
     def _test(self, loader, **kwargs):
         self.model.eval()
@@ -89,6 +94,8 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
             for batch_dict in pg(loader):
                 example = self._make_input(batch_dict)
                 ys = example.pop('y')
+
+
                 pred = self.model(example)
                 loss = self.crit(pred, ys)
                 if handle is not None:
