@@ -45,7 +45,7 @@ def main():
             "plot": ["matplotlib"],
         },
         entry_points={"console_scripts": ["bleu = eight_mile.bleu:main" "conlleval = eight_mile.conlleval:main"]},
-        classifiers={
+        classifiers=[
             "Development Status :: 3 - Alpha",
             "Environment :: Console",
             "Intended Audience :: Developers",
@@ -57,7 +57,7 @@ def main():
             "Programming Language :: Python :: 3.6",
             "Programming Language :: Python :: 3.7",
             "Topic :: Scientific/Engineering :: Artificial Intelligence",
-        },
+        ],
         keywords=["deep-learning", "nlp", "pytorch", "tensorflow"],
     )
 
