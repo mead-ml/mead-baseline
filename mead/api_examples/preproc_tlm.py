@@ -140,7 +140,7 @@ def run(input_files=[], input_pattern='*.txt', codes=None, vocab=None, nctx=256,
     logger.info('Output [%s]', output)
     transform = baseline.lowercase if not cased else lambda x: x
     Vec1D = get_subword_vec1d(subword_type)
-    vectorizer = Vec1D(transform_fn=transform, model_file=codes, vocab_file=vocab, mxlen=4096, extra_tokens=extra_tokens)
+    vectorizer = Vec1D(transform_fn=transform, model_file=codes, vocab_file=vocab, mxlen=4096, extra_tokens=extra_tokens, tokenize=False)
 
     lookup_indices = []
     indices2word = baseline.revlut(vectorizer.vocab)
