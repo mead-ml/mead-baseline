@@ -65,9 +65,9 @@ jobs:
     - name: Install Baseline
       run: |
         cd layers
-        pip install -e .
+        pip install --no-use-pep517 -e .
         cd ..
-        pip install -e .[test,yaml]
+        pip install --no-use-pep517 -e .[test,yaml]
     - name: Unit Test PyTorch ${{matrix.pyt-version}}
       run: |
         pytest --forked
