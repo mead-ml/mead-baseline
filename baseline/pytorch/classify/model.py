@@ -5,6 +5,7 @@ from baseline.pytorch.torchy import *
 from baseline.utils import listify, write_json
 from eight_mile.pytorch.layers import *
 import torch.backends.cudnn as cudnn
+
 import os
 cudnn.benchmark = True
 

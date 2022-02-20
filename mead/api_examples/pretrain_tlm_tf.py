@@ -56,12 +56,12 @@ feature_description = {
 
 def _parse_tf_record(example_proto):
     record = tf.io.parse_single_example(example_proto, feature_description)
-    return record['x'], record['y']
+    return tf.cast(record['x'], dtype=tf.int32), tf.cast(record['y'], dtype=tf.int32)
 
 
 def _parse_tf_record_causal(example_proto):
     record = tf.io.parse_single_example(example_proto, feature_description)
-    return record['x'][:-1], record['x'][1:]
+    return tf.cast(record['x'][:-1], dtype=tf.int32), tf.cast(record['x'][1:], dtype=tf.int32)
 
 
 def decode_json(example):

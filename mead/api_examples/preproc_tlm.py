@@ -12,7 +12,37 @@ from typing import Optional
 import numpy as np
 import os
 
+try:
+    import jsonlines
+    import zstandard
+    import io
 
+    class ZSTFile:
+        def __init__(self, filename, para_joiner=' '):
+            self.filename = filename
+            self.para_joiner = para_joiner
+
+        def __enter__(self):
+            with open(self.filename, 'rb+') as f:
+                cctx = zstandard.ZstdDecompressor()
+                reader_stream = io.BufferedReader(cctx.stream_reader(f))
+                reader = jsonlines.Reader(reader_stream)
+                for item in reader:
+                    result = dict()
+                    if isinstance(item['text'], str):
+                        result = item['text']
+                    else:
+                        text = item['text']
+                        if isinstance(text, list):
+                            text = self.para_joiner.join(text)
+                            result = text
+
+                    yield result
+
+        def __exit__(self, exc_type, exc_value, exc_traceback):
+            pass
+except:
+    pass
 
 def get_subword_vec1d(type):
     if type == 'bpe':
@@ -83,15 +113,23 @@ def run(input_files=[], input_pattern='*.txt', codes=None, vocab=None, nctx=256,
         baseline.import_user_module(module)
 
     get_line = lambda x: x.strip()
+
+    InputFile = TextFile
     if os.path.isdir(input_files):
-        if '.json' in input_pattern:
+        if '.zst' in input_pattern:
+            InputFile = ZSTFile
+        elif '.json' in input_pattern:
             get_line = parse_json_line
+
         input_files = list(glob.glob(os.path.join(input_files, input_pattern)))
         if not output:
             output = os.path.join(input_files, 'records')
     else:
-        if '.json' in input_files:
+        if '.zst' in input_files:
+            InputFile = ZSTFile
+        elif '.json' in input_files:
             get_line = parse_json_line
+
         input_files = [input_files]
         if not output:
             output = f'{input_files}.records'
@@ -102,7 +140,7 @@ def run(input_files=[], input_pattern='*.txt', codes=None, vocab=None, nctx=256,
     logger.info('Output [%s]', output)
     transform = baseline.lowercase if not cased else lambda x: x
     Vec1D = get_subword_vec1d(subword_type)
-    vectorizer = Vec1D(transform_fn=transform, model_file=codes, vocab_file=vocab, mxlen=1024, extra_tokens=extra_tokens)
+    vectorizer = Vec1D(transform_fn=transform, model_file=codes, vocab_file=vocab, mxlen=4096, extra_tokens=extra_tokens, tokenize=False)
 
     lookup_indices = []
     indices2word = baseline.revlut(vectorizer.vocab)
@@ -127,15 +165,17 @@ def run(input_files=[], input_pattern='*.txt', codes=None, vocab=None, nctx=256,
         if i % world_size != world_offset:
             continue
 
-        with TextFile(text) as rf:
+        with InputFile(text) as rf:
             print(f"Reading from {text}...")
             for line in rf:
                 to_bpe = tokenizer(get_line(line))
                 if not to_bpe:
                     continue
                 to_bpe += [tok_on_eol]
-
+                vectorizer.mxlen = max(len(to_bpe) * 2, 4096)
                 output, available = vectorizer.run(to_bpe, vectorizer.vocab)
+                if available > vectorizer.mxlen:
+                    print(f"Warning, truncation from {vectorizer.mxlen} to {available}")
                 while available > 0:
                     if len(lookup_indices) == nctx:
                         record = create_record(lookup_indices, indices2word, prefix, suffix, masking=masking)

@@ -1801,8 +1801,7 @@ class XLMRSentencePieceLabelDict1DVectorizer(XLMRSentencePieceVectorizer1D):
             elif t == '<eos>':
                 yield t_label
             else:
-                subwords = self.tokenizer.EncodeAsPieces(t_word)  # TODO: is this right?
-                #subwords = self.tokenizer.apply([self.transform_fn(t_word)])[0].split()
+                subwords = self.tokenizer.EncodeAsPieces(t_word)
                 subwords = [Offsets.VALUES[Offsets.PAD]] * len(subwords)
                 subwords[0] = t_label
                 for x in subwords:
@@ -1997,6 +1996,15 @@ class BPENBestVectorizer2D(BPENBestVectorizer1D):
     def get_dims(self):
         return self.nbest, self.mxlen
 
+class GPT2Tok:
+    def __init__(self, transform_fn):
+        import regex
+        self.splitter = regex.compile(r"""'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+""")
+        self.transform_fn = transform_fn
+
+    def __call__(self, text):
+        return ' '.join([self.transform_fn(w.strip()) for w in regex.findall(self.splitter, text)])
+
 
 @register_vectorizer(name='bb-spm1d')
 class SentencePieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
@@ -2008,6 +2016,9 @@ class SentencePieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
         super().__init__(kwargs.get('transform_fn'),
                          kwargs.get('emit_begin_tok', []),
                          kwargs.get('emit_end_tok', []))
+        do_pre_tok = kwargs.get('tokenize', True)
+
+        self.tok_fn = GPT2Tok(self.transform_fn) if do_pre_tok else identity_trans_fn
         self.max_seen = kwargs.get('max_seen', 4096)
         self.model_file = kwargs.get('model_file')
         self.tokenizer = spm.SentencePieceProcessor(self.model_file)
@@ -2060,15 +2071,29 @@ class SentencePieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
         return counter
 
     def iterable(self, tokens):
+        if isinstance(tokens, str):
+            tokens = tokens.split()
+
         for t in self.emit_begin_tok:
             yield t
+        for t_word in tokens:
+            t_word_upper = t_word.upper()
+            if t_word_upper == Offsets.PAD:
+                yield '<pad>'
+            elif t_word_upper == Offsets.GO:
+                yield '<s>'
+            elif t_word_upper == Offsets.EOS:
+                yield '</s>'
+            elif t_word_upper == Offsets.UNK:
+                yield '<unk>'
+            elif t_word.startswith('[') and t_word.endswith(']'):
+                yield t_word
 
-        if not isinstance(tokens, str):
-            tokens = ' '.join(tokens)
-
-        spm_tokens = self.tokenizer.EncodeAsPieces(tokens)
-        for t in spm_tokens:
-            yield t
+            else:
+                t_word = self.tok_fn(t_word)
+                subwords = self.tokenizer.EncodeAsPieces(t_word)
+                for x in subwords:
+                    yield x
         for t in self.emit_end_tok:
             yield t
 
@@ -2123,24 +2148,30 @@ class SentencePieceLabelDict1DVectorizer(SentencePieceVectorizer1D):
         self.label = kwargs.get('label', 'label')
 
     def iterable(self, tokens):
+
         for t in self.emit_begin_tok:
             yield t
+        for t in tokens:
+            t_word = t[self.field]
+            t_label = t[self.label]
+            t_word_upper = t_word.upper()
+            if t_word_upper == Offsets.PAD:
+                return Offsets.VALUES[Offsets.PAD]
+            if t_word_upper == Offsets.GO:
+                return Offsets.VALUES[Offsets.PAD]
+            if t_word_upper == Offsets.EOS:
+                return Offsets.VALUES[Offsets.PAD]
+            if t_word_upper == Offsets.UNK:
+                return Offsets.VALUES[Offsets.PAD]
+            if t_word.startswith('[') and t_word.endswith(']'):
+                return Offsets.VALUES[Offsets.PAD]
 
-        if isinstance(tokens[0], dict):
-            _tokens = ' '.join([t[self.field] for t in tokens])
-        else:
-            _tokens = ' '.join(tokens)
-
-        spm_tokens = self.tokenizer.EncodeAsPieces(_tokens)
-        j = 0
-        labels = [Offsets.VALUES[Offsets.PAD]] * len(spm_tokens)
-        for i in range(len(spm_tokens)):
-            if i == 0 or spm_tokens[i].startswith(self.subword_sentinel):
-                labels[i] = tokens[j][self.label]
-                j += 1
-        for label in labels:
-            yield label
-
+            t_word = self.tok_fn(t_word)
+            subwords = self.tokenizer.EncodeAsPieces(t_word)
+            subword_labels = [Offsets.VALUES[Offsets.PAD]] * len(subwords)
+            subword_labels[0] = t_label
+            for x in subword_labels:
+                yield x
         for t in self.emit_end_tok:
             yield t
 

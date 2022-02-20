@@ -3367,7 +3367,7 @@ class TransformerEncoder(nn.Module):
         self.layer_norms_after = layer_norms_after
         self.d_model = d_model
         self.d_ff = d_ff if d_ff is not None else 4 * d_model
-        if rpr_k is not None:                
+        if rpr_k is not None and rpr_k != 0:
             self.self_attn = MultiHeadedRelativeAttention(num_heads, d_model, rpr_k, pdrop, scale, d_k=d_k,
                                                           windowed_ra=windowed_ra, rpr_value_on=rpr_value_on)
         else:
