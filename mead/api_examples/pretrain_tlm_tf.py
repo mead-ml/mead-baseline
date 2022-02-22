@@ -122,6 +122,80 @@ def get_subword_vec1d(type):
         from baseline.vectorizers import SentencePieceVectorizer1D
         return SentencePieceVectorizer1D
 
+
+# https://github.com/OpenNMT/OpenNMT-tf/blob/master/opennmt/optimizers/utils.py
+class GradientAccumulator:
+    """Gradient accumulation utility.
+    When used with a distribution strategy, the accumulator should be called in a
+    replica context. Gradients will be accumulated locally on each replica and
+    without synchronization. Users should then call ``.gradients``, scale the
+    gradients if required, and pass the result to ``apply_gradients``.
+    """
+
+    # We use the ON_READ synchronization policy so that no synchronization is
+    # performed on assignment. To get the value, we call .value() which returns the
+    # value on the current replica without synchronization.
+
+    def __init__(self):
+        """Initializes the accumulator."""
+        self._gradients = []
+        self._accum_steps = None
+
+    @property
+    def step(self):
+        """Number of accumulated steps."""
+        if self._accum_steps is None:
+            self._accum_steps = tf.Variable(
+                tf.constant(0, dtype=tf.int64),
+                trainable=False,
+                synchronization=tf.VariableSynchronization.ON_READ,
+                aggregation=tf.VariableAggregation.ONLY_FIRST_REPLICA,
+            )
+        return self._accum_steps.value()
+
+    @property
+    def gradients(self):
+        """The accumulated gradients on the current replica."""
+        if not self._gradients:
+            raise ValueError(
+                "The accumulator should be called first to initialize the gradients"
+            )
+        return list(gradient.value() for gradient in self._gradients)
+
+    def __call__(self, gradients):
+        """Accumulates :obj:`gradients` on the current replica."""
+        if not self._gradients:
+            _ = self.step  # Create the step variable.
+            self._gradients.extend(
+                [
+                    tf.Variable(
+                        tf.zeros_like(gradient),
+                        trainable=False,
+                        synchronization=tf.VariableSynchronization.ON_READ,
+                    )
+                    for gradient in gradients
+                ]
+            )
+        if len(gradients) != len(self._gradients):
+            raise ValueError(
+                "Expected %s gradients, but got %d"
+                % (len(self._gradients), len(gradients))
+            )
+
+        for accum_gradient, gradient in zip(self._gradients, gradients):
+            accum_gradient.assign_add(gradient, read_value=False)
+        self._accum_steps.assign_add(1)
+
+    def reset(self):
+        """Resets the accumulated gradients on the current replica."""
+        if not self._gradients:
+            return
+        self._accum_steps.assign(0)
+        for gradient in self._gradients:
+            gradient.assign(
+                tf.zeros(gradient.shape, dtype=gradient.dtype), read_value=False
+            )
+
 def main():
     parser = ArgumentParser()
     parser.add_argument("--basedir", type=str)
@@ -176,6 +250,8 @@ def main():
     parser.add_argument("--extra_tokens", help="What extra tokens should we use", nargs="+", default=["[CLS]", "[MASK]"])
     parser.add_argument("--eps", help="Epsilon", default=1e-6, type=float)
     parser.add_argument("--beta2", help="Epsilon", default=0.98, type=float)
+    parser.add_argument("--grad_accum", help="Number of iterations to accum grads", default=1, type=int)
+
     args = parser.parse_args()
     SET_TRAIN_FLAG(True)
 
@@ -297,6 +373,8 @@ def main():
                                                     directory=args.basedir,
                                                     max_to_keep=5)
 
+    grad_accum = GradientAccumulator()
+
     start_epoch = 0
     if args.restart:
         # The global step gets automatically updated here
@@ -305,20 +383,29 @@ def main():
         current_step = optimizer.global_step
         start_epoch = current_step // steps_per_epoch
 
-    def _replicated_train_step(inputs):
+    def _replicated_forward_step(inputs):
         """This runs on a single replica"""
         x, y = inputs
-        per_replica_loss = optimizer.update(model, {'x': x}, y, num_replicas)
+
+        per_replica_grads, per_replica_loss = optimizer.get_grads_and_loss(model, {'x': x}, y, num_replicas)
+        grad_accum(per_replica_grads)
         return per_replica_loss
 
+    def _replicated_optz_step():
+        optimizer.apply_grads(model, grad_accum.gradients)
+
     @tf.function
-    def _distributed_train_step(inputs: Tuple[tf.Tensor, tf.Tensor]):
+    def _distributed_optz_step():
+        strategy.run(_replicated_optz_step)
+
+    @tf.function
+    def _distributed_forward_step(inputs: Tuple[tf.Tensor, tf.Tensor]):
         """Runs across multiple replicas and aggregates the results.
 
         :param inputs:
         :return:
         """
-        per_replica_loss = strategy.run(_replicated_train_step, args=(inputs,))
+        per_replica_loss = strategy.run(_replicated_forward_step, args=(inputs,))
         return strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_loss, axis=None)
 
     def _replicated_test_step(inputs):
@@ -347,12 +434,38 @@ def main():
             avg_loss = Average('average_train_loss')
             metrics = {}
             train_iter = iter(train_loader)
+
+            step_loss = 0
             for i in range(steps_per_epoch):
 
                 try:
-                    loss = _distributed_train_step(next(train_iter))
-                    avg_loss.update(loss.numpy().item())
-                    tf.summary.scalar("train_loss", data=loss, step=optimizer.global_step)
+
+                    loss = _distributed_forward_step(next(train_iter))
+                    step_loss += loss
+
+                    if (i + 1) % args.grad_accum == 0:
+                        # This does a gradient update
+                        _distributed_optz_step()
+                        # Now reset the gradient accumulator
+                        grad_accum.reset()
+                        # Now update the loss info
+                        tf.summary.scalar("train_loss", data=step_loss, step=optimizer.global_step)
+                        # Now reset the loss
+                        step_loss = 0
+                        steps = optimizer.global_step.numpy()
+                        print(steps, avg_loss)
+                        if (steps + 1) % report_on == 0:
+                            logger.info(avg_loss)
+                        if (steps + 1) % update_on == 0:
+                            elapsed = timer.elapsed(True)
+                            logger.info('elapsed time this epoch %d min', elapsed)
+                            logger.info('elapsed step time %f steps/min', i/elapsed)
+                            checkpoint_manager.save()
+                            if args.npz:
+                                npz_checkpoint = os.path.join(args.basedir, f'checkpoint-step-{steps}.npz')
+                                save_tlm_npz(model, npz_checkpoint)
+
+
                 except Exception as e:
                     logger.error(f"Exception at training step {i+1}/{steps_per_epoch}. Skipping")
                     pass
@@ -363,18 +476,7 @@ def main():
                     save_tlm_npz(model, npz_checkpoint)
                     return
 
-                steps = optimizer.global_step.numpy()
-                if (steps + 1) % report_on == 0:
-                    logger.info(avg_loss)
-                if (steps + 1) % update_on == 0:
-                    elapsed = timer.elapsed(True)
-                    logger.info('elapsed time this epoch %d min', elapsed)
-                    logger.info('elapsed step time %f steps/min', i/elapsed)
-                    checkpoint_manager.save()
-                    if args.npz:
 
-                        npz_checkpoint = os.path.join(args.basedir, f'checkpoint-step-{steps}.npz')
-                        save_tlm_npz(model, npz_checkpoint)
 
             # How much time elapsed in minutes
             train_token_loss = avg_loss.avg

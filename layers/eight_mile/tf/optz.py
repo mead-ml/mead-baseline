@@ -259,18 +259,29 @@ class EagerOptimizer:
         return self.optimizer.iterations
 
     def update(self, model, x, y, num_replicas=1):
+        grads, loss_value = self.get_grads_and_loss(model, x, y, num_replicas)
+        self.apply_grads(model, grads)
+        return loss_value
+
+    def get_grads_and_loss(self, model, x, y, num_replicas=1):
+        # 2-part optimization allows us to get the grads but apply them later
         with tf.GradientTape() as tape:
+            # We have to divide by the num_replicas b/c after the grads are
+            # calculated on each replica, they are syncd across the replicas
+            # by summing them:
+            # https://www.tensorflow.org/tutorials/distribute/custom_training?hl=en
             loss_value = self.loss(model, x, y) / num_replicas
         grads = tape.gradient(loss_value, model.trainable_variables)
+        return grads, loss_value
+
+    def apply_grads(self, model, grads):
         grads, _ = tf.clip_by_global_norm(grads, self.clip)
         self.optimizer.apply_gradients(zip(grads, model.trainable_variables))
-        return loss_value
 
     def update_with_hidden(self, model, h, x, y):
         with tf.GradientTape() as tape:
             loss_value, h = self.loss(model, h, x, y)
 
         grads = tape.gradient(loss_value, model.trainable_variables)
-        grads, _ = tf.clip_by_global_norm(grads, self.clip)
-        self.optimizer.apply_gradients(zip(grads, model.trainable_variables))
+        self.apply_grads(model, grads)
         return loss_value, h
