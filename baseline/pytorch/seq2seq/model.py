@@ -187,7 +187,7 @@ class EncoderDecoderModelBase(nn.Module, EncoderDecoderModel):
         else:
             inputs = batch_dict
         encoder_outputs = self.encode(inputs, inputs['src_len'])
-        outs, lengths, scores = self.decoder.beam_search(encoder_outputs, **kwargs)
+        outs, lengths, scores = self.decoder.decode(encoder_outputs, **kwargs)
         if make:
             outs = unsort_batch(outs, perm_idx)
             lengths = unsort_batch(lengths, perm_idx)

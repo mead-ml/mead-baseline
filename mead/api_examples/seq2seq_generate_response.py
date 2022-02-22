@@ -12,7 +12,7 @@ from baseline.pytorch.seq2seq.model import TiedEmbeddingsSeq2SeqModel
 from eight_mile.pytorch.serialize import load_transformer_seq2seq_npz
 from eight_mile.utils import str2bool, Offsets, revlut
 from baseline.vectorizers import BPEVectorizer1D, WordpieceVectorizer1D
-
+import onnxruntime as ort
 logger = logging.getLogger(__file__)
 
 
@@ -32,8 +32,11 @@ def decode_sentences(model, vectorizer, queries, word2index, index2word, beamsz,
     vecs = np.stack(vecs)
     lengths = np.stack(lengths)
     # B x K x T
-    with torch.no_grad():
-        response, _ = model.predict({'x': vecs, 'x_lengths': lengths}, beam=beamsz)
+    if hasattr(model, 'predict'):
+        with torch.no_grad():
+            response, _ = model.predict({'x': vecs, 'x_lengths': lengths}, greedy_decode=beamsz==1, beam=beamsz)
+    else:
+        response = model.run(None, {'x': vecs, 'x_lengths': lengths})#[0]
     sentences = []
     for candidate in response:
         best_sentence_idx = candidate[0]
@@ -48,6 +51,10 @@ def decode_sentences(model, vectorizer, queries, word2index, index2word, beamsz,
     return sentences
 
 def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, d_k, activation, checkpoint_name, device):
+    if checkpoint_name.endswith('onnx'):
+        model = ort.InferenceSession(checkpoint_name)
+        return model
+
     if len(rpr_k) == 0 or rpr_k[0] < 1:
         rpr_k = [None]
     else:
@@ -71,6 +78,7 @@ def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, d_k, a
     else:
         model.load_state_dict(torch.load(checkpoint_name, map_location=torch.device(device)))
     print(model)
+    model.to(device)
     return model
 
 
@@ -139,7 +147,7 @@ def run():
     model = create_model(embeddings, d_model=args.d_model, d_ff=args.d_ff, num_heads=args.num_heads, num_layers=args.num_layers,
                          rpr_k=args.rpr_k, d_k=args.d_k, checkpoint_name=checkpoint, activation=args.activation,
                          device=args.device)
-    model.to(args.device)
+
 
     index2word = revlut(vocab)
     wf = None

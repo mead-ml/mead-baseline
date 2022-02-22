@@ -5,7 +5,8 @@ import torch.nn.functional as F
 import numpy as np
 from torch.autograd import Variable
 from baseline.utils import Offsets, exporter
-from eight_mile.pytorch.layers import repeat_batch, gnmt_length_penalty, BeamSearchBase, rnn_cell, WeightTieDense, subsequent_mask, TransformerDecoderStack
+from eight_mile.pytorch.layers import repeat_batch, gnmt_length_penalty, BeamSearchBase, rnn_cell, WeightTieDense, subsequent_mask, TransformerDecoderStack, sequence_mask_mxlen
+
 from baseline.model import register_arc_policy, register_decoder, create_seq2seq_arc_policy
 from baseline.pytorch.seq2seq.encoders import TransformerEncoderOutput
 from baseline.pytorch.torchy import (
@@ -257,8 +258,13 @@ class RNNDecoder(torch.nn.Module):
             kwargs['length_penalty'] = partial(gnmt_length_penalty, alpha=alpha)
         return RNNDecoder.BeamSearch(parent=self, **kwargs)(encoder_outputs)
 
+    def decode(self, encoder_outputs, greedy_decode=False, **kwargs):
+        if greedy_decode:
+            return self._greedy_search(encoder_outputs, **kwargs)
+        self.beam_search(encoder_outputs, **kwargs)
+
     def _greedy_search(self, encoder_output, **kwargs):
-        """Decode a sentence by taking the hightest scoring token at each timestep.
+        """Decode a sentence by taking the highest scoring token at each timestep.
 
         In the past we have just used a beam size of 1 instead of a greedy search because
         they took about the same time to run. I have added this function back because it
@@ -411,3 +417,45 @@ class TransformerDecoderWrapper(torch.nn.Module):
 
     def beam_search(self, encoder_outputs, **kwargs):
         return TransformerDecoderWrapper.BeamSearch(parent=self, **kwargs)(encoder_outputs)
+
+    def _greedy_search(self, encoder_output, **kwargs):
+        bsz = encoder_output.output.shape[0]
+        device = encoder_output.output.device
+        mxlen = int(kwargs.get("mxlen", 100))
+        print(mxlen)
+        with torch.no_grad():
+
+            start_token = torch.full((bsz,), Offsets.GO, dtype=torch.long, device=device)
+            outputs = torch.full((bsz, mxlen), Offsets.PAD, dtype=torch.long, device=device)
+            outputs[:, 0] = start_token
+            src_mask = encoder_output.src_mask.unsqueeze(1).unsqueeze(1)  # [B, 1, 1, T_k]
+
+            tri_mask = subsequent_mask(mxlen).type_as(src_mask).to(device).bool()
+            end_mask = torch.ones((bsz,), dtype=torch.bool).to(device)
+            for i in range(mxlen-1):
+
+                lengths = torch.sum(outputs != Offsets.PAD, dim=1).to(device=device)
+                embed_out_bth = self.tgt_embeddings(outputs)
+                embed_out_bth = self.proj_to_hsz(embed_out_bth)
+                context_bth = encoder_output.output
+                mask = sequence_mask_mxlen(lengths, mxlen).to(device).bool().unsqueeze(1).unsqueeze(1) & tri_mask & end_mask.view(-1, 1, 1, 1)
+                output = self.transformer_decoder((embed_out_bth, context_bth, src_mask, mask))[:,i+1, :]
+                output = self.proj_to_dsz(output.view(bsz, 1, -1))
+                probs = self.output(output)
+                selected = torch.argmax(probs, dim=-1).squeeze()
+                end_mask = end_mask & (selected != Offsets.EOS)
+                #outputs[i, :] = selected
+                outputs[:, i+1] = selected
+            #outputs = outputs.transpose(0, 1).contiguous()
+            # Add a fake beam dimension of size 1
+
+            outputs = outputs[:,1:].unsqueeze(1)
+            # This is mostly for testing so just return zero for lengths and scores.
+            return outputs, lengths-1, torch.zeros(bsz)
+
+    def decode(self, encoder_outputs, greedy_decode=False, **kwargs):
+        if greedy_decode:
+            return self._greedy_search(encoder_outputs, **kwargs)
+        return self.beam_search(encoder_outputs, **kwargs)
+
+
