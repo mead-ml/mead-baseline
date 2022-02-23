@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 import logging
-from eight_mile.utils import listify
+from eight_mile.utils import listify, Average
 import os
 import glob
 from argparse import ArgumentParser
@@ -13,10 +13,11 @@ from eight_mile.pytorch.serialize import load_transformer_seq2seq_npz
 from eight_mile.utils import str2bool, Offsets, revlut
 from baseline.vectorizers import BPEVectorizer1D, WordpieceVectorizer1D
 import onnxruntime as ort
+import time
 logger = logging.getLogger(__file__)
 
 
-def decode_sentences(model, vectorizer, queries, word2index, index2word, beamsz, end_token):
+def decode_sentences(model, vectorizer, queries, word2index, index2word, beamsz, greedy, end_token):
 
     vecs = []
     end_id = word2index.get(end_token)
@@ -34,7 +35,7 @@ def decode_sentences(model, vectorizer, queries, word2index, index2word, beamsz,
     # B x K x T
     if hasattr(model, 'predict'):
         with torch.no_grad():
-            response, _ = model.predict({'x': vecs, 'x_lengths': lengths}, greedy_decode=beamsz==1, beam=beamsz)
+            response, _ = model.predict({'x': vecs, 'x_lengths': lengths}, greedy_decode=greedy, beam=beamsz)
     else:
         response = model.run(None, {'x': vecs, 'x_lengths': lengths})#[0]
     sentences = []
@@ -119,6 +120,7 @@ def run():
     parser.add_argument("--end_token", default="<EOS>")
     parser.add_argument("--output_file", type=str)
     parser.add_argument("--show_query", type=str2bool, default=False, help="Show the original query as well")
+    parser.add_argument("--greedy", type=str2bool, default=False, help="Bypass the beam decoder")
     parser.add_argument("--device", type=str,
                         default="cuda" if torch.cuda.is_available() else "cpu",
                         help="Device (cuda or cpu)")
@@ -173,10 +175,17 @@ def run():
         batch = [args.input.split()]
         batches.append(batch)
 
-    for queries in batches:
 
-        outputs = decode_sentences(model, vectorizer, queries, vocab, index2word, args.beamsz, args.end_token)
+    batch_time = Average('batch time')
 
+    for i, queries in enumerate(batches):
+
+        start = time.perf_counter()
+        outputs = decode_sentences(model, vectorizer, queries, vocab, index2word, args.beamsz, args.greedy, args.end_token)
+        elapsed = time.perf_counter() - start
+        batch_time.update(elapsed)
+        if (i+1) % 10 == 0:
+            print(batch_time)
         if args.show_query:
             for query, output in zip(queries, outputs):
                 print(f"[Query] {query}")

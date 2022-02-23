@@ -2673,8 +2673,7 @@ def pytorch_embedding(weights: torch.Tensor, finetune: bool = True) -> nn.Embedd
     return lut
 
 
-def tril_onnx(inputs: torch.FloatTensor,
-              diagonal: Optional[int] = 0) -> torch.FloatTensor:
+def tril_onnx(inputs: torch.Tensor) -> torch.Tensor:
     """Caveat to export an tril-based operator with ONNX.
 
     Taken from https://github.com/pytorch/pytorch/issues/34129
@@ -2686,9 +2685,9 @@ def tril_onnx(inputs: torch.FloatTensor,
         (torch.FloatTensor): Output tensor.
 
     """
-
-    arange = torch.arange(inputs.size(0), device=inputs.device)
-    arange2 = torch.arange(inputs.size(1), device=inputs.device)
+    diagonal: int = 0
+    arange = torch.arange(inputs.size(0), dtype=torch.long, device=inputs.device)
+    arange2 = torch.arange(inputs.size(1), dtype=torch.long, device=inputs.device)
 
     mask = arange.unsqueeze(-1).expand(-1, inputs.size(1)) >= (arange2 - diagonal)
 
@@ -3968,8 +3967,8 @@ class BeamSearchBase:
                 last = paths[:, :, -1]
                 eoses = last == Offsets.EOS
                 lengths = update_lengths(lengths, eoses, i + 1)
-                if (lengths != 0).all():
-                    break
+                #if (lengths != 0).all():
+                #    break
             else:
                 # This runs if the loop didn't break meaning one beam hit the max len
                 # Add an EOS to anything that hasn't hit the end. This makes the scores real.

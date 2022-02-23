@@ -418,36 +418,45 @@ class TransformerDecoderWrapper(torch.nn.Module):
     def beam_search(self, encoder_outputs, **kwargs):
         return TransformerDecoderWrapper.BeamSearch(parent=self, **kwargs)(encoder_outputs)
 
-    def _greedy_search(self, encoder_output, **kwargs):
-        bsz = encoder_output.output.shape[0]
+
+    def _greedy_search(self, encoder_output: torch.Tensor, mxlen: int=100, **kwargs):
+        bsz: int = encoder_output.output.shape[0]
         device = encoder_output.output.device
-        mxlen = int(kwargs.get("mxlen", 100))
-        print(mxlen)
+
         with torch.no_grad():
 
-            start_token = torch.full((bsz,), Offsets.GO, dtype=torch.long, device=device)
-            outputs = torch.full((bsz, mxlen), Offsets.PAD, dtype=torch.long, device=device)
-            outputs[:, 0] = start_token
+            outputs = torch.full((bsz, 1), Offsets.GO, dtype=torch.long, device=device)
             src_mask = encoder_output.src_mask.unsqueeze(1).unsqueeze(1)  # [B, 1, 1, T_k]
 
-            tri_mask = subsequent_mask(mxlen).type_as(src_mask).to(device).bool()
-            end_mask = torch.ones((bsz,), dtype=torch.bool).to(device)
+
+            not_done_mask = torch.ones((bsz,1), dtype=torch.bool).to(device)
+            seq_len = torch.arange(mxlen, dtype=torch.long, device=device).unsqueeze(0)
+
             for i in range(mxlen-1):
 
-                lengths = torch.sum(outputs != Offsets.PAD, dim=1).to(device=device)
+                # Broadcast to [B, mxlen] select the current index or 0 if the batch entry is done
+                lengths = (seq_len * not_done_mask)[:, i+1]
+                # We could avoid reprojection if we were willing to keep embed_out_bth in memory
                 embed_out_bth = self.tgt_embeddings(outputs)
                 embed_out_bth = self.proj_to_hsz(embed_out_bth)
                 context_bth = encoder_output.output
-                mask = sequence_mask_mxlen(lengths, mxlen).to(device).bool().unsqueeze(1).unsqueeze(1) & tri_mask & end_mask.view(-1, 1, 1, 1)
-                output = self.transformer_decoder((embed_out_bth, context_bth, src_mask, mask))[:,i+1, :]
+                tri_mask = subsequent_mask(i+1).type_as(src_mask).to(device).bool()
+                mask = sequence_mask_mxlen(lengths, i+1).to(device).bool().unsqueeze(1).unsqueeze(1) & tri_mask # & end_mask.view(-1, 1, 1, 1)
+                # Its possible to cache previous computed attention values, but we dont support this yet
+                output = self.transformer_decoder((embed_out_bth, context_bth, src_mask, mask))[:,i, :]
+                # We have selected only the last token for our final projection, no need to compute the whole tensor
                 output = self.proj_to_dsz(output.view(bsz, 1, -1))
                 probs = self.output(output)
-                selected = torch.argmax(probs, dim=-1).squeeze()
-                end_mask = end_mask & (selected != Offsets.EOS)
-                #outputs[i, :] = selected
-                outputs[:, i+1] = selected
-            #outputs = outputs.transpose(0, 1).contiguous()
-            # Add a fake beam dimension of size 1
+                selected = torch.argmax(probs, dim=-1)
+                # Update whether each batch entry is done yet
+                #not_done_mask &= ~(selected == Offsets.EOS)
+                not_done_mask *= ~(selected == Offsets.EOS)
+                # If its not done, we want the value, else 0
+                selected *= not_done_mask
+                outputs = torch.cat([outputs, selected], 1)
+                # We can drop the loop early if we are all done
+                if all(~not_done_mask):
+                    break
 
             outputs = outputs[:,1:].unsqueeze(1)
             # This is mostly for testing so just return zero for lengths and scores.
