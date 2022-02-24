@@ -2151,6 +2151,7 @@ class SentencePieceLabelDict1DVectorizer(SentencePieceVectorizer1D):
 
         for t in self.emit_begin_tok:
             yield t
+
         for t in tokens:
             t_word = t[self.field]
             t_label = t[self.label]
@@ -2172,6 +2173,7 @@ class SentencePieceLabelDict1DVectorizer(SentencePieceVectorizer1D):
             subword_labels[0] = t_label
             for x in subword_labels:
                 yield x
+
         for t in self.emit_end_tok:
             yield t
 
