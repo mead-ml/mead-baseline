@@ -68,13 +68,15 @@ def decode_json(example):
     return tf.py_function(_parse_json, [example], [tf.int32, tf.int32])
 
 
-def get_dataset(directory, file_type, num_parallel_reads=1, shuffle=True, causal=False):
+def get_dataset(directory, file_type, num_parallel_reads=1, num_shards=1, index=0, shuffle=True, causal=False):
     """Get a dataset as a tf.data.Dataset.  Input can be a bucket or a local file
 
 
     :param directory: Either a bucket or a file
     :param file_type: Currently supports "json" files or "tfrecords"
     :param num_parallel_reads: The number of parallel reads
+    :param num_shards: Number of shards to split into
+    :param index: The index for this shard
     :param shuffle: Defaults to True
     :param causal: Use CLM instead of MLM (Defaults to ``False``)
     :return: a `tf.data.Dataset`
@@ -86,19 +88,20 @@ def get_dataset(directory, file_type, num_parallel_reads=1, shuffle=True, causal
     if file_type == 'json':
         if causal:
             raise Exception("Causal not currently supported with JSON input")
-        ds = tf.data.TextLineDataset(files, num_parallel_reads=num_parallel_reads)
+        ds = tf.data.TextLineDataset(files, num_parallel_reads=num_parallel_reads).shard(num_shards, index)
         if shuffle:
             ds = ds.shuffle(100)
         ds = ds.map(decode_json)
         return ds
     if not shuffle:
-        ds = tf.data.TFRecordDataset(files, num_parallel_reads=num_parallel_reads)
+        ds = tf.data.TFRecordDataset(files, num_parallel_reads=num_parallel_reads).shard(num_shards, index)
     else:
-        ds = tf.data.Dataset.from_tensor_slices(tf.constant(files))
+        ds = tf.data.Dataset.from_tensor_slices(tf.constant(files)).shard(num_shards, index)
         ds = ds.shuffle(buffer_size=len(files))
         ds = ds.interleave(lambda x: tf.data.TFRecordDataset(x),
                            num_parallel_calls=tf.data.experimental.AUTOTUNE,
-                           cycle_length=num_parallel_reads)
+                           cycle_length=num_parallel_reads,
+                           deterministic=False)
         ds = ds.shuffle(buffer_size=100)
     parse_fn = _parse_tf_record_causal if causal else _parse_tf_record
     ds = ds.map(parse_fn)
@@ -219,44 +222,43 @@ def main():
         global_batchsz = args.batch_size
         base_batchsz = input_context.get_per_replica_batch_size(global_batchsz)
         ds = None
+        num_shards = input_context.num_input_pipelines
+        index = input_context.input_pipeline_id
         if is_curriculum:
             for sub in num_train_samples.keys():
                 train_curr_dir = os.path.join(args.train_dir, str(sub))
                 batchsz_scale_factor = args.nctx // sub
                 this_batchsz = base_batchsz * batchsz_scale_factor
-                curr_ds = get_dataset(train_curr_dir, args.file_type, args.num_train_workers, causal=args.causal).batch(this_batchsz, drop_remainder=True)
+                curr_ds = get_dataset(train_curr_dir, args.file_type, args.num_train_workers, num_shards, index, causal=args.causal).batch(this_batchsz, drop_remainder=True)
                 if ds is None:
                     ds = curr_ds
                 else:
                     ds = ds.concatenate(curr_ds)
         else:
-            ds = get_dataset(args.train_dir, args.file_type, args.num_train_workers, causal=args.causal).batch(base_batchsz)
-        return ds.shard(
-            input_context.num_input_pipelines, input_context.input_pipeline_id
-        )
+            ds = get_dataset(args.train_dir, args.file_type, args.num_train_workers, num_shards, index, causal=args.causal).batch(base_batchsz)
+        return ds
     train_loader = strategy.experimental_distribute_datasets_from_function(dataset_train_fn)
 
     def dataset_test_fn(input_context):
         global_batchsz = args.batch_size
         base_batchsz = input_context.get_per_replica_batch_size(global_batchsz)
+        num_shards = input_context.num_input_pipelines
+        index = input_context.input_pipeline_id
         ds = None
         if is_curriculum:
             for sub in num_valid_samples.keys():
                 valid_curr_dir = os.path.join(args.valid_dir, str(sub))
                 batchsz_scale_factor = args.nctx // sub
                 this_batchsz = base_batchsz * batchsz_scale_factor
-                curr_ds = get_dataset(valid_curr_dir, args.file_type, args.num_train_workers, causal=args.causal).batch(
+                curr_ds = get_dataset(valid_curr_dir, args.file_type, args.num_train_workers, num_shards, index, causal=args.causal).batch(
                     this_batchsz, drop_remainder=True)
                 if ds is None:
                     ds = curr_ds
                 else:
                     ds = ds.concatenate(curr_ds)
         else:
-            ds = get_dataset(args.valid_dir, args.file_type, args.num_train_workers, shuffle=False, causal=args.causal).batch(base_batchsz)
-
-        return ds.shard(
-            input_context.num_input_pipelines, input_context.input_pipeline_id
-        )
+            ds = get_dataset(args.valid_dir, args.file_type, args.num_train_workers, num_shards, index, shuffle=False, causal=args.causal).batch(base_batchsz)
+        return ds
     valid_loader = strategy.experimental_distribute_datasets_from_function(dataset_test_fn)
 
     os.makedirs(args.basedir, exist_ok=True)
