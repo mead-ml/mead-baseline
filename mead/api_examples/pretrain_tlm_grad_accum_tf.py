@@ -391,8 +391,7 @@ def main():
     def _replicated_forward_step(inputs):
         """This runs on a single replica"""
         x, y = inputs
-
-        per_replica_grads, per_replica_loss = optimizer.get_grads_and_loss(model, {'x': x}, y, num_replicas)
+        per_replica_grads, per_replica_loss = optimizer.get_grads_and_loss(model, {'x': x}, y, num_replicas * args.grad_accum)
         grad_accum(per_replica_grads)
         return per_replica_loss
 
