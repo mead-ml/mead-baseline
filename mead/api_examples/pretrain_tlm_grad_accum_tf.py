@@ -68,13 +68,16 @@ def decode_json(example):
     return tf.py_function(_parse_json, [example], [tf.int32, tf.int32])
 
 
-def get_dataset(directory, file_type, num_parallel_reads=1, shuffle=True, causal=False):
+
+def get_dataset(directory, file_type, num_parallel_reads=1, num_shards=1, index=0, shuffle=True, causal=False):
     """Get a dataset as a tf.data.Dataset.  Input can be a bucket or a local file
 
 
     :param directory: Either a bucket or a file
     :param file_type: Currently supports "json" files or "tfrecords"
     :param num_parallel_reads: The number of parallel reads
+    :param num_shards: Number of shards to split into
+    :param index: The index for this shard
     :param shuffle: Defaults to True
     :param causal: Use CLM instead of MLM (Defaults to ``False``)
     :return: a `tf.data.Dataset`
@@ -86,19 +89,20 @@ def get_dataset(directory, file_type, num_parallel_reads=1, shuffle=True, causal
     if file_type == 'json':
         if causal:
             raise Exception("Causal not currently supported with JSON input")
-        ds = tf.data.TextLineDataset(files, num_parallel_reads=num_parallel_reads)
+        ds = tf.data.TextLineDataset(files, num_parallel_reads=num_parallel_reads).shard(num_shards, index)
         if shuffle:
             ds = ds.shuffle(100)
         ds = ds.map(decode_json)
         return ds
     if not shuffle:
-        ds = tf.data.TFRecordDataset(files, num_parallel_reads=num_parallel_reads)
+        ds = tf.data.TFRecordDataset(files, num_parallel_reads=num_parallel_reads).shard(num_shards, index)
     else:
-        ds = tf.data.Dataset.from_tensor_slices(tf.constant(files))
+        ds = tf.data.Dataset.from_tensor_slices(tf.constant(files)).shard(num_shards, index)
         ds = ds.shuffle(buffer_size=len(files))
         ds = ds.interleave(lambda x: tf.data.TFRecordDataset(x),
                            num_parallel_calls=tf.data.experimental.AUTOTUNE,
-                           cycle_length=num_parallel_reads)
+                           cycle_length=num_parallel_reads,
+                           deterministic=False)
         ds = ds.shuffle(buffer_size=100)
     parse_fn = _parse_tf_record_causal if causal else _parse_tf_record
     ds = ds.map(parse_fn)
@@ -121,6 +125,80 @@ def get_subword_vec1d(type):
     else:
         from baseline.vectorizers import SentencePieceVectorizer1D
         return SentencePieceVectorizer1D
+
+
+# https://github.com/OpenNMT/OpenNMT-tf/blob/master/opennmt/optimizers/utils.py
+class GradientAccumulator:
+    """Gradient accumulation utility.
+    When used with a distribution strategy, the accumulator should be called in a
+    replica context. Gradients will be accumulated locally on each replica and
+    without synchronization. Users should then call ``.gradients``, scale the
+    gradients if required, and pass the result to ``apply_gradients``.
+    """
+
+    # We use the ON_READ synchronization policy so that no synchronization is
+    # performed on assignment. To get the value, we call .value() which returns the
+    # value on the current replica without synchronization.
+
+    def __init__(self):
+        """Initializes the accumulator."""
+        self._gradients = []
+        self._accum_steps = None
+
+    @property
+    def step(self):
+        """Number of accumulated steps."""
+        if self._accum_steps is None:
+            self._accum_steps = tf.Variable(
+                tf.constant(0, dtype=tf.int64),
+                trainable=False,
+                synchronization=tf.VariableSynchronization.ON_READ,
+                aggregation=tf.VariableAggregation.ONLY_FIRST_REPLICA,
+            )
+        return self._accum_steps.value()
+
+    @property
+    def gradients(self):
+        """The accumulated gradients on the current replica."""
+        if not self._gradients:
+            raise ValueError(
+                "The accumulator should be called first to initialize the gradients"
+            )
+        return list(gradient.value() for gradient in self._gradients)
+
+    def __call__(self, gradients):
+        """Accumulates :obj:`gradients` on the current replica."""
+        if not self._gradients:
+            _ = self.step  # Create the step variable.
+            self._gradients.extend(
+                [
+                    tf.Variable(
+                        tf.zeros_like(gradient),
+                        trainable=False,
+                        synchronization=tf.VariableSynchronization.ON_READ,
+                    )
+                    for gradient in gradients
+                ]
+            )
+        if len(gradients) != len(self._gradients):
+            raise ValueError(
+                "Expected %s gradients, but got %d"
+                % (len(self._gradients), len(gradients))
+            )
+
+        for accum_gradient, gradient in zip(self._gradients, gradients):
+            accum_gradient.assign_add(gradient, read_value=False)
+        self._accum_steps.assign_add(1)
+
+    def reset(self):
+        """Resets the accumulated gradients on the current replica."""
+        if not self._gradients:
+            return
+        self._accum_steps.assign(0)
+        for gradient in self._gradients:
+            gradient.assign(
+                tf.zeros(gradient.shape, dtype=gradient.dtype), read_value=False
+            )
 
 def main():
     parser = ArgumentParser()
@@ -176,6 +254,8 @@ def main():
     parser.add_argument("--extra_tokens", help="What extra tokens should we use", nargs="+", default=["[CLS]", "[MASK]"])
     parser.add_argument("--eps", help="Epsilon", default=1e-6, type=float)
     parser.add_argument("--beta2", help="Epsilon", default=0.98, type=float)
+    parser.add_argument("--grad_accum", help="Number of iterations to accum grads", default=1, type=int)
+
     args = parser.parse_args()
     SET_TRAIN_FLAG(True)
 
@@ -219,44 +299,43 @@ def main():
         global_batchsz = args.batch_size
         base_batchsz = input_context.get_per_replica_batch_size(global_batchsz)
         ds = None
+        num_shards = input_context.num_input_pipelines
+        index = input_context.input_pipeline_id
         if is_curriculum:
             for sub in num_train_samples.keys():
                 train_curr_dir = os.path.join(args.train_dir, str(sub))
                 batchsz_scale_factor = args.nctx // sub
                 this_batchsz = base_batchsz * batchsz_scale_factor
-                curr_ds = get_dataset(train_curr_dir, args.file_type, args.num_train_workers, causal=args.causal).batch(this_batchsz, drop_remainder=True)
+                curr_ds = get_dataset(train_curr_dir, args.file_type, args.num_train_workers, num_shards, index, causal=args.causal).batch(this_batchsz, drop_remainder=True)
                 if ds is None:
                     ds = curr_ds
                 else:
                     ds = ds.concatenate(curr_ds)
         else:
-            ds = get_dataset(args.train_dir, args.file_type, args.num_train_workers, causal=args.causal).batch(base_batchsz)
-        return ds.shard(
-            input_context.num_input_pipelines, input_context.input_pipeline_id
-        )
+            ds = get_dataset(args.train_dir, args.file_type, args.num_train_workers, num_shards, index, causal=args.causal).batch(base_batchsz)
+        return ds
     train_loader = strategy.experimental_distribute_datasets_from_function(dataset_train_fn)
 
     def dataset_test_fn(input_context):
         global_batchsz = args.batch_size
         base_batchsz = input_context.get_per_replica_batch_size(global_batchsz)
+        num_shards = input_context.num_input_pipelines
+        index = input_context.input_pipeline_id
         ds = None
         if is_curriculum:
             for sub in num_valid_samples.keys():
                 valid_curr_dir = os.path.join(args.valid_dir, str(sub))
                 batchsz_scale_factor = args.nctx // sub
                 this_batchsz = base_batchsz * batchsz_scale_factor
-                curr_ds = get_dataset(valid_curr_dir, args.file_type, args.num_train_workers, causal=args.causal).batch(
+                curr_ds = get_dataset(valid_curr_dir, args.file_type, args.num_train_workers, num_shards, index, causal=args.causal).batch(
                     this_batchsz, drop_remainder=True)
                 if ds is None:
                     ds = curr_ds
                 else:
                     ds = ds.concatenate(curr_ds)
         else:
-            ds = get_dataset(args.valid_dir, args.file_type, args.num_train_workers, shuffle=False, causal=args.causal).batch(base_batchsz)
-
-        return ds.shard(
-            input_context.num_input_pipelines, input_context.input_pipeline_id
-        )
+            ds = get_dataset(args.valid_dir, args.file_type, args.num_train_workers, num_shards, index, shuffle=False, causal=args.causal).batch(base_batchsz)
+        return ds
     valid_loader = strategy.experimental_distribute_datasets_from_function(dataset_test_fn)
 
     os.makedirs(args.basedir, exist_ok=True)
@@ -272,16 +351,18 @@ def main():
         raise Exception("Variable tensor lengths not currently supported for gMLP")
     logger.info("Loaded model and loss")
 
+    eff_batch_size = args.batch_size * args.grad_accum
+    logger.info(f"eff batch size: {eff_batch_size}, {args.batch_size}(b) x {args.grad_accum}(ga)")
     if is_curriculum:
         steps_per_epoch = 0
         steps_per_valid_epoch = 0
         for k, v in num_train_samples.items():
-            steps_per_epoch += int(num_train_samples[k] // (args.batch_size * (args.nctx / k)))
+            steps_per_epoch += int(num_train_samples[k] // (eff_batch_size * (args.nctx / k)))
         for k, v in num_valid_samples.items():
             steps_per_valid_epoch += int(num_valid_samples[k] // (args.batch_size * (args.nctx / k)))
 
     else:
-        steps_per_epoch = num_train_samples // args.batch_size
+        steps_per_epoch = num_train_samples // eff_batch_size
         steps_per_valid_epoch = num_valid_samples // args.batch_size
     update_on = steps_per_epoch // args.saves_per_epoch
     report_on = max(10, update_on) // 10
@@ -297,6 +378,8 @@ def main():
                                                     directory=args.basedir,
                                                     max_to_keep=5)
 
+    grad_accum = GradientAccumulator()
+
     start_epoch = 0
     if args.restart:
         # The global step gets automatically updated here
@@ -305,20 +388,29 @@ def main():
         current_step = optimizer.global_step
         start_epoch = current_step // steps_per_epoch
 
-    def _replicated_train_step(inputs):
+    def _replicated_forward_step(inputs):
         """This runs on a single replica"""
         x, y = inputs
-        per_replica_loss = optimizer.update(model, {'x': x}, y, num_replicas)
+
+        per_replica_grads, per_replica_loss = optimizer.get_grads_and_loss(model, {'x': x}, y, num_replicas)
+        grad_accum(per_replica_grads)
         return per_replica_loss
 
+    def _replicated_optz_step():
+        optimizer.apply_grads(model, grad_accum.gradients)
+
     @tf.function
-    def _distributed_train_step(inputs: Tuple[tf.Tensor, tf.Tensor]):
+    def _distributed_optz_step():
+        strategy.run(_replicated_optz_step)
+
+    @tf.function
+    def _distributed_forward_step(inputs: Tuple[tf.Tensor, tf.Tensor]):
         """Runs across multiple replicas and aggregates the results.
 
         :param inputs:
         :return:
         """
-        per_replica_loss = strategy.run(_replicated_train_step, args=(inputs,))
+        per_replica_loss = strategy.run(_replicated_forward_step, args=(inputs,))
         return strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_loss, axis=None)
 
     def _replicated_test_step(inputs):
@@ -347,14 +439,42 @@ def main():
             avg_loss = Average('average_train_loss')
             metrics = {}
             train_iter = iter(train_loader)
-            for i in range(steps_per_epoch):
+
+            step_loss = 0
+            iterations = steps_per_epoch * args.batch_size
+            for i in range(iterations):
 
                 try:
-                    loss = _distributed_train_step(next(train_iter))
-                    avg_loss.update(loss.numpy().item())
-                    tf.summary.scalar("train_loss", data=loss, step=optimizer.global_step)
+
+                    loss = _distributed_forward_step(next(train_iter))
+                    step_loss += loss
+
+                    if (i + 1) % args.grad_accum == 0:
+                        # This does a gradient update
+                        _distributed_optz_step()
+                        # Now reset the gradient accumulator
+                        grad_accum.reset()
+                        # Now update the loss info
+                        tf.summary.scalar("train_loss", data=step_loss, step=optimizer.global_step)
+                        avg_loss.update(step_loss.numpy().item())
+                        # Now reset the loss
+                        step_loss = 0
+                        steps = optimizer.global_step.numpy()
+                        if (steps + 1) % report_on == 0:
+                            logger.info(avg_loss)
+                        if (steps + 1) % update_on == 0:
+                            elapsed = timer.elapsed(True)
+                            logger.info('elapsed time this epoch %d min', elapsed)
+                            logger.info('elapsed step time %f steps/min', i/elapsed)
+                            checkpoint_manager.save()
+                            if args.npz:
+                                npz_checkpoint = os.path.join(args.basedir, f'checkpoint-step-{steps}.npz')
+                                save_tlm_npz(model, npz_checkpoint)
+
+
                 except Exception as e:
-                    logger.error(f"Exception at training step {i+1}/{steps_per_epoch}. Skipping")
+                    logger.error(e)
+                    logger.error(f"Exception at training iter {i+1}/{iterations}. Skipping")
                     pass
                 if args.convert_only:
                     logger.warning("Convert only flag specified.  Stopping after one step")
@@ -363,18 +483,7 @@ def main():
                     save_tlm_npz(model, npz_checkpoint)
                     return
 
-                steps = optimizer.global_step.numpy()
-                if (steps + 1) % report_on == 0:
-                    logger.info(avg_loss)
-                if (steps + 1) % update_on == 0:
-                    elapsed = timer.elapsed(True)
-                    logger.info('elapsed time this epoch %d min', elapsed)
-                    logger.info('elapsed step time %f steps/min', i/elapsed)
-                    checkpoint_manager.save()
-                    if args.npz:
 
-                        npz_checkpoint = os.path.join(args.basedir, f'checkpoint-step-{steps}.npz')
-                        save_tlm_npz(model, npz_checkpoint)
 
             # How much time elapsed in minutes
             train_token_loss = avg_loss.avg
