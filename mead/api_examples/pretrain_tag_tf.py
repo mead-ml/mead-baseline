@@ -92,13 +92,16 @@ def decode_json(example):
     return tf.py_function(_parse_json, [example], [tf.int32, tf.int32])
 
 
-def get_dataset(directory, file_type, num_parallel_reads=1, shuffle=True):
+
+def get_dataset(directory, file_type, num_parallel_reads=1, num_shards=1, index=0, shuffle=True):
     """Get a dataset as a tf.data.Dataset.  Input can be a bucket or a local file
 
 
     :param directory: Either a bucket or a file
     :param file_type: Currently supports "json" files or "tfrecords"
     :param num_parallel_reads: The number of parallel reads
+    :param num_shards: Number of shards to split into
+    :param index: The index for this shard
     :param shuffle: Defaults to True
     :return: a `tf.data.Dataset`
     """
@@ -106,20 +109,21 @@ def get_dataset(directory, file_type, num_parallel_reads=1, shuffle=True):
     files = tf.io.gfile.glob(pattern)
     logger.debug(files)
 
-    if file_type == 'json':
-        ds = tf.data.TextLineDataset(files, num_parallel_reads=num_parallel_reads)
+    if file_type in ['json', 'jsonl']:
+        ds = tf.data.TextLineDataset(files, num_parallel_reads=num_parallel_reads).shard(num_shards, index)
         if shuffle:
             ds = ds.shuffle(100)
         ds = ds.map(decode_json)
         return ds
     if not shuffle:
-        ds = tf.data.TFRecordDataset(files, num_parallel_reads=num_parallel_reads)
+        ds = tf.data.TFRecordDataset(files, num_parallel_reads=num_parallel_reads).shard(num_shards, index)
     else:
-        ds = tf.data.Dataset.from_tensor_slices(tf.constant(files))
+        ds = tf.data.Dataset.from_tensor_slices(tf.constant(files)).shard(num_shards, index)
         ds = ds.shuffle(buffer_size=len(files))
         ds = ds.interleave(lambda x: tf.data.TFRecordDataset(x),
                            num_parallel_calls=tf.data.experimental.AUTOTUNE,
-                           cycle_length=num_parallel_reads)
+                           cycle_length=num_parallel_reads,
+                           deterministic=False)
         ds = ds.shuffle(buffer_size=100)
     ds = ds.map(_parse_tf_record)
     return ds
@@ -217,20 +221,20 @@ def main():
     def dataset_train_fn(input_context):
         global_batchsz = args.batch_size
         base_batchsz = input_context.get_per_replica_batch_size(global_batchsz)
-        ds = get_dataset(args.train_dir, args.file_type, args.num_train_workers).batch(base_batchsz)
-        return ds.shard(
-            input_context.num_input_pipelines, input_context.input_pipeline_id
-        )
+        num_shards = input_context.num_input_pipelines
+        index = input_context.input_pipeline_id
+        ds = get_dataset(args.train_dir, args.file_type, args.num_train_workers, num_shards, index).batch(base_batchsz)
+        return ds
     train_loader = strategy.experimental_distribute_datasets_from_function(dataset_train_fn)
 
     def dataset_test_fn(input_context):
         global_batchsz = args.batch_size
         base_batchsz = input_context.get_per_replica_batch_size(global_batchsz)
-        ds = get_dataset(args.valid_dir, args.file_type, args.num_train_workers, shuffle=False).batch(base_batchsz)
+        num_shards = input_context.num_input_pipelines
+        index = input_context.input_pipeline_id
+        ds = get_dataset(args.valid_dir, args.file_type, args.num_train_workers, num_shards, index, shuffle=False).batch(base_batchsz)
+        return ds
 
-        return ds.shard(
-            input_context.num_input_pipelines, input_context.input_pipeline_id
-        )
     valid_loader = strategy.experimental_distribute_datasets_from_function(dataset_test_fn)
 
     os.makedirs(args.basedir, exist_ok=True)
