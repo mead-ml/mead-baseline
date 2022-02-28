@@ -2,7 +2,7 @@ import os
 import logging
 import torch
 import torch.nn as nn
-from typing import Dict
+from typing import Dict, List
 import baseline as bl
 from eight_mile.pytorch.layers import (
     CRF,
@@ -73,7 +73,8 @@ def create_data_dict_nbest(vocabs, vectorizers):
     for k, v in vectorizers.items():
         vec, lengths = v.run(S2D, vocabs[k])
         data[k] = torch.LongTensor(vec).unsqueeze(0)
-        length_tensor = torch.LongTensor(lengths).unsqueeze(0)
+        if length_tensor is None:
+            length_tensor = torch.LongTensor(lengths).unsqueeze(0)
 
     data['lengths'] = length_tensor
     return data
@@ -104,7 +105,9 @@ class PytorchONNXExporter(Exporter):
         return torch.ones((1, len(model.labels)))
 
     def create_model_inputs(self, model):
-        return [k for k in model.embeddings.keys()] + ['lengths']
+
+        inputs = [k for k in model.embeddings.keys()] + ['lengths']
+        return inputs
 
     def create_model_outputs(self, model):
         if hasattr(model, 'output'):
@@ -132,7 +135,7 @@ class PytorchONNXExporter(Exporter):
         return dynamics
 
     def _run(self, basename, output_dir, project=None, name=None, model_version=None, use_version=False, zip_results=True,
-             remote=False, **kwargs):
+             remote=False, use_all_features=False, **kwargs):
         client_output, server_output = get_output_paths(
             output_dir,
             project, name,
@@ -154,9 +157,13 @@ class PytorchONNXExporter(Exporter):
         model = self.apply_model_patches(model)
 
         data = self.create_example_input(vocabs, vectorizers)
+
         example_output = self.create_example_output(model)
 
-        inputs = self.create_model_inputs(model)
+        if use_all_features:
+            inputs = list(data.keys())
+        else:
+            inputs = self.create_model_inputs(model)
         outputs = self.create_model_outputs(model)
 
         dynamics = self.create_dynamic_axes(model, vectorizers, inputs, outputs)

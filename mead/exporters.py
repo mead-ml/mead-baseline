@@ -19,13 +19,14 @@ class Exporter:
     def _run(self, model_file, output_dir, project=None, name=None, model_version=None, **kwargs):
         raise NotImplementedError
 
-    def run(self, model_file, output_dir, project=None, name=None, model_version=None, **kwargs):
+    def run(self, model_file, output_dir, project=None, name=None, model_version=None, use_all_features=False, **kwargs):
         client_loc, server_loc = self._run(
             model_file,
             output_dir,
             project=project,
             name=name,
             model_version=model_version,
+            use_all_features=use_all_features,
             **kwargs
         )
         if model_version is None:
