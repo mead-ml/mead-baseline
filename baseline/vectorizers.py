@@ -2016,19 +2016,28 @@ class SentencePieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
         super().__init__(kwargs.get('transform_fn'),
                          kwargs.get('emit_begin_tok', []),
                          kwargs.get('emit_end_tok', []))
-        do_pre_tok = kwargs.get('tokenize', True)
+        do_pre_tok = kwargs.get('tokenize', False)
 
         self.tok_fn = GPT2Tok(self.transform_fn) if do_pre_tok else identity_trans_fn
         self.max_seen = kwargs.get('max_seen', 4096)
         self.model_file = kwargs.get('model_file')
         self.tokenizer = spm.SentencePieceProcessor(self.model_file)
 
-        self._special_tokens = SentencePieceVectorizer1D.SPECIAL_TOKENS
+        self._extra_tokens = []
+        if kwargs.get('add_offsets', True):
+            self._extra_tokens += Offsets.VALUES
+        self._extra_tokens += listify(kwargs.get('extra_tokens', []))
+        self._special_tokens = set(SentencePieceVectorizer1D.SPECIAL_TOKENS) | set(self._extra_tokens)
         self.mxlen = kwargs.get('mxlen', -1)
         self._vocab = {}
+
+        offset = len(self._extra_tokens)
+
+        for i, v in enumerate(self._extra_tokens):
+            self.vocab[v] = i
         for i in range(len(self.tokenizer)):
             v = self.tokenizer.IdToPiece(i)
-            self._vocab[v] = i
+            self._vocab[v] = i + offset
 
     def __setstate__(self, d):
         self.__dict__ = d
@@ -2073,11 +2082,14 @@ class SentencePieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
     def iterable(self, tokens):
         if isinstance(tokens, str):
             tokens = tokens.split()
-
+        extra = set(self._extra_tokens)
         for t in self.emit_begin_tok:
             yield t
         for t_word in tokens:
             t_word_upper = t_word.upper()
+
+            if t_word in extra:
+                yield t_word
             if t_word_upper == Offsets.PAD:
                 yield '<pad>'
             elif t_word_upper == Offsets.GO:
