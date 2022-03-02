@@ -9,7 +9,7 @@ import baseline
 from eight_mile.pytorch.serialize import tlm_load_state_dict, load_tlm_npz
 from baseline.pytorch.lm import TransformerMaskedLanguageModel
 from eight_mile.utils import str2bool, read_json, Offsets, revlut
-from baseline.vectorizers import Token1DVectorizer, BPEVectorizer1D
+from baseline.vectorizers import Token1DVectorizer, BPEVectorizer1D, WordpieceVectorizer1D
 from baseline.pytorch.embeddings import *
 from mead.api_examples.transformer_utils import find_latest_checkpoint
 logger = logging.getLogger(__file__)
@@ -85,12 +85,22 @@ def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, rpr_va
     return model
 
 
+def get_subword_vec1d(type):
+    if type == 'bpe':
+        return BPEVectorizer1D
+    elif type == 'wordpiece':
+        return WordpieceVectorizer1D
+    else:
+        from baseline.vectorizers import SentencePieceVectorizer1D
+        return SentencePieceVectorizer1D
+
+
 def main():
     parser = ArgumentParser()
     parser.add_argument("--basedir", type=str)
     parser.add_argument("--checkpoint", type=str, help='Checkpoint name or directory to load')
     parser.add_argument("--sample", type=str2bool, help='Sample from the decoder?  Defaults to `false`', default=0)
-    parser.add_argument("--query", type=str, default='hello , <unk> are you today ?')
+    parser.add_argument("--query", type=str)
     parser.add_argument("--dataset_cache", type=str, default=os.path.expanduser('~/.bl-data'),
                         help="Path or url of the dataset cache")
     parser.add_argument("--d_model", type=int, default=512, help="Model dimension (and embedding dsz)")
@@ -101,8 +111,9 @@ def main():
     parser.add_argument("--nctx", type=int, default=128, help="Max context length (for both encoder and decoder)")
     parser.add_argument("--embed_type", type=str, default='default',
                         help="register label of the embeddings, so far support positional or learned-positional")
-    parser.add_argument("--subword_model_file", type=str, required=True)
-    parser.add_argument("--subword_vocab_file", type=str, required=True)
+    parser.add_argument("--subword_model_file", type=str, required=False)
+    parser.add_argument("--subword_vocab_file", type=str, required=False)
+    parser.add_argument("--subword_type", type=str, choices=["bpe", "wordpiece", "sentencepiece"], default="bpe")
     parser.add_argument("--use_cls", type=str2bool, default=False)
     parser.add_argument("--rpr_value_on", type=str2bool, default=False)
     parser.add_argument('--end_token', default='<EOU>')
@@ -115,7 +126,9 @@ def main():
     parser.add_argument("--device", type=str,
                         default="cuda" if torch.cuda.is_available() else "cpu",
                         help="Device (cuda or cpu)")
+    parser.add_argument("--begin_token", default=["[CLS]"])
     args = parser.parse_args()
+
 
     if torch.cuda.device_count() == 1:
         torch.cuda.set_device(0)
@@ -128,9 +141,11 @@ def main():
     else:
         checkpoint = args.checkpoint
 
-    cls = None if not args.use_cls else '[CLS]'
-    end = args.end_token
-    vectorizer = BPEVectorizer1D(model_file=args.subword_model_file, vocab_file=args.subword_vocab_file, mxlen=args.nctx, emit_begin_tok=cls, emit_end_tok=end, extra_tokens=args.extra_tokens)
+    Vec1D = get_subword_vec1d(args.subword_type)
+    vectorizer = Vec1D(model_file=args.subword_model_file, vocab_file=args.subword_vocab_file,
+                       mxlen=args.nctx, emit_begin_tok=args.begin_token, emit_end_tok=args.end_token, extra_tokens=args.extra_tokens)
+
+    #vectorizer = BPEVectorizer1D(model_file=args.subword_model_file, vocab_file=args.subword_vocab_file, mxlen=args.nctx, emit_begin_tok=cls, emit_end_tok=end, extra_tokens=args.extra_tokens)
     vocab = vectorizer.vocab.copy()
     # If we are not using chars, then use 'x' for both input and output
     preproc_data = baseline.embeddings.load_embeddings('x', dsz=args.d_model, counts=False, known_vocab=vocab, embed_type=args.embed_type, preserve_vocab_indices=True)
@@ -140,10 +155,28 @@ def main():
                          rpr_k=args.rpr_k, rpr_value_on=args.rpr_value_on, d_k=args.d_k, checkpoint_name=checkpoint, activation=args.activation)
     model.to(args.device)
 
-    index2word = revlut(vocab)
-    print('[Query]', args.query)
-    bpe_out = decode_sentence(model, vectorizer, args.query.split(), vocab, index2word, args.device, sample=args.sample, y_only=args.y_only)
 
-    print('[Response]', ' '.join(bpe_out))
+    index2word = revlut(vocab)
+
+    if args.query:
+        print('[Query]', args.query)
+        bpe_out = decode_sentence(model, vectorizer, args.query.split(), vocab, index2word, args.device, sample=args.sample, y_only=args.y_only)
+        print('[Response]', ' '.join(bpe_out))
+        return
+
+    from prompt_toolkit import prompt
+
+    from prompt_toolkit.history import FileHistory
+    prompt_name='->> '
+    history_file='.history'
+    history = FileHistory(history_file)
+    while True:
+        query = prompt(prompt_name, history=history)
+        query = query.strip()
+        if query == 'quit':
+            break
+        print('[Query]', query)
+        bpe_out = decode_sentence(model, vectorizer, query.split(), vocab, index2word, args.device, sample=args.sample, y_only=args.y_only)
+        print('[Response]', ' '.join(bpe_out))
 
 main()
