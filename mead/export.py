@@ -50,6 +50,7 @@ def main():
     parser.add_argument('--backend', help='The deep learning backend to use')
     parser.add_argument('--reporting', help='reporting hooks', nargs='+')
     parser.add_argument('--use_version', help='Should we use the version?', type=str2bool, default=True)
+    parser.add_argument('--use_all_features', help='If a feature is found via vectorizer and not in embeddings, should we include it?', type=str2bool, default=False)
     parser.add_argument('--zip', help='Should we zip the results?', type=str2bool, default=False)
 
     args, overrides = parser.parse_known_args()
@@ -106,7 +107,8 @@ def main():
     exporter = create_exporter(task, exporter_type, return_labels=return_labels,
                                feature_exporter_field_map=feature_exporter_field_map,
                                nbest_input=args.nbest_input)
-    exporter.run(args.model, output_dir, project, name, model_version, remote=is_remote, use_version=args.use_version, zip_results=args.zip)
+    exporter.run(args.model, output_dir, project, name, model_version,
+                 remote=is_remote, use_version=args.use_version, zip_results=args.zip, use_all_features=args.use_all_features)
 
 
 if __name__ == "__main__":
