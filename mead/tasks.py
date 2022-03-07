@@ -314,7 +314,8 @@ class Task:
         train_params = self.config_params['train']
         train_params['checkpoint'] = checkpoint
         baseline.train.fit(model_params, self.train_data, self.valid_data, self.test_data, **train_params)
-        baseline.zip_files(self.get_basedir())
+        if str2bool(self.config_params.get('zip_checkpoint', True)):
+            baseline.zip_files(self.get_basedir())
         self._close_reporting_hooks()
 
     def _configure_reporting(self, reporting, config_file, **kwargs):
