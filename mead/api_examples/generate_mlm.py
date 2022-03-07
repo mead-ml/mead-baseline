@@ -52,7 +52,8 @@ def decode_sentence(model, vectorizer, query, word2index, index2word, device, sa
         return words
 
 
-def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, rpr_value_on, d_k, checkpoint_name, activation):
+def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, rpr_value_on, d_k, checkpoint_name,
+                 activation, layer_norm_eps, layer_norms_after, embeddings_reduction):
     rpr_k = listify(rpr_k)
 
     if len(rpr_k) == 0 or rpr_k[0] < 1:
@@ -63,6 +64,7 @@ def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, rpr_va
     logger.info("Creating tied encoder decoder model")
     model = TransformerMaskedLanguageModel.create({'x': embeddings},
                                                   hsz=d_model,
+                                                  embeddings_reduction=embeddings_reduction,
                                                   d_ff=d_ff,
                                                   tie_weights=True,
                                                   dropout=0,
@@ -72,6 +74,8 @@ def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, rpr_va
                                                   rpr_k=rpr_k,
                                                   rpr_value_on=rpr_value_on,
                                                   d_k=d_k,
+                                                  layer_norm_eps=layer_norm_eps,
+                                                  layer_norms_after=layer_norms_after,
                                                   activation=activation,
                                                   src_keys=['x'], tgt_key='x')
     if checkpoint_name.endswith('npz'):
@@ -114,9 +118,12 @@ def main():
     parser.add_argument("--subword_model_file", type=str, required=False)
     parser.add_argument("--subword_vocab_file", type=str, required=False)
     parser.add_argument("--subword_type", type=str, choices=["bpe", "wordpiece", "sentencepiece"], default="bpe")
-    parser.add_argument("--use_cls", type=str2bool, default=False)
     parser.add_argument("--rpr_value_on", type=str2bool, default=False)
     parser.add_argument('--end_token', default='<EOU>')
+    parser.add_argument('--begin_token', default='[CLS]')
+    parser.add_argument('--embeddings_reduction', default='sum')
+    parser.add_argument("--layer_norms_after", type=str2bool, default=False, help="Layer norms after (set True for BERT)")
+    parser.add_argument('--layer_norm_eps', default=1e-6, type=float)
     parser.add_argument("--activation", type=str, default='gelu')
     parser.add_argument('--rpr_k', help='Relative attention positional sizes pass 0 if you dont want relative attention',
                         type=int, default=[8], nargs='+')
@@ -126,14 +133,7 @@ def main():
     parser.add_argument("--device", type=str,
                         default="cuda" if torch.cuda.is_available() else "cpu",
                         help="Device (cuda or cpu)")
-    parser.add_argument("--begin_token", default=["[CLS]"])
     args = parser.parse_args()
-
-
-    if torch.cuda.device_count() == 1:
-        torch.cuda.set_device(0)
-        args.device = torch.device("cuda", 0)
-
 
     if os.path.isdir(args.checkpoint):
         checkpoint, _ = find_latest_checkpoint(args.checkpoint)
@@ -152,7 +152,10 @@ def main():
     embeddings = preproc_data['embeddings']
     vocab = preproc_data['vocab']
     model = create_model(embeddings, d_model=args.d_model, d_ff=args.d_ff, num_heads=args.num_heads, num_layers=args.num_layers,
-                         rpr_k=args.rpr_k, rpr_value_on=args.rpr_value_on, d_k=args.d_k, checkpoint_name=checkpoint, activation=args.activation)
+                         rpr_k=args.rpr_k, rpr_value_on=args.rpr_value_on,
+                         d_k=args.d_k, checkpoint_name=checkpoint, activation=args.activation,
+                         layer_norm_eps=args.layer_norm_eps, layer_norms_after=args.layer_norms_after,
+                         embeddings_reduction=args.embeddings_reduction)
     model.to(args.device)
 
 
@@ -175,6 +178,14 @@ def main():
         query = query.strip()
         if query == 'quit':
             break
+        if query == ':sample':
+            args.sample = True
+            print("Turn sampling mode on")
+            continue
+        if query == ':max':
+            args.sample = False
+            print("Turn sampling mode off")
+            continue
         print('[Query]', query)
         bpe_out = decode_sentence(model, vectorizer, query.split(), vocab, index2word, args.device, sample=args.sample, y_only=args.y_only)
         print('[Response]', ' '.join(bpe_out))
