@@ -91,6 +91,7 @@ BERT_HF_EMBED_MAP = {
     'bert.embeddings.LayerNorm.gamma': 'embeddings.reduction.ln.weight',
     'bert.embeddings.LayerNorm.bias': 'embeddings.reduction.ln.bias',
     'bert.embeddings.LayerNorm.weight': 'embeddings.reduction.ln.weight',
+    'bert.cls.predictions.bias': 'output_layer.bias'
 }
 
 ROBERTA_HF_LAYER_MAP = {
@@ -162,12 +163,16 @@ def convert_transformers_keys(num_layers: int, d: Dict, nested_layer_map: Dict =
             try:
                 m[v.format(i)] = d[k.format(i)]
             except:
-                print(f"Bad key. Skipping {k.format(i)}")
+                # If its called alpha and beta, this key will be skipped and is not error worthy
+                if not 'LayerNorm.weight' in k and not 'LayerNorm.bias' in k:
+                    print(f"Bad key. Skipping {k.format(i)}")
     for k, v in flat_map.items():
         try:
             m[v] = d[k]
         except:
-            print(f"Bad key. Skipping {k}")
+            # If its called alpha and beta, this key will be skipped and is not error worthy
+            if not 'LayerNorm.weight' in k and not 'LayerNorm.bias' in k:
+                print(f"Bad key. Skipping {k}")
 
     return m
 
@@ -453,6 +458,8 @@ def to_tlm_array(pytorch_tlm: nn.Module, embeddings_keys: List[str] = None, name
 
     if hasattr(pytorch_tlm.embeddings.reduction, 'ln'):
         d.update(to_weight_array(pytorch_tlm.embeddings.reduction.ln, name=f"{name}/Embeddings/reduction/ln"))
+
+
     return d
 
 
@@ -467,6 +474,12 @@ def save_tlm_npz(pytorch_tlm: nn.Module, npz: str, embeddings_keys: List[str] = 
     :return: None
     """
     d = to_tlm_array(pytorch_tlm, embeddings_keys, name)
+    # This might not be the best way to do this, but it should work
+    # we dont want to put it in to_tlm_array because there are other cases where we need this to be something else
+    if hasattr(pytorch_tlm, 'output_layer') and hasattr(pytorch_tlm.output_layer, 'bias') and pytorch_tlm.output_layer.bias != None:
+        bias = pytorch_tlm.output_layer.bias.cpu().detach().numpy()
+        d.update({f"{name}/output/bias": bias})
+
     if verbose:
         print(d.keys())
     np.savez(npz, **d)
@@ -773,6 +786,11 @@ def load_tlm_npz(pytorch_tlm: nn.Module, npz: str, embeddings_keys: List[str] = 
     """
     d = np.load(npz)
     from_tlm_array(pytorch_tlm, d, embeddings_keys, name)
+
+
+    if hasattr(pytorch_tlm, 'output_layer') and hasattr(pytorch_tlm.output_layer, 'bias') and pytorch_tlm.output_layer.bias != None:
+        device = pytorch_tlm.output_layer.bias.device
+        pytorch_tlm.output_layer.bias = nn.Parameter(torch.from_numpy(d[f"{name}/output/bias"]).to(device=device), requires_grad=True)
 
 def load_tlm_output_npz(pytorch_tlm: nn.Module, npz: str, embeddings_keys: List[str] = None, name: str = "TLM"):
     """Restore a TLM-like model (possibly a `nn.Module` for fine-tuning
