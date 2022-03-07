@@ -53,7 +53,7 @@ def decode_sentence(model, vectorizer, query, word2index, index2word, device, sa
 
 
 def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, rpr_value_on, d_k, checkpoint_name,
-                 activation, layer_norm_eps, layer_norms_after, embeddings_reduction):
+                 activation, layer_norm_eps, layer_norms_after, embeddings_reduction, output_bias):
     rpr_k = listify(rpr_k)
 
     if len(rpr_k) == 0 or rpr_k[0] < 1:
@@ -77,6 +77,7 @@ def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, rpr_va
                                                   layer_norm_eps=layer_norm_eps,
                                                   layer_norms_after=layer_norms_after,
                                                   activation=activation,
+                                                  output_bias=output_bias,
                                                   src_keys=['x'], tgt_key='x')
     if checkpoint_name.endswith('npz'):
         load_tlm_npz(model, checkpoint_name)
@@ -114,13 +115,14 @@ def main():
     parser.add_argument("--num_layers", type=int, default=8, help="Number of layers")
     parser.add_argument("--nctx", type=int, default=128, help="Max context length (for both encoder and decoder)")
     parser.add_argument("--embed_type", type=str, default='default',
-                        help="register label of the embeddings, so far support positional or learned-positional")
+                        help="register label of the embeddings")
     parser.add_argument("--subword_model_file", type=str, required=False)
     parser.add_argument("--subword_vocab_file", type=str, required=False)
     parser.add_argument("--subword_type", type=str, choices=["bpe", "wordpiece", "sentencepiece"], default="bpe")
     parser.add_argument("--rpr_value_on", type=str2bool, default=False)
     parser.add_argument('--end_token', default='<EOU>')
     parser.add_argument('--begin_token', default='[CLS]')
+    parser.add_argument('--output_bias', default=False, type=str2bool)
     parser.add_argument('--embeddings_reduction', default='sum')
     parser.add_argument("--layer_norms_after", type=str2bool, default=False, help="Layer norms after (set True for BERT)")
     parser.add_argument('--layer_norm_eps', default=1e-6, type=float)
@@ -145,7 +147,6 @@ def main():
     vectorizer = Vec1D(model_file=args.subword_model_file, vocab_file=args.subword_vocab_file,
                        mxlen=args.nctx, emit_begin_tok=args.begin_token, emit_end_tok=args.end_token, extra_tokens=args.extra_tokens)
 
-    #vectorizer = BPEVectorizer1D(model_file=args.subword_model_file, vocab_file=args.subword_vocab_file, mxlen=args.nctx, emit_begin_tok=cls, emit_end_tok=end, extra_tokens=args.extra_tokens)
     vocab = vectorizer.vocab.copy()
     # If we are not using chars, then use 'x' for both input and output
     preproc_data = baseline.embeddings.load_embeddings('x', dsz=args.d_model, counts=False, known_vocab=vocab, embed_type=args.embed_type, preserve_vocab_indices=True)
@@ -155,7 +156,7 @@ def main():
                          rpr_k=args.rpr_k, rpr_value_on=args.rpr_value_on,
                          d_k=args.d_k, checkpoint_name=checkpoint, activation=args.activation,
                          layer_norm_eps=args.layer_norm_eps, layer_norms_after=args.layer_norms_after,
-                         embeddings_reduction=args.embeddings_reduction)
+                         embeddings_reduction=args.embeddings_reduction, output_bias=args.output_bias)
     model.to(args.device)
 
 

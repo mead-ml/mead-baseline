@@ -106,6 +106,8 @@ def create_transformer_lm(config_url: str) -> Tuple[TransformerMaskedLanguageMod
                                                   embeddings_dropout=pdrop,
                                                   dropout=pdrop,
                                                   activation=activation,
+                                                  output_bias=True,
+                                                  layer_norm_eps=layer_norm_eps,
                                                   layer_norms_after=True,
                                                   embeddings_reduction='sum-layer-norm')
     return model, num_layers
