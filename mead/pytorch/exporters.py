@@ -130,8 +130,11 @@ class PytorchONNXExporter(Exporter):
             for name in inputs:
                 if 'lengths' == name:
                     dynamics[name] = {1: 'sequence'}
-                else:
+                elif len(vectorizers[name].get_dims()) > 1:
                     dynamics[name] = {1: 'nbest', 2: 'sequence'}
+                else:
+                    dynamics[name] = {1: 'sequence'}
+
         return dynamics
 
     def _run(self, basename, output_dir, project=None, name=None, model_version=None, use_version=False, zip_results=True,
