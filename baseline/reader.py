@@ -844,6 +844,7 @@ class TSVSeqLabelReader(LineSeqLabelReader):
         label_sentence = [cols[c] for c in col_indices]
         label, sentence = label_sentence
         text = ' '.join(list(filter(lambda s: len(s) != 0, [clean_fn(w) for w in sentence.split()])))
+        text = TSVSeqLabelReader.splits(text)
         return label, text
 
     def label_and_sentence_no_header(self, line, clean_fn):

@@ -1,6 +1,7 @@
 import baseline as bl
 import argparse
 import os
+import json
 from eight_mile.utils import str2bool
 
 
@@ -22,6 +23,7 @@ def main():
     parser.add_argument('--scores', '-s', action="store_true")
     parser.add_argument('--label_first', action="store_true", help="Use the second column")
     parser.add_argument("--output_delim", default="\t")
+    parser.add_argument("--output_type", default="tsv", choices=["tsv", "json"])
     parser.add_argument("--no_text_output", action="store_true", help="Dont write the text")
     args = parser.parse_args()
 
@@ -52,18 +54,30 @@ def main():
     for texts in batched:
         for text, output in zip(texts, m.predict(texts)):
 
-            if args.no_text_output:
-                text_output = ''
-            else:
-                text_output = ' '.join(text) + {args.output_delim}
+
             if args.scores:
                 guess_output = output
             else:
                 guess_output = output[0][0]
 
-            s = f"{text_output}{guess_output}"
-            if args.label_first:
-                s = f"{next(label_iter)}{args.output_delim}{s}"
+            if args.output_type == 'tsv':
+                if args.no_text_output:
+                    text_output = ''
+                else:
+                    text_output = ' '.join(text) + {args.output_delim}
+                s = f"{text_output}{guess_output}"
+                if args.label_first:
+                    s = f"{next(label_iter)}{args.output_delim}{s}"
+            else:
+                text_output = ' '.join(text)
+                if args.scores:
+                    guess_output = {kv[0]: kv[1] for kv in guess_output}
+                json_output = {'prediction': guess_output}
+                if not args.no_text_output:
+                    json_output['text'] = text_output
+                if args.label_first:
+                    json_output['label'] = next(label_iter)
+                s = json.dumps(json_output)
             print(s)
 
 if __name__ == '__main__':
