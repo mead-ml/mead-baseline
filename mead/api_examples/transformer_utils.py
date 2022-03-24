@@ -414,7 +414,8 @@ class MultiFileDatasetReader:
                 mxlen=mxlen,
                 emit_begin_tok=emit_begin_tok,
                 emit_end_tok=emit_end_tok,
-                transform_fn=transform_fn)
+                transform_fn=transform_fn,
+                extra_tokens=extra_tokens)
 
     def build_vocab(self, _=None):
         return {'x': self.src_vectorizer.vocab}

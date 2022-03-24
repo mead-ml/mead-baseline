@@ -528,14 +528,6 @@ class HasPredefinedVocab:
     """Define an interface for predefined vocabs.  Using a sub-class of this means readers dont need to collect a vocab
     """
 
-    def read_vocab(self, file_or_url) -> Dict[str, int]:
-        """Read a pre-defined vocab from a file and give back a vocab of (sub)words to integer values
-
-        If the file is presented as a URL, it will be downloaded first
-
-        :param file_or_url: A file or URL
-        :return: A vocabular of word to indices
-        """
     @property
     def vocab(self):
         pass
@@ -569,12 +561,7 @@ class HasSubwordTokens(HasPredefinedVocab):
 @export
 @register_vectorizer(name='bpe1d')
 class BPEVectorizer1D(AbstractVectorizer, HasSubwordTokens):
-    """Define a Baseline Vectorizer for BPE using fastBPE (https://github.com/glample/fastBPE) or
-    subword-nmt (https://github.com/rsennrich/subword-nmt)
-
-    If you use tokens=bpe, this vectorizer is used, and so then there is a
-    dependency on either fastBPE or subword-NMT.  To configure which, set boolean `use_fast_bpe`
-    (defaults to True).  If using subword-NMT, you can make use of out-of-vocabulary glossaries.
+    """Define a Baseline Vectorizer for BPE using fastBPE (https://github.com/glample/fastBPE)
 
     The implementation here subclasses the subword NMT `BPE` class to allow it to read in
     `fastBPE` files.  The difference is those files have a 3rd column, and they contain do not
@@ -582,6 +569,12 @@ class BPEVectorizer1D(AbstractVectorizer, HasSubwordTokens):
     See https://github.com/rsennrich/subword-nmt/issues/76
 
     To use BPE, we assume that a Dictionary of codes and vocab was already created
+    If a token is desired by the caller and isnt present in the vocab, it should be added via the
+    `extra_tokens` keyword argument.  If a token passed in `extra_tokens` is already in the vocab,
+    it will not be added to the property, instead it will fall back on the vocab instantiation.
+    If an `extra_token` is added, then the vectorization routine will pass it through without splitting
+    it via the sub-word tokenizer.  No matter if it is present in the vocab or not, any user-supplied extra
+    tokens will be added to the special tokens list.
 
     """
     def __init__(self, **kwargs):
@@ -591,11 +584,15 @@ class BPEVectorizer1D(AbstractVectorizer, HasSubwordTokens):
         self.model_file = kwargs.get('model_file')
         self.vocab_file = kwargs.get('vocab_file')
         self._special_tokens = {"[CLS]", "<unk>", "<EOS>", "<UNK>", "<s>", "</s>"}
-        self._extra_tokens = kwargs.get('extra_tokens', ['[CLS]', '[MASK]'])
         self.tokenizer = SavableFastBPE(self.model_file, self.vocab_file)
         self.mxlen = kwargs.get('mxlen', -1)
         vocab_list = self.read_vocab(self.vocab_file)
-        self._vocab = {k: i for i, k in enumerate(vocab_list)}
+        # Only add tokens if they arent already in the vocab
+        extra_tokens = kwargs.get('extra_tokens', ['[CLS]', '[MASK]'])
+        # Add all extra tokens to special token list
+        self._extra_tokens = [t for t in extra_tokens if t not in vocab_list]
+        self._special_tokens |= set(extra_tokens)
+        self._vocab = {k: i for i, k in enumerate(Offsets.VALUES + self._extra_tokens + vocab_list)}
 
     @property
     def vocab(self):
@@ -630,7 +627,7 @@ class BPEVectorizer1D(AbstractVectorizer, HasSubwordTokens):
         return indices
 
     def read_vocab(self, file_or_url):
-        vocab = [] + Offsets.VALUES + self._extra_tokens
+        vocab = []
         with open_file_or_url(file_or_url, "r") as f:
             for line in f.readlines():
                 token = line.split()[0].strip()
@@ -647,16 +644,20 @@ class BPEVectorizer1D(AbstractVectorizer, HasSubwordTokens):
         return counter
 
     def iterable(self, tokens):
+        # This exists for backwards compatibility
         extra = self._extra_tokens if hasattr(self, '_extra_tokens') else ['[CLS]', '[MASK]']
         outside_vocab = set(Offsets.VALUES + extra)
         for t in self.emit_begin_tok:
             yield t
 
         for t in tokens:
+            # Any outside vocab should be pass-through
             if t in outside_vocab:
                 yield t
+            # TODO: do we still need this?
             elif t == '<unk>':
                 yield Offsets.VALUES[Offsets.UNK]
+            # TODO: do we still need this?
             elif t == '<eos>':
                 yield Offsets.VALUES[Offsets.EOS]
             else:
@@ -668,13 +669,14 @@ class BPEVectorizer1D(AbstractVectorizer, HasSubwordTokens):
 
     def _next_element(self, tokens, vocab):
         for atom in self.iterable(tokens):
-            value = vocab.get(atom, Offsets.UNK)  # This shouldnt actually happen
+            value = vocab.get(atom, Offsets.UNK)
             yield value
 
     def run(self, tokens, vocab):
         if self.mxlen < 0:
             self.mxlen = self.max_seen
         i = 0
+        # pads accomodates redefinition of Offset.PAD to values besides 0
         vec1d = pads(self.mxlen, dtype=np.long)
         for i, atom in enumerate(self._next_element(tokens, vocab)):
             if i == self.mxlen:
@@ -711,15 +713,22 @@ class BPESecondaryFeatureDict1DVectorizer(BPEVectorizer1D):
         self.apply_all_subwords = kwargs.get('apply_all_subwords', True)
 
     def iterable(self, tokens):
+        extra = self._extra_tokens if hasattr(self, '_extra_tokens') else ['[CLS]', '[MASK]']
+        outside_vocab = set(Offsets.VALUES + extra)
+
         for t in self.emit_begin_tok:
             yield t
         for t in tokens:
             t_word = t[self.primary_feature]
             t_feature = t[self.field]
-            if t_word in Offsets.VALUES:
+
+            # If the value is in the outside vocab list, return the feature without splitting
+            if t_word in outside_vocab:
                 yield t_feature
+            # TODO: do we still need this?
             elif t == '<unk>':
                 yield t_feature
+            # TODO: do we still need this?
             elif t == '<eos>':
                 yield t_feature
             else:
@@ -749,15 +758,19 @@ class BPELabelDict1DVectorizer(BPEVectorizer1D):
         self.label = kwargs.get('label', 'label')
 
     def iterable(self, tokens):
+        extra = self._extra_tokens if hasattr(self, '_extra_tokens') else ['[CLS]', '[MASK]']
+        outside_vocab = set(Offsets.VALUES + extra)
         for t in self.emit_begin_tok:
             yield t
         for t in tokens:
             t_word = t[self.field]
             t_label = t[self.label]
-            if t_word in Offsets.VALUES:
+            if t_word in outside_vocab:
                 yield t_label
+            # TODO: do we still need this?
             elif t == '<unk>':
                 yield t_label
+            # TODO: do we still need this?
             elif t == '<eos>':
                 yield t_label
             else:
@@ -1108,13 +1121,23 @@ def _is_punctuation(char):
 
 @register_vectorizer(name='wordpiece1d')
 class WordpieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
+    """Define a Baseline Vectorizer for WordPiece subword tokenization
+
+    The implementation here primarily exists to support BERT models which require WordPiece.
+    Unlike other subword implementations in the library, we dont currently support any modifications
+    to this corpus.  It is presumed that the vocabulary will already contain a `[CLS]`, `[MASK]`, `[UNK]`
+    and `[SEP]` token.  It also assumes that there is a [PAD] token whose offset is 0
+
+    """
 
     def __init__(self, **kwargs):
+        
         super().__init__(kwargs.get('transform_fn'), kwargs.get('emit_begin_tok', ['[CLS]']), kwargs.get('emit_end_tok', ['[SEP]']))
         self.max_seen = kwargs.get('max_seen', 512)
         self.tokenizer = WordpieceTokenizer(self.read_vocab(kwargs.get('vocab_file')))
         self.mxlen = kwargs.get('mxlen', -1)
         self.dtype = kwargs.get('dtype', 'int')
+        # TODO: maybe this be a superset that includes things like [UNK], [SEP]
         self._special_tokens = {"[CLS]", "<unk>", "<EOS>"}
 
     def read_vocab(self, file):
@@ -1135,9 +1158,11 @@ class WordpieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
         for t in self.emit_begin_tok:
             yield t
         for tok in tokens:
+
             if tok == '<unk>':
                 yield '[UNK]'
-            elif tok == '<EOS>':
+            # A lot of times in the library, we use <EOS> as a string, make sure to translate that
+            elif tok.upper() == '<EOS>':
                 yield '[SEP]'
             else:
                 for subtok in self.tokenizer.tokenize(self.transform_fn(tok)):
@@ -1213,11 +1238,10 @@ class WordpieceSecondaryFeatureDict1DVectorizer(WordpieceVectorizer1D):
         for t in tokens:
             t_word = t[self.primary_feature]
             t_feature = t[self.field]
-            if t_word in Offsets.VALUES:
+
+            if t == '<unk>':
                 yield t_feature
-            elif t == '<unk>':
-                yield t_feature
-            elif t == '<eos>':
+            elif t.upper() == '<EOS>':
                 yield t_feature
             else:
                 subwords = self.tokenizer.tokenize(self.transform_fn(t_word))
@@ -1251,6 +1275,12 @@ class WordpieceLabelDict1DVectorizer(WordpieceVectorizer1D):
         for t in tokens:
             t_word = t[self.field]
             t_label = t[self.label]
+
+            if t == '<unk>':
+                yield t_label
+            elif t.upper() == '<EOS>':
+                yield t_label
+
             subwords = [x for x in self.tokenizer.tokenize(self.transform_fn(t_word))]
             subwords = [Offsets.VALUES[Offsets.PAD]] * len(subwords)
             # TODO: The tokenizer sometimes cuts up the token and leaves nothing
@@ -1305,7 +1335,7 @@ class WordpieceDict1DVectorizer(WordpieceVectorizer1D):
             tok = t[self.field] if isinstance(t, dict) else t
             if tok == '<unk>':
                 yield '[UNK]'
-            elif tok == '<EOS>':
+            elif tok.upper() == '<EOS>':
                 yield '[SEP]'
             else:
                 for subtok in self.tokenizer.tokenize(self.transform_fn(tok)):
@@ -2008,30 +2038,80 @@ class GPT2Tok:
 
 @register_vectorizer(name='bb-spm1d')
 class SentencePieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
+    """Define a Baseline Vectorizer for SentencePiece
+
+
+    We assume that a vocabulary was already created
+    If a token is desired by the caller and isnt present in the vocab, it should be added via the
+    `extra_tokens` keyword argument.  If a token passed in `extra_tokens` is already in the vocab,
+    it will not be added to the property, instead it will fall back on the vocab instantiation.
+    If an `extra_token` is added, then the vectorization routine will pass it through without splitting
+    it via the sub-word tokenizer.  No matter if it is present in the vocab or not, any user-supplied extra
+    tokens will be added to the special tokens list.
+
+    SPM allows users to define the pad, bos, eos and unk values, but sometimes people do not, and they must
+    be added later.  To support this, its possible to pass a value of {{OFFSETS}} into the extra_tokens list and
+    it will be expanded.  For example, you can put in the extra_tokens ["{{OFFSETS}}", "[MASK]"], and this will
+    be expanded to [Offsets.VALUES[Offsets.PAD],..., "[MASK]"]
+
+    """
     SPECIAL_TOKENS = {"[CLS]", "[UNK]", "<s>", "</s>", "[MASK]"}
 
-    def __init__(self,
-                 **kwargs):
+    def __init__(self, **kwargs):
         """Loads a BPE tokenizer"""
         super().__init__(kwargs.get('transform_fn'),
                          kwargs.get('emit_begin_tok', []),
                          kwargs.get('emit_end_tok', []))
-        do_pre_tok = kwargs.get('tokenize', True)
+        do_pre_tok = kwargs.get('tokenize', False)
 
         self.tok_fn = GPT2Tok(self.transform_fn) if do_pre_tok else identity_trans_fn
         self.max_seen = kwargs.get('max_seen', 4096)
         self.model_file = kwargs.get('model_file')
         self.tokenizer = spm.SentencePieceProcessor(self.model_file)
 
-        self._special_tokens = SentencePieceVectorizer1D.SPECIAL_TOKENS
+        # SPM has special tokens you can define for pad, bos, eos and unk, but not every file uses them
+        # if they are defined, we should redefine the Offsets settings to the correct integer value
+        # if they are not defined, allow the user to express this through a special ID: Offsets.VALUES
+        extra_tokens = kwargs.get('extra_tokens', [])
+        self._extra_tokens = []
+        for t in extra_tokens:
+            if t.lower() == '{{offsets}}':
+                self._extra_tokens += Offsets.VALUES
+            elif self.tokenizer.PieceToId(t) == 0:
+                self._extra_tokens.append(t)
+
+        self._special_tokens = set(SentencePieceVectorizer1D.SPECIAL_TOKENS) | set(extra_tokens)
         self.mxlen = kwargs.get('mxlen', -1)
         self._vocab = {}
+
+        offset = len(self._extra_tokens)
+
+        for i, v in enumerate(self._extra_tokens):
+            self.vocab[v] = i
         for i in range(len(self.tokenizer)):
             v = self.tokenizer.IdToPiece(i)
-            self._vocab[v] = i
+            self._vocab[v] = i + offset
+
+    def _REWIRE_GLOBAL_OFFSETS(self):
+        """This function mutates the global state for Offsets.  If the Offsets are passed in the extra_tokens,
+        no change is required to the values. Otherwise, assume that the values are sane and provided by SPM lib,
+        and rewire to use those
+
+        :return:
+        """
+        if Offsets.VALUES[Offsets.PAD] not in self._extra_tokens:
+            Offsets.INDICES['PAD'] = self._vocab.get('<pad>')
+        if Offsets.VALUES[Offsets.GO] not in self._extra_tokens:
+            Offsets.INDICES['GO'] = self._vocab['<s>']
+        if Offsets.VALUES[Offsets.EOS] not in self._extra_tokens:
+            Offsets.INDICES['EOS'] = self._vocab['</s>']
+        if Offsets.VALUES[Offsets.UNK] not in self._extra_tokens:
+            Offsets.INDICES['UNK'] = self._vocab['<unk>']
+
 
     def __setstate__(self, d):
         self.__dict__ = d
+        self._REWIRE_GLOBAL_OFFSETS()
 
     @property
     def vocab(self):
@@ -2073,10 +2153,17 @@ class SentencePieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
     def iterable(self, tokens):
         if isinstance(tokens, str):
             tokens = tokens.split()
-
+        extra = set(self._extra_tokens)
         for t in self.emit_begin_tok:
             yield t
         for t_word in tokens:
+
+            # If the word is part of the added token offsets, it will return here
+            # likewise any user defined tokens return directly
+            if t_word in extra:
+                yield t_word
+
+            # The SPM library supports builtins for pad, bos, eos, unk, so special case that here:
             t_word_upper = t_word.upper()
             if t_word_upper == Offsets.PAD:
                 yield '<pad>'
@@ -2086,9 +2173,6 @@ class SentencePieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
                 yield '</s>'
             elif t_word_upper == Offsets.UNK:
                 yield '<unk>'
-            elif t_word.startswith('[') and t_word.endswith(']'):
-                yield t_word
-
             else:
                 t_word = self.tok_fn(t_word)
                 subwords = self.tokenizer.EncodeAsPieces(t_word)
@@ -2098,8 +2182,12 @@ class SentencePieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
             yield t
 
     def _next_element(self, tokens, vocab):
+
+        # Cannot really count on this existing.  It might if they add_tokens
+        UNK_ID = vocab.get("<unk>", vocab.get("<UNK>", vocab.get("[UNK]")))
         for atom in self.iterable(tokens):
-            value = vocab.get(atom, Offsets.UNK)
+
+            value = vocab.get(atom, UNK_ID)
             yield value
 
     def run(self, tokens, vocab):
@@ -2148,6 +2236,7 @@ class SentencePieceLabelDict1DVectorizer(SentencePieceVectorizer1D):
         self.label = kwargs.get('label', 'label')
 
     def iterable(self, tokens):
+        extra = set(self._extra_tokens)
 
         for t in self.emit_begin_tok:
             yield t
@@ -2155,16 +2244,11 @@ class SentencePieceLabelDict1DVectorizer(SentencePieceVectorizer1D):
         for t in tokens:
             t_word = t[self.field]
             t_label = t[self.label]
+
+            if t_word in extra:
+                return t_label
             t_word_upper = t_word.upper()
-            if t_word_upper == Offsets.PAD:
-                return Offsets.VALUES[Offsets.PAD]
-            if t_word_upper == Offsets.GO:
-                return Offsets.VALUES[Offsets.PAD]
-            if t_word_upper == Offsets.EOS:
-                return Offsets.VALUES[Offsets.PAD]
-            if t_word_upper == Offsets.UNK:
-                return Offsets.VALUES[Offsets.PAD]
-            if t_word.startswith('[') and t_word.endswith(']'):
+            if t_word_upper in Offsets.VALUES:
                 return Offsets.VALUES[Offsets.PAD]
 
             t_word = self.tok_fn(t_word)
@@ -2176,7 +2260,6 @@ class SentencePieceLabelDict1DVectorizer(SentencePieceVectorizer1D):
 
         for t in self.emit_end_tok:
             yield t
-
 
     def run(self, tokens, vocab):
         return super().run(tokens, vocab)
