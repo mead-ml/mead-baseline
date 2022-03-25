@@ -568,12 +568,15 @@ class TaggerService(Service):
             output = []
             # Extract the vectorized example for this batch element and the key we are choosing
             vectorized_example = vectorized_examples[key][i]
+
             # Convert back into strings, these will now be broken into subwords
             tokenized_text = [self.rev_vocab[key][t] for t in vectorized_example][:len(outcome)]
+
             new_outcome = [
                 outcome[j] if self.return_labels else self.label_vocab[outcome[j].item()]
                 for j in self.vectorizers[key].valid_label_indices(tokenized_text)
             ]
+
             # Loop through the (now aligned) og tokens and the labels
             for token, label in zip(tokens_batch[i], new_outcome):
                 new_token = deepcopy(token)
@@ -584,6 +587,44 @@ class TaggerService(Service):
             outputs.append(output)
         return outputs
 
+@export
+class JointClassifyTaggerService(TaggerService):
+    def __init__(self, vocabs=None, vectorizers=None, model=None, preproc='client'):
+        super().__init__(vocabs, vectorizers, model, preproc)
+
+    def format_output(self, predicted, tokens_batch=None, label_field='label', vectorized_examples=None, **kwargs):
+        """This code got very messy dealing with BPE/WP outputs."""
+        assert tokens_batch is not None
+        assert vectorized_examples is not None
+        outputs = []
+        # Pick a random non-lengths key from the vectorized input, if one input was BPE'd they all had to be to stay aligned
+        key = [k for k in vectorized_examples if not k.endswith("_lengths")][0]
+        # For each item in a batch
+        for i, outcome in enumerate(predicted):
+            output = []
+            # Extract the vectorized example for this batch element and the key we are choosing
+            vectorized_example = vectorized_examples[key][i]
+
+            #since the [CLS] token contains the class string
+            class_string=self.label_vocab.get(outcome[0].item(), 'O')
+
+            # Convert back into strings, these will now be broken into subwords
+            tokenized_text = [self.rev_vocab[key][t] for t in vectorized_example][:len(outcome)]
+
+            new_outcome = [
+                outcome[j] if self.return_labels else self.label_vocab[outcome[j].item()]
+                for j in self.vectorizers[key].valid_label_indices(tokenized_text)
+            ]
+
+            # Loop through the (now aligned) og tokens and the labels
+            for token, label in zip(tokens_batch[i], new_outcome):
+                new_token = deepcopy(token)
+                # Our labels now have <PAD> in their vocab, if we see one just hide it with an "O"
+                label = "O" if label == Offsets.VALUES[Offsets.PAD] else label
+                new_token[label_field] = label
+                output.append(new_token)
+            outputs.append([output, class_string])
+        return outputs
 
 class ONNXTaggerService(TaggerService):
 
