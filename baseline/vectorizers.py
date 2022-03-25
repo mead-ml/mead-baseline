@@ -1174,6 +1174,8 @@ class WordpieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
                 break
             vec1d[i] = atom
         valid_length = i + 1
+        print(tokens)
+        print(vec1d)
         return vec1d, valid_length
 
     @property
@@ -1266,6 +1268,40 @@ class WordpieceLabelDict1DVectorizer(WordpieceVectorizer1D):
         return super().run(tokens, vocab)
 
 
+@register_vectorizer(name='wordpiece-label-dict1d-joint')
+class WordpieceLabelDict1DVectorizer(WordpieceVectorizer1D):
+
+    def __init__(self, **kwargs):
+        kwargs['emit_begin_tok'] = kwargs.get('emit_begin_tok', [Offsets.VALUES[Offsets.PAD]])
+        kwargs['emit_end_tok'] = kwargs.get('emit_end_tok', [Offsets.VALUES[Offsets.PAD]])
+        super().__init__(**kwargs)
+        self.field = kwargs.get('fields', kwargs.get('field', 'text'))
+        self.label = kwargs.get('label', 'label')
+
+    def iterable(self, tokens):
+        #for t in self.emit_begin_tok:
+        print(tokens)
+        for i, t in enumerate(tokens):
+            t_word = t[self.field]
+            t_label = t[self.label]
+            if(i==0):
+                yield t_label
+                continue
+            subwords = [x for x in self.tokenizer.tokenize(self.transform_fn(t_word))]
+            subwords = [Offsets.VALUES[Offsets.PAD]] * len(subwords)
+            # TODO: The tokenizer sometimes cuts up the token and leaves nothing
+            # how to handle this since we cannot get anything for it
+            if len(subwords):
+                subwords[0] = t_label
+            for x in subwords:
+                yield x
+        for t in self.emit_end_tok:
+            yield t
+
+    def run(self, tokens, vocab):
+        return super().run(tokens, vocab)
+
+
 @export
 @register_vectorizer(name='wordpiece-int-identity-dict1d')
 class WordpieceIntIdentityDict1DVectorizer(WordpieceSecondaryFeatureDict1DVectorizer):
@@ -1303,6 +1339,8 @@ class WordpieceDict1DVectorizer(WordpieceVectorizer1D):
             yield t
         for t in tokens:
             tok = t[self.field] if isinstance(t, dict) else t
+            if tok in self.emit_begin_tok:
+                continue
             if tok == '<unk>':
                 yield '[UNK]'
             elif tok == '<EOS>':

@@ -2,7 +2,7 @@ task: tagger
 backend: pytorch
 conll_output: atis-bert.conll
 unif: 0.1
-dataset: atis
+dataset: joint-intent-tagger
 basedir: atis-bert
 preproc: 
   mxlen: -1
@@ -21,21 +21,22 @@ features:
      finetune: true
      mlm: true
 loader:
-  reader_type: default
+  reader_type: joint-intent-tagger #default #
   named_fields: {"0": "text", "-1": "y"}
   label_vectorizer:
     label: y
-    type: wordpiece-label-dict1d
+    type: wordpiece-label-dict1d-joint
 
 model:
   model_type: pass
   constrain_decode: 0
   crf: 1
   dropout: 0.65
+  device: cpu
 
 train:
   batchsz: 32
-  epochs: 50
+  epochs: 2
   optim: adam
   eta: 1.0e-5
   patience: 15

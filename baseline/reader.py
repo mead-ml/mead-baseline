@@ -389,8 +389,8 @@ class SeqPredictReader:
         texts = self.read_examples(filename)
         if sort_key is not None and not sort_key.endswith('_lengths'):
             sort_key += '_lengths'
-
         examples = self.convert_to_tensors(texts, vocabs)
+
         examples = baseline.data.DictExamples(examples, do_shuffle=shuffle, sort_key=sort_key)
         return baseline.data.ExampleDataFeed(examples, batchsz=batchsz, shuffle=shuffle, trim=self.trim, truncate=self.truncate), texts
 
@@ -400,15 +400,22 @@ class SeqPredictReader:
             example = {}
             for k, vectorizer in self.vectorizers.items():
                 example[k], lengths = vectorizer.run(example_tokens, vocabs[k])
+
                 if lengths is not None:
                     example['{}_lengths'.format(k)] = lengths
 
             example['y'], lengths = self.label_vectorizer.run(example_tokens, self.label2index)
+
             example['y_lengths'] = lengths
             example['ids'] = i
+            #print("---------")
+            #print(example)
+            #print(self.label2index)
+            #exit()
             # Uncomment for sanity check that you wont receive truncated sequences
             #if len(example[k]) != len(example['y']):
             #    raise Exception(f"{len(example[k])} != {len(example['y'])}")
+
             ts.append(example)
 
         return ts
@@ -471,6 +478,7 @@ class MultiLabelSeqPredictReader:
                     vocabs[k].update(vocab_example)
 
         vocabs = _filter_vocab(vocabs, kwargs.get('min_f', {}))
+        print(vocabs)
         base_offset = len(Offsets.VALUES) - 1  # Dont put UNK in labels
 
         for l in labels.keys():
@@ -541,12 +549,62 @@ class CONLLSeqReader(SeqPredictReader):
                 else:
                     if len(tokens) == 0:
                         raise Exception("Unexpected empty line ({}) in {}".format(i, tsfile))
+                    tokens=tokens[1:]
                     examples.append(tokens)
                     tokens = []
             if len(tokens) > 0:
+                tokens = tokens[1:]
                 examples.append(tokens)
+                print(tokens)
         return examples
 
+
+@export
+@register_reader(task='tagger', name='joint-intent-tagger')
+class CONLLSeqJointReader(SeqPredictReader):
+
+    def __init__(self, vectorizers, trim=False, truncate=False, mxlen=-1, **kwargs):
+        super().__init__(vectorizers, trim, truncate, mxlen, **kwargs)
+        self.named_fields = kwargs.get('named_fields', {})
+
+    def read_examples(self, tsfile):
+
+        tokens = []
+        examples = []
+        class_string = ""
+
+        with codecs.open(tsfile, encoding='utf-8', mode='r') as f:
+            for i, line in enumerate(f):
+
+                states = re.split("\s", line.strip())
+
+                token = dict()
+                if len(states) > 1:
+                    if not class_string:
+
+                        tokens.append({"text":"[CLS]","y":states[0]})
+                        class_string = states[0]
+                        continue
+
+                    for j in range(len(states)):
+
+                        noff = j - len(states)
+                        if noff >= 0:
+                            noff = j
+                        field_name = self.named_fields.get(str(j),
+                                                           self.named_fields.get(str(noff), str(j)))
+                        token[field_name] = states[j]
+                    tokens.append(token)
+
+                else:
+                    if len(tokens) == 0:
+                        raise Exception("Unexpected empty line ({}) in {}".format(i, tsfile))
+                    examples.append(tokens)
+                    tokens = []
+                    class_string = ""
+            if len(tokens) > 0:
+                examples.append(tokens)
+        return examples
 
 
 @export
