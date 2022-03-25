@@ -389,6 +389,7 @@ class SeqPredictReader:
         texts = self.read_examples(filename)
         if sort_key is not None and not sort_key.endswith('_lengths'):
             sort_key += '_lengths'
+
         examples = self.convert_to_tensors(texts, vocabs)
         examples = baseline.data.DictExamples(examples, do_shuffle=shuffle, sort_key=sort_key)
         return baseline.data.ExampleDataFeed(examples, batchsz=batchsz, shuffle=shuffle, trim=self.trim, truncate=self.truncate), texts
