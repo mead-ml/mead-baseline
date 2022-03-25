@@ -1277,8 +1277,6 @@ class WordpieceLabelDict1DVectorizer(WordpieceVectorizer1D):
         self.label = kwargs.get('label', 'label')
 
     def iterable(self, tokens):
-        #for t in self.emit_begin_tok:
-        print(tokens)
         for i, t in enumerate(tokens):
             t_word = t[self.field]
             t_label = t[self.label]
