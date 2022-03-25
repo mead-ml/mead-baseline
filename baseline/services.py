@@ -568,15 +568,12 @@ class TaggerService(Service):
             output = []
             # Extract the vectorized example for this batch element and the key we are choosing
             vectorized_example = vectorized_examples[key][i]
-
             # Convert back into strings, these will now be broken into subwords
             tokenized_text = [self.rev_vocab[key][t] for t in vectorized_example][:len(outcome)]
-
             new_outcome = [
                 outcome[j] if self.return_labels else self.label_vocab[outcome[j].item()]
                 for j in self.vectorizers[key].valid_label_indices(tokenized_text)
             ]
-
             # Loop through the (now aligned) og tokens and the labels
             for token, label in zip(tokens_batch[i], new_outcome):
                 new_token = deepcopy(token)

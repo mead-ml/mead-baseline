@@ -1174,8 +1174,6 @@ class WordpieceVectorizer1D(AbstractVectorizer, HasSubwordTokens):
                 break
             vec1d[i] = atom
         valid_length = i + 1
-        print(tokens)
-        print(vec1d)
         return vec1d, valid_length
 
     @property
