@@ -1276,9 +1276,9 @@ class WordpieceLabelDict1DVectorizer(WordpieceVectorizer1D):
             t_word = t[self.field]
             t_label = t[self.label]
 
-            if t == '<unk>':
+            if t_word == '<unk>':
                 yield t_label
-            elif t.upper() == '<EOS>':
+            elif t_word.upper() == '<EOS>':
                 yield t_label
 
             subwords = [x for x in self.tokenizer.tokenize(self.transform_fn(t_word))]
