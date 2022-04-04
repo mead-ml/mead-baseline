@@ -417,7 +417,6 @@ class JointAbstractEncoderTaggerModel(AbstractEncoderTaggerModel):
             lengths = torch.from_numpy(lengths)
 
         lengths, perm_idx = lengths.sort(0, descending=True)
-        self.gpu=False
         if self.gpu:
             lengths = lengths.cuda()
 
