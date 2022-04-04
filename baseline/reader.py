@@ -371,7 +371,6 @@ class SeqPredictReader:
         if label2index:
             logger.info("Collected vocabs via counting, labels via file")
             return vocabs
-
         if not have_vocabs:
             vocabs = _filter_vocab(vocabs, kwargs.get('min_f', {}))
         base_offset = len(self.label2index)
@@ -412,6 +411,9 @@ class SeqPredictReader:
             ts.append(example)
 
         return ts
+
+
+
 
 @export
 class MultiLabelSeqPredictReader:
@@ -510,6 +512,11 @@ class MultiLabelSeqPredictReader:
         return baseline.data.ExampleDataFeed(examples, batchsz=batchsz, shuffle=shuffle, trim=self.trim, truncate=self.truncate), texts
 
 
+
+
+
+
+
 @export
 @register_reader(task='tagger', name='default')
 class CONLLSeqReader(SeqPredictReader):
@@ -548,6 +555,37 @@ class CONLLSeqReader(SeqPredictReader):
         return examples
 
 
+@export
+@register_reader(task='tagger', name='joint')
+class CONLLJointSeqReader(CONLLSeqReader):
+
+    def __init__(self, vectorizers, trim=False, truncate=False, mxlen=-1, **kwargs):
+        super().__init__(vectorizers, trim, truncate, mxlen, **kwargs)
+        self.classlabel2index = {}
+        self.class_label_idx = 0
+
+    def convert_to_tensors(self, texts, vocabs):
+        ts = []
+
+        for i, example_tokens in enumerate(texts):
+            example = {}
+            class_label = example_tokens.pop(0)["text"]
+            if class_label not in self.classlabel2index:
+                self.classlabel2index[class_label] = self.class_label_idx
+                self.class_label_idx += 1
+            for k, vectorizer in self.vectorizers.items():
+                example[k], lengths = vectorizer.run(example_tokens, vocabs[k])
+                if lengths is not None:
+                    example['{}_lengths'.format(k)] = lengths
+
+            example['y'], lengths = self.label_vectorizer.run(example_tokens, self.label2index)
+            example['y_lengths'] = lengths
+            example['ids'] = i
+            example['class_labels'] = self.classlabel2index[class_label]
+            ts.append(example)
+
+        return ts
+
 
 @export
 @register_reader(task='deps', name='default')
@@ -556,6 +594,8 @@ class CONLLParserSeqReader(MultiLabelSeqPredictReader):
     def __init__(self, vectorizers, trim=False, truncate=False, mxlen=-1, **kwargs):
         super().__init__(vectorizers, trim, truncate, mxlen, **kwargs)
         self.named_fields = kwargs.get('named_fields', {})
+
+
 
     def read_examples(self, tsfile):
 
@@ -707,6 +747,7 @@ class LineSeqLabelReader(SeqLabelReader):
         vocab_file = kwargs.get('vocab_file')
         self.label2index = _try_read_labels(**kwargs)
 
+
         if _all_predefined_vocabs(self.vectorizers):
             if not self.label2index:
                 logger.warning("If you provide a label file or list, we can skip tabulating the labels from the data!")
@@ -757,6 +798,7 @@ class LineSeqLabelReader(SeqLabelReader):
                         label_idx += 1
 
         vocab = _filter_vocab(vocab, kwargs.get('min_f', {}))
+
 
         return vocab, self.get_labels()
 

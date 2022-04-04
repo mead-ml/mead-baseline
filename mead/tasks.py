@@ -564,6 +564,7 @@ class ClassifierTask(Task):
             shuffle=True,
             sort_key=sort_key,
         )
+        
         self.valid_data = self.reader.load(
             self.dataset['valid_file'],
             self.feat2index,
@@ -683,6 +684,10 @@ class TaggerTask(Task):
         model_params = self.config_params['model']
         model_params['features'] = self._get_features()
         model_params['labels'] = self._get_labels()
+        if hasattr(self.reader, 'classlabel2index'):
+            model_params['class_labels'] = self.reader.classlabel2index
+            print(self.reader.classlabel2index)
+
         model_params['task'] = self.task_name()
         train_params = self.config_params['train']
         train_params['checkpoint'] = checkpoint
@@ -699,6 +704,43 @@ class TaggerTask(Task):
         self._close_reporting_hooks()
 
 
+
+@export
+@register_task
+class JointTaggerTask(TaggerTask):
+
+    def __init__(self, mead_settings_config, **kwargs):
+        super().__init__(mead_settings_config, **kwargs)
+    @classmethod
+    def task_name(cls):
+        return 'joint-tagger'
+
+    def _get_class_labels(self):
+        return
+
+    def train(self, checkpoint=None):
+        self._load_dataset()
+        baseline.save_vectorizers(self.get_basedir(), self.vectorizers)
+        self._reorganize_params()
+        conll_output = self.config_params.get("conll_output", None)
+        model_params = self.config_params['model']
+        model_params['features'] = self._get_features()
+        model_params['labels'] = self._get_labels()
+        model_params['class_labels'] = self._get_class_labels()
+        model_params['task'] = self.task_name()
+        train_params = self.config_params['train']
+        train_params['checkpoint'] = checkpoint
+        train_params['conll_output'] = conll_output
+        train_params['txts'] = self.txts
+
+        if conll_output is not None:
+            dir_name = os.path.dirname(conll_output)
+            if dir_name:
+                os.makedirs(dir_name, exist_ok=True)
+
+        baseline.train.fit(model_params, self.train_data, self.valid_data, self.test_data, **train_params)
+        baseline.zip_files(self.get_basedir())
+        self._close_reporting_hooks()
 
 @export
 @register_task
