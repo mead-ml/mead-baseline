@@ -170,7 +170,6 @@ class TaggerModelBase(nn.Module, TaggerModel):
         :return:
         """
         model = cls()
-        model.class_labels = kwargs.get('class_labels')
         model.lengths_key = kwargs.get('lengths_key')
         model.activation_type = kwargs.get('activation', 'tanh')
         model.pdrop = float(kwargs.get('dropout', 0.5))
@@ -362,6 +361,7 @@ class JointAbstractEncoderTaggerModel(AbstractEncoderTaggerModel):
         :return:
         """
         model = cls()
+        model.class_labels = kwargs.get('class_labels')
         model.lengths_key = kwargs.get('lengths_key')
         model.activation_type = kwargs.get('activation', 'tanh')
         model.pdrop = float(kwargs.get('dropout', 0.5))
