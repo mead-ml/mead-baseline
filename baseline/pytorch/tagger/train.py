@@ -389,5 +389,3 @@ def fit(model_params, ts, vs, es, **kwargs):
         trainer = create_trainer(model, **kwargs)
         test_metrics = trainer.test(es, reporting_fns, conll_output=conll_output, txts=txts, phase='Test')
     return test_metrics
-
-

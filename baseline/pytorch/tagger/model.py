@@ -170,7 +170,6 @@ class TaggerModelBase(nn.Module, TaggerModel):
         :return:
         """
         model = cls()
-
         model.class_labels = kwargs.get('class_labels')
         model.lengths_key = kwargs.get('lengths_key')
         model.activation_type = kwargs.get('activation', 'tanh')
@@ -197,8 +196,6 @@ class TaggerModelBase(nn.Module, TaggerModel):
         :param inputs:
         :return:
         """
-
-
 
 
 class AbstractEncoderTaggerModel(TaggerModelBase):
@@ -259,7 +256,6 @@ class AbstractEncoderTaggerModel(TaggerModelBase):
         :return: A projection from the encoder output size to the final number of labels
         """
         return Dense(self.encoder.output_dim, len(self.labels))
-    
 
     def init_decode(self, **kwargs) -> BaseLayer:
         """Define a decoder from the inputs
@@ -346,6 +342,34 @@ class JointAbstractEncoderTaggerModel(AbstractEncoderTaggerModel):
     def __init__(self):
         """Constructor"""
         super().__init__()
+
+
+    @classmethod
+    def create(cls, embeddings: Dict[str, TensorDef], labels: List[str], **kwargs) -> 'JointAbstractEncoderTaggerModel':
+        """Create a tagger from the inputs.  Most classes shouldnt extend this
+
+        :param embeddings: A dictionary containing the input feature indices
+        :param labels: A list of the labels (tags)
+        :param kwargs: See below
+
+        :Keyword Arguments:
+
+        * *lengths_key* (`str`) Which feature identifies the length of the sequence
+        * *activation* (`str`) What type of activation function to use (defaults to `tanh`)
+        * *dropout* (`str`) What fraction dropout to apply
+        * *dropin* (`str`) A dictionarwith feature keys telling what fraction of word masking to apply to each feature
+
+        :return:
+        """
+        model = cls()
+        model.lengths_key = kwargs.get('lengths_key')
+        model.activation_type = kwargs.get('activation', 'tanh')
+        model.pdrop = float(kwargs.get('dropout', 0.5))
+        model.dropin_values = kwargs.get('dropin', {})
+        model.labels = labels
+        model.gpu = not bool(kwargs.get('nogpu', False))
+        model.create_layers(embeddings, **kwargs)
+        return model
 
     def init_output(self, input_dim: int, **kwargs) -> BaseLayer:
         """Produce the final output layer in the model
