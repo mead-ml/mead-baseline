@@ -570,9 +570,6 @@ class CONLLJointSeqReader(CONLLSeqReader):
         for i, example_tokens in enumerate(texts):
             example = {}
             class_label = example_tokens.pop(0)["text"]
-            if class_label not in self.label2index["class_labels"]:
-                self.classlabel2index["class_labels"][class_label] = self.class_label_idx
-                self.class_label_idx += 1
             for k, vectorizer in self.vectorizers.items():
                 example[k], lengths = vectorizer.run(example_tokens, vocabs[k])
                 if lengths is not None:
@@ -615,8 +612,8 @@ class CONLLJointSeqReader(CONLLSeqReader):
             for example in examples:
                 #accessing class labels which are the first token text of the string
                 class_label = example.pop(0)[self.named_fields['0']]
-                if class_label not in self.classlabel2index:
-                    self.classlabel2index["class_labels"][class_label] = class_label_idx
+                if class_label not in self.label2index["class_labels"]:
+                    self.label2index["class_labels"][class_label] = class_label_idx
                     class_label_idx += 1
                 labels.update(self.label_vectorizer.count(example))
                 if not have_vocabs:
