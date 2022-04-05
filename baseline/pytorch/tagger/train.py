@@ -187,8 +187,8 @@ class JointTaggerTrainerPyTorch(EpochReportingTrainer):
 
         logger.info('Setting span type %s', self.span_type)
         self.model = model
-        self.idx2label = revlut(self.model.labels)
-        self.idx2classlabel = revlut(self.model.class_labels)
+        self.idx2label = revlut(self.model.labels["tags"])
+        self.idx2classlabel = revlut(self.model.class_labels["class_labels"])
         self.clip = float(kwargs.get('clip', 5))
         self.optimizer = OptimizerManager(self.model, **kwargs)
         if self.gpus > 1:
@@ -264,10 +264,11 @@ class JointTaggerTrainerPyTorch(EpochReportingTrainer):
         for batch_dict in pg(ts):
 
             inputs = self.model.make_input(batch_dict)
-            y = inputs.pop('y')
+            joint_labels = inputs.pop('y')
+            y = joint_labels["tags"]
             lengths = inputs['lengths']
             ids = inputs['ids']
-            class_labels = inputs["class_labels"]
+            class_labels = joint_labels["class_label"]
             with torch.no_grad():
                 class_pred, pred = self.model(inputs)
             correct, count, golds, guesses = self.process_output(pred, y.data, class_pred, class_labels.data, lengths, ids, handle, txts)

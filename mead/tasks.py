@@ -684,10 +684,6 @@ class TaggerTask(Task):
         model_params = self.config_params['model']
         model_params['features'] = self._get_features()
         model_params['labels'] = self._get_labels()
-        if hasattr(self.reader, 'classlabel2index'):
-            model_params['class_labels'] = self.reader.classlabel2index
-            print(self.reader.classlabel2index)
-
         model_params['task'] = self.task_name()
         train_params = self.config_params['train']
         train_params['checkpoint'] = checkpoint
