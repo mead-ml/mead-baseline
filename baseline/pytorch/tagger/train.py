@@ -218,7 +218,6 @@ class JointTaggerTrainerPyTorch(EpochReportingTrainer):
         gold_chunks = []
         pred_chunks = []
         _, class_guess=class_guess.max(1)
-        print(class_guess, class_truth)
 
         # For each sentence
         for b in range(len(guess)):

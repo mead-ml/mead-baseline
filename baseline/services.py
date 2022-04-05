@@ -554,6 +554,7 @@ class TaggerService(Service):
             examples = unfeaturized_examples
 
         outcomes = self.model.predict(examples)
+
         return self.format_output(outcomes, tokens_batch=tokens_batch, label_field=label_field, vectorized_examples=examples)
 
     def format_output(self, predicted, tokens_batch=None, label_field='label', vectorized_examples=None, **kwargs):
@@ -584,6 +585,60 @@ class TaggerService(Service):
             outputs.append(output)
         return outputs
 
+
+@export
+class JointTaggerService(TaggerService):
+
+    def __init__(self, vocabs=None, vectorizers=None, model=None, preproc='client'):
+        super().__init__(vocabs, vectorizers, model, preproc)
+        if hasattr(self.model, 'return_labels'):
+            self.return_labels = self.model.return_labels
+        else:
+            self.return_labels = False  # keeping the default tagger behavior
+        self.class_label_vocab = revlut(self.model.class_labels)
+        if not self.return_labels:
+            self.label_vocab = revlut(self.get_labels())
+        self.rev_vocab = {k: revlut(v) for k, v in self.vocabs.items()}
+
+    @classmethod
+    def task_name(cls):
+        return 'tagger'
+    def predict(self, tokens, **kwargs):
+        """
+        Utility function to convert lists of sentence tokens to integer value one-hots which
+        are then passed to the tagger.  The resultant output is then converted back to label and token
+        to be printed.
+
+        This method is not aware of any input features other than words and characters (and lengths).  If you
+        wish to use other features and have a custom model that is aware of those, use `predict` directly.
+
+        :param tokens: (``list``) A list of tokens
+
+        """
+        preproc = kwargs.get('preproc', None)
+        if preproc is not None:
+            logger.warning("Warning: Passing `preproc` to `TaggerService.predict` is deprecated.")
+        export_mapping = kwargs.get('export_mapping', {})  # if empty dict argument was passed
+        if not export_mapping:
+            export_mapping = {'tokens': 'text'}
+        label_field = kwargs.get('label', 'label')
+        tokens_batch = self.batch_input(tokens)
+        self.prepare_vectorizers(tokens_batch)
+        # TODO: here we allow vectorizers even for preproc=server to get `word_lengths`.
+        # vectorizers should not be available when preproc=server.
+        examples = self.vectorize(tokens_batch)
+        if self.preproc == 'server':
+            unfeaturized_examples = {}
+            for exporter_field in export_mapping:
+                unfeaturized_examples[exporter_field] = np.array([" ".join([y[export_mapping[exporter_field]]
+                                                                   for y in x]) for x in tokens_batch])
+            unfeaturized_examples[self.model.lengths_key] = examples[self.model.lengths_key]  # remote model
+            examples = unfeaturized_examples
+
+        class_output_logits, outcomes = self.model.predict(examples)
+        _, class_max_indexes= class_output_logits.max(1)
+        class_label_list = [self.class_label_vocab[class_max_index.item()] for class_max_index in class_max_indexes]
+        return zip(class_label_list, self.format_output(outcomes, tokens_batch=tokens_batch, label_field=label_field, vectorized_examples=examples))
 
 class ONNXTaggerService(TaggerService):
 

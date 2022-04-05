@@ -383,6 +383,23 @@ class JointAbstractEncoderTaggerModel(AbstractEncoderTaggerModel):
         class_output = self.class_proj(class_embed)
         return class_output, path
 
+    def predict(self, batch_dict: Dict[str, TensorDef], **kwargs) -> Tuple[TensorDef, TensorDef]:
+        """Take in a batch of data, and predict the tags, and the class labels
+
+        :param batch_dict: A batch of features that is to be predicted
+        :param kwargs: See Below
+
+        :Keyword Arguments:
+
+        * *numpy_to_tensor* (``bool``) Should we convert input from numpy to `torch.Tensor` Defaults to `True`
+        :return: A batch-sized tensor of predictions
+        """
+        self.eval()
+        numpy_to_tensor = bool(kwargs.get('numpy_to_tensor', True))
+        inputs, perm_idx = self.make_input(batch_dict, perm=True, numpy_to_tensor=numpy_to_tensor)
+        class_output, tag_outputs = self(inputs)
+        return class_output, unsort_batch(tag_outputs, perm_idx)
+
     def compute_loss(self, inputs):
         """Provide the loss by requesting it from the decoder
 
