@@ -595,10 +595,16 @@ class JointTaggerService(TaggerService):
             self.return_labels = self.model.return_labels
         else:
             self.return_labels = False  # keeping the default tagger behavior
-        self.class_label_vocab = revlut(self.model.class_labels)
+        joint_labels = self.get_labels(False)
+        self.class_label_vocab = revlut(joint_labels["class_labels"])
         if not self.return_labels:
-            self.label_vocab = revlut(self.get_labels())
+            self.label_vocab = revlut(joint_labels["tags"])
         self.rev_vocab = {k: revlut(v) for k, v in self.vocabs.items()}
+
+    def get_labels(self, tags_only=True):
+        if tags_only:
+            return self.model.get_labels()["tags"]
+        return self.model.get_labels()
 
     @classmethod
     def task_name(cls):

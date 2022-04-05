@@ -371,6 +371,43 @@ class JointAbstractEncoderTaggerModel(AbstractEncoderTaggerModel):
         model.create_layers(embeddings, **kwargs)
         return model
 
+    def init_proj(self, **kwargs) -> BaseLayer:
+        """Provide a projection from the encoder output to the number of labels
+
+        This projection typically will not include any activation, since its output is the logits that
+        the decoder is built on
+
+        :param kwargs:
+        :return: A projection from the encoder output size to the final number of labels
+        """
+        return Dense(self.encoder.output_dim, len(self.labels["tags"]))
+
+    def init_decode(self, **kwargs) -> BaseLayer:
+        """Define a decoder from the inputs
+
+        :param kwargs: See below
+        :keyword Arguments:
+        * *crf* (``bool``) Should we create a CRF as the decoder
+        * *constraint_mask* (``tensor``) A constraint mask to apply to the transitions
+        * *reduction* (``str``) How to reduce the loss, defaults to `batch`
+        :return: A decoder layer
+        """
+        use_crf = bool(kwargs.get('crf', False))
+        constraint_mask = kwargs.get('constraint_mask')
+        if constraint_mask is not None:
+            constraint_mask = constraint_mask.unsqueeze(0)
+
+        if use_crf:
+            decoder = CRF(len(self.labels["tags"]), constraint_mask=constraint_mask, batch_first=True)
+        else:
+            decoder = TaggerGreedyDecoder(
+                len(self.labels["tags"]),
+                constraint_mask=constraint_mask,
+                batch_first=True,
+                reduction=kwargs.get('reduction', 'batch')
+            )
+        return decoder
+
     def init_output(self, input_dim: int, **kwargs) -> BaseLayer:
         """Produce the final output layer in the model
 
@@ -431,7 +468,7 @@ class JointAbstractEncoderTaggerModel(AbstractEncoderTaggerModel):
         :return:
         """
         tags = inputs['y']
-        class_labels = inputs['class_labels']
+        class_labels = inputs['class_label']
 
         lengths = inputs['lengths']
         class_embed = self.embeddings(inputs)
@@ -440,7 +477,6 @@ class JointAbstractEncoderTaggerModel(AbstractEncoderTaggerModel):
         unaries = self.transduce(inputs)
         class_out = self.class_proj(class_embed)
         class_loss = nn.NLLLoss()(class_out, class_labels)
-
 
         return self.decoder.neg_log_loss(unaries, tags, lengths) + class_loss
 
@@ -481,14 +517,14 @@ class JointAbstractEncoderTaggerModel(AbstractEncoderTaggerModel):
             if self.gpu:
                 ids = ids.cuda()
             example_dict['ids'] = ids
-        classes = batch_dict.get('class_labels')
+        classes = batch_dict.get('class_label')
         if classes is not None:
             #if numpy_to_tensor:
             #classes = torch.tensor(classes)
             classes = classes[perm_idx]
             if self.gpu:
                 classes = classes.cuda()
-            example_dict['class_labels'] = classes
+            example_dict['class_label'] = classes
         if perm:
             return example_dict, perm_idx
         return example_dict

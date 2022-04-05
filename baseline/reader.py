@@ -575,11 +575,10 @@ class CONLLJointSeqReader(CONLLSeqReader):
                 if lengths is not None:
                     example['{}_lengths'.format(k)] = lengths
 
-            #example['y'], lengths = self.label_vectorizer.run(example_tokens, self.label2index)
-            tag_labels, lengths = self.label_vectorizer.run(example_tokens, self.label2index["tags"])
+            example['y'], lengths = self.label_vectorizer.run(example_tokens, self.label2index["tags"])
             example['y_lengths'] = lengths
             example['ids'] = i
-            example['y'] = {"tags": tag_labels, "class_label": self.label2index["class_labels"][class_label]}
+            example['class_label'] = self.label2index["class_labels"][class_label]
             ts.append(example)
 
         return ts
