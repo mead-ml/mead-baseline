@@ -342,35 +342,6 @@ class JointAbstractEncoderTaggerModel(AbstractEncoderTaggerModel):
         """Constructor"""
         super().__init__()
 
-
-    @classmethod
-    def create(cls, embeddings: Dict[str, TensorDef], labels: List[str], **kwargs) -> 'JointAbstractEncoderTaggerModel':
-        """Create a tagger from the inputs.  Most classes shouldnt extend this
-
-        :param embeddings: A dictionary containing the input feature indices
-        :param labels: A list of the labels (tags)
-        :param kwargs: See below
-
-        :Keyword Arguments:
-
-        * *lengths_key* (`str`) Which feature identifies the length of the sequence
-        * *activation* (`str`) What type of activation function to use (defaults to `tanh`)
-        * *dropout* (`str`) What fraction dropout to apply
-        * *dropin* (`str`) A dictionarwith feature keys telling what fraction of word masking to apply to each feature
-
-        :return:
-        """
-        model = cls()
-        model.class_labels = kwargs.get('class_labels')
-        model.lengths_key = kwargs.get('lengths_key')
-        model.activation_type = kwargs.get('activation', 'tanh')
-        model.pdrop = float(kwargs.get('dropout', 0.5))
-        model.dropin_values = kwargs.get('dropin', {})
-        model.labels = labels
-        model.gpu = not bool(kwargs.get('nogpu', False))
-        model.create_layers(embeddings, **kwargs)
-        return model
-
     def init_proj(self, **kwargs) -> BaseLayer:
         """Provide a projection from the encoder output to the number of labels
 
