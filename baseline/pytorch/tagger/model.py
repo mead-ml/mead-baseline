@@ -378,7 +378,7 @@ class JointAbstractEncoderTaggerModel(AbstractEncoderTaggerModel):
         :param kwargs:
         :return:
         """
-        return WithDropout(Dense(input_dim, len(self.class_labels), activation=kwargs.get('output_activation', 'log_softmax'),
+        return WithDropout(Dense(input_dim, len(self.labels["class_labels"]), activation=kwargs.get('output_activation', 'log_softmax'),
                                  unif=kwargs.get('output_unif', 0.0)), pdrop=kwargs.get('output_dropout', 0.0))
     def create_layers(self, embeddings: Dict[str, TensorDef], **kwargs):
         """This class overrides this method to produce the outline of steps for a transduction tagger
