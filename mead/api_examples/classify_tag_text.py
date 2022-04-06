@@ -6,10 +6,13 @@ import os
 from eight_mile.utils import str2bool, read_conll
 
 def main():
-    parser = argparse.ArgumentParser(description='Tag text with a model')
+    parser = argparse.ArgumentParser(description='Jointly Classify and Tag text with a model')
     parser.add_argument('--model', help='A tagger model with extended features', required=True, type=str)
     parser.add_argument('--text', help='raw value', type=str)
     parser.add_argument('--conll', help='is file type conll?', type=str2bool, default=False)
+    parser.add_argument('--ignore_first_token', help='if the input file is in conll format, and the first token'
+                                                     ' in the sentence is the class label, ignore it',
+                                                     type=str2bool, default=False)
     parser.add_argument('--features', help='(optional) features in the format feature_name:index (column # in conll) or '
                                            'just feature names (assumed sequential)', default=[], nargs='+')
     parser.add_argument('--backend', help='backend', default='pytorch')
@@ -23,7 +26,7 @@ def main():
                         default=[], nargs='+')
     parser.add_argument('--modules', default=[], nargs="+")
     parser.add_argument('--out_fmt', nargs="+")
-    parser.add_argument('--batchsz', default=64, help="How many examples to run through the model at once", type=int)
+    parser.add_argument('--batchsz', default=8, help="How many examples to run through the model at once", type=int)
 
     args = parser.parse_args()
 
@@ -49,6 +52,8 @@ def main():
         if args.conll:
             feature_indices = feature_index_mapping(args.features)
             for sentence in read_conll(args.text):
+                if args.ignore_first_token:
+                    sentence.pop(0)
                 if feature_indices:
                     texts.append([{k: line[v] for k, v in feature_indices.items()} for line in sentence])
                 else:
