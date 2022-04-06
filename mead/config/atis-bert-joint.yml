@@ -21,7 +21,7 @@ features:
      finetune: true
      mlm: true
 loader:
-  reader_type: joint #default #
+  reader_type: joint
   named_fields: {"0": "text", "-1": "y"}
   label_vectorizer:
     label: y
@@ -37,10 +37,10 @@ model:
 train:
   trainer_type: joint-trainer
   batchsz: 32
-  epochs: 2
+  epochs: 50
   optim: adam
   eta: 1.0e-5
   patience: 15
-  early_stopping_metric: f1
+  early_stopping_metric: tagging_f1
   clip: 5.0
-  span_type: bio 
+  span_type: iobes 
