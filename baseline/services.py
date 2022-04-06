@@ -554,7 +554,6 @@ class TaggerService(Service):
             examples = unfeaturized_examples
 
         outcomes = self.model.predict(examples)
-
         return self.format_output(outcomes, tokens_batch=tokens_batch, label_field=label_field, vectorized_examples=examples)
 
     def format_output(self, predicted, tokens_batch=None, label_field='label', vectorized_examples=None, **kwargs):

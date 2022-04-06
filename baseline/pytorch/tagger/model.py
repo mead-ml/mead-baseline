@@ -178,8 +178,6 @@ class TaggerModelBase(nn.Module, TaggerModel):
         model.gpu = not bool(kwargs.get('nogpu', False))
         model.alpha = kwargs.get('alpha', 0.5)
         model.create_layers(embeddings, **kwargs)
-
-
         return model
 
     def create_layers(self, embeddings: Dict[str, TensorDef], **kwargs):
@@ -511,8 +509,6 @@ class JointAbstractEncoderTaggerModel(AbstractEncoderTaggerModel):
             example_dict['ids'] = ids
         classes = batch_dict.get('class_label')
         if classes is not None:
-            #if numpy_to_tensor:
-            #classes = torch.tensor(classes)
             classes = classes[perm_idx]
             if self.gpu:
                 classes = classes.cuda()

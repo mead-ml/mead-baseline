@@ -371,6 +371,7 @@ class SeqPredictReader:
         if label2index:
             logger.info("Collected vocabs via counting, labels via file")
             return vocabs
+
         if not have_vocabs:
             vocabs = _filter_vocab(vocabs, kwargs.get('min_f', {}))
         base_offset = len(self.label2index)
@@ -411,9 +412,6 @@ class SeqPredictReader:
             ts.append(example)
 
         return ts
-
-
-
 
 @export
 class MultiLabelSeqPredictReader:
@@ -510,11 +508,6 @@ class MultiLabelSeqPredictReader:
 
         examples = baseline.data.DictExamples(ts, do_shuffle=shuffle, sort_key=sort_key)
         return baseline.data.ExampleDataFeed(examples, batchsz=batchsz, shuffle=shuffle, trim=self.trim, truncate=self.truncate), texts
-
-
-
-
-
 
 
 @export
@@ -639,8 +632,6 @@ class CONLLParserSeqReader(MultiLabelSeqPredictReader):
     def __init__(self, vectorizers, trim=False, truncate=False, mxlen=-1, **kwargs):
         super().__init__(vectorizers, trim, truncate, mxlen, **kwargs)
         self.named_fields = kwargs.get('named_fields', {})
-
-
 
     def read_examples(self, tsfile):
 
@@ -792,7 +783,6 @@ class LineSeqLabelReader(SeqLabelReader):
         vocab_file = kwargs.get('vocab_file')
         self.label2index = _try_read_labels(**kwargs)
 
-
         if _all_predefined_vocabs(self.vectorizers):
             if not self.label2index:
                 logger.warning("If you provide a label file or list, we can skip tabulating the labels from the data!")
@@ -843,7 +833,6 @@ class LineSeqLabelReader(SeqLabelReader):
                         label_idx += 1
 
         vocab = _filter_vocab(vocab, kwargs.get('min_f', {}))
-
 
         return vocab, self.get_labels()
 
