@@ -608,11 +608,11 @@ class JointTaggerService(TaggerService):
     @classmethod
     def task_name(cls):
         return 'tagger'
+
     def predict(self, tokens, **kwargs):
         """
-        Utility function to convert lists of sentence tokens to integer value one-hots which
-        are then passed to the tagger.  The resultant output is then converted back to label and token
-        to be printed.
+        Takes in a batch of sentences, where each sentence is list of tokens. Predicts class label and list of tag labels
+        for each sentence, zips them in a tuple and returns them as an iterator.
 
         This method is not aware of any input features other than words and characters (and lengths).  If you
         wish to use other features and have a custom model that is aware of those, use `predict` directly.

@@ -343,7 +343,7 @@ class JointAbstractEncoderTaggerModel(AbstractEncoderTaggerModel):
         super().__init__()
 
     def init_proj_tagging(self, **kwargs) -> BaseLayer:
-        """Provide a projection from the encoder output to the number of labels
+        """Provide a projection from the encoder output to the number of tag labels
 
         This projection typically will not include any activation, since its output is the logits that
         the decoder is built on
@@ -380,7 +380,7 @@ class JointAbstractEncoderTaggerModel(AbstractEncoderTaggerModel):
         return decoder
 
     def init_proj_classification(self, input_dim: int, **kwargs) -> BaseLayer:
-        """Produce the final output layer in the model
+        """Produce the final output layer in the model for classification
 
         :param input_dim: The input hidden size
         :param kwargs:
@@ -391,7 +391,7 @@ class JointAbstractEncoderTaggerModel(AbstractEncoderTaggerModel):
 
 
     def transduce_post_embed(self, inputs: Dict[str, TensorDef], embedded: TensorDef ) -> TensorDef:
-        """This operation performs embedding of the input, followed by encoding and projection to logits
+        """This operation takes embedded input, encodes it and projects to logits
 
         :param inputs: The feature indices to embed
         :return: Transduced (post-encoding) output
@@ -402,7 +402,7 @@ class JointAbstractEncoderTaggerModel(AbstractEncoderTaggerModel):
         return transduced
 
     def create_layers(self, embeddings: Dict[str, TensorDef], **kwargs):
-        """This class overrides this method to produce the outline of steps for a transduction tagger
+        """This class overrides this method to produce the outline of steps for a transduction tagger and classifier
 
         :param embeddings: The input embeddings dict
         :param kwargs:
@@ -415,10 +415,10 @@ class JointAbstractEncoderTaggerModel(AbstractEncoderTaggerModel):
         self.decoder = self.init_decode(**kwargs)
 
     def forward(self, inputs: Dict[str, TensorDef]):
-        """Take the input and produce the best path of labels out
+        """Take the input and produce the distribution over class labels and  best path of tag labels out
 
         :param inputs: The feature indices for the input
-        :return: The most likely path through the output labels
+        :return: Distribution over class labels, The most likely path through the output labels
         """
         embed = self.embeddings(inputs)
         transduced = self.transduce_post_embed(inputs, embed)
@@ -447,7 +447,7 @@ class JointAbstractEncoderTaggerModel(AbstractEncoderTaggerModel):
 
 
     def compute_loss(self, inputs):
-        """Provide the loss by requesting it from the decoder
+        """Computes joint loss by combining tagging loss from decoder and classification loss
 
         :param inputs: A batch of inputs
         :return:
@@ -507,12 +507,14 @@ class JointAbstractEncoderTaggerModel(AbstractEncoderTaggerModel):
             if self.gpu:
                 ids = ids.cuda()
             example_dict['ids'] = ids
-        classes = batch_dict.get('class_label')
-        if classes is not None:
-            classes = classes[perm_idx]
+        class_labels = batch_dict.get('class_label')
+        if class_labels is not None:
+            if numpy_to_tensor:
+                class_labels = torch.from_numpy(class_labels)
+            class_labels = class_labels[perm_idx]
             if self.gpu:
-                classes = classes.cuda()
-            example_dict['class_label'] = classes
+                class_labels = class_labels.cuda()
+            example_dict['class_label'] = class_labels
         if perm:
             return example_dict, perm_idx
         return example_dict
@@ -644,8 +646,8 @@ class PassThruTaggerModel(AbstractEncoderTaggerModel):
 class JointPassThruTaggerModel(JointAbstractEncoderTaggerModel):
     """A Pass-thru implementation of the encoder
 
-    When we fine-tune our taggers from things like BERT embeddings, we might want to just pass through our
-    embedding result directly to the output decoder.  This model provides a mechanism for this by providing
+    When we fine-tune our joint tagger and classifier from things like BERT embeddings, we might want to just pass through our
+    embedding result directly to the output decoder and classification.  This model provides a mechanism for this by providing
     a simple identity layer
     """
     def __init__(self, *args, **kwargs):

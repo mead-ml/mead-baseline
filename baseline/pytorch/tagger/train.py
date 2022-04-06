@@ -181,6 +181,9 @@ class TaggerTrainerPyTorch(EpochReportingTrainer):
 
 @register_trainer(task='tagger', name='joint-trainer')
 class JointTaggerTrainerPyTorch(EpochReportingTrainer):
+    """
+    Trainer to train a joint tagging and classifier model
+    """
 
     def __init__(self, model, **kwargs):
         super().__init__()
