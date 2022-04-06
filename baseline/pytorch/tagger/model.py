@@ -176,7 +176,9 @@ class TaggerModelBase(nn.Module, TaggerModel):
         model.dropin_values = kwargs.get('dropin', {})
         model.labels = labels
         model.gpu = not bool(kwargs.get('nogpu', False))
+        model.alpha = kwargs.get('alpha', 0.5)
         model.create_layers(embeddings, **kwargs)
+
 
         return model
 
@@ -342,7 +344,7 @@ class JointAbstractEncoderTaggerModel(AbstractEncoderTaggerModel):
         """Constructor"""
         super().__init__()
 
-    def init_proj(self, **kwargs) -> BaseLayer:
+    def init_proj_tagging(self, **kwargs) -> BaseLayer:
         """Provide a projection from the encoder output to the number of labels
 
         This projection typically will not include any activation, since its output is the logits that
@@ -379,7 +381,7 @@ class JointAbstractEncoderTaggerModel(AbstractEncoderTaggerModel):
             )
         return decoder
 
-    def init_output(self, input_dim: int, **kwargs) -> BaseLayer:
+    def init_proj_classification(self, input_dim: int, **kwargs) -> BaseLayer:
         """Produce the final output layer in the model
 
         :param input_dim: The input hidden size
@@ -388,6 +390,19 @@ class JointAbstractEncoderTaggerModel(AbstractEncoderTaggerModel):
         """
         return WithDropout(Dense(input_dim, len(self.labels["class_labels"]), activation=kwargs.get('output_activation', 'log_softmax'),
                                  unif=kwargs.get('output_unif', 0.0)), pdrop=kwargs.get('output_dropout', 0.0))
+
+
+    def transduce_post_embed(self, inputs: Dict[str, TensorDef], embedded: TensorDef ) -> TensorDef:
+        """This operation performs embedding of the input, followed by encoding and projection to logits
+
+        :param inputs: The feature indices to embed
+        :return: Transduced (post-encoding) output
+        """
+        lengths = inputs["lengths"]
+        embedded = (embedded, lengths)
+        transduced = self.proj_layer_tagging(self.encoder(embedded))
+        return transduced
+
     def create_layers(self, embeddings: Dict[str, TensorDef], **kwargs):
         """This class overrides this method to produce the outline of steps for a transduction tagger
 
@@ -397,8 +412,8 @@ class JointAbstractEncoderTaggerModel(AbstractEncoderTaggerModel):
         """
         self.embeddings = self.init_embed(embeddings, **kwargs)
         self.encoder = self.init_encode(self.embeddings.output_dim, **kwargs)
-        self.proj_layer = self.init_proj(**kwargs)
-        self.class_proj = self.init_output(self.embeddings.output_dim, **kwargs)
+        self.proj_layer_tagging = self.init_proj_tagging(**kwargs)
+        self.proj_layer_classification = self.init_proj_classification(self.embeddings.output_dim, **kwargs)
         self.decoder = self.init_decode(**kwargs)
 
     def forward(self, inputs: Dict[str, TensorDef]):
@@ -407,12 +422,12 @@ class JointAbstractEncoderTaggerModel(AbstractEncoderTaggerModel):
         :param inputs: The feature indices for the input
         :return: The most likely path through the output labels
         """
-        transduced = self.transduce(inputs)
-        class_embed = self.embeddings(inputs)
-        B = class_embed.shape[0]
-        class_embed = class_embed[:, 0, :].reshape(B, -1)
+        embed = self.embeddings(inputs)
+        transduced = self.transduce_post_embed(inputs, embed)
+        B = embed.shape[0]
+        embed = embed[:, 0, :].reshape(B, -1)
         path = self.decode(transduced, inputs.get("lengths"))
-        class_output = self.class_proj(class_embed)
+        class_output = self.proj_layer_classification(embed)
         return class_output, path
 
     def predict(self, batch_dict: Dict[str, TensorDef], **kwargs) -> Tuple[TensorDef, TensorDef]:
@@ -432,6 +447,7 @@ class JointAbstractEncoderTaggerModel(AbstractEncoderTaggerModel):
         class_output, tag_outputs = self(inputs)
         return class_output, unsort_batch(tag_outputs, perm_idx)
 
+
     def compute_loss(self, inputs):
         """Provide the loss by requesting it from the decoder
 
@@ -442,14 +458,19 @@ class JointAbstractEncoderTaggerModel(AbstractEncoderTaggerModel):
         class_labels = inputs['class_label']
 
         lengths = inputs['lengths']
-        class_embed = self.embeddings(inputs)
-        B = class_embed.shape[0]
-        class_embed = class_embed[:,0,:].reshape(B,-1)
-        unaries = self.transduce(inputs)
-        class_out = self.class_proj(class_embed)
+        embed = self.embeddings(inputs)
+
+        #tagging loss
+        unaries = self.transduce_post_embed(inputs, embed)
+        tagging_loss = self.decoder.neg_log_loss(unaries, tags, lengths)
+
+        #classification loss
+        B = embed.shape[0]
+        embed = embed[:,0,:].reshape(B,-1)
+        class_out = self.proj_layer_classification(embed)
         class_loss = nn.NLLLoss()(class_out, class_labels)
 
-        return self.decoder.neg_log_loss(unaries, tags, lengths) + class_loss
+        return self.alpha*class_loss + (1-self.alpha)*tagging_loss
 
     def make_input(self, batch_dict: Dict[str, TensorDef], perm: bool = False, numpy_to_tensor: bool = False) -> Dict[str, TensorDef]:
         """Transform a `batch_dict` into format suitable for tagging

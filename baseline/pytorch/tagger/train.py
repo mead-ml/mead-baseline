@@ -7,10 +7,20 @@ from baseline.utils import get_model_file, get_metric_cmp
 from baseline.pytorch.torchy import *
 from eight_mile.pytorch.optz import OptimizerManager
 from eight_mile.utils import span_f1, per_entity_f1, conlleval_output
+from eight_mile.confusion import ConfusionMatrix
 from baseline.model import create_model_for
 from torch.utils.data import DataLoader
 
 logger = logging.getLogger('baseline')
+
+
+def _add_to_cm(cm, y, pred):
+    if cm is None:
+        return
+    _, best = pred.max(1)
+    yt = y.cpu().int()
+    yp = best.cpu().int()
+    cm.add_batch(yt.data.numpy(), yp.data.numpy())
 
 
 @register_trainer(task='tagger', name='default')
@@ -208,7 +218,7 @@ class JointTaggerTrainerPyTorch(EpochReportingTrainer):
     def _get_batchsz(batch_dict):
         return batch_dict['y'].shape[0]
 
-    def process_output(self, guess, truth, class_guess, class_truth, sentence_lengths, ids, handle=None, txts=None):
+    def process_output(self, guess, truth, sentence_lengths, ids, handle=None, txts=None):
 
         # For acc
         correct_labels = 0
@@ -217,7 +227,6 @@ class JointTaggerTrainerPyTorch(EpochReportingTrainer):
         # For f1
         gold_chunks = []
         pred_chunks = []
-        _, class_guess=class_guess.max(1)
 
         # For each sentence
         for b in range(len(guess)):
@@ -252,7 +261,7 @@ class JointTaggerTrainerPyTorch(EpochReportingTrainer):
 
         gold_spans = []
         pred_spans = []
-
+        cm = ConfusionMatrix(self.idx2classlabel)
         metrics = {}
         steps = len(ts)
         conll_output = kwargs.get('conll_output', None)
@@ -270,15 +279,17 @@ class JointTaggerTrainerPyTorch(EpochReportingTrainer):
             class_labels = inputs["class_label"]
             with torch.no_grad():
                 class_pred, pred = self.model(inputs)
-            correct, count, golds, guesses = self.process_output(pred, y.data, class_pred, class_labels.data, lengths, ids, handle, txts)
+            correct, count, golds, guesses = self.process_output(pred, y.data, lengths, ids, handle, txts)
             total_correct += correct
             total_sum += count
             gold_spans.extend(golds)
             pred_spans.extend(guesses)
+            _add_to_cm(cm, class_labels, class_pred)
 
         total_acc = total_correct / float(total_sum)
-        metrics['acc'] = total_acc
-        metrics['f1'] = span_f1(gold_spans, pred_spans)
+        metrics['tagging_acc'] = total_acc
+        metrics['tagging_f1'] = span_f1(gold_spans, pred_spans)
+        metrics.update({f"classification_{k}": v for k, v in cm.get_all_metrics().items()})
         if self.verbose:
             # TODO: Add programmatic access to these metrics?
             conll_metrics = per_entity_f1(gold_spans, pred_spans)
