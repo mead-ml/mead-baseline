@@ -3395,7 +3395,7 @@ class PreLNTransformerEncoder(TransformerEncoderBase):
         return x
 
 
-class PreLNPreResConnTransformerEncoder(TransformerEncoderBase):
+class PreLNBeforeResConnTransformerEncoder(TransformerEncoderBase):
 
     def forward(self, inputs: Tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
         """
@@ -3516,7 +3516,7 @@ class TransformerDecoderBase(nn.Module):
         d_model: int,
         pdrop: float,
         scale: bool = True,
-        activation_type: str = "relu",
+        activation_type: str = "gelu",
         d_ff: Optional[int] = None,
         d_k: Optional[int] = None,
         rpr_k: Optional[int] = None,
@@ -3550,9 +3550,7 @@ class TransformerDecoderBase(nn.Module):
         self.dropout = nn.Dropout(pdrop)
 
 
-
 class PreLNTransformerDecoder(TransformerDecoderBase):
-
     def forward(self, inputs: Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]) -> torch.Tensor:
 
         x, memory, src_mask, tgt_mask = inputs
@@ -3567,7 +3565,7 @@ class PreLNTransformerDecoder(TransformerDecoderBase):
         return x
 
 
-class PreLNPreResConnTransformerDecoder(TransformerDecoderBase):
+class PreLNBeforeResConnTransformerDecoder(TransformerDecoderBase):
 
     def forward(self, inputs: Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]) -> torch.Tensor:
 
@@ -3584,7 +3582,7 @@ class PreLNPreResConnTransformerDecoder(TransformerDecoderBase):
 
 
 class PostLNTransformerDecoder(nn.Module):
-    # TODO: change the names on this
+
     def forward(self, inputs: Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]) -> torch.Tensor:
 
         x, memory, src_mask, tgt_mask = inputs
@@ -3618,21 +3616,25 @@ class TransformerEncoderStack(nn.Module):
         rpr_value_on: bool = True,
         layer_drop: float = 0.0,
         ra_type: Optional[str] = None,
-        layer_norms_before_resconn: bool = False,
+        transformer_type: Optional[str] = False,
         **kwargs,
     ):
         super().__init__()
         self.encoders = nn.ModuleList()
-        self.ln = nn.Identity() if layer_norms_after else nn.LayerNorm(d_model, eps=layer_norm_eps)
-        TransformerEncoder = PreLNTransformerEncoder
-        if layer_norms_after:
-            logger.debug("Using post-layer-norm transformer")
+        if layer_norms_after or transformer_type == "post-layer-norm":
+            logger.info("Using post-layer-norm transformer")
             TransformerEncoder = PostLNTransformerEncoder
-        if layer_norms_before_resconn:
-            logger.debug("Using layer norm before residual connections")
+            self.ln = nn.Identity()
+        elif transformer_type == "pre-layer-norm":
+            TransformerEncoder = PreLNTransformerEncoder
+            self.ln = nn.LayerNorm(d_model, eps=layer_norm_eps)
+
+        else:  # transformer_type == "pre-layer-norm-before-resconn"
+            logger.info("Using layer norm before residual connections")
             if layer_norms_after:
-                raise Exception("Mutually exclusive options (layer_norms_before_resconn=True and layer_norms_after=True)")
-            TransformerEncoder = PreLNPreResConnTransformerEncoder
+                raise Exception(f"Mutually exclusive options ({transformer_type}) and layer_norms_after=True)",)
+            TransformerEncoder = PreLNBeforeResConnTransformerEncoder
+            self.ln = nn.LayerNorm(d_model, eps=layer_norm_eps)
 
         self.output_dim = d_model
         self.layer_drop = layer_drop
@@ -3717,11 +3719,11 @@ class TransformerEncoderStackWithLengths(TransformerEncoderStack):
         rpr_value_on: bool = True,
         layer_drop: float = 0.0,
         ra_type: Optional[str] = None,
-        layer_norms_before_resconn: bool = False,
+        transformer_type: Optional[str] = None,
         **kwargs,
     ):
         super().__init__(num_heads, d_model, pdrop, scale, layers, activation, d_ff, d_k, rpr_k,
-                         ffn_pdrop, layer_norms_after, layer_norm_eps, windowed_ra, rpr_value_on, layer_drop, ra_type, layer_norms_before_resconn, **kwargs)
+                         ffn_pdrop, layer_norms_after, layer_norm_eps, windowed_ra, rpr_value_on, layer_drop, ra_type, transformer_type, **kwargs)
         self.proj = WithDropout(pytorch_linear(input_sz, d_model), pdrop)
 
     def forward(self, inputs: Tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
@@ -3752,12 +3754,12 @@ class TransformerEncoderStackWithTimeMask(TransformerEncoderStack):
         windowed_ra: Optional[bool] = False,
         rpr_value_on: bool = True,
         layer_drop: float = 0.0,
-        ra_type: bool = False,
-        layer_norms_before_resconn: bool = False,
+        ra_type: Optional[str] = None,
+        transformer_type: Optional[str] = None,
         **kwargs,
     ):
         super().__init__(num_heads, d_model, pdrop, scale, layers, activation, d_ff, d_k, rpr_k,
-                         ffn_pdrop, layer_norms_after, layer_norm_eps, windowed_ra, rpr_value_on, layer_drop, ra_type, layer_norms_before_resconn, **kwargs)
+                         ffn_pdrop, layer_norms_after, layer_norm_eps, windowed_ra, rpr_value_on, layer_drop, ra_type, transformer_type, **kwargs)
         self.proj = WithDropout(pytorch_linear(input_sz, d_model), pdrop)
 
     def forward(self, inputs: Tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
@@ -3786,24 +3788,26 @@ class TransformerDecoderStack(nn.Module):
         layer_drop: float = 0.0,
         rpr_value_on: bool = True,
         ra_type: Optional[str] = None,
-        layer_norms_before_resconn: bool = False,
+        transformer_type: Optional[str] = None,
         **kwargs,
 
     ):
         super().__init__()
         self.decoders = nn.ModuleList()
-        self.ln = nn.Identity() if layer_norms_after else nn.LayerNorm(d_model, eps=layer_norm_eps)
         self.layer_drop = layer_drop
-
-        TransformerDecoder = PreLNTransformerDecoder
-        if layer_norms_after:
-            logger.info("Using post-layer-norm transformer")
+        if layer_norms_after or transformer_type == "post-layer-norm":
+            logger.debug("Using post-layer-norm transformer")
             TransformerDecoder = PostLNTransformerDecoder
-        if layer_norms_before_resconn:
-            logger.info("Using layer norm before residual connections")
+            self.ln = nn.Identity()
+        elif transformer_type == "pre-layer-norm":
+            TransformerDecoder = PreLNTransformerDecoder
+            self.ln = nn.LayerNorm(d_model, eps=layer_norm_eps)
+        else:  # transformer_type == "pre-layer-norm-before-resconn"
+            logger.debug("Using layer norm before residual connections")
             if layer_norms_after:
-                raise Exception("Mutually exclusive options (layer_norms_before_resconn=True and layer_norms_after=True)")
-            TransformerDecoder = PreLNPreResConnTransformerDecoder
+                raise Exception(f"Mutually exclusive options ({transformer_type}) and layer_norms_after=True)",)
+            TransformerDecoder = PreLNBeforeResConnTransformerDecoder
+            self.ln = nn.LayerNorm(d_model, eps=layer_norm_eps)
 
         if not is_sequence(rpr_k):
             rpr_k = [rpr_k] * layers
@@ -4743,28 +4747,29 @@ class PairedModel(DualEncoderModel):
     by injecting the same `nn.Module` for encoder_1 and encoder_2 consisting of the transformer and reduction
     """
     def __init__(self, embeddings,
-                 d_model,
-                 d_ff,
-                 dropout,
-                 num_heads,
-                 num_layers,
-                 stacking_layers=None,
-                 d_out=None,
-                 d_k=None,
-                 weight_std=0.02,
-                 rpr_k=None,
-                 reduction_d_k=64,
-                 ffn_pdrop=0.1,
-                 windowed_ra=False,
-                 rpr_value_on=False,
-                 reduction_type="2ha",
-                 freeze_encoders=False,
-                 layer_norms_after=False,
-                 embeddings_reduction='sum',
-                 layer_norm_eps=1e-6,
-                 output_layer=False,
-                 output_activation='tanh',
-                 output_shared=False,
+                 d_model: int,
+                 d_ff: int,
+                 dropout: float,
+                 num_heads: int,
+                 num_layers: int,
+                 stacking_layers: Optional[nn.Module] = None,
+                 d_out: Optional[int] = None,
+                 d_k: Optional[int] = None,
+                 weight_std: float = 0.02,
+                 rpr_k: Optional[int] = None,
+                 reduction_d_k: int = 64,
+                 ffn_pdrop: float = 0.1,
+                 windowed_ra: bool = False,
+                 rpr_value_on: bool = False,
+                 reduction_type: str = "2ha",
+                 freeze_encoders: bool = False,
+                 layer_norms_after: bool = False,
+                 embeddings_reduction: str = 'sum',
+                 layer_norm_eps: float=1e-6,
+                 output_layer: bool = False,
+                 output_activation: str = 'tanh',
+                 output_shared: bool = False,
+                 transformer_type: Optional[str]=None,
                  **kwargs):
         super().__init__(2*d_model if reduction_type.startswith("2") else d_model, stacking_layers,
                          d_out if d_out is not None else d_model, ffn_pdrop, None, output_layer,
@@ -4801,7 +4806,7 @@ class PairedModel(DualEncoderModel):
                                                    ffn_pdrop=ffn_pdrop,
                                                    d_k=d_k, rpr_k=rpr_k, windowed_ra=windowed_ra, rpr_value_on=rpr_value_on,
                                                    layer_norms_after=layer_norms_after, layer_norm_eps=layer_norm_eps,
-                                                   ra_type=ra_type)
+                                                   ra_type=ra_type, transformer_type=transformer_type)
 
         self.embeddings = EmbeddingsStack({'x': embeddings}, 0.0, False, embeddings_reduction)
         self.freeze = freeze_encoders
@@ -4874,6 +4879,7 @@ class TransformerBoWPairedModel(DualEncoderModel):
                  reduction_type_1="2ha",
                  freeze_encoders=False,
                  layer_norms_after=False,
+                 transformer_type: Optional[str]=None,
                  **kwargs):
         super().__init__(d_model, stacking_layers, d_out, ffn_pdrop)
 
@@ -4902,7 +4908,7 @@ class TransformerBoWPairedModel(DualEncoderModel):
                                                    pdrop=dropout, layers=num_layers, activation='gelu', d_ff=d_ff,
                                                    ffn_pdrop=ffn_pdrop,
                                                    d_k=d_k, rpr_k=rpr_k, windowed_ra=windowed_ra, rpr_value_on=rpr_value_on,
-                                                   layer_norms_after=layer_norms_after, ra_type=ra_type)
+                                                   layer_norms_after=layer_norms_after, ra_type=ra_type, transformer_type=transformer_type)
 
         self.embeddings = EmbeddingsStack({'x': embeddings})
         self.freeze = freeze_encoders

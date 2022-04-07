@@ -2378,7 +2378,7 @@ class PostLNTransformerEncoder(TransformerEncoderBase):
         return x
 
 
-class PreLNPreResConnTransformerEncoder(TransformerEncoderBase):
+class PreLNBeforeResConnTransformerEncoder(TransformerEncoderBase):
 
     def call(self, inputs):
         """
@@ -2542,7 +2542,7 @@ class PostLNTransformerDecoder(TransformerDecoderBase):
         return x
 
 
-class PreLNPreResConnTransformerDecoder(TransformerDecoderBase):
+class PreLNBeforeResConnTransformerDecoder(TransformerDecoderBase):
 
     def call(self, inputs):
         x, memory, src_mask, tgt_mask = inputs
@@ -2617,26 +2617,33 @@ class TransformerEncoderStack(tf.keras.layers.Layer):
         rpr_value_on: bool = True,
         layer_drop: float = 0.0,
         ra_type: Optional[str] = None,
-        layer_norms_before_resconn: bool = False,
+        transformer_type: Optional[str] = None,
         name: Optional[str] = None,
         **kwargs,
     ):
 
         super().__init__(name=name)
         self.encoders = []
-        self.ln = tf.identity if layer_norms_after else tf.keras.layers.LayerNormalization(epsilon=layer_norm_eps)
         self.layer_drop = layer_drop
         if not is_sequence(rpr_k):
             rpr_k = [rpr_k] * layers
-        TransformerEncoder = PreLNTransformerEncoder
-        if layer_norms_after:
-            LOGGER.info("Using post-layer-norm transformer")
+
+        if layer_norms_after or transformer_type == "post-layer-norm":
+            LOGGER.debug("Using post-layer-norm transformer")
             TransformerEncoder = PostLNTransformerEncoder
-        if layer_norms_before_resconn:
-            LOGGER.info("Using layer norm before residual connections")
+            self.ln = tf.identity
+
+        elif transformer_type == "pre-layer-norm":
+            TransformerEncoder = PreLNTransformerEncoder
+            self.ln = tf.keras.layers.LayerNormalization(epsilon=layer_norm_eps)
+
+        else:  # transformer_type == "pre-layer-norm-before-resconn":
+            LOGGER.debug("Using layer norm before residual connections")
             if layer_norms_after:
-                raise Exception("Mutually exclusive options (layer_norms_before_resconn=True and layer_norms_after=True)")
-            TransformerEncoder = PreLNPreResConnTransformerEncoder
+                raise Exception(f"Mutually exclusive options ({transformer_type}) and layer_norms_after=True)",)
+            TransformerEncoder = PreLNBeforeResConnTransformerEncoder
+            self.ln = tf.keras.layers.LayerNormalization(epsilon=layer_norm_eps)
+
 
         for i in range(layers):
             self.encoders.append(
@@ -2677,12 +2684,12 @@ class TransformerEncoderStackWithLengths(TransformerEncoderStack):
         rpr_value_on: bool = True,
         layer_drop: float = 0.0,
         ra_type: Optional[str] = None,
-        layer_norms_before_resconn: bool = False,
+        transformer_type: Optional[str] = None,
         name: str = None,
         **kwargs,
     ):
         super().__init__(num_heads, d_model, pdrop, scale, layers, activation, d_ff, d_k, rpr_k,
-                         ffn_pdrop, layer_norms_after, layer_norm_eps, windowed_ra, rpr_value_on, layer_drop, ra_type, layer_norms_before_resconn, name, **kwargs)
+                         ffn_pdrop, layer_norms_after, layer_norm_eps, windowed_ra, rpr_value_on, layer_drop, ra_type, transformer_type, name, **kwargs)
         self.proj = WithDropout(tf.keras.layers.Dense(d_model), pdrop)
 
     def call(self, inputs):
@@ -2712,12 +2719,12 @@ class TransformerEncoderStackWithTimeMask(TransformerEncoderStack):
         rpr_value_on: bool = True,
         layer_drop: float = 0.0,
         ra_type: Optional[str] = None,
-        layer_norms_before_resconn: bool = False,
+        transformer_type: Optional[str] = None,
         name: str = None,
         **kwargs,
     ):
         super().__init__(num_heads, d_model, pdrop, scale, layers, activation, d_ff, d_k, rpr_k,
-                         ffn_pdrop, layer_norms_after, layer_norm_eps, windowed_ra, rpr_value_on, layer_drop, ra_type, layer_norms_before_resconn, name,
+                         ffn_pdrop, layer_norms_after, layer_norm_eps, windowed_ra, rpr_value_on, layer_drop, ra_type, transformer_type, name,
                          **kwargs)
         self.proj = WithDropout(tf.keras.layers.Dense(d_model), pdrop)
 
@@ -3000,6 +3007,7 @@ class PairedModel(DualEncoderModel):
                  rpr_value_on=False,
                  reduction_type="2ha",
                  freeze_encoders=False,
+                 transformer_type: Optional[str]=None,
                  name=None,
                  **kwargs):
         super().__init__(2*d_model if reduction_type.startswith("2") else d_model, stacking_layers, d_out, ffn_pdrop, name=name)
@@ -3025,7 +3033,7 @@ class PairedModel(DualEncoderModel):
         self.transformer = TransformerEncoderStack(num_heads=num_heads, d_model=d_model,
                                                    pdrop=dropout, layers=num_layers, activation='gelu', d_ff=d_ff,
                                                    ffn_pdrop=ffn_pdrop, d_k=d_k, rpr_k=rpr_k, windowed_ra=windowed_ra,
-                                                   rpr_value_on=rpr_value_on, ra_type=ra_type)
+                                                   rpr_value_on=rpr_value_on, ra_type=ra_type, transformer_type=transformer_type)
 
         self.freeze = freeze_encoders
 
@@ -3067,12 +3075,13 @@ class TransformerDiscriminator(tf.keras.Model):
         d_model: int,
         dropout: bool,
         layers: int = 1,
-        activation: str = "relu",
+        activation: str = "gelu",
         d_ff: Optional[int] = None,
         d_k: Optional[int] = None,
         rpr_k: Optional[Union[int, List[int]]] = None,
         layer_norms_after: bool = False,
         layer_norm_eps: float = 1.0e-6,
+        transformer_type: Optional[str]=None,
         name: Optional[str] = None,
         **kwargs,
     ):
@@ -3081,7 +3090,7 @@ class TransformerDiscriminator(tf.keras.Model):
         self.transformer = TransformerEncoderStack(
             num_heads, d_model=d_model, pdrop=dropout, scale=True,
             layers=layers, activation=activation, d_ff=d_ff, rpr_k=rpr_k, d_k=d_k,
-            layer_norms_after=layer_norms_after, layer_norm_eps=layer_norm_eps
+            layer_norms_after=layer_norms_after, layer_norm_eps=layer_norm_eps, transformer_type=transformer_type
         )
 
         self.proj_to_output = tf.keras.layers.Dense(1)
@@ -3115,7 +3124,7 @@ class TransformerDecoderStack(tf.keras.layers.Layer):
         pdrop: float,
         scale: bool = True,
         layers: int = 1,
-        activation_type: str = "relu",
+        activation_type: str = "gelu",
         d_ff: Optional[int] = None,
         d_k: Optional[int] = None,
         rpr_k: Optional[Union[int, List[int]]] = None,
@@ -3125,26 +3134,31 @@ class TransformerDecoderStack(tf.keras.layers.Layer):
         layer_drop: float = 0.0,
         rpr_value_on: bool = True,
         ra_type: Optional[str] = None,
-        layer_norms_before_resconn: bool = False,
+        transformer_type: Optional[str] = None,
         name: Optional[str] = None,
         **kwargs,
     ):
         super().__init__(name=name)
         self.decoders = []
-        self.ln = tf.identity if layer_norms_after else tf.keras.layers.LayerNormalization(epsilon=layer_norm_eps)
         self.layer_drop = layer_drop
         if not is_sequence(rpr_k):
             rpr_k = [rpr_k] * layers
 
-        TransformerDecoder = PreLNTransformerDecoder
-        if layer_norms_after:
-            LOGGER.info("Using post-layer-norm transformer")
+        if layer_norms_after or transformer_type == "post-layer-norm":
+            LOGGER.debug("Using post-layer-norm transformer")
             TransformerDecoder = PostLNTransformerDecoder
-        if layer_norms_before_resconn:
-            LOGGER.info("Using layer norm before residual connections")
+            self.ln = tf.identity
+
+        elif transformer_type == "pre-layer-norm":
+            TransformerDecoder = PreLNTransformerDecoder
+            self.ln = tf.keras.layers.LayerNormalization(epsilon=layer_norm_eps)
+
+        else:  # transformer_type == "pre-layer-norm-before-resconn":
+            LOGGER.debug("Using layer norm before residual connections")
             if layer_norms_after:
-                raise Exception("Mutually exclusive options (layer_norms_before_resconn=True and layer_norms_after=True)")
-            TransformerDecoder = PreLNPreResConnTransformerDecoder
+                raise Exception(f"Mutually exclusive options ({transformer_type}) and layer_norms_after=True)",)
+            TransformerDecoder = PreLNBeforeResConnTransformerDecoder
+            self.ln = tf.keras.layers.LayerNormalization(epsilon=layer_norm_eps)
 
         for i in range(layers):
             self.decoders.append(
