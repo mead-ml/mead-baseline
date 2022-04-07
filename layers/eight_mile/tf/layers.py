@@ -2473,22 +2473,22 @@ class GatedMLPEncoder(tf.keras.layers.Layer):
 
 class TransformerDecoderBase(tf.keras.layers.Layer):
     def __init__(
-            self,
-            num_heads: int,
-            d_model: int,
-            pdrop: float,
-            scale: bool = True,
-            activation_type: str = "relu",
-            d_ff: Optional[int] = None,
-            d_k: Optional[int] = None,
-            rpr_k: Optional[int] = None,
-            ffn_pdrop: Optional[float] = 0.0,
-            layer_norms_after: bool = False,
-            layer_norm_eps: float = 1.0e-6,
-            layer_drop: float = 0.0,
-            rpr_value_on: bool = True,
-            ra_type: Optional[str] = None,
-            name: Optional[str] = None
+        self,
+        num_heads: int,
+        d_model: int,
+        pdrop: float,
+        scale: bool = True,
+        activation_type: str = "gelu",
+        d_ff: Optional[int] = None,
+        d_k: Optional[int] = None,
+        rpr_k: Optional[int] = None,
+        ffn_pdrop: Optional[float] = 0.0,
+        layer_norms_after: bool = False,
+        layer_norm_eps: float = 1.0e-6,
+        layer_drop: float = 0.0,
+        rpr_value_on: bool = True,
+        ra_type: Optional[str] = None,
+        name: Optional[str] = None
     ):
         super().__init__(name=name)
         self.d_model = d_model
@@ -2606,7 +2606,7 @@ class TransformerEncoderStack(tf.keras.layers.Layer):
         pdrop: float,
         scale: bool = True,
         layers: int = 1,
-        activation: str = "relu",
+        activation: str = "gelu",
         d_ff: Optional[int] = None,
         d_k: Optional[int] = None,
         rpr_k: Optional[Union[int, List[int]]] = None,
