@@ -3622,7 +3622,7 @@ class TransformerEncoderStack(nn.Module):
         super().__init__()
         self.encoders = nn.ModuleList()
         if layer_norms_after or transformer_type == "post-layer-norm":
-            logger.info("Using post-layer-norm transformer")
+            logger.info("Using post-layer-norm transformer (encoder)")
             TransformerEncoder = PostLNTransformerEncoder
             self.ln = nn.Identity()
         elif transformer_type == "pre-layer-norm":
@@ -3630,7 +3630,7 @@ class TransformerEncoderStack(nn.Module):
             self.ln = nn.LayerNorm(d_model, eps=layer_norm_eps)
 
         else:  # transformer_type == "pre-layer-norm-before-resconn"
-            logger.info("Using layer norm before residual connections")
+            logger.info("Using layer norm before residual connections (encoder)")
             if layer_norms_after:
                 raise Exception(f"Mutually exclusive options ({transformer_type}) and layer_norms_after=True)",)
             TransformerEncoder = PreLNBeforeResConnTransformerEncoder
@@ -3796,14 +3796,14 @@ class TransformerDecoderStack(nn.Module):
         self.decoders = nn.ModuleList()
         self.layer_drop = layer_drop
         if layer_norms_after or transformer_type == "post-layer-norm":
-            logger.debug("Using post-layer-norm transformer")
+            logger.info("Using post-layer-norm transformer (decoder)")
             TransformerDecoder = PostLNTransformerDecoder
             self.ln = nn.Identity()
         elif transformer_type == "pre-layer-norm":
             TransformerDecoder = PreLNTransformerDecoder
             self.ln = nn.LayerNorm(d_model, eps=layer_norm_eps)
         else:  # transformer_type == "pre-layer-norm-before-resconn"
-            logger.debug("Using layer norm before residual connections")
+            logger.info("Using layer norm before residual connections (decoder)")
             if layer_norms_after:
                 raise Exception(f"Mutually exclusive options ({transformer_type}) and layer_norms_after=True)",)
             TransformerDecoder = PreLNBeforeResConnTransformerDecoder

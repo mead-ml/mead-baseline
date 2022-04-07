@@ -2629,7 +2629,7 @@ class TransformerEncoderStack(tf.keras.layers.Layer):
             rpr_k = [rpr_k] * layers
 
         if layer_norms_after or transformer_type == "post-layer-norm":
-            LOGGER.debug("Using post-layer-norm transformer")
+            LOGGER.info("Using post-layer-norm transformer (encoder)")
             TransformerEncoder = PostLNTransformerEncoder
             self.ln = tf.identity
 
@@ -2638,7 +2638,7 @@ class TransformerEncoderStack(tf.keras.layers.Layer):
             self.ln = tf.keras.layers.LayerNormalization(epsilon=layer_norm_eps)
 
         else:  # transformer_type == "pre-layer-norm-before-resconn":
-            LOGGER.debug("Using layer norm before residual connections")
+            LOGGER.info("Using layer norm before residual connections (encoder)")
             if layer_norms_after:
                 raise Exception(f"Mutually exclusive options ({transformer_type}) and layer_norms_after=True)",)
             TransformerEncoder = PreLNBeforeResConnTransformerEncoder
@@ -3145,7 +3145,7 @@ class TransformerDecoderStack(tf.keras.layers.Layer):
             rpr_k = [rpr_k] * layers
 
         if layer_norms_after or transformer_type == "post-layer-norm":
-            LOGGER.debug("Using post-layer-norm transformer")
+            LOGGER.info("Using post-layer-norm transformer (decoder)")
             TransformerDecoder = PostLNTransformerDecoder
             self.ln = tf.identity
 
@@ -3154,7 +3154,7 @@ class TransformerDecoderStack(tf.keras.layers.Layer):
             self.ln = tf.keras.layers.LayerNormalization(epsilon=layer_norm_eps)
 
         else:  # transformer_type == "pre-layer-norm-before-resconn":
-            LOGGER.debug("Using layer norm before residual connections")
+            LOGGER.info("Using layer norm before residual connections (decoder)")
             if layer_norms_after:
                 raise Exception(f"Mutually exclusive options ({transformer_type}) and layer_norms_after=True)",)
             TransformerDecoder = PreLNBeforeResConnTransformerDecoder

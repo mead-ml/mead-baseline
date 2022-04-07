@@ -31,7 +31,8 @@ This file uses Baseline to train a Transformer model using fastBPE with query-re
   
 """
 def create_model(embeddings, d_model, d_ff, dropout, num_heads, num_layers, model_type, rpr_k, d_k, reduction_d_k,
-                 stacking_layers, ff_pdrop, windowed_ra, reduction_type, shared_output, logger, layer_norms_after=False):
+                 stacking_layers, ff_pdrop, windowed_ra, reduction_type, shared_output, logger, layer_norms_after=False,
+                 ra_type=None, transformer_type=None):
 
     if model_type == 'transformer-bow':
         model = TransformerBoWPairedModel(embeddings, d_model, d_ff, dropout, num_heads, num_layers, rpr_k=rpr_k, d_k=d_k,
@@ -44,7 +45,7 @@ def create_model(embeddings, d_model, d_ff, dropout, num_heads, num_layers, mode
                             reduction_d_k=reduction_d_k, stacking_layers=stacking_layers, ffn_pdrop=ff_pdrop,
                             windowed_ra=windowed_ra, reduction_type=reduction_type, freeze_encoders=True,
                             output_shared=shared_output, output_layer=shared_output,
-                            layer_norms_after=layer_norms_after)
+                            layer_norms_after=layer_norms_after, transformer_type=transformer_type)
 
     logger.info(model)
     return model
@@ -146,6 +147,7 @@ def parse_args(argv):
                         help="Local rank for distributed training (-1 means use the environment variables to find)")
     parser.add_argument("--shared_output", action='store_true')
     parser.add_argument("--extra_tokens", help="What extra tokens should we use", nargs="+", default=["[CLS]", "[MASK]"])
+    parser.add_argument("--transformer_type", help="What TransformerEncoder type to use", default="pre-layer-norm")
     parser.add_argument("--save_npz", type=str2bool, default=False, help="Whether save npz checkpoint")
     args = parser.parse_args(argv)
     return args

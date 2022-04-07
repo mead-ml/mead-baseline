@@ -49,7 +49,7 @@ def run(basedir=None, train_file=None, valid_file=None, dataset_key='tlm', embed
         restart_tt=None, warmup_steps=10000, saves_per_epoch=10, mlm=True, preprocessed=True, rpr_k=[8],
         rpr_value_on=False, windowed_ra=False, device="cuda", distributed=False, local_rank=-1,
         extra_tokens=["[CLS]", "[MASK]"], do_early_stopping=False, model_type='transformer-mlm', modules=[],
-        ra_type=None, **kwargs):
+        ra_type=None, transformer_type=None, **kwargs):
     if basedir is None:
         basedir = 'lm-{}-bpe-{}'.format(dataset_key, os.getpid())
     logging.basicConfig(level=logging.INFO if local_rank in [-1, 0] else logging.WARN)
@@ -136,6 +136,7 @@ def run(basedir=None, train_file=None, valid_file=None, dataset_key='tlm', embed
         layer_drop=layer_drop,
         model_type=model_type,
         ra_type=ra_type,
+        transformer_type=transformer_type,
         src_keys=['x'], tgt_key='x')
     model.to(device)
 
@@ -369,6 +370,8 @@ def parse_args(argv):
                         default=["[CLS]", "[MASK]"])
     parser.add_argument("--do_early_stopping", type=str2bool, default=False,
                         help="if True, only save checkpoint when valid loss improves")
+    parser.add_argument("--transformer_type", help="What TransformerEncoder type to use")
+
     args = parser.parse_args(argv)
     return args
 
