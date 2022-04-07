@@ -3346,21 +3346,21 @@ class MultiHeadedRelativeAttention(nn.Module):
 
 class TransformerEncoderBase(nn.Module):
     def __init__(
-            self,
-            num_heads: int,
-            d_model: int,
-            pdrop: float,
-            scale: bool = True,
-            activation_type: str = "gelu",
-            d_ff: Optional[int] = None,
-            d_k: Optional[int] = None,
-            rpr_k: Optional[int] = None,
-            ffn_pdrop: Optional[float] = 0.0,
-            layer_norm_eps: float = 1.0e-6,
-            windowed_ra: Optional[bool] = False,
-            rpr_value_on: bool = True,
-            ra_type: Optional[str] = None,
-            **kwargs,
+        self,
+        num_heads: int,
+        d_model: int,
+        pdrop: float,
+        scale: bool = True,
+        activation_type: str = "gelu",
+        d_ff: Optional[int] = None,
+        d_k: Optional[int] = None,
+        rpr_k: Optional[int] = None,
+        ffn_pdrop: Optional[float] = 0.0,
+        layer_norm_eps: float = 1.0e-6,
+        windowed_ra: Optional[bool] = False,
+        rpr_value_on: bool = True,
+        ra_type: Optional[str] = None,
+        **kwargs,
     ):
         super().__init__()
         self.d_model = d_model
@@ -3423,6 +3423,7 @@ class PostLNTransformerEncoder(TransformerEncoderBase):
         x = x + self.dropout(h)
         x = self.ln2(x)
         x = x + self.dropout(self.ffn(x))
+        x = self.ln1(x)
         return x
 
 
@@ -3625,10 +3626,10 @@ class TransformerEncoderStack(nn.Module):
         self.ln = nn.Identity() if layer_norms_after else nn.LayerNorm(d_model, eps=layer_norm_eps)
         TransformerEncoder = PreLNTransformerEncoder
         if layer_norms_after:
-            logger.info("Using post-layer-norm transformer")
+            logger.debug("Using post-layer-norm transformer")
             TransformerEncoder = PostLNTransformerEncoder
         if layer_norms_before_resconn:
-            logger.info("Using layer norm before residual connections")
+            logger.debug("Using layer norm before residual connections")
             if layer_norms_after:
                 raise Exception("Mutually exclusive options (layer_norms_before_resconn=True and layer_norms_after=True)")
             TransformerEncoder = PreLNPreResConnTransformerEncoder
