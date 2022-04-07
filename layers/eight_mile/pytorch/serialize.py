@@ -5,9 +5,9 @@ from typing import Dict, List
 from eight_mile.pytorch.layers import (
     Dense,
     TransformerEncoderStack,
-    TransformerEncoder,
+    TransformerEncoderBase,
     TransformerDecoderStack,
-    TransformerDecoder,
+    TransformerDecoderBase,
     EmbeddingsStack,
     WithDropout,
     SingleHeadReduction,
@@ -313,8 +313,8 @@ def from_attn_array(pytorch_attn: nn.Module, d: Dict, name: str):
         pytorch_attn.rpr_value.weight = torch.nn.Parameter(torch.from_numpy(d[f"{name}/rpr_value"]).to(device=device))
 
 
-def to_encoder_array(pytorch_encoder: TransformerEncoder, name: str) -> Dict:
-    """Convert a `TransformerEncoder` layer to an set of numpy arrays
+def to_encoder_array(pytorch_encoder: TransformerEncoderBase, name: str) -> Dict:
+    """Convert a `TransformerEncoderBase` layer to an set of numpy arrays
 
     :param pytorch_encoder: A `TransformerEncoder` layer
     :param name: The layer name
@@ -332,6 +332,7 @@ def from_sgu_array(pytorch_sgu: SpatialGatingUnit, d: Dict, name: str) -> Dict:
     from_weight_array(pytorch_sgu.norm, d, f"{name}/norm")
     from_weight_array(pytorch_sgu.proj, d, f"{name}/proj")
 
+
 def from_gmlp_encoder_array(pytorch_encoder: GatedMLPEncoder, d: Dict, name: str):
     """Restore a `TransformerEncoder` layer from a set of numpy arrays
 
@@ -347,10 +348,10 @@ def from_gmlp_encoder_array(pytorch_encoder: GatedMLPEncoder, d: Dict, name: str
 
 
 
-def from_encoder_array(pytorch_encoder: TransformerEncoder, d: Dict, name: str):
+def from_encoder_array(pytorch_encoder: TransformerEncoderBase, d: Dict, name: str):
     """Restore a `TransformerEncoder` layer from a set of numpy arrays
 
-    :param pytorch_encoder: A `TransformerEncoder` layer
+    :param pytorch_encoder: A `TransformerEncoderBase` layer
     :param d: A Dict of arrays by key
     :param name: The layer name
     :return: None
@@ -361,10 +362,10 @@ def from_encoder_array(pytorch_encoder: TransformerEncoder, d: Dict, name: str):
     from_ffn_array(pytorch_encoder.ffn, d, f"{name}/ffn")
 
 
-def from_decoder_array(pytorch_decoder: TransformerDecoder, d: Dict, name: str):
+def from_decoder_array(pytorch_decoder: TransformerDecoderBase, d: Dict, name: str):
     """Restore a `TransformerDecoder` layer from a set of numpy arrays
 
-    :param pytorch_decoder: A `TransformerDecoder` layer
+    :param pytorch_decoder: A `TransformerDecoderBase` layer
     :param d: A Dict of arrays by key
     :param name: The layer name
     :return: None
@@ -377,7 +378,7 @@ def from_decoder_array(pytorch_decoder: TransformerDecoder, d: Dict, name: str):
     from_ffn_array(pytorch_decoder.ffn, d, f"{name}/ffn")
 
 
-def to_decoder_array(pytorch_decoder: TransformerDecoder, name: str) -> Dict:
+def to_decoder_array(pytorch_decoder: TransformerDecoderBase, name: str) -> Dict:
     """Convert a `TransformerDeccoder` layer to an set of numpy arrays
 
     :param pytorch_decoder: A `TransformerDecoder` layer

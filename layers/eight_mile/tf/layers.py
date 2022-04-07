@@ -2309,14 +2309,14 @@ class MultiHeadedRelativeAttention(tf.keras.layers.Layer):
             return x
 
 
-class TransformerEncoder(tf.keras.layers.Layer):
+class TransformerEncoderBase(tf.keras.layers.Layer):
     def __init__(
         self,
         num_heads: int,
         d_model: int,
         pdrop: float,
         scale: bool = True,
-        activation_type: str = "relu",
+        activation_type: str = "gelu",
         d_ff: Optional[int] = None,
         d_k: Optional[int] = None,
         rpr_k: Optional[int] = None,
@@ -2345,22 +2345,53 @@ class TransformerEncoder(tf.keras.layers.Layer):
         self.ln2 = tf.keras.layers.LayerNormalization(epsilon=layer_norm_eps)
         self.dropout = tf.keras.layers.Dropout(pdrop)
 
+
+class PreLNTransformerEncoder(TransformerEncoderBase):
+
     def call(self, inputs):
         """
         :param inputs: `(x, mask)`
         :return: The output tensor
         """
         x, mask = inputs
-        if not self.layer_norms_after:
-            x = self.ln1(x)
+        h = self.ln1(x)
+        h = self.self_attn((h, h, h, mask))
+        x = x + self.dropout(h, TRAIN_FLAG())
+        h = self.ln2(x)
+        x = x + self.dropout(self.ffn(h), TRAIN_FLAG())
+        return x
+
+
+class PostLNTransformerEncoder(TransformerEncoderBase):
+
+    def call(self, inputs):
+        """
+        :param inputs: `(x, mask)`
+        :return: The output tensor
+        """
+        x, mask = inputs
+        x = self.self_attn((x, x, x, mask))
+        x = x + self.dropout(x, TRAIN_FLAG())
+        x = self.ln2(x)
+        x = x + self.dropout(self.ffn(x), TRAIN_FLAG())
+        x = self.ln1(x)
+        return x
+
+
+class PreLNPreResConnTransformerEncoder(TransformerEncoderBase):
+
+    def call(self, inputs):
+        """
+        :param inputs: `(x, mask)`
+        :return: The output tensor
+        """
+        x, mask = inputs
+        x = self.ln1(x)
         h = self.self_attn((x, x, x, mask))
         x = x + self.dropout(h, TRAIN_FLAG())
         x = self.ln2(x)
         x = x + self.dropout(self.ffn(x), TRAIN_FLAG())
-        if self.layer_norms_after:
-            x = self.ln1(x)
         return x
-
 
 class SpatialGatingUnit(tf.keras.layers.Layer):
     """Spatial gating unit
@@ -2440,24 +2471,24 @@ class GatedMLPEncoder(tf.keras.layers.Layer):
         x = self.dropout(x)
         return x + shortcut
 
-class TransformerDecoder(tf.keras.layers.Layer):
+class TransformerDecoderBase(tf.keras.layers.Layer):
     def __init__(
-        self,
-        num_heads: int,
-        d_model: int,
-        pdrop: float,
-        scale: bool = True,
-        activation_type: str = "relu",
-        d_ff: Optional[int] = None,
-        d_k: Optional[int] = None,
-        rpr_k: Optional[int] = None,
-        ffn_pdrop: Optional[float] = 0.0,
-        layer_norms_after: bool = False,
-        layer_norm_eps: float = 1.0e-6,
-        layer_drop: float = 0.0,
-        rpr_value_on: bool = True,
-        ra_type: Optional[str] = None,
-        name: Optional[str] = None
+            self,
+            num_heads: int,
+            d_model: int,
+            pdrop: float,
+            scale: bool = True,
+            activation_type: str = "relu",
+            d_ff: Optional[int] = None,
+            d_k: Optional[int] = None,
+            rpr_k: Optional[int] = None,
+            ffn_pdrop: Optional[float] = 0.0,
+            layer_norms_after: bool = False,
+            layer_norm_eps: float = 1.0e-6,
+            layer_drop: float = 0.0,
+            rpr_value_on: bool = True,
+            ra_type: Optional[str] = None,
+            name: Optional[str] = None
     ):
         super().__init__(name=name)
         self.d_model = d_model
@@ -2477,10 +2508,28 @@ class TransformerDecoder(tf.keras.layers.Layer):
         self.ln3 = tf.keras.layers.LayerNormalization(epsilon=layer_norm_eps)
         self.dropout = tf.keras.layers.Dropout(pdrop)
 
+
+class PreLNTransformerDecoder(TransformerDecoderBase):
+
     def call(self, inputs):
         x, memory, src_mask, tgt_mask = inputs
-        if not self.layer_norms_after:
-            x = self.ln1(x)
+        h = self.ln1(x)
+        x = x + self.dropout(self.self_attn((h, h, h, tgt_mask)), TRAIN_FLAG())
+
+        h = self.ln2(x)
+        x = x + self.dropout(self.src_attn((h, memory, memory, src_mask)), TRAIN_FLAG())
+
+        h = self.ln3(x)
+        x = x + self.dropout(self.ffn(h), TRAIN_FLAG())
+
+        return x
+
+
+class PostLNTransformerDecoder(TransformerDecoderBase):
+
+    def call(self, inputs):
+        x, memory, src_mask, tgt_mask = inputs
+
         x = x + self.dropout(self.self_attn((x, x, x, tgt_mask)), TRAIN_FLAG())
 
         x = self.ln2(x)
@@ -2488,8 +2537,25 @@ class TransformerDecoder(tf.keras.layers.Layer):
 
         x = self.ln3(x)
         x = x + self.dropout(self.ffn(x), TRAIN_FLAG())
-        if self.layer_norms_after:
-            x = self.ln1(x)
+
+        x = self.ln1(x)
+        return x
+
+
+class PreLNPreResConnTransformerDecoder(TransformerDecoderBase):
+
+    def call(self, inputs):
+        x, memory, src_mask, tgt_mask = inputs
+
+        x = self.ln1(x)
+        x = x + self.dropout(self.self_attn((x, x, x, tgt_mask)), TRAIN_FLAG())
+
+        x = self.ln2(x)
+        x = x + self.dropout(self.src_attn((x, memory, memory, src_mask)), TRAIN_FLAG())
+
+        x = self.ln3(x)
+        x = x + self.dropout(self.ffn(x), TRAIN_FLAG())
+
         return x
 
 
@@ -2551,6 +2617,7 @@ class TransformerEncoderStack(tf.keras.layers.Layer):
         rpr_value_on: bool = True,
         layer_drop: float = 0.0,
         ra_type: Optional[str] = None,
+        layer_norms_before_resconn: bool = False,
         name: Optional[str] = None,
         **kwargs,
     ):
@@ -2561,6 +2628,15 @@ class TransformerEncoderStack(tf.keras.layers.Layer):
         self.layer_drop = layer_drop
         if not is_sequence(rpr_k):
             rpr_k = [rpr_k] * layers
+        TransformerEncoder = PreLNTransformerEncoder
+        if layer_norms_after:
+            LOGGER.info("Using post-layer-norm transformer")
+            TransformerEncoder = PostLNTransformerEncoder
+        if layer_norms_before_resconn:
+            LOGGER.info("Using layer norm before residual connections")
+            if layer_norms_after:
+                raise Exception("Mutually exclusive options (layer_norms_before_resconn=True and layer_norms_after=True)")
+            TransformerEncoder = PreLNPreResConnTransformerEncoder
 
         for i in range(layers):
             self.encoders.append(
@@ -2600,11 +2676,13 @@ class TransformerEncoderStackWithLengths(TransformerEncoderStack):
         windowed_ra: Optional[bool] = False,
         rpr_value_on: bool = True,
         layer_drop: float = 0.0,
+        ra_type: Optional[str] = None,
+        layer_norms_before_resconn: bool = False,
         name: str = None,
         **kwargs,
     ):
         super().__init__(num_heads, d_model, pdrop, scale, layers, activation, d_ff, d_k, rpr_k,
-                         ffn_pdrop, layer_norms_after, layer_norm_eps, windowed_ra, rpr_value_on, layer_drop, name, **kwargs)
+                         ffn_pdrop, layer_norms_after, layer_norm_eps, windowed_ra, rpr_value_on, layer_drop, ra_type, layer_norms_before_resconn, name, **kwargs)
         self.proj = WithDropout(tf.keras.layers.Dense(d_model), pdrop)
 
     def call(self, inputs):
@@ -2633,11 +2711,13 @@ class TransformerEncoderStackWithTimeMask(TransformerEncoderStack):
         windowed_ra: Optional[bool] = False,
         rpr_value_on: bool = True,
         layer_drop: float = 0.0,
+        ra_type: Optional[str] = None,
+        layer_norms_before_resconn: bool = False,
         name: str = None,
         **kwargs,
     ):
         super().__init__(num_heads, d_model, pdrop, scale, layers, activation, d_ff, d_k, rpr_k,
-                         ffn_pdrop, layer_norms_after, layer_norm_eps, windowed_ra, rpr_value_on, layer_drop, name,
+                         ffn_pdrop, layer_norms_after, layer_norm_eps, windowed_ra, rpr_value_on, layer_drop, ra_type, layer_norms_before_resconn, name,
                          **kwargs)
         self.proj = WithDropout(tf.keras.layers.Dense(d_model), pdrop)
 
@@ -3045,6 +3125,7 @@ class TransformerDecoderStack(tf.keras.layers.Layer):
         layer_drop: float = 0.0,
         rpr_value_on: bool = True,
         ra_type: Optional[str] = None,
+        layer_norms_before_resconn: bool = False,
         name: Optional[str] = None,
         **kwargs,
     ):
@@ -3055,11 +3136,21 @@ class TransformerDecoderStack(tf.keras.layers.Layer):
         if not is_sequence(rpr_k):
             rpr_k = [rpr_k] * layers
 
+        TransformerDecoder = PreLNTransformerDecoder
+        if layer_norms_after:
+            LOGGER.info("Using post-layer-norm transformer")
+            TransformerDecoder = PostLNTransformerDecoder
+        if layer_norms_before_resconn:
+            LOGGER.info("Using layer norm before residual connections")
+            if layer_norms_after:
+                raise Exception("Mutually exclusive options (layer_norms_before_resconn=True and layer_norms_after=True)")
+            TransformerDecoder = PreLNPreResConnTransformerDecoder
+
         for i in range(layers):
             self.decoders.append(
                 TransformerDecoder(num_heads, d_model, pdrop, scale, activation_type, d_ff,
                                    d_k=d_k, rpr_k=rpr_k[i], ffn_pdrop=ffn_pdrop,
-                                   layer_norms_after=layer_norms_after, layer_norm_eps=layer_norm_eps,
+                                   layer_norm_eps=layer_norm_eps,
                                    rpr_value_on=rpr_value_on, ra_type=ra_type)
             )
 

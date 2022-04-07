@@ -2,9 +2,9 @@ import numpy as np
 from typing import Dict, List
 from eight_mile.tf.layers import (
     TransformerEncoderStack,
-    TransformerEncoder,
+    TransformerEncoderBase,
     TransformerDecoderStack,
-    TransformerDecoder,
+    TransformerDecoderBase,
     MultiHeadedAttention,
     PassThru,
     FFN,
@@ -146,7 +146,7 @@ def to_gmlp_encoder_array(tf_encoder: GatedMLPEncoder, name: str) -> Dict:
     d.update(to_sgu_array(tf_encoder.spatial_gating_unit, f"{name}/spatial_gating_unit"))
     return d
 
-def to_encoder_array(tf_encoder: TransformerEncoder, name: str) -> Dict:
+def to_encoder_array(tf_encoder: TransformerEncoderBase, name: str) -> Dict:
     """Convert a `TransformerEncoder` layer to an set of numpy arrays
 
     :param tf_encoder: A `TransformerEncoder` layer
@@ -161,7 +161,7 @@ def to_encoder_array(tf_encoder: TransformerEncoder, name: str) -> Dict:
     return d
 
 
-def from_encoder_array(tf_encoder: TransformerEncoder, d: Dict, name: str):
+def from_encoder_array(tf_encoder: TransformerEncoderBase, d: Dict, name: str):
     """Restore a `TransformerEncoder` layer from a set of numpy arrays
 
     :param tf_encoder: A `TransformerEncoder` layer
@@ -175,7 +175,7 @@ def from_encoder_array(tf_encoder: TransformerEncoder, d: Dict, name: str):
     from_ffn_array(tf_encoder.ffn, d, f"{name}/ffn")
 
 
-def to_decoder_array(tf_decoder: TransformerDecoder, name: str) -> Dict:
+def to_decoder_array(tf_decoder: TransformerDecoderBase, name: str) -> Dict:
     """Convert a `TransformerDeccoder` layer to an set of numpy arrays
 
     :param tf_decoder: A `TransformerDecoder` layer
@@ -302,7 +302,7 @@ def to_decoder_stack_array(
         d.update(to_decoder_array(dec_tf, f"{name}/{i}"))
     return d
 
-def from_decoder_array(tf_decoder: TransformerDecoder, d: Dict, name: str):
+def from_decoder_array(tf_decoder: TransformerDecoderBase, d: Dict, name: str):
     """Restore a `TransformerDecoder` layer from a set of numpy arrays
 
     :param tf_decoder: A `TransformerDecoder` layer
