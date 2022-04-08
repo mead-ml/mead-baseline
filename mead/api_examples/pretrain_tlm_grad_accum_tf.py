@@ -255,7 +255,7 @@ def main():
     parser.add_argument("--eps", help="Epsilon", default=1e-6, type=float)
     parser.add_argument("--beta2", help="Epsilon", default=0.98, type=float)
     parser.add_argument("--grad_accum", help="Number of iterations to accum grads", default=1, type=int)
-
+    parser.add_argument("--transformer_type", help="Transformer layer type")
     args = parser.parse_args()
     SET_TRAIN_FLAG(True)
 
@@ -560,6 +560,7 @@ def create_model(args, embeddings):
                            rpr_value_on=args.rpr_value_on,
                            layer_drop=args.layer_drop,
                            ra_type=args.ra_type,
+                           transformer_type=args.transformer_type,
                            src_keys=['x'], tgt_key='x')
     return model
 

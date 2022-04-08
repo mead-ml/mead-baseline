@@ -115,6 +115,8 @@ def parse_args(argv):
                         help="Local rank for distributed training (-1 means use the environment variables to find)")
     parser.add_argument("--extra_tokens", help="What extra tokens should we use", nargs="+",
                         default=["[CLS]", "[MASK]"])
+    parser.add_argument("--transformer_type", help="What TransformerEncoder type to use")
+
     parser.add_argument("--save_npz", type=str2bool, default=False, help="Whether save npz checkpoint")
     args = parser.parse_args(argv)
     return args
@@ -129,7 +131,7 @@ def run(basedir=None, train_file=None, valid_file=None, dataset_key='paired', em
         layer_drop=0.0, reader_type='preprocessed', src_begin_tok=[], src_end_tok=['<EOS>'],
         tgt_begin_tok=['<GO>'], tgt_end_tok=['<EOS>'], lower=False,
         rpr_k=[8], device='cuda', distributed=False, local_rank=-1, save_npz=False,
-        extra_tokens=["[CLS]", "[MASK]"], subword_type='bpe', label_smoothing=None, **kwargs):
+        extra_tokens=["[CLS]", "[MASK]"], subword_type='bpe', label_smoothing=None, ra_type=None, transformer_type=None, **kwargs):
     if basedir is None:
         basedir = f's2s-{reader_type}-paired-{dataset_key}-bpe-{os.getpid()}'
     logging.basicConfig(level=logging.INFO if local_rank in [-1, 0] else logging.WARN)
@@ -180,7 +182,9 @@ def run(basedir=None, train_file=None, valid_file=None, dataset_key='paired', em
            "src_lengths_key": "x_lengths",
            "d_k": d_k,
            "layer_drop": layer_drop,
-           "rpr_k": rpr_k}
+           "rpr_k": rpr_k,
+           "ra_type": ra_type,
+           "transformer_type": transformer_type}
     model = TiedEmbeddingsSeq2SeqModel({'x': embeddings}, None, **hps)
     model.to(device)
 

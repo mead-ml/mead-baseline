@@ -47,14 +47,15 @@ class TransformerEncoderWrapper(tf.keras.layers.Layer):
         d_ff = int(kwargs.get('d_ff', 4 * hsz))
         rpr_k = kwargs.get('rpr_k')
         d_k = kwargs.get('d_k')
-        activation = kwargs.get('activation', 'relu')
+        activation = kwargs.get('activation', 'gelu')
         scale = bool(kwargs.get('scale', True))
         layer_drop = float(kwargs.get('layer_drop', 0.0))
         ra_type = kwargs.get('ra_type')
+        transformer_type = kwargs.get('transformer_type')
         self.transformer = TransformerEncoderStack(num_heads, d_model=hsz, d_ff=d_ff,
                                                    pdrop=dropout, scale=scale, layers=layers,
                                                    rpr_k=rpr_k, d_k=d_k, activation=activation, layer_drop=layer_drop,
-                                                   ra_type=ra_type, scope=scope)
+                                                   ra_type=ra_type, transformer_type=transformer_type, scope=scope)
 
 
     def _identity(self, x):

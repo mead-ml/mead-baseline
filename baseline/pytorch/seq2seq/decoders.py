@@ -327,12 +327,13 @@ class RNNDecoderWithAttn(RNNDecoder):
 class TransformerDecoderWrapper(torch.nn.Module):
 
     def __init__(self, tgt_embeddings, dropout=0.5, layers=1, hsz=None, num_heads=4,
-                 activation='relu',
+                 activation='gelu',
                  rpr_k=None,
                  layer_norm_eps=1e-6,
                  layer_drop=0.0, scale=True, rpr_value_on=True, ra_type=None,
                  d_k=None,
                  d_ff=None,
+                 transformer_type=None,
                  **kwargs):
         super().__init__()
         self.tgt_embeddings = tgt_embeddings
@@ -347,7 +348,7 @@ class TransformerDecoderWrapper(torch.nn.Module):
                                                            pdrop=dropout, scale=scale, layers=layers,
                                                            rpr_k=rpr_k, d_k=d_k, activation_type=activation,
                                                            layer_drop=layer_drop, layer_norm_eps=layer_norm_eps,
-                                                           rpr_value_on=rpr_value_on, ra_type=ra_type)
+                                                           rpr_value_on=rpr_value_on, ra_type=ra_type, transformer_type=transformer_type)
 
         self.proj_to_hsz = self._identity
         self.proj_to_dsz = self._identity
