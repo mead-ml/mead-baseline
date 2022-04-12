@@ -401,6 +401,14 @@ class JointAbstractEncoderTaggerModel(AbstractEncoderTaggerModel):
         transduced = self.proj_layer_tagging(self.encoder(embedded))
         return transduced
 
+    def cls_pooling(self, embedded: TensorDef):
+        B = embedded.shape[0]
+        embedded = embedded[:, 0, :].reshape(B, -1)
+        return embedded
+
+    def init_pool(self, **kwargs):
+        return self.cls_pooling
+
     def create_layers(self, embeddings: Dict[str, TensorDef], **kwargs):
         """This class overrides this method to produce the outline of steps for a transduction tagger and classifier
 
@@ -410,6 +418,7 @@ class JointAbstractEncoderTaggerModel(AbstractEncoderTaggerModel):
         """
         self.embeddings = self.init_embed(embeddings, **kwargs)
         self.encoder = self.init_encode(self.embeddings.output_dim, **kwargs)
+        self.pool_model = self.init_pool(**kwargs)
         self.proj_layer_tagging = self.init_proj_tagging(**kwargs)
         self.proj_layer_classification = self.init_proj_classification(self.embeddings.output_dim, **kwargs)
         self.decoder = self.init_decode(**kwargs)
@@ -422,8 +431,7 @@ class JointAbstractEncoderTaggerModel(AbstractEncoderTaggerModel):
         """
         embed = self.embeddings(inputs)
         transduced = self.transduce_post_embed(inputs, embed)
-        B = embed.shape[0]
-        embed = embed[:, 0, :].reshape(B, -1)
+        embed = self.pool_model(embed)
         path = self.decode(transduced, inputs.get("lengths"))
         class_output = self.proj_layer_classification(embed)
         return class_output, path
@@ -463,8 +471,7 @@ class JointAbstractEncoderTaggerModel(AbstractEncoderTaggerModel):
         tagging_loss = self.decoder.neg_log_loss(unaries, tags, lengths)
 
         #classification loss
-        B = embed.shape[0]
-        embed = embed[:,0,:].reshape(B,-1)
+        embed = self.pool_model(embed)
         class_out = self.proj_layer_classification(embed)
         class_loss = nn.NLLLoss()(class_out, class_labels)
 
