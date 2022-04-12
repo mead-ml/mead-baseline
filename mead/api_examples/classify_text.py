@@ -64,7 +64,7 @@ def main():
                 if args.no_text_output:
                     text_output = ''
                 else:
-                    text_output = ' '.join(text) + {args.output_delim}
+                    text_output = ' '.join(text) + args.output_delim
                 s = f"{text_output}{guess_output}"
                 if args.label_first:
                     s = f"{next(label_iter)}{args.output_delim}{s}"
