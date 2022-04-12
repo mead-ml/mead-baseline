@@ -473,8 +473,7 @@ class JointAbstractEncoderTaggerModel(AbstractEncoderTaggerModel):
         #classification loss
         embed = self.pool_model(embed)
         class_out = self.proj_layer_classification(embed)
-        class_loss = nn.NLLLoss()(class_out, class_labels)
-
+        class_loss = nn.functional.nll_loss(class_out, class_labels)
         return self.alpha*class_loss + (1-self.alpha)*tagging_loss
 
     def make_input(self, batch_dict: Dict[str, TensorDef], perm: bool = False, numpy_to_tensor: bool = False) -> Dict[str, TensorDef]:
