@@ -104,6 +104,7 @@ def main():
                 'bleu = baseline.bleu:main',
                 'conlleval = baseline.conlleval:main',
                 'classify_text = mead.api_examples.classify_text:main',
+                'classify_paired_text = mead.api_examples.classify_paired_text:main',
                 'tag_text = mead.api_examples.tag_text:main',
                 'ed_text = mead.api_examples.ed_text:main',
                 'deps_text = mead.api_examples.deps_text:main',
