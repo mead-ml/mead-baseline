@@ -451,7 +451,7 @@ class JointAbstractEncoderTaggerModel(AbstractEncoderTaggerModel):
         numpy_to_tensor = bool(kwargs.get('numpy_to_tensor', True))
         inputs, perm_idx = self.make_input(batch_dict, perm=True, numpy_to_tensor=numpy_to_tensor)
         class_output, tag_outputs = self(inputs)
-        return class_output, unsort_batch(tag_outputs, perm_idx)
+        return class_output.cpu().detach().numpy(), unsort_batch(tag_outputs, perm_idx).cpu().detach().numpy()
 
 
     def compute_loss(self, inputs):

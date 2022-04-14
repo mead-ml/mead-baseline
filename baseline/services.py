@@ -641,8 +641,8 @@ class JointTaggerService(TaggerService):
             examples = unfeaturized_examples
 
         class_output_logits, outcomes = self.model.predict(examples)
-        _, class_max_indexes= class_output_logits.max(1)
-        class_label_list = [self.class_label_vocab[class_max_index.item()] for class_max_index in class_max_indexes]
+        class_max_indexes = class_output_logits.argmax(1)
+        class_label_list = [self.class_label_vocab[class_max_index] for class_max_index in class_max_indexes]
         return zip(class_label_list, self.format_output(outcomes, tokens_batch=tokens_batch, label_field=label_field, vectorized_examples=examples))
 
 class ONNXTaggerService(TaggerService):
