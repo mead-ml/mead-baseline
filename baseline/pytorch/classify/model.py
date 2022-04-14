@@ -118,7 +118,8 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
         examples, perm_idx = self.make_input(batch_dict, perm=True, numpy_to_tensor=numpy_to_tensor)
         with torch.no_grad():
             probs = self(examples).exp()
-            probs = unsort_batch(probs, perm_idx)
+            if perm_idx is not None:
+                probs = unsort_batch(probs, perm_idx)
         return probs
 
     def predict(self, batch_dict: Dict[str, TensorDef], raw: bool = False, dense: bool = False, **kwargs):
