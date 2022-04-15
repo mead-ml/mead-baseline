@@ -160,6 +160,8 @@ def train():
     parser.add_argument("--tb", help="Turn on tensorboard?", type=str2bool, default=False)
     parser.add_argument("--convert_only", help="Should we just convert this file to NPZ and exit?", type=str2bool, default=False)
     parser.add_argument("--extra_tokens", help="What extra tokens should we use", nargs="+", default=["[CLS]", "[MASK]"])
+    parser.add_argument("--transformer_type", help="What TransformerEncoder type to use")
+
     args = parser.parse_args()
 
     if args.tpu_ep is not None and args.file_type != 'tfrecord':
@@ -275,7 +277,8 @@ def train():
            "d_k": args.d_k,
            "rpr_k": rpr_k,
            "rpr_value_on": args.rpr_value_on,
-           "ra_type": args.ra_type}
+           "ra_type": args.ra_type,
+           "transformer_type": args.transformer_type}
     model = TiedEmbeddingsSeq2SeqModel(embeddings, **hps)
 
     logger.info("Loaded model and loss")

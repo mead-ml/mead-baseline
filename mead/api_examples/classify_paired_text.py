@@ -2,11 +2,10 @@ import baseline as bl
 import argparse
 import os
 import json
-from eight_mile.utils import str2bool
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Classify text with a model')
+    parser = argparse.ArgumentParser(description='Classify paired text with a model')
     parser.add_argument('--model', help='The path to either the .zip file created by training or to the client bundle '
                                         'created by exporting', required=True, type=str)
     parser.add_argument('--text', help='The text to classify as a string, or a path to a file with each line as an example',
@@ -35,10 +34,13 @@ def main():
         texts = []
         with open(args.text, 'r') as f:
             for line in f:
-                text = line.strip().split()
+                text = line.strip().split('\t')
                 if args.label_first:
                     labels.append(text[0])
                     text = text[1:]
+                first = text[0].split()
+                second = text[1].split()
+                text = [first, second]
                 texts += [text]
 
     else:
@@ -53,8 +55,6 @@ def main():
         label_iter = iter(labels)
     for texts in batched:
         for text, output in zip(texts, m.predict(texts)):
-
-
             if args.scores:
                 guess_output = output
             else:
@@ -64,13 +64,13 @@ def main():
                 if args.no_text_output:
                     text_output = ''
                 else:
-                    text_output = ' '.join(text) + args.output_delim
-
+                    text = text[0] + [args.output_delim] + text[1]
+                    text_output = ' '.join(text) + {args.output_delim}
                 s = f"{text_output}{guess_output}"
                 if args.label_first:
                     s = f"{next(label_iter)}{args.output_delim}{s}"
             else:
-                text_output = ' '.join(text)
+                text_output = [' '.join(text[0]), ' '.join(text[1])]
                 if args.scores:
                     guess_output = {kv[0]: kv[1] for kv in guess_output}
                 json_output = {'prediction': guess_output}
@@ -80,6 +80,7 @@ def main():
                     json_output['label'] = next(label_iter)
                 s = json.dumps(json_output)
             print(s)
+
 
 if __name__ == '__main__':
     main()

@@ -79,8 +79,9 @@ class Service:
         """
         for vectorizer in self.vectorizers.values():
             vectorizer.reset()
-            for tokens in tokens_batch:
-                _ = vectorizer.count(tokens)
+            if not isinstance(vectorizer, baseline.vectorizers.HasPredefinedVocab):
+                for tokens in tokens_batch:
+                    _ = vectorizer.count(tokens)
 
     def vectorize(self, tokens_batch):
         """Turn the input into that batch dict for prediction.
@@ -90,17 +91,40 @@ class Service:
         :returns: dict[str] -> np.ndarray: The vectorized batch.
         """
         examples = defaultdict(list)
+        keys = self.vectorizers.keys()
         for i, tokens in enumerate(tokens_batch):
-            for k, vectorizer in self.vectorizers.items():
-                vec, length = vectorizer.run(tokens, self.vocabs[k])
-                examples[k].append(vec)
-                if length is not None:
-                    lengths_key = '{}_lengths'.format(k)
-                    examples[lengths_key].append(length)
+            if is_sequence(tokens[0]):
+                if len(tokens) != 2:
+                    raise Exception("We currently only accept dual inputs for multi-encoder")
+                keys = []
+                for k, vectorizer in self.vectorizers.items():
+                    vec0, length0 = vectorizer.run(tokens[0], self.vocabs[k])
+                    vec1, length1 = vectorizer.run(tokens[1], self.vocabs[k])
+                    # Its paired data
+                    key0 = f'{k}[0]'
+                    key1 = f'{k}[1]'
+                    keys.append(key0)
+                    keys.append(key1)
+                    examples[key0].append(vec0)
+                    examples[key1].append(vec1)
+                    if length0 is not None:
+                        lengths_key = f'{key0}_lengths'
+                        examples[lengths_key].append(length0)
+                    if length1 is not None:
+                        lengths_key = f'{key1}_lengths'
+                        examples[lengths_key].append(length1)
 
-        for k in self.vectorizers.keys():
+            else:
+                for k, vectorizer in self.vectorizers.items():
+                    vec, length = vectorizer.run(tokens, self.vocabs[k])
+                    examples[k].append(vec)
+                    if length is not None:
+                        lengths_key = f'{k}_lengths'
+                        examples[lengths_key].append(length)
+
+        for k in keys:
             examples[k] = np.stack(examples[k])
-            lengths_key = '{}_lengths'.format(k)
+            lengths_key = f'{k}_lengths'
             if lengths_key in examples:
                 examples[lengths_key] = np.stack(examples[lengths_key])
         return examples
@@ -1235,8 +1259,10 @@ class EncoderDecoderService(Service):
         tokens_batch = self.batch_input(tokens)
         for vectorizer in self.src_vectorizers.values():
             vectorizer.reset()
-            for tokens in tokens_batch:
-                _ = vectorizer.count(tokens)
+            if not isinstance(vectorizer, baseline.vectorizers.HasPredefinedVocab):
+                for tokens in tokens_batch:
+                    _ = vectorizer.count(tokens)
+
         examples = self.vectorize(tokens_batch)
 
         kwargs['beam'] = int(kwargs.get('beam', K))

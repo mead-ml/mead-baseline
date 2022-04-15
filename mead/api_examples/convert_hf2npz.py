@@ -9,7 +9,6 @@ from eight_mile.utils import read_config_stream
 
 from eight_mile.pytorch.embeddings import LookupTableEmbeddings, LearnedPositionalLookupTableEmbeddings
 from eight_mile.downloads import web_downloader
-# From https://github.com/huggingface/transformers/blob/master/src/transformers/modeling_bert.py
 
 """
 
@@ -82,7 +81,7 @@ MODEL_MAPS = {
 }
 
 
-def create_transformer_lm(config_url: str) -> Tuple[TransformerMaskedLanguageModel, int]:
+def create_transformer_lm(config_url: str, model_type: str) -> Tuple[TransformerMaskedLanguageModel, int]:
     config = read_config_stream(config_url)
     pdrop = config['attention_probs_dropout_prob']
     activation = config['hidden_act']
@@ -97,8 +96,17 @@ def create_transformer_lm(config_url: str) -> Tuple[TransformerMaskedLanguageMod
         raise Exception(f"Unexpected pad value {pad}")
     tt_vsz = config['type_vocab_size']
     vsz = config['vocab_size']
-    embeddings = {'x': LearnedPositionalLookupTableEmbeddings(vsz=vsz, dsz=d_model, mxlen=mxlen),
-                  'tt': LookupTableEmbeddings(vsz=tt_vsz, dsz=d_model)}
+
+    if model_type == "bert" or model_type == "roberta":
+        embeddings_type = "sum-layer-norm"
+        transformer_type = "post-layer-norm"
+    else:
+        raise Exception(f"We dont support model type {model_type}")
+
+    embeddings = {'x': LearnedPositionalLookupTableEmbeddings(vsz=vsz, dsz=d_model, mxlen=mxlen), 'tt': LookupTableEmbeddings(vsz=tt_vsz, dsz=d_model)}
+    if model_type == "bert":
+        embeddings['tt']: LookupTableEmbeddings(vsz=tt_vsz, dsz=d_model)
+
     model = TransformerMaskedLanguageModel.create(embeddings,
                                                   d_model=d_model, d_ff=d_ff, num_heads=num_heads,
                                                   tgt_key='x',
@@ -106,8 +114,8 @@ def create_transformer_lm(config_url: str) -> Tuple[TransformerMaskedLanguageMod
                                                   embeddings_dropout=pdrop,
                                                   dropout=pdrop,
                                                   activation=activation,
-                                                  layer_norms_after=True,
-                                                  embeddings_reduction='sum-layer-norm')
+                                                  transformer_type=transformer_type,
+                                                  embeddings_reduction=embeddings_type)
     return model, num_layers
 
 
@@ -137,7 +145,7 @@ def write_npz(output_file: str, model: TransformerMaskedLanguageModel):
 
 parser = argparse.ArgumentParser(description='Grab a HuggingFace BERT checkpoint down and convert it to a TLM NPZ file')
 parser.add_argument('--model', help='This is the key of a HuggingFace input model or path to model', default='bert-base-uncased')
-parser.add_argument('--model_type', choices=['bert', 'roberta'], default='Model flavor: bert (BERT, SBERT), roberta (RoBERTa, XLM-R)')
+parser.add_argument('--model_type', choices=['bert', 'roberta'], help='Model flavor: bert (BERT, SentenceBERT), roberta (RoBERTa, XLM-R, CamemBERT)')
 parser.add_argument('--target_dir', help='This is the target directory where we will put the checkpoints')
 parser.add_argument('--config_file_name', help='The name of the config file.  Only needed for local models', default='config.json')
 parser.add_argument('--checkpoint', help='The name of the checkpoint file. Only needed for local models', default='pytorch_model.bin')
@@ -157,7 +165,7 @@ else:
     checkpoint_disk_loc = os.path.join(args.target_dir, checkpoint_basename)
     output_file = args.model
 
-model, num_layers = create_transformer_lm(config_url)
+model, num_layers = create_transformer_lm(config_url, args.model_type)
 mapped_keys = convert_checkpoint(pt_checkpoint, num_layers, args.target_dir, checkpoint_disk_loc,
                                  nested_layer_map=MODEL_MAPS[args.model_type]['layers'],
                                  flat_map=MODEL_MAPS[args.model_type]['embed'], model_type=args.model_type)

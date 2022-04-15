@@ -217,6 +217,7 @@ class TransformerLanguageModel(AbstractGeneratorLanguageModel):
         windowed_ra = kwargs.get('windowed_ra', False)
         rpr_value_on = kwargs.get('rpr_value_on', True)
         ra_type = kwargs.get('ra_type')
+        transformer_type = kwargs.get('transformer_type')
         self.mask_pad = kwargs.get('mask_pad', False)
         return TransformerEncoderStack(num_heads, d_model=d_model, pdrop=pdrop, scale=scale,
                                        layers=layers, d_ff=d_ff, rpr_k=rpr_k, d_k=d_k,
@@ -225,7 +226,7 @@ class TransformerLanguageModel(AbstractGeneratorLanguageModel):
                                        layer_norm_eps=layer_norm_eps,
                                        layer_norms_after=layer_norms_after, windowed_ra=windowed_ra,
                                        rpr_value_on=rpr_value_on, ra_type=ra_type,
-                                       layer_drop=layer_drop)
+                                       layer_drop=layer_drop, transformer_type=transformer_type)
 
     def create_layers(self, embeddings, **kwargs):
         super().create_layers(embeddings, **kwargs)

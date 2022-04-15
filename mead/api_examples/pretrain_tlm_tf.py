@@ -177,6 +177,7 @@ def main():
     parser.add_argument("--tb", help="Turn on tensorboard?", type=str2bool, default=False)
     parser.add_argument("--convert_only", help="Should we just convert this file to NPZ and exit?", type=str2bool, default=False)
     parser.add_argument("--extra_tokens", help="What extra tokens should we use", nargs="+", default=["[CLS]", "[MASK]"])
+    parser.add_argument("--transformer_type", help="What TransformerEncoder type to use")
     parser.add_argument("--eps", help="Epsilon", default=1e-6, type=float)
     parser.add_argument("--beta2", help="Epsilon", default=0.98, type=float)
     args = parser.parse_args()
@@ -454,6 +455,7 @@ def create_model(args, embeddings):
                            rpr_value_on=args.rpr_value_on,
                            layer_drop=args.layer_drop,
                            ra_type=args.ra_type,
+                           transformer_type=args.transformer_type,
                            src_keys=['x'], tgt_key='x')
     return model
 
