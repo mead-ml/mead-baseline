@@ -309,7 +309,7 @@ class TaggerTrainerEagerTf(EpochReportingTrainer):
 
 
 class JointTaggerEvaluatorEagerTf:
-    """Performs evaluation on tagger output
+    """Performs evaluation on joint tagger and classifier output
     """
     def __init__(self, model, span_type, verbose):
         """Construct from an existing model

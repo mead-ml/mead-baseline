@@ -387,24 +387,8 @@ class AbstractEncoderTaggerModel(TaggerModelBase):
 
 
 class JointAbstractEncoderTaggerModel(TaggerModelBase):
-    """Class defining a typical flow for taggers.  Most taggers should extend this class
-
-    This class provides the model base for tagging by providing specific hooks for each phase.  There are
-    4 basic steps identified in this class:
-
-    1. embed
-    2. encode (transduction)
-    3. proj (projection to the final number of labels)
-    4. decode
-
-    There is an `init_* method for each of this phases, allowing you to
-    define and return a custom layer.
-
-    The actual forward method is defined as a combination of these 3 steps, which includes a
-    projection from the encoder output to the number of labels.
-
-    Decoding in taggers refers to the process of selecting the best path through the labels and is typically
-    implemented either as a constrained greedy decoder or as a CRF layer
+    """
+    This class provides the model base for joint tagger and classifier by providing specific hooks for each phase.
     """
     def __init__(self):
         super().__init__()
@@ -417,11 +401,11 @@ class JointAbstractEncoderTaggerModel(TaggerModelBase):
         self.proj_layer_classification = self.init_proj_classification(**kwargs)
         self.decoder = self.init_decode(**kwargs)
 
-    def call(self, inputs: Dict[str, TensorDef]) -> TensorDef:
-        """Take the input and produce the best path of labels out
+    def call(self, inputs: Dict[str, TensorDef]) -> Tuple[TensorDef, TensorDef]:
+        """Take the input and produce the distribution over class labels and produce the best path of labels out
 
         :param inputs: The feature indices for the input
-        :return: The most likely path through the output labels
+        :return: Distribution over class labels, The most likely path through the output labels
         """
         embed = self.embeddings(inputs)
         self.probs = self.transduce_post_embed(inputs, embed)
@@ -430,8 +414,8 @@ class JointAbstractEncoderTaggerModel(TaggerModelBase):
         class_output = self.proj_layer_classification(embed)
         return class_output, path
 
-    def predict(self, batch_dict: Dict[str, TensorDef]) -> TensorDef:
-        """Take in a batch of data, and predict the tags
+    def predict(self, batch_dict: Dict[str, TensorDef]) -> Tuple[TensorDef, TensorDef]:
+        """Take in a batch of data, and predict the tags, and the class labels
 
         :param batch_dict: A `Dict[str, tensor]` that is to be predicted
         :return: A batch-sized list of predictions
