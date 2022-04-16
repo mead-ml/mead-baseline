@@ -2370,8 +2370,8 @@ class PostLNTransformerEncoder(TransformerEncoderBase):
         :return: The output tensor
         """
         x, mask = inputs
-        x = self.self_attn((x, x, x, mask))
-        x = x + self.dropout(x, TRAIN_FLAG())
+        h = self.self_attn((x, x, x, mask))
+        x = x + self.dropout(h, TRAIN_FLAG())
         x = self.ln2(x)
         x = x + self.dropout(self.ffn(x), TRAIN_FLAG())
         x = self.ln1(x)
