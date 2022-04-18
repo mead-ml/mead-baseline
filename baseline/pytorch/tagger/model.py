@@ -176,7 +176,6 @@ class TaggerModelBase(nn.Module, TaggerModel):
         model.dropin_values = kwargs.get('dropin', {})
         model.labels = labels
         model.gpu = not bool(kwargs.get('nogpu', False))
-        model.alpha = kwargs.get('alpha', 0.5)
         model.create_layers(embeddings, **kwargs)
         return model
 
@@ -658,6 +657,7 @@ class JointPassThruTaggerModel(JointAbstractEncoderTaggerModel):
     """
     def __init__(self, *args, **kwargs):
         super().__init__(**kwargs)
+        self.alpha = kwargs.get('alpha', 0.5)
         #self.class_labels = kwargs.get('class_labels', {})
 
     def init_encode(self, input_dim: int, **kwargs) -> BaseLayer:
