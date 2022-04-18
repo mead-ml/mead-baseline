@@ -36,8 +36,8 @@ model:
 
 train:
   trainer_type: joint-trainer
-  batchsz: 4
-  epochs: 2
+  batchsz: 8
+  epochs: 50
   optim: adam
   eta: 1.0e-5
   patience: 15
