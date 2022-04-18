@@ -548,6 +548,82 @@ class CONLLSeqReader(SeqPredictReader):
         return examples
 
 
+@export
+@register_reader(task='tagger', name='joint')
+class CONLLJointSeqReader(CONLLSeqReader):
+
+    def __init__(self, vectorizers, trim=False, truncate=False, mxlen=-1, **kwargs):
+        super().__init__(vectorizers, trim, truncate, mxlen, **kwargs)
+        self.label2index = {"tags": self.label2index, "class_labels": {}}
+
+
+    def convert_to_tensors(self, texts, vocabs):
+        ts = []
+
+        for i, example_tokens in enumerate(texts):
+            example = {}
+            class_label = example_tokens.pop(0)["text"]
+            for k, vectorizer in self.vectorizers.items():
+                example[k], lengths = vectorizer.run(example_tokens, vocabs[k])
+                if lengths is not None:
+                    example['{}_lengths'.format(k)] = lengths
+
+            example['y'], lengths = self.label_vectorizer.run(example_tokens, self.label2index["tags"])
+            example['y_lengths'] = lengths
+            example['ids'] = i
+            example['class_label'] = self.label2index["class_labels"][class_label]
+            ts.append(example)
+
+        return ts
+
+    def build_vocab(self, files, **kwargs):
+
+        if _all_predefined_vocabs(self.vectorizers):
+            vocabs = {k: v.vocab for k, v in self.vectorizers.items()}
+            have_vocabs = True
+        else:
+            have_vocabs = False
+            vocabs = {k: Counter() for k in self.vectorizers.keys()}
+
+        pre_vocabs = None
+        if not have_vocabs:
+            vocab_file = kwargs.get('vocab_file')
+
+            if vocab_file:
+                _vocab_allowed(self.vectorizers)
+                pre_vocabs = _build_vocab_for_col(0, listify(vocab_file), self.vectorizers)
+
+        labels = Counter()
+        class_label_idx = len(self.label2index["class_labels"])
+
+        for file in files:
+            if file is None:
+                continue
+
+            examples = self.read_examples(file)
+            for example in examples:
+                #accessing class labels which are the first token text of the string
+                class_label = example.pop(0)[self.named_fields['0']]
+                if class_label not in self.label2index["class_labels"]:
+                    self.label2index["class_labels"][class_label] = class_label_idx
+                    class_label_idx += 1
+                labels.update(self.label_vectorizer.count(example))
+                if not have_vocabs:
+                    for k, vectorizer in self.vectorizers.items():
+                        vocab_example = vectorizer.count(example)
+                        vocabs[k].update(vocab_example)
+
+
+        if not have_vocabs:
+            vocabs = _filter_vocab(vocabs, kwargs.get('min_f', {}))
+        base_offset = len(self.label2index["tags"])
+        labels.pop(Offsets.VALUES[Offsets.PAD], None)
+        for i, k in enumerate(labels.keys()):
+            self.label2index["tags"][k] = i + base_offset
+        if not have_vocabs and pre_vocabs:
+            vocabs = pre_vocabs
+        return vocabs
+
 
 @export
 @register_reader(task='deps', name='default')

@@ -336,6 +336,194 @@ class AbstractEncoderTaggerModel(TaggerModelBase):
         return self.decoder.neg_log_loss(unaries, tags, lengths)
 
 
+class JointAbstractEncoderTaggerModel(AbstractEncoderTaggerModel):
+    def __init__(self):
+        """Constructor"""
+        super().__init__()
+
+    def init_proj_tagging(self, **kwargs) -> BaseLayer:
+        """Provide a projection from the encoder output to the number of tag labels
+
+        This projection typically will not include any activation, since its output is the logits that
+        the decoder is built on
+
+        :param kwargs:
+        :return: A projection from the encoder output size to the final number of labels
+        """
+        return Dense(self.encoder.output_dim, len(self.labels["tags"]))
+
+    def init_decode(self, **kwargs) -> BaseLayer:
+        """Define a decoder from the inputs
+
+        :param kwargs: See below
+        :keyword Arguments:
+        * *crf* (``bool``) Should we create a CRF as the decoder
+        * *constraint_mask* (``tensor``) A constraint mask to apply to the transitions
+        * *reduction* (``str``) How to reduce the loss, defaults to `batch`
+        :return: A decoder layer
+        """
+        use_crf = bool(kwargs.get('crf', False))
+        constraint_mask = kwargs.get('constraint_mask')
+        if constraint_mask is not None:
+            constraint_mask = constraint_mask.unsqueeze(0)
+
+        if use_crf:
+            decoder = CRF(len(self.labels["tags"]), constraint_mask=constraint_mask, batch_first=True)
+        else:
+            decoder = TaggerGreedyDecoder(
+                len(self.labels["tags"]),
+                constraint_mask=constraint_mask,
+                batch_first=True,
+                reduction=kwargs.get('reduction', 'batch')
+            )
+        return decoder
+
+    def init_proj_classification(self, input_dim: int, **kwargs) -> BaseLayer:
+        """Produce the final output layer in the model for classification
+
+        :param input_dim: The input hidden size
+        :param kwargs:
+        :return:
+        """
+        return WithDropout(Dense(input_dim, len(self.labels["class_labels"]), activation=kwargs.get('output_activation', 'log_softmax'),
+                                 unif=kwargs.get('output_unif', 0.0)), pdrop=kwargs.get('output_dropout', 0.0))
+
+
+    def transduce_post_embed(self, inputs: Dict[str, TensorDef], embedded: TensorDef ) -> TensorDef:
+        """This operation takes embedded input, encodes it and projects to logits
+
+        :param inputs: The feature indices to embed
+        :return: Transduced (post-encoding) output
+        """
+        lengths = inputs["lengths"]
+        embedded = (embedded, lengths)
+        transduced = self.proj_layer_tagging(self.encoder(embedded))
+        return transduced
+
+    def cls_pooling(self, embedded: TensorDef):
+        B = embedded.shape[0]
+        embedded = embedded[:, 0, :].reshape(B, -1)
+        return embedded
+
+    def init_pool(self, **kwargs):
+        return self.cls_pooling
+
+    def create_layers(self, embeddings: Dict[str, TensorDef], **kwargs):
+        """This class overrides this method to produce the outline of steps for a transduction tagger and classifier
+
+        :param embeddings: The input embeddings dict
+        :param kwargs:
+        :return:
+        """
+        self.embeddings = self.init_embed(embeddings, **kwargs)
+        self.encoder = self.init_encode(self.embeddings.output_dim, **kwargs)
+        self.pool_model = self.init_pool(**kwargs)
+        self.proj_layer_tagging = self.init_proj_tagging(**kwargs)
+        self.proj_layer_classification = self.init_proj_classification(self.embeddings.output_dim, **kwargs)
+        self.decoder = self.init_decode(**kwargs)
+
+    def forward(self, inputs: Dict[str, TensorDef]):
+        """Take the input and produce the distribution over class labels and  best path of tag labels out
+
+        :param inputs: The feature indices for the input
+        :return: Distribution over class labels, The most likely path through the output labels
+        """
+        embed = self.embeddings(inputs)
+        transduced = self.transduce_post_embed(inputs, embed)
+        embed = self.pool_model(embed)
+        path = self.decode(transduced, inputs.get("lengths"))
+        class_output = self.proj_layer_classification(embed)
+        return class_output, path
+
+    def predict(self, batch_dict: Dict[str, TensorDef], **kwargs) -> Tuple[TensorDef, TensorDef]:
+        """Take in a batch of data, and predict the tags, and the class labels
+
+        :param batch_dict: A batch of features that is to be predicted
+        :param kwargs: See Below
+
+        :Keyword Arguments:
+
+        * *numpy_to_tensor* (``bool``) Should we convert input from numpy to `torch.Tensor` Defaults to `True`
+        :return: A batch-sized tensor of predictions
+        """
+        self.eval()
+        numpy_to_tensor = bool(kwargs.get('numpy_to_tensor', True))
+        inputs, perm_idx = self.make_input(batch_dict, perm=True, numpy_to_tensor=numpy_to_tensor)
+        class_output, tag_outputs = self(inputs)
+        return unsort_batch(class_output, perm_idx).cpu().detach().numpy(), unsort_batch(tag_outputs, perm_idx).cpu().detach().numpy()
+
+
+    def compute_loss(self, inputs):
+        """Computes joint loss by combining tagging loss from decoder and classification loss
+
+        :param inputs: A batch of inputs
+        :return:
+        """
+        tags = inputs['y']
+        class_labels = inputs['class_label']
+
+        lengths = inputs['lengths']
+        embed = self.embeddings(inputs)
+
+        #tagging loss
+        unaries = self.transduce_post_embed(inputs, embed)
+        tagging_loss = self.decoder.neg_log_loss(unaries, tags, lengths)
+
+        #classification loss
+        embed = self.pool_model(embed)
+        class_out = self.proj_layer_classification(embed)
+        class_loss = nn.functional.nll_loss(class_out, class_labels)
+        return self.alpha*class_loss + (1-self.alpha)*tagging_loss
+
+    def make_input(self, batch_dict: Dict[str, TensorDef], perm: bool = False, numpy_to_tensor: bool = False) -> Dict[str, TensorDef]:
+        """Transform a `batch_dict` into format suitable for tagging
+
+        :param batch_dict: A dictionary containing all inputs to the embeddings for this model
+        :param perm: Should we sort data by length descending?
+        :param numpy_to_tensor: Do we need to convert the input from numpy to a torch.Tensor?
+        :return: A dictionary representation of this batch suitable for processing
+        """
+        example_dict = dict({})
+        lengths = batch_dict[self.lengths_key]
+        if numpy_to_tensor:
+            lengths = torch.from_numpy(lengths)
+
+        lengths, perm_idx = lengths.sort(0, descending=True)
+        if self.gpu:
+            lengths = lengths.cuda()
+
+        example_dict['lengths'] = lengths
+        for key in self.embeddings.keys():
+            example_dict[key] = self.input_tensor(key, batch_dict, perm_idx, numpy_to_tensor=numpy_to_tensor)
+        y = batch_dict.get('y')
+        if y is not None:
+            if numpy_to_tensor:
+                y = torch.from_numpy(y)
+            y = y[perm_idx]
+            if self.gpu:
+                y = y.cuda()
+            example_dict['y'] = y
+
+        ids = batch_dict.get('ids')
+        if ids is not None:
+            if numpy_to_tensor:
+                ids = torch.from_numpy(ids)
+            ids = ids[perm_idx]
+            if self.gpu:
+                ids = ids.cuda()
+            example_dict['ids'] = ids
+        class_labels = batch_dict.get('class_label')
+        if class_labels is not None:
+            if numpy_to_tensor:
+                class_labels = torch.from_numpy(class_labels)
+            class_labels = class_labels[perm_idx]
+            if self.gpu:
+                class_labels = class_labels.cuda()
+            example_dict['class_label'] = class_labels
+        if perm:
+            return example_dict, perm_idx
+        return example_dict
+
 @register_model(task='tagger', name='default')
 class RNNTaggerModel(AbstractEncoderTaggerModel):
     """RNN-based tagger implementation: this is the default tagger for mead-baseline
@@ -448,6 +636,29 @@ class PassThruTaggerModel(AbstractEncoderTaggerModel):
     """
     def __init__(self):
         super().__init__()
+
+    def init_encode(self, input_dim: int, **kwargs) -> BaseLayer:
+        """Identity layer encoder
+
+        :param input_dim: The input dims
+        :param kwargs: None
+        :return: An encoder
+        """
+        return WithoutLength(PassThru(input_dim))
+
+
+@register_model(task='tagger', name='pass-joint')
+class JointPassThruTaggerModel(JointAbstractEncoderTaggerModel):
+    """A Pass-thru implementation of the encoder
+
+    When we fine-tune our joint tagger and classifier from things like BERT embeddings, we might want to just pass through our
+    embedding result directly to the output decoder and classification.  This model provides a mechanism for this by providing
+    a simple identity layer
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(**kwargs)
+        self.alpha = kwargs.get('alpha', 0.5)
+        #self.class_labels = kwargs.get('class_labels', {})
 
     def init_encode(self, input_dim: int, **kwargs) -> BaseLayer:
         """Identity layer encoder

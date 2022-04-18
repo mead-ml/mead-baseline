@@ -609,6 +609,76 @@ class TaggerService(Service):
         return outputs
 
 
+@export
+class JointTaggerService(TaggerService):
+
+    def __init__(self, vocabs=None, vectorizers=None, model=None, preproc='client'):
+        super().__init__(vocabs, vectorizers, model, preproc)
+        if hasattr(self.model, 'return_labels'):
+            self.return_labels = self.model.return_labels
+        else:
+            self.return_labels = False  # keeping the default tagger behavior
+        joint_labels = self.get_labels(False)
+        self.class_label_vocab = revlut(joint_labels["class_labels"])
+        if not self.return_labels:
+            self.label_vocab = revlut(joint_labels["tags"])
+        self.rev_vocab = {k: revlut(v) for k, v in self.vocabs.items()}
+
+
+    def get_labels(self, tags_only=True):
+        if tags_only:
+            return self.model.get_labels()["tags"]
+        return self.model.get_labels()
+
+    @classmethod
+    def task_name(cls):
+        return 'tagger'
+
+    @classmethod
+    def load(cls, bundle, **kwargs):
+        backend = kwargs.get('backend', 'tf')
+        remote = kwargs.get('remote')
+        if backend == 'onnx' and remote is None:
+            return ONNXJointTaggerService.load(bundle, **kwargs)
+        return super().load(bundle, **kwargs)
+
+    def predict(self, tokens, **kwargs):
+        """
+        Takes in a batch of sentences, where each sentence is list of tokens. Predicts class label and list of tag labels
+        for each sentence, zips them in a tuple and returns them as an iterator.
+
+        This method is not aware of any input features other than words and characters (and lengths).  If you
+        wish to use other features and have a custom model that is aware of those, use `predict` directly.
+
+        :param tokens: (``list``) A list of tokens
+
+        """
+        preproc = kwargs.get('preproc', None)
+        if preproc is not None:
+            logger.warning("Warning: Passing `preproc` to `TaggerService.predict` is deprecated.")
+        export_mapping = kwargs.get('export_mapping', {})  # if empty dict argument was passed
+        if not export_mapping:
+            export_mapping = {'tokens': 'text'}
+        label_field = kwargs.get('label', 'label')
+        tokens_batch = self.batch_input(tokens)
+        self.prepare_vectorizers(tokens_batch)
+        # TODO: here we allow vectorizers even for preproc=server to get `word_lengths`.
+        # vectorizers should not be available when preproc=server.
+        examples = self.vectorize(tokens_batch)
+        if self.preproc == 'server':
+            unfeaturized_examples = {}
+            for exporter_field in export_mapping:
+                unfeaturized_examples[exporter_field] = np.array([" ".join([y[export_mapping[exporter_field]]
+                                                                   for y in x]) for x in tokens_batch])
+            unfeaturized_examples[self.model.lengths_key] = examples[self.model.lengths_key]  # remote model
+            examples = unfeaturized_examples
+
+        class_output_logits, outcomes = self.model.predict(examples)
+        class_max_indexes = class_output_logits.argmax(1)
+        class_label_list = [self.class_label_vocab[class_max_index] for class_max_index in class_max_indexes]
+        tag_label_list = self.format_output(outcomes, tokens_batch=tokens_batch, label_field=label_field, vectorized_examples=examples)
+        return zip(class_label_list, tag_label_list)
+
 class ONNXTaggerService(TaggerService):
 
     def __init__(self, vocabs=None, vectorizers=None, model=None, labels=None, lengths_key=None, **kwargs):
@@ -630,6 +700,103 @@ class ONNXTaggerService(TaggerService):
         examples = [self.vectorize([tokens]) for tokens in tokens_batch]
         outcomes_list = np.concatenate([self.model.run(None, example)[0] for example in examples], axis=0)
         return self.format_output(outcomes_list, tokens_batch, label_field=kwargs.get('label', 'label'), vectorized_examples=examples)
+
+    def format_output(self, *args, **kwargs):
+        """Because the ONNX service is hiding it's one at a time nature it is a List[Dict[str]] instead of a Dict[str, List]
+           So flip it so it can be processed by the normal format_output.
+        """
+        vectorized_examples = kwargs['vectorized_examples']
+        new_vec = defaultdict(list)
+        for key in vectorized_examples[0]:
+            for ve in vectorized_examples:
+                new_vec[key].append(ve[key][0])
+        kwargs['vectorized_examples'] = new_vec
+        return super().format_output(*args, **kwargs)
+
+    def vectorize(self, tokens_batch):
+        """Turn the input into that batch dict for prediction.
+
+        :param tokens_batch: `List[List[str]]`: The input text batch.
+
+        :returns: dict[str] -> np.ndarray: The vectorized batch.
+        """
+        examples = defaultdict(list)
+        if self.lengths_key is None and 'lengths' in self.input_names:
+            self.lengths_key = list(self.vectorizers.keys())[0]
+
+        for i, tokens in enumerate(tokens_batch):
+            for k, vectorizer in self.vectorizers.items():
+                vec, length = vectorizer.run(tokens, self.vocabs[k])
+                examples[k].append(vec)
+                if self.lengths_key == k and length:
+                    examples['lengths'].append(length)
+        for k in self.vectorizers.keys():
+            examples[k] = np.stack(examples[k])
+        if 'lengths' in examples:
+            examples['lengths'] = np.stack(examples['lengths'])
+        return examples
+
+    @classmethod
+    def load(cls, bundle, **kwargs):
+        """Load a model from a bundle.
+
+        This can be either a local model or a remote, exported model.
+
+        :returns a Service implementation
+        """
+        import onnxruntime as ort
+        if os.path.isdir(bundle):
+            directory = bundle
+        else:
+            directory = unzip_files(bundle)
+
+        model_basename = find_model_basename(directory)
+        model_name = f"{model_basename}.onnx"
+
+        vocabs = load_vocabs(directory)
+        vectorizers = load_vectorizers(directory)
+
+        # Currently nothing to do here
+        labels = read_json(model_basename + '.labels')
+
+        model = ort.InferenceSession(model_name)
+        return cls(vocabs, vectorizers, model, labels)
+
+
+class ONNXJointTaggerService(JointTaggerService):
+
+    def __init__(self, vocabs=None, vectorizers=None, model=None, labels=None, lengths_key=None, **kwargs):
+        self.labels = labels
+        self.lengths_key = lengths_key
+        super().__init__(vocabs, vectorizers, model)
+        self.input_names = set([x.name for x in model.get_inputs()])
+
+
+    def get_vocab(self, vocab_type='word'):
+        return self.vocabs.get(vocab_type)
+
+    def get_labels(self, tags_only=True):
+        if tags_only:
+            return self.labels["tags"]
+        return self.labels
+
+    def predict(self, tokens, **kwargs):
+        tokens_batch = self.batch_input(tokens)
+        self.prepare_vectorizers(tokens_batch)
+        # Process each example in the batch by itself to hide the one at a time nature
+        examples = [self.vectorize([tokens]) for tokens in tokens_batch]
+        class_outputs = []
+        tag_outputs = []
+        for example in examples:
+            class_output, tag_output = self.model.run(None, example)
+            tag_outputs.append(tag_output)
+            class_max_index = class_output.argmax()
+            class_label = self.class_label_vocab[class_max_index]
+            class_outputs.append(class_label)
+
+        outcomes_list = np.concatenate(tag_outputs, axis=0)
+        tag_labels = self.format_output(outcomes_list, tokens_batch, label_field=kwargs.get('label', 'label'), vectorized_examples=examples)
+        return zip(class_outputs, tag_labels)
 
     def format_output(self, *args, **kwargs):
         """Because the ONNX service is hiding it's one at a time nature it is a List[Dict[str]] instead of a Dict[str, List]

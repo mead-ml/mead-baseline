@@ -386,6 +386,149 @@ class AbstractEncoderTaggerModel(TaggerModelBase):
         return path
 
 
+class JointAbstractEncoderTaggerModel(TaggerModelBase):
+    """
+    This class provides the model base for joint tagger and classifier by providing specific hooks for each phase.
+    """
+    def __init__(self):
+        super().__init__()
+
+    def create_layers(self, embeddings: Dict[str, TensorDef], **kwargs):
+        self.embeddings = self.init_embed(embeddings, **kwargs)
+        self.encoder = self.init_encode(**kwargs)
+        self.pool_model = self.init_pool(**kwargs)
+        self.proj_layer_tagging = self.init_proj_tagging(**kwargs)
+        self.proj_layer_classification = self.init_proj_classification(**kwargs)
+        self.decoder = self.init_decode(**kwargs)
+
+    def call(self, inputs: Dict[str, TensorDef]) -> Tuple[TensorDef, TensorDef]:
+        """Take the input and produce the distribution over class labels and produce the best path of labels out
+
+        :param inputs: The feature indices for the input
+        :return: Distribution over class labels, The most likely path through the output labels
+        """
+        embed = self.embeddings(inputs)
+        self.probs = self.transduce_post_embed(inputs, embed)
+        embed = self.pool_model(embed)
+        path = self.decode(self.probs, inputs.get("lengths"))
+        class_output = self.proj_layer_classification(embed)
+        return class_output, path
+
+    def predict(self, batch_dict: Dict[str, TensorDef]) -> Tuple[TensorDef, TensorDef]:
+        """Take in a batch of data, and predict the tags, and the class labels
+
+        :param batch_dict: A `Dict[str, tensor]` that is to be predicted
+        :return: A batch-sized list of predictions
+        """
+        batch_dict = self.make_input(batch_dict)
+        class_pred, tag_pred = self(batch_dict)
+        return class_pred.numpy(), tag_pred.numpy()
+
+    def init_embed(self, embeddings: Dict[str, TensorDef], **kwargs) -> BaseLayer:
+        """This method creates the "embedding" layer of the inputs, with an optional reduction
+
+        :param embeddings: A dictionary of embeddings
+        :param kwargs: See below
+
+        :Keyword Arguments:
+        * *embeddings_reduction* (defaults to `concat`) An operator to perform on a stack of embeddings
+        * *embeddings_name* (``str``) Optional override to Keras default names
+        :return: The output of the embedding stack followed by its reduction.  This will typically be an output
+          with an additional dimension which is the hidden representation of the input
+        """
+        name = kwargs.get('embeddings_name')
+        reduction = kwargs.get('embeddings_reduction', kwargs.get('embed_reduction_type', 'concat'))
+        reduction = create_embeddings_reduction(embed_reduction_type=reduction, **kwargs)
+        embeddings_dropout = float(kwargs.get('embeddings_dropout', self.pdrop_value))
+        return EmbeddingsStack(embeddings, embeddings_dropout, reduction=reduction, name=name)
+
+    def cls_pooling(self, embedded: TensorDef):
+        B = embedded.shape[0]
+        embedded = tf.reshape(embedded[:,0,:], [B,-1])
+        return embedded
+
+    def init_pool(self, **kwargs):
+        return self.cls_pooling
+
+    def init_encode(self, **kwargs) -> BaseLayer:
+        """Provide a layer object that represents the `encode` phase of the model
+       :param kwargs:
+       :return: The encoder
+       """
+
+    def init_proj_classification(self, **kwargs) -> BaseLayer:
+        """Provide a final output layer for classification
+
+        This projection typically will not include any activation.
+
+        :param kwargs: See below
+
+        :keyword arguments:
+        * *proj_name* (``str``) Optional override to default Keras layer name
+        :return: A projection from the encoder output size to the final number of labels
+        """
+        name = kwargs.get('proj_name')
+        return tf.keras.layers.Dense(len(self.labels["class_labels"]), name=name)
+
+
+
+    def init_proj_tagging(self, **kwargs) -> BaseLayer:
+        """Provide a projection from the encoder output to the number of labels
+
+        This projection typically will not include any activation, since its output is the logits that
+        the decoder is built on
+
+        :param kwargs: See below
+
+        :keyword arguments:
+        * *proj_name* (``str``) Optional override to default Keras layer name
+        :return: A projection from the encoder output size to the final number of labels
+        """
+        name = kwargs.get('proj_name')
+        return tf.keras.layers.Dense(len(self.labels["tags"]), name=name)
+
+    def init_decode(self, **kwargs) -> BaseLayer:
+        """Provide a layer object that represents the `decode` phase of the model
+        This will typically produce a CRF layer, or a greedy decoder
+
+        :param kwargs: See below
+
+        :keyword arguments:
+        * *crf* (``bool``) Is it a CRF?
+        * *constraint_mask* (``bool``) Is there a CRF mask?
+        * *decode_name* (``str``) Optional TF graph name to use, defaults to Keras layer default
+        :return: Some decoder for the model
+        """
+        self.crf = bool(kwargs.get('crf', False))
+        self.constraint_mask = kwargs.get('constraint_mask')
+        name = kwargs.get('decode_name')
+        if self.crf:
+            return CRF(len(self.labels["tags"]), self.constraint_mask, name=name)
+        return TaggerGreedyDecoder(len(self.labels["tags"]), self.constraint_mask, name=name)
+
+    def transduce_post_embed(self, inputs: Dict[str, TensorDef], embedded: TensorDef) -> TensorDef:
+        """This operation takes embedded input, encodes it and projects it to logits
+
+        :return: Transduced (post-encoding) output
+        """
+        lengths = inputs["lengths"]
+        embedded = (embedded, lengths)
+        transduced = self.proj_layer_tagging(self.encoder(embedded))
+        return transduced
+
+    def decode(self, tensor: TensorDef, lengths: TensorDef) -> TensorDef:
+        """Take in the transduced (encoded) input and decode it
+
+        :param tensor: Transduced input
+        :param lengths: Valid lengths of the transduced input
+        :return: A best path through the output
+        """
+        path, self.path_scores = self.decoder((tensor, lengths))
+        return path
+
+
+
+
 @register_model(task='tagger', name='default')
 class RNNTaggerModel(AbstractEncoderTaggerModel):
     """RNN-based tagger implementation: this is the default tagger for mead-baseline
@@ -498,6 +641,27 @@ class PassThruTaggerModel(AbstractEncoderTaggerModel):
 
     When we fine-tune our taggers from things like BERT embeddings, we might want to just pass through our
     embedding result directly to the output decoder.  This model provides a mechanism for this by providing
+    a simple identity layer
+    """
+    def __init__(self):
+        super().__init__()
+
+    def init_encode(self, **kwargs) -> BaseLayer:
+        """Identity layer encoder
+
+        :param kwargs: None
+        :return: An encoder
+        """
+        input_dim = self.embeddings.output_dim
+        return WithoutLength(PassThru(input_dim))
+
+
+@register_model(task='tagger', name='pass-joint')
+class JointPassThruTaggerModel(JointAbstractEncoderTaggerModel):
+    """A Pass-thru implementation of the encoder
+
+    When we fine-tune our taggers from things like BERT embeddings, we might want to just pass through our
+    embedding result directly to the output decoder and classification.  This model provides a mechanism for this by providing
     a simple identity layer
     """
     def __init__(self):
