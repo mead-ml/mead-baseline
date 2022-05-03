@@ -16,7 +16,7 @@ from eight_mile.pytorch.layers import (
     GatedMLPEncoderStack,
 )
 from eight_mile.pytorch.embeddings import LookupTableEmbeddings, LearnedPositionalLookupTableEmbeddingsWithBias
-
+import re
 # BERT HuggingFace Tokenizers checkpoints can be converted into MEAD Baseline Transformer checkpoints
 # With a simple name change
 BERT_HF_LAYER_MAP = {
@@ -93,6 +93,8 @@ BERT_HF_EMBED_MAP = {
     'bert.embeddings.LayerNorm.weight': 'embeddings.reduction.ln.weight',
 }
 
+
+
 ROBERTA_HF_LAYER_MAP = {
     ## FFN weights
     'roberta.encoder.layer.{}.intermediate.dense.weight': 'generator.encoders.{}.ffn.0.layer.weight',
@@ -154,6 +156,25 @@ ROBERTA_HF_EMBED_MAP = {
     'roberta.embeddings.LayerNorm.weight': 'embeddings.reduction.ln.weight',
 }
 
+GPT2_HF_EMBED_MAP = {
+    ## Embedding weights
+    'gpt2.wte.weight': 'embeddings.embeddings.0.embeddings.weight',
+    'gpt2.wpe.weight': 'embeddings.embeddings.0.pos_embeddings.weight',
+}
+
+GPT2_HF_LAYER_MAP = {
+    ## FFN weights
+    'gpt2.h.{}.ln_1.weight': 'generator.encoders.{}.ln2.weight',
+    'gpt2.h.{}.ln_1.bias':  'generator.encoders.{}.ln2.bias',
+    'gpt2.h.{}.ln_2.weight': 'generator.encoders.{}.ln1.weight',
+    'gpt2.h.{}.ln_2.bias': 'generator.encoders.{}.ln1.bias',
+    'gpt2.h.{}.mlp.c_fc.weight': 'generator.encoders.{}.ffn.0.layer.weight',
+    'gpt2.h.{}.mlp.c_fc.bias': 'generator.encoders.{}.ffn.0.layer.bias',
+    'gpt2.h.{}.mlp.c_proj.weight': 'generator.encoders.{}.ffn.3.layer.weight',
+    'gpt2.h.{}.mlp.c_proj.bias': 'generator.encoders.{}.ffn.3.layer.bias',
+    'gpt2.ln_f.weight': 'generator.ln.weight',
+    'gpt2.ln_f.bias': 'generator.ln.bias',
+}
 
 def convert_transformers_keys(num_layers: int, d: Dict, nested_layer_map: Dict = BERT_HF_LAYER_MAP, flat_map: Dict = BERT_HF_EMBED_MAP) -> Dict:
     m = {}
@@ -163,6 +184,58 @@ def convert_transformers_keys(num_layers: int, d: Dict, nested_layer_map: Dict =
                 m[v.format(i)] = d[k.format(i)]
             except:
                 print(f"Bad key. Skipping {k.format(i)}")
+    for k, v in flat_map.items():
+        try:
+            m[v] = d[k]
+        except:
+            print(f"Bad key. Skipping {k}")
+
+    return m
+
+
+def convert_transformers_keys_gpt2(num_layers: int, d: Dict, nested_layer_map: Dict = GPT2_HF_LAYER_MAP, flat_map: Dict = GPT2_HF_EMBED_MAP) -> Dict:
+    m = {}
+    for field_name in d:
+        if 'mlp.c_fc.weight' in field_name:
+            d[field_name] = d[field_name].T
+        if 'mlp.c_proj.weight' in field_name:
+            d[field_name] = d[field_name].T
+
+
+    for i in range(num_layers):
+        for k, v in nested_layer_map.items():
+            try:
+                m[v.format(i)] = d[k.format(i)]
+            except Exception as e:
+                print(f"Bad key. Skipping {k.format(i)}")
+
+
+
+    for field_name in d:
+
+        if 'attn' not in field_name:
+            continue
+        layer_number = re.search('\.(\d+)\.',field_name)
+        if not layer_number:
+            continue
+        layer_number = layer_number.group(1)
+        new_field_name = 'generator.encoders.{}.self_attn'.format(layer_number)
+        if 'attn.c_attn.weight' in field_name:
+            q, k, v = torch.chunk(d[field_name].T, 3, dim=0)
+            m[f'{new_field_name}.w_Q.layer.weight'] = q
+            m[f'{new_field_name}.w_K.layer.weight'] = k
+            m[f'{new_field_name}.w_V.layer.weight'] = v
+        elif 'attn.c_proj.weight' in field_name:
+            m[f'{new_field_name}.w_O.layer.weight'] = d[field_name].T
+        elif 'attn.c_attn.bias' in field_name:
+            q, k, v = torch.chunk(d[field_name], 3, dim=0)
+            m[f'{new_field_name}.w_Q.layer.bias'] = q
+            m[f'{new_field_name}.w_K.layer.bias'] = k
+            m[f'{new_field_name}.w_V.layer.bias'] = v
+        elif 'attn.c_proj.bias' in field_name:
+            m[f'{new_field_name}.w_O.layer.bias'] = d[field_name].T
+
+
     for k, v in flat_map.items():
         try:
             m[v] = d[k]

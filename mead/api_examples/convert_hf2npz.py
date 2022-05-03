@@ -4,7 +4,7 @@ import torch
 from typing import Tuple, Dict
 from eight_mile.pytorch.layers import EmbeddingsStack
 from eight_mile.pytorch.serialize import *
-from baseline.pytorch.lm import TransformerMaskedLanguageModel
+from baseline.pytorch.lm import TransformerMaskedLanguageModel, TransformerLanguageModel
 from eight_mile.utils import read_config_stream
 
 from eight_mile.pytorch.embeddings import LookupTableEmbeddings, LearnedPositionalLookupTableEmbeddings
@@ -77,7 +77,9 @@ BERT_PRETRAINED_MODEL_ARCHIVE_MAP = {
 
 MODEL_MAPS = {
     'roberta': {'layers': ROBERTA_HF_LAYER_MAP, 'embed': ROBERTA_HF_EMBED_MAP},
-    'bert': {'layers': BERT_HF_LAYER_MAP, 'embed': BERT_HF_EMBED_MAP}
+    'bert': {'layers': BERT_HF_LAYER_MAP, 'embed': BERT_HF_EMBED_MAP},
+    'gpt2': {'layers': GPT2_HF_LAYER_MAP, 'embed': GPT2_HF_EMBED_MAP}
+
 }
 
 
@@ -119,6 +121,40 @@ def create_transformer_lm(config_url: str, model_type: str) -> Tuple[Transformer
     return model, num_layers
 
 
+def create_transformer_lm_gpt2(config_url: str, model_type: str) -> Tuple[TransformerMaskedLanguageModel, int]:
+    config = read_config_stream(config_url)
+    pdrop = config['attn_pdrop']
+    activation = 'gelu'
+    d_model = config['n_embd']
+    d_ff = 4 * d_model
+    layer_norm_eps = float(config['layer_norm_epsilon'])
+    mxlen = config['n_ctx']
+    num_heads = config['n_head']
+    num_layers = config['n_layer']
+    pad = 0
+    if pad != 0 and pad != 1:
+        raise Exception(f"Unexpected pad value {pad}")
+    vsz = config['vocab_size']
+    embeddings_type = "sum"
+    transformer_type = "pre-layer-norm"
+
+    embeddings = {'x': LearnedPositionalLookupTableEmbeddings(vsz=vsz, dsz=d_model, mxlen=mxlen)}
+
+    model = TransformerLanguageModel.create(embeddings,
+                                                  d_model=d_model, d_ff=d_ff, num_heads=num_heads,
+                                                  tgt_key='x',
+                                                  num_layers=num_layers,
+                                                  embeddings_dropout=pdrop,
+                                                  dropout=pdrop,
+                                                  activation=activation,
+                                                  transformer_type=transformer_type,
+                                                  embeddings_reduction=embeddings_type, layer_norms_after=False)
+
+    return model, num_layers
+
+
+
+
 def convert_checkpoint(bert_checkpoint: str, num_layers: int, target_dir: str, checkpoint_disk_loc: str,
                        nested_layer_map, flat_map, model_type) -> Dict:
 
@@ -135,8 +171,11 @@ def convert_checkpoint(bert_checkpoint: str, num_layers: int, target_dir: str, c
             if not k.startswith(model_type):
                 state_dict[f'{model_type}.{k}'] = v
                 del state_dict[k]
-
-    mapped_keys = convert_transformers_keys(num_layers, state_dict, nested_layer_map=nested_layer_map, flat_map=flat_map)
+    if model_type == 'gpt2':
+        mapped_keys = convert_transformers_keys_gpt2(num_layers, state_dict, nested_layer_map=nested_layer_map, flat_map=flat_map)
+    else:
+        mapped_keys = convert_transformers_keys(num_layers, state_dict, nested_layer_map=nested_layer_map,
+                                                     flat_map=flat_map)
     return mapped_keys
 
 def write_npz(output_file: str, model: TransformerMaskedLanguageModel):
@@ -145,7 +184,7 @@ def write_npz(output_file: str, model: TransformerMaskedLanguageModel):
 
 parser = argparse.ArgumentParser(description='Grab a HuggingFace BERT checkpoint down and convert it to a TLM NPZ file')
 parser.add_argument('--model', help='This is the key of a HuggingFace input model or path to model', default='bert-base-uncased')
-parser.add_argument('--model_type', choices=['bert', 'roberta'], help='Model flavor: bert (BERT, SentenceBERT), roberta (RoBERTa, XLM-R, CamemBERT)')
+parser.add_argument('--model_type', choices=['bert', 'roberta', 'gpt2'], help='Model flavor: bert (BERT, SentenceBERT), roberta (RoBERTa, XLM-R, CamemBERT)')
 parser.add_argument('--target_dir', help='This is the target directory where we will put the checkpoints')
 parser.add_argument('--config_file_name', help='The name of the config file.  Only needed for local models', default='config.json')
 parser.add_argument('--checkpoint', help='The name of the checkpoint file. Only needed for local models', default='pytorch_model.bin')
@@ -164,12 +203,15 @@ else:
     checkpoint_basename = os.path.basename(pt_checkpoint)
     checkpoint_disk_loc = os.path.join(args.target_dir, checkpoint_basename)
     output_file = args.model
-
-model, num_layers = create_transformer_lm(config_url, args.model_type)
+if args.model_type == 'gpt2':
+    model, num_layers = create_transformer_lm_gpt2(config_url, args.model_type)
+else:
+    model, num_layers = create_transformer_lm(config_url, args.model_type)
 mapped_keys = convert_checkpoint(pt_checkpoint, num_layers, args.target_dir, checkpoint_disk_loc,
                                  nested_layer_map=MODEL_MAPS[args.model_type]['layers'],
                                  flat_map=MODEL_MAPS[args.model_type]['embed'], model_type=args.model_type)
 unknown_keys = model.load_state_dict(mapped_keys, strict=False)
+
 for k in unknown_keys.missing_keys:
     if k not in ['output_layer.weight', 'output_layer.bias']:
         print(f'Warning: missing key: {k}')
