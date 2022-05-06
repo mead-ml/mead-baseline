@@ -1524,10 +1524,17 @@ class GPT2Vectorizer1D(AbstractVectorizer, HasSubwordTokens):
         )
 
         self.mxlen = kwargs.get('mxlen', -1)
-        Offsets.INDICES['PAD'] = self.vocab['<pad>']
-        Offsets.INDICES['GO'] = self.vocab['<s>']
-        Offsets.INDICES['EOS'] = self.vocab['</s>']
-        Offsets.INDICES['UNK'] = self.vocab['<unk>']
+        if '<pad>' in self.vocab:
+            Offsets.INDICES['PAD'] = self.vocab['<pad>']
+        if '<s>' in self.vocab:
+            Offsets.INDICES['GO'] = self.vocab['<s>']
+        if '<|endoftext|>' in self.vocab:
+            Offsets.INDICES['EOS'] = self.vocab['<|endoftext|>']
+        if '</s>' in self.vocab:
+            Offsets.INDICES['EOS'] = self.vocab['</s>']
+
+        if '<unk>' in self.vocab:
+            Offsets.INDICES['UNK'] = self.vocab['<unk>']
 
     @property
     def vocab(self):

@@ -9,17 +9,37 @@ import baseline
 from eight_mile.pytorch.serialize import tlm_load_state_dict, load_tlm_npz
 from baseline.pytorch.lm import TransformerLanguageModel
 from eight_mile.utils import str2bool, read_json, Offsets, revlut
-from baseline.vectorizers import Token1DVectorizer, BPEVectorizer1D
+from baseline.vectorizers import Token1DVectorizer, BPEVectorizer1D, WordpieceVectorizer1D, GPT2Vectorizer1D
 from baseline.pytorch.embeddings import *
 from eight_mile.pytorch.layers import find_latest_checkpoint
 logger = logging.getLogger(__file__)
 
 
+def get_subword_vec1d(type):
+    if type == 'bpe':
+        return BPEVectorizer1D
+    elif type == 'wordpiece':
+        return WordpieceVectorizer1D
+    elif type == "gpt2":
+        return GPT2Vectorizer1D
+    else:
+        from baseline.vectorizers import SentencePieceVectorizer1D
+        return SentencePieceVectorizer1D
+
 def decode_sentence(model, vectorizer, query, word2index, index2word, device, end_token='<EOS>', sample=True, sample_temperature=1.0):
-    vec, length = vectorizer.run(query, word2index)
-    bpe = [index2word[v] for v in vec if v != Offsets.PAD]
-    logger.info('[BPE] ' + ' '.join(bpe))
-    toks = torch.from_numpy(vec).to(device=device)
+    #vec, length = vectorizer.run(query, word2index)
+    #vec = vec[:length]
+    #bpe = [index2word[v] for v in vec if v != Offsets.PAD]
+    #logger.info('[BPE] ' + ' '.join(bpe))
+    from tokenizers import Tokenizer
+    tok = Tokenizer.from_file("/data/hf-models/gpt2/tokenizer.json")
+    toks = tok.encode(' '.join(query))
+
+    raw_toks = torch.tensor(toks.ids, device=device)
+    length = len(raw_toks)
+    toks = torch.zeros(128, dtype=torch.long, device=device)
+    toks[:length] = raw_toks
+    #toks = torch.from_numpy(vec).to(device=device)
 
     with torch.no_grad():
 
@@ -44,7 +64,8 @@ def decode_sentence(model, vectorizer, query, word2index, index2word, device, en
         return words[:-1]
 
 
-def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, rpr_value_on, d_k, checkpoint_name, activation):
+def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, rpr_value_on, d_k, checkpoint_name, activation,
+                 transformer_type):
     rpr_k = listify(rpr_k)
 
     if len(rpr_k) == 0 or rpr_k[0] < 1:
@@ -55,16 +76,19 @@ def create_model(embeddings, d_model, d_ff, num_heads, num_layers, rpr_k, rpr_va
     logger.info("Creating tied encoder decoder model")
     model = TransformerLanguageModel.create({'x': embeddings},
                                             hsz=d_model,
-                                            d_ff=d_ff,
+                                            #d_ff=d_ff,
                                             tie_weights=True,
                                             dropout=0,
                                             gpu=False,
                                             num_heads=num_heads,
                                             layers=num_layers,
                                             rpr_k=rpr_k,
+                                            layer_norm_eps=1e-5,
                                             rpr_value_on=rpr_value_on,
                                             d_k=d_k,
+                                            mask_pad=True,
                                             activation=activation,
+                                            transformer_type=transformer_type,
                                             src_keys=['x'], tgt_key='x')
     if checkpoint_name.endswith('npz'):
         load_tlm_npz(model, checkpoint_name)
@@ -89,11 +113,13 @@ def main():
     parser.add_argument("--num_heads", type=int, default=8, help="Number of heads")
     parser.add_argument("--num_layers", type=int, default=8, help="Number of layers")
     parser.add_argument("--nctx", type=int, default=128, help="Max context length (for both encoder and decoder)")
+    parser.add_argument("--max_seq_len", type=int, default=512, help="Max sequence length for LP")
     parser.add_argument("--embed_type", type=str, default='default',
                         help="register label of the embeddings, so far support positional or learned-positional")
     parser.add_argument("--subword_model_file", type=str, required=True)
     parser.add_argument("--subword_vocab_file", type=str, required=True)
-    parser.add_argument('--go_token', default='<GO>')
+    parser.add_argument("--subword_type", type=str, default="bpe", choices=["gpt2", "bpe", "spm", "wordpiece"])
+    parser.add_argument('--go_token')
     parser.add_argument('--end_token', default='<EOU>')
     parser.add_argument("--activation", type=str, default='gelu')
     parser.add_argument('--rpr_k', help='Relative attention positional sizes pass 0 if you dont want relative attention',
@@ -102,6 +128,7 @@ def main():
     parser.add_argument("--device", type=str,
                         default="cuda" if torch.cuda.is_available() else "cpu",
                         help="Device (cuda or cpu)")
+    parser.add_argument("--transformer_type", help="What TransformerEncoder type to use")
     parser.add_argument('--temperature', help='Sample temperature during generation', default=1.0, type=float)
 
     args = parser.parse_args()
@@ -120,14 +147,18 @@ def main():
     else:
         checkpoint = args.checkpoint
 
-    vectorizer = BPEVectorizer1D(model_file=args.subword_model_file, vocab_file=args.subword_vocab_file, mxlen=args.nctx, emit_begin_tok=args.go_token)
+    SubwordType = get_subword_vec1d(args.subword_type)
+    vectorizer = SubwordType(model_file=args.subword_model_file, vocab_file=args.subword_vocab_file, mxlen=args.nctx, emit_begin_tok=args.go_token)
     vocab = vectorizer.vocab.copy()
     # If we are not using chars, then use 'x' for both input and output
-    preproc_data = baseline.embeddings.load_embeddings('x', dsz=args.d_model, counts=False, known_vocab=vocab, embed_type=args.embed_type, preserve_vocab_indices=True)
+    preproc_data = baseline.embeddings.load_embeddings('x', dsz=args.d_model, counts=False, known_vocab=vocab,
+                                                       embed_type=args.embed_type, preserve_vocab_indices=True,
+                                                       mxlen=args.max_seq_len)
     embeddings = preproc_data['embeddings']
     vocab = preproc_data['vocab']
     model = create_model(embeddings, d_model=args.d_model, d_ff=args.d_ff, num_heads=args.num_heads, num_layers=args.num_layers,
-                         rpr_k=args.rpr_k, rpr_value_on=args.rpr_value_on, d_k=args.d_k, checkpoint_name=checkpoint, activation=args.activation)
+                         rpr_k=args.rpr_k, rpr_value_on=args.rpr_value_on, d_k=args.d_k, checkpoint_name=checkpoint,
+                         activation=args.activation, transformer_type=args.transformer_type)
     model.to(args.device)
 
     index2word = revlut(vocab)
