@@ -27,19 +27,10 @@ def get_subword_vec1d(type):
         return SentencePieceVectorizer1D
 
 def decode_sentence(model, vectorizer, query, word2index, index2word, device, end_token='<EOS>', sample=True, sample_temperature=1.0):
-    #vec, length = vectorizer.run(query, word2index)
-    #vec = vec[:length]
-    #bpe = [index2word[v] for v in vec if v != Offsets.PAD]
-    #logger.info('[BPE] ' + ' '.join(bpe))
-    from tokenizers import Tokenizer
-    tok = Tokenizer.from_file("/data/hf-models/gpt2/tokenizer.json")
-    toks = tok.encode(' '.join(query))
-
-    raw_toks = torch.tensor(toks.ids, device=device)
-    length = len(raw_toks)
-    toks = torch.zeros(128, dtype=torch.long, device=device)
-    toks[:length] = raw_toks
-    #toks = torch.from_numpy(vec).to(device=device)
+    vec, length = vectorizer.run(query, word2index)
+    bpe = [index2word[v] for v in vec if v != Offsets.PAD]
+    logger.info('[BPE] ' + ' '.join(bpe))
+    toks = torch.from_numpy(vec).to(device=device)
 
     with torch.no_grad():
 
