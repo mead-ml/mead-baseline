@@ -179,7 +179,7 @@ def write_npz(output_file: str, model: TransformerMaskedLanguageModel):
 
 parser = argparse.ArgumentParser(description='Grab a HuggingFace BERT checkpoint down and convert it to a TLM NPZ file')
 parser.add_argument('--model', help='This is the key of a HuggingFace input model or path to model', default='bert-base-uncased')
-parser.add_argument('--model_type', choices=['bert', 'roberta', 'gpt2'], help='Model flavor: bert (BERT, SentenceBERT), roberta (RoBERTa, XLM-R, CamemBERT)')
+parser.add_argument('--model_type', choices=['bert', 'roberta', 'gpt2'], help='Model flavor: bert (BERT, SentenceBERT), roberta (RoBERTa, XLM-R, CamemBERT), gpt2')
 parser.add_argument('--target_dir', help='This is the target directory where we will put the checkpoints')
 parser.add_argument('--config_file_name', help='The name of the config file.  Only needed for local models', default='config.json')
 parser.add_argument('--checkpoint', help='The name of the checkpoint file. Only needed for local models', default='pytorch_model.bin')
