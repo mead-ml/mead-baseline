@@ -200,15 +200,12 @@ def convert_transformers_keys_gpt2(num_layers: int, d: Dict, nested_layer_map: D
         if 'mlp.c_proj.weight' in field_name:
             d[field_name] = d[field_name].T
 
-
     for i in range(num_layers):
         for k, v in nested_layer_map.items():
             try:
                 m[v.format(i)] = d[k.format(i)]
-            except Exception as e:
+            except:
                 print(f"Bad key. Skipping {k.format(i)}")
-
-
 
     for field_name in d:
         #required only for attention layers
@@ -233,7 +230,6 @@ def convert_transformers_keys_gpt2(num_layers: int, d: Dict, nested_layer_map: D
             m[f'{new_field_name}.w_V.layer.bias'] = v
         elif 'attn.c_proj.bias' in field_name:
             m[f'{new_field_name}.w_O.layer.bias'] = d[field_name].T
-
 
     for k, v in flat_map.items():
         try:
