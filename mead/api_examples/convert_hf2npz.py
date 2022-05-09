@@ -121,10 +121,10 @@ def create_transformer_lm(config_url: str, model_type: str) -> Tuple[Transformer
     return model, num_layers
 
 
-def create_transformer_lm_gpt2(config_url: str, model_type: str) -> Tuple[TransformerMaskedLanguageModel, int]:
+def create_transformer_lm_gpt2(config_url: str, model_type: str) -> Tuple[TransformerLanguageModel, int]:
     config = read_config_stream(config_url)
     pdrop = config['attn_pdrop']
-    activation = 'gelu'
+    activation = config['activation_function']
     d_model = config['n_embd']
     d_ff = 4 * d_model
     layer_norm_eps = float(config['layer_norm_epsilon'])
@@ -137,9 +137,7 @@ def create_transformer_lm_gpt2(config_url: str, model_type: str) -> Tuple[Transf
     vsz = config['vocab_size']
     embeddings_type = "sum"
     transformer_type = "pre-layer-norm"
-
     embeddings = {'x': LearnedPositionalLookupTableEmbeddings(vsz=vsz, dsz=d_model, mxlen=mxlen)}
-
     model = TransformerLanguageModel.create(embeddings,
                                                   d_model=d_model, d_ff=d_ff, num_heads=num_heads,
                                                   tgt_key='x',
@@ -148,8 +146,7 @@ def create_transformer_lm_gpt2(config_url: str, model_type: str) -> Tuple[Transf
                                                   dropout=pdrop,
                                                   activation=activation,
                                                   transformer_type=transformer_type,
-                                                  embeddings_reduction=embeddings_type, layer_norms_after=False)
-
+                                                  embeddings_reduction=embeddings_type, layer_norms_after=False, layer_norm_eps= layer_norm_eps, tie_weights=True)
     return model, num_layers
 
 
@@ -220,3 +217,47 @@ for k in unknown_keys.unexpected_keys:
 output_file = os.path.join(args.target_dir, output_file + '.npz')
 print(f'Writing output file {output_file}')
 write_npz(output_file, model)
+
+def compare_gpt2(model: torch.nn.Module, gpt_model_path: str,  query_list: str, max_to_complete: int =20):
+    model.eval()
+    model.to("cuda")
+    import re
+
+    #loading Hugging Face GPT2LM head
+    from transformers import GPT2Tokenizer, GPT2LMHeadModel
+    hf_tokenizer = GPT2Tokenizer.from_pretrained(gpt_model_path)
+    hf_model = GPT2LMHeadModel.from_pretrained(gpt_model_path)
+    hf_model.eval()
+
+    ## running both the models across query list
+    with torch.no_grad():
+        for query in query_list:
+            print(f"\t\tQuery: {query}")
+            outputs = []
+            for i in range(max_to_complete):
+                encoded_input = hf_tokenizer(query, return_tensors='pt')
+                ids = encoded_input['input_ids'][0].to('cuda')
+
+                #npz mead model output
+                response = model({'x': ids.unsqueeze(0)}, None)[0].squeeze(0)
+                response = response[len(ids) - 1]
+                response = response.argmax(-1).item()
+
+                # gpt model model output
+                output_hf_model = hf_model(**encoded_input)
+                hf_response = output_hf_model[0][0][-1].argmax(-1).item()
+                assert(hf_response == response), f'Prediction Mismatch Error:\
+                 Without any sampling Hugging Face model predicted the subword: {hf_tokenizer.decode([hf_response])}, where as\
+                 Mead Model predicted the subword: \
+                 {hf_tokenizer.decode([response])}, for the query text: {query}'
+                outputs.append(response)
+                query = f'{query}{hf_tokenizer.decode([response])}'
+            outputs = hf_tokenizer.decode(outputs)
+            outputs = re.sub('\s+',' ',outputs.strip())
+            print(f"\t\tGenerated Sequence:{outputs}\n\n")
+    return outputs
+
+if args.model_type == 'gpt2':
+     query_list = ['in the great green room there was a telephone and a red balloon and a picture of - the cow jumping over the moon.',\
+     'hello how are you', "Hello, I'm a language model,", "What can i do for you?", "Replace me by any text you'd like"]
+     compare_gpt2(model, args.model, query_list)

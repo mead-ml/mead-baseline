@@ -164,10 +164,10 @@ GPT2_HF_EMBED_MAP = {
 
 GPT2_HF_LAYER_MAP = {
     ## FFN weights
-    'gpt2.h.{}.ln_1.weight': 'generator.encoders.{}.ln2.weight',
-    'gpt2.h.{}.ln_1.bias':  'generator.encoders.{}.ln2.bias',
-    'gpt2.h.{}.ln_2.weight': 'generator.encoders.{}.ln1.weight',
-    'gpt2.h.{}.ln_2.bias': 'generator.encoders.{}.ln1.bias',
+    'gpt2.h.{}.ln_1.weight': 'generator.encoders.{}.ln1.weight',
+    'gpt2.h.{}.ln_1.bias':  'generator.encoders.{}.ln1.bias',
+    'gpt2.h.{}.ln_2.weight': 'generator.encoders.{}.ln2.weight',
+    'gpt2.h.{}.ln_2.bias': 'generator.encoders.{}.ln2.bias',
     'gpt2.h.{}.mlp.c_fc.weight': 'generator.encoders.{}.ffn.0.layer.weight',
     'gpt2.h.{}.mlp.c_fc.bias': 'generator.encoders.{}.ffn.0.layer.bias',
     'gpt2.h.{}.mlp.c_proj.weight': 'generator.encoders.{}.ffn.3.layer.weight',
