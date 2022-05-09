@@ -16,6 +16,7 @@ from eight_mile.pytorch.layers import (
     GatedMLPEncoderStack,
 )
 from eight_mile.pytorch.embeddings import LookupTableEmbeddings, LearnedPositionalLookupTableEmbeddingsWithBias
+
 import re
 # BERT HuggingFace Tokenizers checkpoints can be converted into MEAD Baseline Transformer checkpoints
 # With a simple name change
@@ -92,8 +93,6 @@ BERT_HF_EMBED_MAP = {
     'bert.embeddings.LayerNorm.bias': 'embeddings.reduction.ln.bias',
     'bert.embeddings.LayerNorm.weight': 'embeddings.reduction.ln.weight',
 }
-
-
 
 ROBERTA_HF_LAYER_MAP = {
     ## FFN weights
@@ -212,7 +211,7 @@ def convert_transformers_keys_gpt2(num_layers: int, d: Dict, nested_layer_map: D
 
 
     for field_name in d:
-
+        #required only for attention layers
         if 'attn' not in field_name:
             continue
         layer_number = re.search('\.(\d+)\.',field_name)

@@ -150,8 +150,6 @@ def create_transformer_lm_gpt2(config_url: str, model_type: str) -> Tuple[Transf
     return model, num_layers
 
 
-
-
 def convert_checkpoint(bert_checkpoint: str, num_layers: int, target_dir: str, checkpoint_disk_loc: str,
                        nested_layer_map, flat_map, model_type) -> Dict:
 
@@ -208,7 +206,6 @@ mapped_keys = convert_checkpoint(pt_checkpoint, num_layers, args.target_dir, che
                                  nested_layer_map=MODEL_MAPS[args.model_type]['layers'],
                                  flat_map=MODEL_MAPS[args.model_type]['embed'], model_type=args.model_type)
 unknown_keys = model.load_state_dict(mapped_keys, strict=False)
-
 for k in unknown_keys.missing_keys:
     if k not in ['output_layer.weight', 'output_layer.bias']:
         print(f'Warning: missing key: {k}')
@@ -217,7 +214,6 @@ for k in unknown_keys.unexpected_keys:
 output_file = os.path.join(args.target_dir, output_file + '.npz')
 print(f'Writing output file {output_file}')
 write_npz(output_file, model)
-
 def compare_gpt2(model: torch.nn.Module, gpt_model_path: str,  query_list: str, max_to_complete: int =20):
     model.eval()
     model.to("cuda")
