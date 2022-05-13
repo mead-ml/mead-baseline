@@ -1524,17 +1524,32 @@ class GPT2Vectorizer1D(AbstractVectorizer, HasSubwordTokens):
         )
 
         self.mxlen = kwargs.get('mxlen', -1)
+
         if '<pad>' in self.vocab:
             Offsets.INDICES['PAD'] = self.vocab['<pad>']
+        elif '<|endoftext|>' in self.vocab:
+            Offsets.INDICES['PAD'] = self.vocab['<|endoftext|>']
+
         if '<s>' in self.vocab:
             Offsets.INDICES['GO'] = self.vocab['<s>']
-        if '<|endoftext|>' in self.vocab:
-            Offsets.INDICES['EOS'] = self.vocab['<|endoftext|>']
+        elif '<|endoftext|>' in self.vocab:
+            Offsets.INDICES['GO'] = self.vocab['<|endoftext|>']
+
         if '</s>' in self.vocab:
             Offsets.INDICES['EOS'] = self.vocab['</s>']
+        if '<|endoftext|>' in self.vocab:
+            Offsets.INDICES['EOS'] = self.vocab['<|endoftext|>']
 
         if '<unk>' in self.vocab:
             Offsets.INDICES['UNK'] = self.vocab['<unk>']
+        elif '<|endoftext|>' in self.vocab:
+            Offsets.INDICES['UNK'] = self.vocab['<|endoftext|>']
+
+        #if '<|endoftext|>' is the only special token present in the vocab of the model
+        if '<unk>' in self.vocab and '</s>' not in self.vocab and \
+                '<s>' not in self.vocab and '<|endoftext|>' in self.vocab:
+            Offsets.INDICES['OFFSET'] = self.vocab['<|endoftext|>']+1
+            Offsets.VALUES = ['<|endoftext|>']*4
 
     @property
     def vocab(self):
@@ -1599,7 +1614,7 @@ class GPT2Vectorizer1D(AbstractVectorizer, HasSubwordTokens):
 
         if self.mxlen < 0:
             self.mxlen = self.max_seen
-        vec1d = np.ones(self.mxlen, dtype=np.long)
+        vec1d=pads(self.mxlen, dtype=np.long)
         for i, atom in enumerate(self._next_element(tokens, vocab)):
             if i == self.mxlen:
                 i -= len(self.emit_end_tok)
