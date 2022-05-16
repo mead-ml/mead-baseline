@@ -157,7 +157,8 @@ class TransformerLMEmbeddings(TensorFlowEmbeddings):
         # `learned-positional` with a token type feature
         # or `learned-positional-w-bias` if you dont care about the token type
         embed_type = kwargs.get('word_embed_type', 'learned-positional')
-        x_embedding = create_embeddings(vsz=self.vsz, dsz=self.d_model, embed_type=embed_type, name='x')
+        mxlen = kwargs.get('mxlen', 512)
+        x_embedding = create_embeddings(vsz=self.vsz, dsz=self.d_model, embed_type=embed_type, name='x', mxlen=mxlen)
 
         embeddings = {'x': x_embedding}
         # This is for BERT support when we are using 2 features
@@ -185,11 +186,12 @@ class TransformerLMEmbeddings(TensorFlowEmbeddings):
         windowed_ra = kwargs.get('windowed_ra', False)
         rpr_value_on = kwargs.get('rpr_value_on', True)
         ra_type = kwargs.get('ra_type')
+        transformer_type = kwargs.get("transformer_type", False)
         self.transformer = TransformerEncoderStack(num_heads, d_model=self.d_model, pdrop=pdrop, scale=True,
                                                    layers=num_layers, d_ff=d_ff, rpr_k=rpr_k, d_k=d_k,
                                                    activation=activation, layer_norms_after=layer_norms_after,
                                                    layer_norm_eps=layer_norm_eps, windowed_ra=windowed_ra,
-                                                   rpr_value_on=rpr_value_on, ra_type=ra_type)
+                                                   rpr_value_on=rpr_value_on, ra_type=ra_type, transformer_type=transformer_type)
         self.mlm = kwargs.get('mlm', True)
         self.finetune = kwargs.get('finetune', True)
 

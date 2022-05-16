@@ -1527,29 +1527,14 @@ class GPT2Vectorizer1D(AbstractVectorizer, HasSubwordTokens):
 
         if '<pad>' in self.vocab:
             Offsets.INDICES['PAD'] = self.vocab['<pad>']
-        elif '<|endoftext|>' in self.vocab:
-            Offsets.INDICES['PAD'] = self.vocab['<|endoftext|>']
-
         if '<s>' in self.vocab:
             Offsets.INDICES['GO'] = self.vocab['<s>']
-        elif '<|endoftext|>' in self.vocab:
-            Offsets.INDICES['GO'] = self.vocab['<|endoftext|>']
-
-        if '</s>' in self.vocab:
-            Offsets.INDICES['EOS'] = self.vocab['</s>']
         if '<|endoftext|>' in self.vocab:
             Offsets.INDICES['EOS'] = self.vocab['<|endoftext|>']
-
+        if '</s>' in self.vocab:
+            Offsets.INDICES['EOS'] = self.vocab['</s>']
         if '<unk>' in self.vocab:
             Offsets.INDICES['UNK'] = self.vocab['<unk>']
-        elif '<|endoftext|>' in self.vocab:
-            Offsets.INDICES['UNK'] = self.vocab['<|endoftext|>']
-
-        #if '<|endoftext|>' is the only special token present in the vocab of the model
-        if '<unk>' in self.vocab and '</s>' not in self.vocab and \
-                '<s>' not in self.vocab and '<|endoftext|>' in self.vocab:
-            Offsets.INDICES['OFFSET'] = self.vocab['<|endoftext|>']+1
-            Offsets.VALUES = ['<|endoftext|>']*4
 
     @property
     def vocab(self):
@@ -1627,7 +1612,28 @@ class GPT2Vectorizer1D(AbstractVectorizer, HasSubwordTokens):
         return vec1d, valid_length
 
     def get_dims(self):
-        return self.mxlen,
+        return self.mxlen
+
+
+@register_vectorizer(name='gpt2-single-special-token-bpe1d')
+class GPT2VectorizerSingleSpecialToken1D(GPT2Vectorizer1D):
+
+    def __init__(self, **kwargs):
+        """Loads a BPE tokenizer"""
+        super().__init__(**kwargs)
+
+        #if '<|endoftext|>' is the only special token in the vocab
+        if '<|endoftext|>' in self.vocab and '<unk>' not in self.vocab and '</s>' not in self.vocab and \
+                '<s>' not in self.vocab:
+            self._special_tokens = {"<|endoftext|>", "<|endoftext|>", "<|endoftext|>", "<|endoftext|>"}
+            Offsets.INDICES['PAD'] = self.vocab['<|endoftext|>']
+            Offsets.INDICES['GO'] = self.vocab['<|endoftext|>']
+            Offsets.INDICES['EOS'] = self.vocab['<|endoftext|>']
+            Offsets.INDICES['UNK'] = self.vocab['<|endoftext|>']
+            Offsets.INDICES['OFFSET'] = self.vocab['<|endoftext|>'] + 1
+            Offsets.VALUES = ['<|endoftext|>'] * 4
+
+
 
 
 @register_vectorizer(name='gpt2-dict1d')
