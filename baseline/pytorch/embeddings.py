@@ -161,7 +161,7 @@ class TransformerLMEmbeddings(PyTorchEmbeddings):
         rpr_value_on = kwargs.get('rpr_value_on', True)
         ra_type = kwargs.get('ra_type')
         is_mlp = kwargs.get("mlp", False)
-        transformer_type = kwargs.get("transformer_type", False)
+        transformer_type = kwargs.get("transformer_type", None)
         if is_mlp:
             self.transformer = GatedMLPEncoderStack(self.d_model, pdrop=pdrop, layers=num_layers,
                                                     nctx=kwargs.get('nctx', 256),

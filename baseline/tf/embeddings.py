@@ -186,7 +186,7 @@ class TransformerLMEmbeddings(TensorFlowEmbeddings):
         windowed_ra = kwargs.get('windowed_ra', False)
         rpr_value_on = kwargs.get('rpr_value_on', True)
         ra_type = kwargs.get('ra_type')
-        transformer_type = kwargs.get("transformer_type", False)
+        transformer_type = kwargs.get("transformer_type", None)
         self.transformer = TransformerEncoderStack(num_heads, d_model=self.d_model, pdrop=pdrop, scale=True,
                                                    layers=num_layers, d_ff=d_ff, rpr_k=rpr_k, d_k=d_k,
                                                    activation=activation, layer_norms_after=layer_norms_after,

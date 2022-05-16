@@ -1599,7 +1599,7 @@ class GPT2Vectorizer1D(AbstractVectorizer, HasSubwordTokens):
 
         if self.mxlen < 0:
             self.mxlen = self.max_seen
-        vec1d=pads(self.mxlen, dtype=np.long)
+        vec1d = pads(self.mxlen, dtype=np.long)
         for i, atom in enumerate(self._next_element(tokens, vocab)):
             if i == self.mxlen:
                 i -= len(self.emit_end_tok)
