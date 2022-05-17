@@ -1524,17 +1524,13 @@ class GPT2Vectorizer1D(AbstractVectorizer, HasSubwordTokens):
         )
 
         self.mxlen = kwargs.get('mxlen', -1)
+        self._set_offset_indices()
 
-        if '<pad>' in self.vocab:
-            Offsets.INDICES['PAD'] = self.vocab['<pad>']
-        if '<s>' in self.vocab:
-            Offsets.INDICES['GO'] = self.vocab['<s>']
-        if '<|endoftext|>' in self.vocab:
-            Offsets.INDICES['EOS'] = self.vocab['<|endoftext|>']
-        if '</s>' in self.vocab:
-            Offsets.INDICES['EOS'] = self.vocab['</s>']
-        if '<unk>' in self.vocab:
-            Offsets.INDICES['UNK'] = self.vocab['<unk>']
+    def _set_offset_indices(self):
+        Offsets.INDICES['PAD'] = self.vocab['<pad>']
+        Offsets.INDICES['GO'] = self.vocab['<s>']
+        Offsets.INDICES['EOS'] = self.vocab.get('</s>', self.vocab['<|endoftext|>'])
+        Offsets.INDICES['UNK'] = self.vocab['<unk>']
 
     @property
     def vocab(self):
@@ -1622,6 +1618,7 @@ class GPT2VectorizerSingleSpecialToken1D(GPT2Vectorizer1D):
         """Loads a BPE tokenizer"""
         super().__init__(**kwargs)
 
+    def _set_offset_indices(self):
         #if '<|endoftext|>' is the only special token in the vocab
         if '<|endoftext|>' in self.vocab and '<unk>' not in self.vocab and '</s>' not in self.vocab and \
                 '<s>' not in self.vocab:

@@ -158,7 +158,6 @@ def tensor_and_lengths(inputs):
 def gelu(x):
     return 0.5 * x * (1 + tf.tanh(math.sqrt(2 / math.pi) * (x + 0.044715 * tf.pow(x, 3))))
 
-
 def swish(x):
     return x * tf.nn.sigmoid(x)
 
@@ -232,6 +231,8 @@ def get_activation(name: str = "relu"):
         return swish
     if name == "leaky_relu":
         return tf.nn.leaky_relu
+    if name == "gelu_new":
+        return gelu
     return tf.nn.relu
 
 

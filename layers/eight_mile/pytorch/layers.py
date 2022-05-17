@@ -311,7 +311,7 @@ class GeLU(nn.Module):
         return torch.nn.functional.gelu(x)
 
 #Code taken from: https://github.com/huggingface/transformers/blob/766d4bf7920213bdd8a8afb42a72719190124568/src/transformers/activations.py#L27
-class NewGELUActivation(nn.Module):
+class Gpt2GELU(nn.Module):
     """
     Implementation of the GELU activation function currently in Google BERT repo (identical to OpenAI GPT). Also see
     the Gaussian Error Linear Units paper: https://arxiv.org/abs/1606.08415
@@ -347,7 +347,7 @@ def get_activation(name: str = "relu") -> nn.Module:
     if name == "softmax":
         return nn.Softmax(dim=-1)
     if name == "gelu_new":
-        return NewGELUActivation()
+        return Gpt2GELU()
     return nn.ReLU()
 
 
