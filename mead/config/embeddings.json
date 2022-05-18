@@ -122,5 +122,15 @@
     "file": "https://www.dropbox.com/s/s8q2feew1fmwl3p/senna-50.txt.gz?dl=1",
     "sha1": "5258af089f40f9071bbb8f4f5ac2b2f35b18fea2",
     "dsz": 50
+  },
+  {
+  "label": "gpt2-small-npz",
+  "file": "placeholder_path",
+  "dsz": 768,
+  "type": "tlm-words-embed-pooled",
+  "model":{
+          "transformer_type": "pre-layer-norm",
+          "mxlen": 1024
+         }
   }
 ]

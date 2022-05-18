@@ -155,6 +155,12 @@
     "vocab_file": "https://www.dropbox.com/s/ck7dyhjawlmv2kp/vocab.json?dl=1"
   },
   {
+    "label": "gpt2-small-bpe1d",
+    "type": "gpt2-single-special-token-bpe1d",
+    "model_file": "placeholder_path/merges.txt",
+    "vocab_file": "placeholder_path/vocab.json"
+  },
+  {
     "label": "camembert-base",
     "type": "camembert-spm1d",
     "emit_begin_tok": "<s>",
