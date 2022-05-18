@@ -124,13 +124,13 @@
     "dsz": 50
   },
   {
-  "label": "gpt2-small-npz",
-  "file": "https://www.dropbox.com/s/e90wu5t0ysiqlgw/gpt2-small.npz?dl=1",
-  "dsz": 768,
-  "type": "tlm-words-embed-pooled",
-  "model":{
-          "transformer_type": "pre-layer-norm",
-          "mxlen": 1024
-         }
+    "label": "gpt2-small-npz",
+    "file": "https://www.dropbox.com/s/e90wu5t0ysiqlgw/gpt2-small.npz?dl=1",
+    "dsz": 768,
+    "type": "tlm-words-embed-pooled",
+    "model": {
+      "transformer_type": "pre-layer-norm",
+      "mxlen": 1024
+    }
   }
 ]
