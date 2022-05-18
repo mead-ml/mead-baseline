@@ -11,7 +11,7 @@ features:
     transformer_type: pre-layer-norm
     layer_norms_after: false
     layer_norm_eps: 1.0e-5
-    activation: gelu_new
+    activation: gpt2_gelu
     finetune: true
     dropout: 0.1
     mlm: false

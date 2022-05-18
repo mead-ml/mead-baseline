@@ -231,7 +231,7 @@ def get_activation(name: str = "relu"):
         return swish
     if name == "leaky_relu":
         return tf.nn.leaky_relu
-    if name == "gelu_new":
+    if name == "gpt2_gelu":
         return gelu
     return tf.nn.relu
 

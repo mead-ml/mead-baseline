@@ -346,7 +346,7 @@ def get_activation(name: str = "relu") -> nn.Module:
         return nn.LogSoftmax(dim=-1)
     if name == "softmax":
         return nn.Softmax(dim=-1)
-    if name == "gelu_new":
+    if name == "gpt2_gelu":
         return Gpt2GELU()
     return nn.ReLU()
 
