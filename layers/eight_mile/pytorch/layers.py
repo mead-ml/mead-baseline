@@ -310,6 +310,15 @@ class GeLU(nn.Module):
     def forward(self, x):
         return torch.nn.functional.gelu(x)
 
+#Code taken from: https://github.com/huggingface/transformers/blob/766d4bf7920213bdd8a8afb42a72719190124568/src/transformers/activations.py#L27
+class Gpt2GELU(nn.Module):
+    """
+    Implementation of the GELU activation function currently in Google BERT repo (identical to OpenAI GPT). Also see
+    the Gaussian Error Linear Units paper: https://arxiv.org/abs/1606.08415
+    """
+
+    def forward(self, input):
+        return 0.5 * input * (1.0 + torch.tanh(math.sqrt(2.0 / math.pi) * (input + 0.044715 * torch.pow(input, 3.0))))
 
 def get_activation(name: str = "relu") -> nn.Module:
     """Get back an `nn.Module` by string name of the activation operator
@@ -337,6 +346,8 @@ def get_activation(name: str = "relu") -> nn.Module:
         return nn.LogSoftmax(dim=-1)
     if name == "softmax":
         return nn.Softmax(dim=-1)
+    if name == "gpt2_gelu":
+        return Gpt2GELU()
     return nn.ReLU()
 
 

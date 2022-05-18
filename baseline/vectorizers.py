@@ -1524,9 +1524,12 @@ class GPT2Vectorizer1D(AbstractVectorizer, HasSubwordTokens):
         )
 
         self.mxlen = kwargs.get('mxlen', -1)
+        self._set_offset_indices()
+
+    def _set_offset_indices(self):
         Offsets.INDICES['PAD'] = self.vocab['<pad>']
         Offsets.INDICES['GO'] = self.vocab['<s>']
-        Offsets.INDICES['EOS'] = self.vocab['</s>']
+        Offsets.INDICES['EOS'] = self.vocab.get('</s>', self.vocab['<|endoftext|>'])
         Offsets.INDICES['UNK'] = self.vocab['<unk>']
 
     @property
@@ -1592,7 +1595,7 @@ class GPT2Vectorizer1D(AbstractVectorizer, HasSubwordTokens):
 
         if self.mxlen < 0:
             self.mxlen = self.max_seen
-        vec1d = np.ones(self.mxlen, dtype=np.long)
+        vec1d = pads(self.mxlen, dtype=np.long)
         for i, atom in enumerate(self._next_element(tokens, vocab)):
             if i == self.mxlen:
                 i -= len(self.emit_end_tok)
@@ -1605,7 +1608,29 @@ class GPT2Vectorizer1D(AbstractVectorizer, HasSubwordTokens):
         return vec1d, valid_length
 
     def get_dims(self):
-        return self.mxlen,
+        return self.mxlen
+
+
+@register_vectorizer(name='gpt2-single-special-token-bpe1d')
+class GPT2VectorizerSingleSpecialToken1D(GPT2Vectorizer1D):
+
+    def __init__(self, **kwargs):
+        """Loads a BPE tokenizer"""
+        super().__init__(**kwargs)
+
+    def _set_offset_indices(self):
+        #if '<|endoftext|>' is the only special token in the vocab
+        if '<|endoftext|>' in self.vocab and '<unk>' not in self.vocab and '</s>' not in self.vocab and \
+                '<s>' not in self.vocab:
+            self._special_tokens = {"<|endoftext|>", "<|endoftext|>", "<|endoftext|>", "<|endoftext|>"}
+            Offsets.INDICES['PAD'] = self.vocab['<|endoftext|>']
+            Offsets.INDICES['GO'] = self.vocab['<|endoftext|>']
+            Offsets.INDICES['EOS'] = self.vocab['<|endoftext|>']
+            Offsets.INDICES['UNK'] = self.vocab['<|endoftext|>']
+            Offsets.INDICES['OFFSET'] = self.vocab['<|endoftext|>'] + 1
+            Offsets.VALUES = ['<|endoftext|>'] * 4
+
+
 
 
 @register_vectorizer(name='gpt2-dict1d')

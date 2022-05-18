@@ -1,0 +1,34 @@
+backend: pytorch
+basedir: ./trec-gpt2-small
+batchsz: 10
+dataset: trec
+features:
+- embeddings:
+    word_embed_type: learned-positional
+    label: gpt2-small-npz
+    type: tlm-words-embed-pooled
+    pooling: mean
+    transformer_type: pre-layer-norm
+    layer_norms_after: false
+    layer_norm_eps: 1.0e-5
+    activation: gpt2_gelu
+    finetune: true
+    dropout: 0.1
+    mlm: false
+    dsz: 768
+  name: gpt2
+  vectorizer:
+    mxlen: 100
+    label: gpt2-small-bpe1d
+loader:
+  reader_type: default
+model:
+  model_type: fine-tune
+task: classify
+train:
+  early_stopping_metric: acc
+  epochs: 5
+  eta: 1.0e-5
+  optim: adam
+  weight_decay: 1.0e-8
+unif: 0.25
