@@ -157,8 +157,8 @@
   {
     "label": "gpt2-small-bpe1d",
     "type": "gpt2-single-special-token-bpe1d",
-    "model_file": "placeholder_path/merges.txt",
-    "vocab_file": "placeholder_path/vocab.json"
+    "model_file": "https://www.dropbox.com/s/3bdvdcmbifbulsp/merges.txt?dl=1",
+    "vocab_file": "https://www.dropbox.com/s/e6ayyddkpp6sg00/vocab.json?dl=1"
   },
   {
     "label": "camembert-base",
