@@ -27,7 +27,7 @@ model:
 task: classify
 train:
   early_stopping_metric: acc
-  epochs: 5
+  epochs: 20
   eta: 1.0e-5
   optim: adamw
   weight_decay: 1.0e-5
