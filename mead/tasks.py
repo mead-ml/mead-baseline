@@ -258,9 +258,6 @@ class Task:
         reader_params['clean_fn'] = reader_params.get('clean_fn', self.config_params.get('preproc', {}).get('clean_fn'))
         if reader_params['clean_fn'] is not None and self.config_params['dataset'] != 'SST2':
             logger.warning('Warning: A reader preprocessing function (%s) is active, it is recommended that all data preprocessing is done outside of baseline to insure data at inference time matches data at training time.', reader_params['clean_fn'])
-        #reader_params['mxlen'] = self.vectorizers[self.primary_key].mxlen
-        #if self.config_params['train'].get('gpus', 1) > 1:
-        #    reader_params['truncate'] = True
         return baseline.reader.create_reader(self.task_name(), self.vectorizers, self.config_params['preproc'].get('trim', False), **reader_params)
 
     @staticmethod
@@ -536,12 +533,7 @@ class ClassifierTask(Task):
         return self.labels
 
     def _reorganize_params(self):
-        train_params = self.config_params['train']
-        train_params['batchsz'] = train_params['batchsz'] if 'batchsz' in train_params else self.config_params['batchsz']
-        train_params['test_batchsz'] = train_params.get('test_batchsz', self.config_params.get('test_batchsz', 1))
-        unif = self.config_params.get('unif', 0.1)
         model = self.config_params['model']
-        model['unif'] = model.get('unif', unif)
         lengths_key = model.get('lengths_key', self.primary_key)
         if lengths_key is not None:
             if not lengths_key.endswith('_lengths'):
@@ -550,7 +542,6 @@ class ClassifierTask(Task):
         if self.backend.params is not None:
             for k, v in self.backend.params.items():
                 model[k] = v
-        ##return baseline.model.create_model(self.embeddings, self.labels, **model)
 
     def _load_dataset(self):
         read = self.config_params['reader'] if 'reader' in self.config_params else self.config_params['loader']
@@ -612,9 +603,6 @@ class TaggerTask(Task):
         baseline.save_vocabs(self.get_basedir(), self.feat2index)
 
     def _reorganize_params(self):
-        train_params = self.config_params['train']
-        train_params['batchsz'] = train_params['batchsz'] if 'batchsz' in train_params else self.config_params['batchsz']
-        train_params['test_batchsz'] = train_params.get('test_batchsz', self.config_params.get('test_batchsz', 1))
         labels = self.reader.label2index
         span_type = self.config_params['train'].get('span_type')
         constrain = bool(self.config_params['model'].get('constrain_decode', False))
@@ -639,7 +627,6 @@ class TaggerTask(Task):
         if self.backend.params is not None:
             for k, v in self.backend.params.items():
                 model[k] = v
-        #return baseline.model.create_tagger_model(self.embeddings, labels, **self.config_params['model'])
 
     def _load_dataset(self):
         # TODO: get rid of sort_key=self.primary_key in favor of something explicit?
@@ -699,7 +686,6 @@ class TaggerTask(Task):
         self._close_reporting_hooks()
 
 
-
 @export
 @register_task
 class DependencyParserTask(Task):
@@ -741,14 +727,7 @@ class DependencyParserTask(Task):
         baseline.save_vocabs(self.get_basedir(), self.feat2index)
 
     def _reorganize_params(self):
-        train_params = self.config_params['train']
-        train_params['batchsz'] = train_params['batchsz'] if 'batchsz' in train_params else self.config_params['batchsz']
-        train_params['test_batchsz'] = train_params.get('test_batchsz', self.config_params.get('test_batchsz', 1))
-
         model = self.config_params['model']
-        unif = self.config_params.get('unif', 0.1)
-        model['unif'] = model.get('unif', unif)
-
         lengths_key = model.get('lengths_key', self.primary_key)
         if lengths_key is not None:
             if not lengths_key.endswith('_lengths'):
@@ -758,7 +737,6 @@ class DependencyParserTask(Task):
         if self.backend.params is not None:
             for k, v in self.backend.params.items():
                 model[k] = v
-        #return baseline.model.create_tagger_model(self.embeddings, labels, **self.config_params['model'])
 
     def _load_dataset(self):
         # TODO: get rid of sort_key=self.primary_key in favor of something explicit?
@@ -799,11 +777,11 @@ class DependencyParserTask(Task):
         baseline.save_vectorizers(self.get_basedir(), self.vectorizers)
         self._reorganize_params()
         conll_output = self.config_params.get("conll_output", None)
-        model_params = self.config_params['model']
+        model_params = OmegaConf.to_container(self.config_params['model'], throw_on_missing=True)
         model_params['features'] = self._get_features()
         model_params['labels'] = self._get_labels()
         model_params['task'] = self.task_name()
-        train_params = self.config_params['train']
+        train_params = OmegaConf.to_container(self.config_params['train'], throw_on_missing=True)
         train_params['checkpoint'] = checkpoint
         train_params['conll_output'] = conll_output
         train_params['txts'] = self.txts
@@ -900,14 +878,7 @@ class EncoderDecoderTask(Task):
             )
 
     def _reorganize_params(self):
-        train_params = self.config_params['train']
-        train_params['batchsz'] = train_params['batchsz'] if 'batchsz' in train_params else self.config_params['batchsz']
-        train_params['test_batchsz'] = train_params.get('test_batchsz', self.config_params.get('test_batchsz', 1))
-
-        self.config_params['model']["unif"] = self.config_params["unif"]
         model = self.config_params['model']
-        unif = self.config_params.get('unif', 0.1)
-        model['unif'] = model.get('unif', unif)
         lengths_key = model.get('src_lengths_key', self.primary_key)
         if lengths_key is not None:
             if not lengths_key.endswith('_lengths'):
@@ -916,7 +887,6 @@ class EncoderDecoderTask(Task):
         if self.backend.params is not None:
             for k, v in self.backend.params.items():
                 model[k] = v
-        #return baseline.model.create_seq2seq_model(self.src_embeddings, self.tgt_embeddings, **self.config_params['model'])
 
     def _get_features(self):
         return self.src_embeddings
@@ -1013,16 +983,8 @@ class LanguageModelingTask(Task):
                 tgt_key=tgt_key
             )
 
-
     def _reorganize_params(self):
-
-        train_params = self.config_params['train']
-        train_params['batchsz'] = train_params['batchsz'] if 'batchsz' in train_params else self.config_params['batchsz']
-        train_params['test_batchsz'] = train_params.get('test_batchsz', self.config_params.get('test_batchsz', 1))
         model = self.config_params['model']
-        unif = self.config_params.get('unif', 0.1)
-        model['unif'] = model.get('unif', unif)
-        model['batchsz'] = train_params['batchsz']
         model['tgt_key'] = self.config_params.get('reader',
                                                   self.config_params.get('loader', {})).get('tgt_key', self.primary_key)
         model['src_keys'] = listify(self.config_params.get('reader', self.config_params.get('loader', {})).get('src_keys', list(self.embeddings.keys())))
