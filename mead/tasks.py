@@ -1,7 +1,7 @@
 import os
 import json
 import logging
-from typing import List
+from typing import List, Optional
 from collections import Counter
 import numpy as np
 import baseline
@@ -24,7 +24,7 @@ from baseline.utils import (
     normalize_backend,
     str2bool,
 )
-
+from omegaconf import DictConfig, OmegaConf
 from mead.utils import (
     index_by_label,
     get_mead_settings,
@@ -57,7 +57,7 @@ def merge_reporting_with_settings(reporting, settings):
 
 class Backend:
     """Simple object to represent a deep-learning framework backend"""
-    def __init__(self, name=None, params=None, exporter=None):
+    def __init__(self, name=None, params: Optional[DictConfig] = None):
         """Initialize the backend, optional with constructor args
 
         :param name: (``str``) Name of the framework: currently one of (`tensorflow`, `pytorch`)
@@ -115,12 +115,12 @@ class Task:
     """Basic building block for a task of NLP problems, e.g. `tagger`, `classify`, etc.
     """
 
-    def _create_backend(self, **kwargs):
+    def _create_backend(self, params: DictConfig):
         """This method creates and returns a `Backend` object
 
         :return:
         """
-        backend = Backend(self.config_params.get('backend', 'pytorch'), kwargs)
+        backend = Backend(self.config_params.get('backend', 'pytorch'), params)
         backend.load(self.task_name())
         return backend
 
@@ -199,23 +199,25 @@ class Task:
         config = TASK_REGISTRY[task](mead_config)
         return config
 
-    def read_config(self, config_params, datasets_index, vecs_index, **kwargs):
+    def init(self, cfg: DictConfig):
+        self.read_config(cfg)
+        self._initialize(cfg.embeddings_index)
+
+    def read_config(self, cfg: DictConfig):
         """
         Read the config file and the datasets index
 
         Between the config file and the dataset index, we have enough information
         to configure the backend and the models.  We can also initialize the data readers
 
-        :param config_file: The config file
-        :param datasets_index: The index of datasets
+        :param cfg: The config map
         :return:
         """
-        datasets_index = read_config_file_or_json(datasets_index, 'datasets')
-        datasets_set = index_by_label(datasets_index)
-        vecs_index = read_config_file_or_json(vecs_index, 'vecs')
-        vecs_set = index_by_label(vecs_index)
-        self.config_params = config_params
-        config_file = deepcopy(config_params)
+        datasets_set = index_by_label(cfg.datasets_index)
+        vecs_set = index_by_label(cfg.vecs_index)
+        self.config_params = cfg
+        # TODO: get rid of this
+        config_file = deepcopy(cfg)
         basedir = self.get_basedir()
         if basedir is not None and not os.path.exists(basedir):
             logger.info('Creating: %s', basedir)
@@ -224,16 +226,13 @@ class Task:
         if progress_bar_type is not None:
             logger.info("Setting progress bar type %s", progress_bar_type)
             SET_DEFAULT_PROGRESS_BAR(progress_bar_type)
-        self.config_params['train']['basedir'] = basedir
-        # Read GPUS from env variables now so that the reader has access
-        if self.config_params['train'].get('gpus', -1) == -1:
-            self.config_params['train']['gpus'] = len(get_env_gpus())
-        self._setup_task(**kwargs)
+
+        self._setup_task()
         self._load_user_modules()
         self.dataset = get_dataset_from_key(self.config_params['dataset'], datasets_set)
         # replace dataset in config file by the latest dataset label, this will be used by some reporting hooks
         config_file['dataset'] = self.dataset['label']
-        self._configure_reporting(config_params.get('reporting', {}), config_file=config_file, **kwargs)
+        self._configure_reporting(self.config_params.get('reporting', {}), config_file=config_file)
         self.reader = self._create_task_specific_reader(vecs_set)
 
     def _load_user_modules(self):
@@ -244,7 +243,7 @@ class Task:
             for addon in self.config_params['modules']:
                 import_user_module(addon, self.data_download_cache)
 
-    def initialize(self, embeddings_index):
+    def _initialize(self, embeddings_index):
         """
         Load the vocabulary using the readers and then load any embeddings required
 
@@ -259,9 +258,9 @@ class Task:
         reader_params['clean_fn'] = reader_params.get('clean_fn', self.config_params.get('preproc', {}).get('clean_fn'))
         if reader_params['clean_fn'] is not None and self.config_params['dataset'] != 'SST2':
             logger.warning('Warning: A reader preprocessing function (%s) is active, it is recommended that all data preprocessing is done outside of baseline to insure data at inference time matches data at training time.', reader_params['clean_fn'])
-        reader_params['mxlen'] = self.vectorizers[self.primary_key].mxlen
-        if self.config_params['train'].get('gpus', 1) > 1:
-            reader_params['truncate'] = True
+        #reader_params['mxlen'] = self.vectorizers[self.primary_key].mxlen
+        #if self.config_params['train'].get('gpus', 1) > 1:
+        #    reader_params['truncate'] = True
         return baseline.reader.create_reader(self.task_name(), self.vectorizers, self.config_params['preproc'].get('trim', False), **reader_params)
 
     @staticmethod
@@ -270,12 +269,12 @@ class Task:
         backoff = read.get('min_f', config.get('preproc', {}).get('min_f', -1))
         return {f['name']: f.get('min_f', backoff) for f in config['features']}
 
-    def _setup_task(self, **kwargs):
+    def _setup_task(self):
         """
         This method provides the task-specific setup
         :return:
         """
-        self.backend = self._create_backend(**kwargs)
+        self.backend = self._create_backend(self.config_params.get('backend_params'))
 
     def _load_dataset(self):
         """This hook is responsible for creating and initializing the ``DataFeed`` objects to be used for train, dev
@@ -294,7 +293,7 @@ class Task:
         """
         pass
 
-    def train(self, checkpoint=None):
+    def train(self):
         """This method delegates to several sub-hooks in order to complete training.
         1. call `_load_dataset()` which initializes the `DataFeed` fields of this class
         2. call `baseline.save_vectorizers()` which write out the bound `vectorizers` fields to a file in the `basedir`
@@ -307,12 +306,13 @@ class Task:
         baseline.save_vectorizers(self.get_basedir(), self.vectorizers)
         self._load_dataset()
 
-        model_params = self.config_params['model']
+        model_params = OmegaConf.to_container(self.config_params['model'], throw_on_missing=True)
         model_params['features'] = self._get_features()
         model_params['labels'] = self._get_labels()
         model_params['task'] = self.task_name()
-        train_params = self.config_params['train']
-        train_params['checkpoint'] = checkpoint
+        train_params = OmegaConf.to_container(self.config_params['train'], throw_on_missing=True)
+        train_params['checkpoint'] = self.config_params.get('checkpoint')
+        train_params['reporting'] = [x.step for x in self.reporting]
         baseline.train.fit(model_params, self.train_data, self.valid_data, self.test_data, **train_params)
         if str2bool(self.config_params.get('zip_checkpoint', True)):
             baseline.zip_files(self.get_basedir())
@@ -325,17 +325,15 @@ class Task:
         :param kwargs:
         :return:
         """
-        # If there is an nstep request in config or we are doing seq2seq/lm log steps to console
-        if 'nsteps' in self.config_params['train'] or self.__class__.task_name() in {'seq2seq', 'lm'}:
-            reporting['step_logging'] = reporting.get('step_logging', {})
-
-        reporting_hooks, reporting = merge_reporting_with_settings(reporting, self.mead_settings_config)
-
+        reporting_hooks = list(reporting.keys())
+        for settings in reporting.values():
+            for module in listify(settings.get('module', settings.get('modules', []))):
+                import_user_module(module)
         self.reporting = create_reporting(reporting_hooks,
                                           reporting,
                                           {'config_file': config_file, 'task': self.__class__.task_name(), 'base_dir': self.get_basedir()})
 
-        self.config_params['train']['reporting'] = [x.step for x in self.reporting]
+
         logging.basicConfig(level=logging.DEBUG)
 
     def _close_reporting_hooks(self):
@@ -386,16 +384,18 @@ class Task:
                 if embed_type != 'default':
                     logger.warning("You have requested a stack of pretrained embeddings but didnt request 'default' or representation")
             # Backwards compat, copy from main block if not present locally
-            embeddings_section['unif'] = embeddings_section.get('unif', self.config_params.get('unif', 0.1))
+            unif = embeddings_section.get('unif', self.config_params.get('unif', 0.1))
+            OmegaConf.set_struct(embeddings_section, False)
+            embeddings_section.unif = unif
 
             # Backwards compat, copy from main block if not present locally
-            embeddings_section['keep_unused'] = embeddings_section.get('keep_unused',
-                                                                       self.config_params.get('keep_unused', False))
+            embeddings_section.keep_unused = embeddings_section.get('keep_unused',
+                                                                    self.config_params.get('keep_unused', False))
 
             # Overlay any backend parameters
 
             # Also, if we are in eager mode, we might have to place the embeddings explicitly on the CPU
-            embeddings_section['cpu_placement'] = bool(embeddings_section.get('cpu_placement', False))
+            embeddings_section.cpu_placement = bool(embeddings_section.get('cpu_placement', False))
             if self.backend.params is not None:
                 # If we are in eager mode
                 train_block = self.config_params['train']
@@ -481,7 +481,7 @@ class Task:
     def get_basedir(self):
         """Return the base directory if provided, or CWD
         """
-        return self.config_params.get('basedir', './{}'.format(self.task_name()))
+        return self.config_params.train.basedir
 
     @staticmethod
     def _get_batchsz(config):
@@ -504,17 +504,16 @@ class ClassifierTask(Task):
     def task_name(cls):
         return 'classify'
 
-    def _setup_task(self, **kwargs):
-        super()._setup_task(**kwargs)
-        if self.config_params.get('preproc', {}).get('clean', False) is True:
-            self.config_params.get('preproc', {})['clean_fn'] = baseline.TSVSeqLabelReader.do_clean
-            logger.info('Clean')
-        else:
-            self.config_params.setdefault('preproc', {})
-            self.config_params['preproc']['clean_fn'] = None
+    def _setup_task(self):
+        super()._setup_task()
+        #if self.config_params.get('preproc', {}).get('clean', False) is True:
+        #    self.config_params.get('preproc', {})['clean_fn'] = baseline.TSVSeqLabelReader.do_clean
+        #    logger.info('Clean')
+        #else:
+        #    self.config_params.setdefault('preproc', {})
+        #    self.config_params['preproc']['clean_fn'] = None
 
-    def initialize(self, embeddings):
-        embeddings = read_config_file_or_json(embeddings, 'embeddings')
+    def _initialize(self, embeddings):
         embeddings_set = index_by_label(embeddings)
         self.dataset = DataDownloader(self.dataset, self.data_download_cache).download()
         print_dataset_info(self.dataset)
@@ -589,8 +588,8 @@ class TaggerTask(Task):
     def task_name(cls):
         return 'tagger'
 
-    def _setup_task(self, **kwargs):
-        super()._setup_task(**kwargs)
+    def _setup_task(self):
+        super()._setup_task()
         if 'preproc' not in self.config_params:
             self.config_params['preproc'] = {}
         if self.backend.name == 'pytorch':
@@ -598,7 +597,7 @@ class TaggerTask(Task):
         else:
             self.config_params['preproc']['trim'] = False
 
-    def initialize(self, embeddings):
+    def _initialize(self, embeddings):
         self.dataset = DataDownloader(self.dataset, self.data_download_cache).download()
         print_dataset_info(self.dataset)
         embeddings = read_config_file_or_json(embeddings, 'embeddings')
@@ -675,7 +674,8 @@ class TaggerTask(Task):
     def _get_labels(self):
         return self.reader.label2index
 
-    def train(self, checkpoint=None):
+    def train(self):
+        checkpoint = self.config_params.get('checkpoint')
         self._load_dataset()
         baseline.save_vectorizers(self.get_basedir(), self.vectorizers)
         self._reorganize_params()
@@ -711,8 +711,8 @@ class DependencyParserTask(Task):
     def task_name(cls):
         return 'deps'
 
-    def _create_backend(self, **kwargs):
-        backend = Backend(self.config_params.get('backend', 'tf'), kwargs)
+    def _create_backend(self, params: DictConfig):
+        backend = Backend(self.config_params.get('backend', 'tf'), params)
         if 'preproc' not in self.config_params:
             self.config_params['preproc'] = {}
         if backend.name == 'pytorch':
@@ -793,7 +793,8 @@ class DependencyParserTask(Task):
     def _get_labels(self):
         return self.reader.label2index
 
-    def train(self, checkpoint=None):
+    def train(self):
+        checkpoint = self.config_params.get('checkpoint')
         self._load_dataset()
         baseline.save_vectorizers(self.get_basedir(), self.vectorizers)
         self._reorganize_params()
@@ -828,8 +829,8 @@ class EncoderDecoderTask(Task):
     def task_name(cls):
         return 'seq2seq'
 
-    def _create_backend(self, **kwargs):
-        backend = Backend(self.config_params.get('backend', 'tf'), kwargs)
+    def _create_backend(self, params: DictConfig):
+        backend = Backend(self.config_params.get('backend', 'tf'), params)
         if 'preproc' not in self.config_params:
             self.config_params['preproc'] = {}
         self.config_params['preproc']['show_ex'] = show_examples
@@ -966,8 +967,8 @@ class LanguageModelingTask(Task):
             reader_params['truncate'] = True
         return baseline.reader.create_reader(self.task_name(), self.vectorizers, self.config_params.get('preproc', {}).get('trim', False), **reader_params)
 
-    def _setup_task(self, **kwargs):
-        super()._setup_task(**kwargs)
+    def _setup_task(self):
+        super()._setup_task()
 
         if self.backend.name == 'pytorch':
             self.config_params.get('preproc', {})['trim'] = True
