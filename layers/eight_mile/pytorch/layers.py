@@ -3421,7 +3421,6 @@ class PreLNBeforeResConnTransformerEncoder(TransformerEncoderBase):
         x = x + self.dropout(self.ffn(x))
         return x
 
-TransformerEncoder = PreLNBeforeResConnTransformerEncoder
 
 class PostLNTransformerEncoder(TransformerEncoderBase):
 
