@@ -14,7 +14,7 @@ import glob
 from eight_mile.utils import listify, Offsets, is_sequence, str2bool, get_alibi_slopes
 from eight_mile.utils import transition_mask as transition_mask_np
 
-MASK_FALSE = False
+MASK_FALSE = 0
 logger = logging.getLogger("mead.layers")
 
 
@@ -3421,6 +3421,7 @@ class PreLNBeforeResConnTransformerEncoder(TransformerEncoderBase):
         x = x + self.dropout(self.ffn(x))
         return x
 
+TransformerEncoder = PreLNBeforeResConnTransformerEncoder
 
 class PostLNTransformerEncoder(TransformerEncoderBase):
 

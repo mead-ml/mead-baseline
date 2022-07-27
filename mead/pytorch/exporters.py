@@ -192,9 +192,7 @@ class PytorchONNXExporter(Exporter):
                           f=f'{server_output}/{onnx_model_name}.onnx',
                           input_names=inputs,
                           output_names=outputs,
-                          opset_version=self.onnx_opset,
-                          #propagate=True,
-                          example_outputs=example_output)
+                          opset_version=self.onnx_opset)
 
         logger.info("Saving metadata.")
         save_to_bundle(client_output, basename, assets=meta, zip_results=zip_results)

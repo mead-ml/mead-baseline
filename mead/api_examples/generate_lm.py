@@ -153,11 +153,24 @@ def main():
     model.to(args.device)
 
     index2word = revlut(vocab)
-    print('[Query]', args.query)
-    bpe_out = decode_sentence(model, vectorizer, args.query.split(), vocab, index2word, args.device,
-                              end_token=args.end_token, sample=args.sample, sample_temperature=args.temperature)
-    unbpe = ' '.join(bpe_out).replace('@@ ', '')
-    print('[Response]', unbpe)
+
+    if os.path.exists(args.query) and os.path.isfile(args.query):
+        with open(args.query, 'rt', encoding='utf-8') as f:
+            batch = []
+            for line in f:
+                text = line.strip().split()
+                batch.append(text)
+
+    else:
+        batch = [args.input.split()]
+
+
+    for query in batch:
+        print('[Query]', query)
+        bpe_out = decode_sentence(model, vectorizer, query, vocab, index2word, args.device,
+                                  end_token=args.end_token, sample=args.sample, sample_temperature=args.temperature)
+        unbpe = ' '.join(bpe_out).replace('@@ ', '')
+        print('[Response]', unbpe)
 
 if __name__ == '__main__':
     main()
