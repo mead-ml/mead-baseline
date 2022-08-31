@@ -37,6 +37,8 @@ def main():
             for line in f:
                 text = line.strip().split()
                 if args.label_first:
+                    if not text[1:] or not text[0]:
+                        continue
                     labels.append(text[0])
                     text = text[1:]
                 texts += [text]
