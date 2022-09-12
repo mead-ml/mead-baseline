@@ -14,7 +14,7 @@ import glob
 from eight_mile.utils import listify, Offsets, is_sequence, str2bool, get_alibi_slopes
 from eight_mile.utils import transition_mask as transition_mask_np
 
-MASK_FALSE = False
+MASK_FALSE = 0
 logger = logging.getLogger("mead.layers")
 
 
@@ -3103,7 +3103,7 @@ class SeqScaledWindowedRelativeAttention(SequenceSequenceRelativeAttention):
         scores = (scores_qk + scores_qrk) / math.sqrt(d_k)
         if mask is not None:
             mask = self._unfold_mask(mask, B, rpr_k).unsqueeze(-2)  # [B, 1, T, 1, W]
-            scores = scores.masked_fill(mask == False, -1e9)
+            scores = scores.masked_fill(mask == MASK_FALSE, -1e9)
         return F.softmax(scores, dim=-1)
 
     def _update(self, a: torch.Tensor, value: torch.Tensor, rpr_value: torch.Tensor) -> torch.Tensor:

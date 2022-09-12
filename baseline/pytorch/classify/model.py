@@ -41,6 +41,10 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
         basename, _ = os.path.splitext(outname)
         write_json(self.labels, basename + ".labels")
 
+    @property
+    def num_classes(self):
+        return len(self.get_labels())
+
     @classmethod
     def create(cls, embeddings, labels, **kwargs) -> 'ClassifierModelBase':
 

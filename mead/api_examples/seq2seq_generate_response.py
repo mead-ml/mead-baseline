@@ -108,6 +108,7 @@ def run():
     parser.add_argument('--rpr_k', help='Relative attention positional sizes pass 0 if you dont want relative attention',
                         type=int, default=[8]*8, nargs='+')
     parser.add_argument("--subword_type", type=str, choices=["bpe", "wordpiece", "sentencepiece"], default="bpe")
+    parser.add_argument('--go_token')
     parser.add_argument("--end_token", default="<EOS>")
     parser.add_argument("--output_file", type=str)
     parser.add_argument("--show_query", type=str2bool, default=False, help="Show the original query as well")
@@ -128,8 +129,9 @@ def run():
         checkpoint = args.checkpoint
 
     Vec1D = get_subword_vec1d(args.subword_type)
+    # emit_begin_tok="[CLS]",
     vectorizer = Vec1D(model_file=args.subword_model_file, vocab_file=args.subword_vocab_file,
-                       mxlen=args.nctx, emit_end_tok=args.end_token, extra_tokens=args.extra_tokens)
+                       mxlen=args.nctx, emit_start_tok=args.go_token, emit_end_tok=args.end_token, extra_tokens=args.extra_tokens)
 
     vocab = vectorizer.vocab
     # If we are not using chars, then use 'x' for both input and output
@@ -171,7 +173,7 @@ def run():
 
         if args.show_query:
             for query, output in zip(queries, outputs):
-                print(f"[Query] {query}")
+                print(f"[Query] {' '.join(query)}")
                 print(f"[Response] {output}")
         elif wf:
             for query, output in zip(queries, outputs):
