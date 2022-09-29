@@ -3,7 +3,7 @@ import logging
 import torch
 import torch.autograd
 import os
-
+import inspect
 from eight_mile.confusion import ConfusionMatrix
 from eight_mile.utils import listify
 from eight_mile.pytorch.optz import OptimizerManager
@@ -13,7 +13,9 @@ from baseline.utils import verbose_output, get_model_file, get_metric_cmp
 from baseline.train import EpochReportingTrainer, create_trainer, register_trainer, register_training_func
 from baseline.model import create_model_for
 from torch.utils.data import DataLoader
+
 logger = logging.getLogger('baseline')
+
 
 
 def _add_to_cm(cm, y, pred):
@@ -50,15 +52,16 @@ class ClassifyTrainerPyTorch(EpochReportingTrainer):
 
         self.optimizer = OptimizerManager(model, **kwargs)
         self.model = model
+        has_args = len(inspect.signature(model.create_loss).parameters) > 0
+        self.crit = model.create_loss(**kwargs) if has_args else model.create_loss()
         if self.gpus > 0 and self.model.gpu:
-            self.crit = model.create_loss(**kwargs).cuda()
+            self.crit = self.crit.cuda()
             if self.gpus > 1:
                 self.model = torch.nn.DataParallel(model).cuda()
             else:
                 self.model.cuda()
         else:
             logger.warning("Requested training on CPU.  This will be slow.")
-            self.crit = model.create_loss(**kwargs)
         self.nsteps = kwargs.get('nsteps', six.MAXSIZE)
 
     def _get_pytorch_model(self):
