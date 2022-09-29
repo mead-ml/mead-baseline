@@ -82,8 +82,21 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
         return super().cuda(device=device)
 
     def create_loss(self, loss_type=None, **kwargs):
+        # Use for soft-target distillation where ys are a distribution, validation make be hard or soft-targets
         if loss_type == 'kldiv':
+            logger.info("Using KL-divergence training loss")
             return KLDivTrainLoss()
+
+        # Use for multi-label classification where y is a multihot vector, and activation is identity
+        # Has better numerical stability than BCE + Sigmoid
+        elif loss_type == 'bce_logits':
+            logger.info("Using binary cross-entropy training loss (with logits input)")
+            nn.BCEWithLogitsLoss()
+
+        # Use for multi-label classification where y is a multihot vector, and activation is sigmoid
+        elif loss_type == 'bce':
+            logger.info("Using binary cross-entropy training loss (with sigmoid input)")
+            return nn.BCELoss()
 
         return nn.NLLLoss()
 
