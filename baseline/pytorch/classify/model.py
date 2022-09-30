@@ -12,6 +12,31 @@ cudnn.benchmark = True
 logger = logging.getLogger('baseline')
 
 
+
+class KLDivTrainLoss(torch.nn.Module):
+    """Do KL-Divergence at train time, and NLLLoss() at test time
+
+    For this model, we assume that the test data is either 1-hot or a distribution that we can use
+    argmax on to find the hard-target values, and during training we assue it is always a distribution.
+    """
+    def __init__(self, log_target: bool = False, reduction="mean"):
+        """Wraps PyTorch KLDivLoss, but at test time use NLLLoss
+        """
+        super().__init__()
+        self.train_loss = torch.nn.KLDivLoss(reduction=reduction, log_target=log_target)
+
+
+    def forward(self, output: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        """
+        :param output: The model outputs, [B, V]
+        :param target: The target labels, [B]
+        """
+        if self.training:
+            return self.train_loss(output, target)
+        if target.dtype == torch.float32:
+            return torch.nn.functional.nll_loss(output, torch.argmax(target, -1), ignore_index=Offsets.PAD)
+        return torch.nn.functional.nll_loss(output, target, ignore_index=Offsets.PAD)
+
 class ClassifierModelBase(nn.Module, ClassifierModel):
     """Base for all baseline implementations of token-based classifiers
 
@@ -61,7 +86,23 @@ class ClassifierModelBase(nn.Module, ClassifierModel):
         self.gpu = True
         return super().cuda(device=device)
 
-    def create_loss(self):
+    def create_loss(self, loss_type=None, **kwargs):
+        # Use for soft-target distillation where ys are a distribution, validation make be hard or soft-targets
+        if loss_type == 'kldiv':
+            logger.info("Using KL-divergence training loss")
+            return KLDivTrainLoss()
+
+        # Use for multi-label classification where y is a multihot vector, and activation is identity
+        # Has better numerical stability than BCE + Sigmoid
+        elif loss_type == 'bce_logits':
+            logger.info("Using binary cross-entropy training loss (with logits input)")
+            nn.BCEWithLogitsLoss()
+
+        # Use for multi-label classification where y is a multihot vector, and activation is sigmoid
+        elif loss_type == 'bce':
+            logger.info("Using binary cross-entropy training loss (with sigmoid input)")
+            return nn.BCELoss()
+
         return nn.NLLLoss()
 
     def make_input(self, batch_dict, perm=False, numpy_to_tensor=False):
@@ -467,14 +508,14 @@ class FineTuneDualCosineSimModelClassifier(FineTuneModelClassifier):
         assert(len(self.labels) == 2)
         return nn.Identity()
 
-    def create_loss(self):
+    def create_loss(self, **kwargs):
         return CosineSimilarityLoss()
 
 
 @register_model(task='classify', name='fine-tune-dual-ocl')
 class FineTuneDualOCLModelClassifier(FineTuneDualCosineSimModelClassifier):
 
-    def create_loss(self):
+    def create_loss(self, **kwargs):
         return OnlineContrastiveLoss()
 
 
