@@ -6,6 +6,8 @@ from itertools import chain
 from eight_mile.utils import read_config_stream, str2bool
 from baseline.utils import import_user_module, normalize_backend
 import mead
+import hydra
+from omegaconf import DictConfig
 from mead.utils import convert_path, parse_extra_args, configure_logger, parse_and_merge_overrides
 
 DEFAULT_SETTINGS_LOC = 'config/mead-settings.json'
@@ -75,81 +77,22 @@ def update_datasets(datasets_config, config_params, train, valid, test):
     datasets_config.append(updated_record)
 
 
-def main():
-    parser = argparse.ArgumentParser(description='Train a text classifier')
-    parser.add_argument('--config', help='JSON/YML Configuration for an experiment: local file or remote URL', type=convert_path, default="$MEAD_CONFIG")
-    parser.add_argument('--settings', help='JSON/YML Configuration for mead', default=DEFAULT_SETTINGS_LOC, type=convert_path)
-    parser.add_argument('--task_modules', help='tasks to load, must be local', default=[], nargs='+', required=False)
-    parser.add_argument('--datasets', help='index of dataset labels: local file, remote URL or mead-ml/hub ref', type=convert_path)
-    parser.add_argument('--modules', help='modules to load: local files, remote URLs or mead-ml/hub refs', default=[], nargs='+', required=False)
-    parser.add_argument('--mod_train_file', help='override the training set')
-    parser.add_argument('--mod_valid_file', help='override the validation set')
-    parser.add_argument('--mod_test_file', help='override the test set')
-    parser.add_argument('--fit_func', help='override the fit function')
-    parser.add_argument('--embeddings', help='index of embeddings: local file, remote URL or mead-ml/hub ref', type=convert_path)
-    parser.add_argument('--vecs', help='index of vectorizers: local file, remote URL or hub mead-ml/ref', type=convert_path)
-    parser.add_argument('--logging', help='json file for logging', default=DEFAULT_LOGGING_LOC, type=convert_path)
-    parser.add_argument('--task', help='task to run', choices=['classify', 'tagger', 'seq2seq', 'lm'])
-    parser.add_argument('--gpus', help='Number of GPUs (defaults to number available)', type=int, default=-1)
-    parser.add_argument('--basedir', help='Override the base directory where models are stored', type=str)
-    parser.add_argument('--reporting', help='reporting hooks', nargs='+')
-    parser.add_argument('--backend', help='The deep learning backend to use')
-    parser.add_argument('--checkpoint', help='Restart training from this checkpoint')
-    args, overrides = parser.parse_known_args()
-    config_params = read_config_stream(args.config)
-    config_params = parse_and_merge_overrides(config_params, overrides, pre='x')
-    if args.basedir is not None:
-        config_params['basedir'] = args.basedir
+@hydra.main(version_base=None, config_path='./config', config_name="sst2-pyt")
+def main(cfg: DictConfig):
 
     # task_module overrides are not allowed via hub or HTTP, must be defined locally
-    for task in args.task_modules:
-        import_user_module(task)
+    if 'task_modules' in cfg:
+        for task in cfg.task_modules:
+            import_user_module(task)
 
-    task_name = config_params.get('task', 'classify') if args.task is None else args.task
-    args.logging = read_config_stream(args.logging)
-    configure_logger(args.logging, config_params.get('basedir', './{}'.format(task_name)))
-
-    try:
-        args.settings = read_config_stream(args.settings)
-    except:
-        logger.warning('Warning: no mead-settings file was found at [{}]'.format(args.settings))
-        args.settings = {}
-
-    args.datasets = args.settings.get('datasets', convert_path(DEFAULT_DATASETS_LOC)) if args.datasets is None else args.datasets
-    args.datasets = read_config_stream(args.datasets)
-    if args.mod_train_file or args.mod_valid_file or args.mod_test_file:
-        logging.warning('Warning: overriding the training/valid/test data with user-specified files'
-                        ' different from what was specified in the dataset index.  Creating a new key for this entry')
-        update_datasets(args.datasets, config_params, args.mod_train_file, args.mod_valid_file, args.mod_test_file)
-
-    args.embeddings = args.settings.get('embeddings', convert_path(DEFAULT_EMBEDDINGS_LOC)) if args.embeddings is None else args.embeddings
-    args.embeddings = read_config_stream(args.embeddings)
-
-    args.vecs = args.settings.get('vecs', convert_path(DEFAULT_VECTORIZERS_LOC)) if args.vecs is None else args.vecs
-    args.vecs = read_config_stream(args.vecs)
-
-    if args.gpus:
-        # why does it go to model and not to train?
-        config_params['train']['gpus'] = args.gpus
-    if args.fit_func:
-        config_params['train']['fit_func'] = args.fit_func
-    if args.backend:
-        config_params['backend'] = normalize_backend(args.backend)
-
-    config_params['modules'] = list(chain(config_params.get('modules', []), args.modules))
-
-    cmd_hooks = args.reporting if args.reporting is not None else []
-    config_hooks = config_params.get('reporting') if config_params.get('reporting') is not None else []
-    reporting = parse_extra_args(set(chain(cmd_hooks, config_hooks)), overrides)
-    config_params['reporting'] = reporting
-
+    task_name = cfg.get('task', 'classify')
+    #args.logging = read_config_stream(args.logging)
+    #configure_logger(args.logging, config_params.get('basedir', './{}'.format(task_name)))
     logger.info('Task: [{}]'.format(task_name))
 
-    task = mead.Task.get_task_specific(task_name, args.settings)
-
-    task.read_config(config_params, args.datasets, args.vecs, reporting_args=overrides)
-    task.initialize(args.embeddings)
-    task.train(args.checkpoint)
+    task = mead.Task.get_task_specific(task_name, cfg.get('settings', {}))
+    task.init(cfg)
+    task.train()
 
 if __name__ == "__main__":
     main()

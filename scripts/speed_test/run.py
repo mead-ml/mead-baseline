@@ -35,8 +35,7 @@ def run_model(si, config_params, logs, settings, datasets, embeddings, task_name
     config_params['reporting'] = {}
     with suppress_output():
         task = mead.Task.get_task_specific(task_name, logs, settings)
-        task.read_config(config_params, datasets)
-        task.initialize(embeddings)
+        task.init(config_params)
         task.train()
 
         si['framework_version'] = get_framework_version(config_params['backend'])
