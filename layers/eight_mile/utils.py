@@ -396,7 +396,7 @@ def str2bool(v):
 def is_sequence(x) -> bool:
     if isinstance(x, str):
         return False
-    return isinstance(x, (collections.Sequence, collections.MappingView))
+    return isinstance(x, (collections.abc.Sequence, collections.abc.MappingView))
 
 
 @export
